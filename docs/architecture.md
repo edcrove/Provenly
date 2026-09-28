@@ -43,6 +43,7 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 1. `<properties><property name="tc-id" value="153"/></properties>` inside the `<testcase>` (value `153` or `TC-153`).
 2. Otherwise the `TC-<id>` pattern in the `name` attribute.
 
-Outcomes: `valid`, `missing` (none declared), `malformed` (not a single positive integer, or several different ids),
+Outcomes: `valid`, `missing` (none declared; only uppercase `TC-` counts), `malformed` (not a single positive
+integer — leading zeros are accepted, `TC-0153` = `TC-153` — or several different ids in one `<testcase>`),
 `unknown` (no such TC), `deprecated`. Invalid testcases (no name, invalid `time`) are reported in `parseErrors` without
 stopping the batch; an unreadable document is a `400 invalid_junit`.

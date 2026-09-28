@@ -119,9 +119,9 @@ type xmlSuite struct {
 }
 
 var (
-	propertyValue = regexp.MustCompile(`^(?:TC-)?([1-9][0-9]{0,17})$`)
+	propertyValue = regexp.MustCompile(`^(?:TC-)?([0-9]+)$`)
 	nameRef       = regexp.MustCompile(`\bTC-([0-9A-Za-z_]*)`)
-	validNameID   = regexp.MustCompile(`^[1-9][0-9]{0,17}$`)
+	numericID     = regexp.MustCompile(`^0*([1-9][0-9]{0,17})$`)
 )
 
 // Parse reads a JUnit XML document with a <testsuites> or <testsuite> root.
@@ -227,16 +227,44 @@ func extractRef(name string, props []xmlProperty) TCRef {
 	return fromName(name)
 }
 
-func fromProperty(values []string) TCRef {
-	raw := strings.Join(uniq(values), ",")
-	if len(uniq(values)) > 1 {
-		return TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: raw}
-	}
-	m := propertyValue.FindStringSubmatch(values[0])
+// parseID accepts a positive id of up to 18 significant digits; leading zeros are ignored (TC-0153 == TC-153).
+func parseID(digits string) (int64, bool) {
+	m := numericID.FindStringSubmatch(digits)
 	if m == nil {
-		return TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: raw}
+		return 0, false
 	}
 	id, _ := strconv.ParseInt(m[1], 10, 64)
+	return id, true
+}
+
+// resolve returns the single id declared by all refs, or false when a ref is
+// invalid or refs declare different ids (e.g. TC-1 and TC-2 in one testcase).
+func resolve(digits []string) (int64, bool) {
+	var found int64
+	for _, d := range digits {
+		id, ok := parseID(d)
+		if !ok || (found != 0 && id != found) {
+			return 0, false
+		}
+		found = id
+	}
+	return found, true
+}
+
+func fromProperty(values []string) TCRef {
+	raw := strings.Join(uniq(values), ",")
+	digits := make([]string, len(values))
+	for i, v := range values {
+		m := propertyValue.FindStringSubmatch(v)
+		if m == nil {
+			return TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: raw}
+		}
+		digits[i] = m[1]
+	}
+	id, ok := resolve(digits)
+	if !ok {
+		return TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: raw}
+	}
 	return TCRef{Kind: RefFound, Source: SourceProperty, Raw: raw, ID: id}
 }
 
@@ -245,20 +273,16 @@ func fromName(name string) TCRef {
 	if len(matches) == 0 {
 		return TCRef{Kind: RefMissing, Source: SourceNone}
 	}
-	var refs, ids []string
-	malformed := false
-	for _, m := range matches {
-		refs = append(refs, m[0])
-		ids = append(ids, m[1])
-		if !validNameID.MatchString(m[1]) {
-			malformed = true
-		}
+	refs := make([]string, len(matches))
+	digits := make([]string, len(matches))
+	for i, m := range matches {
+		refs[i], digits[i] = m[0], m[1]
 	}
 	raw := strings.Join(uniq(refs), ",")
-	if malformed || len(uniq(ids)) > 1 {
+	id, ok := resolve(digits)
+	if !ok {
 		return TCRef{Kind: RefMalformed, Source: SourceName, Raw: raw}
 	}
-	id, _ := strconv.ParseInt(ids[0], 10, 64)
 	return TCRef{Kind: RefFound, Source: SourceName, Raw: raw, ID: id}
 }
 

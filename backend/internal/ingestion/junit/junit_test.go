@@ -89,6 +89,25 @@ type failingReader struct{ err error }
 
 func (f failingReader) Read([]byte) (int, error) { return 0, f.err }
 
+// A data provider / parameterized test reports one <testcase> per data row, so
+// each invocation declares its own TC-ID independently.
+func TestParameterizedTestsDeclareOneIDPerInvocation(t *testing.T) {
+	rep, err := Parse(strings.NewReader(`<testsuite name="login">
+<testcase name="login [1] TC-153"/>
+<testcase name="login [2] TC-154"><failure/></testcase>
+<testcase name="login[chrome]"><properties><property name="tc-id" value="155"/></properties></testcase>
+<testcase name="login[firefox]"><properties><property name="tc-id" value="156"/></properties></testcase>
+</testsuite>`))
+	require.NoError(t, err)
+	ids := make([]int64, len(rep.Results))
+	for i, r := range rep.Results {
+		require.Equal(t, RefFound, r.Ref.Kind)
+		ids[i] = r.Ref.ID
+	}
+	assert.Equal(t, []int64{153, 154, 155, 156}, ids)
+	assert.Equal(t, Failed, rep.Results[1].Status)
+}
+
 func TestExtractRef(t *testing.T) {
 	prop := func(values ...string) []xmlProperty {
 		var out []xmlProperty
@@ -109,12 +128,20 @@ func TestExtractRef(t *testing.T) {
 		{"TC-1 and TC-2", nil, TCRef{Kind: RefMalformed, Source: SourceName, Raw: "TC-1,TC-2"}},
 		{"TC-abc", nil, TCRef{Kind: RefMalformed, Source: SourceName, Raw: "TC-abc"}},
 		{"TC-0", nil, TCRef{Kind: RefMalformed, Source: SourceName, Raw: "TC-0"}},
+		{"TC-000", nil, TCRef{Kind: RefMalformed, Source: SourceName, Raw: "TC-000"}},
+		{"TC-0153 leading zeros", nil, TCRef{Kind: RefFound, Source: SourceName, Raw: "TC-0153", ID: 153}},
+		{"TC-0153 and TC-153 are the same id", nil, TCRef{Kind: RefFound, Source: SourceName, Raw: "TC-0153,TC-153", ID: 153}},
+		{"tc-153 lowercase is not a reference", nil, TCRef{Kind: RefMissing, Source: SourceNone}},
 		{"TC- empty", nil, TCRef{Kind: RefMalformed, Source: SourceName, Raw: "TC-"}},
 		{"TC-9 in name ignored", prop("153"), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "153", ID: 153}},
 		{"x", prop(" TC-42 "), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "TC-42", ID: 42}},
 		{"x", []xmlProperty{{Name: "TC-ID", Value: "5"}}, TCRef{Kind: RefFound, Source: SourceProperty, Raw: "5", ID: 5}},
 		{"x", prop("5", "5"), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "5", ID: 5}},
 		{"x", prop("5", "6"), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "5,6"}},
+		{"x", prop("0153"), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "0153", ID: 153}},
+		{"x", prop("153", "TC-0153"), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "153,TC-0153", ID: 153}},
+		{"x", prop("0"), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "0"}},
+		{"x", prop("TC-0"), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "TC-0"}},
 		{"x", prop("abc"), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "abc"}},
 		{"x", prop(""), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: ""}},
 		{"x", prop("1234567890123456789"), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "1234567890123456789"}},

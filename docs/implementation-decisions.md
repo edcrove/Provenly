@@ -30,6 +30,12 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
    wording "testCaseId when the TC-ID is valid" should be updated to "valid or deprecated".
 4. **Malformed rules.** `tc-id` accepts `153` or `TC-153`; `0`, leading zeros, non-digits, >18 digits, an empty
    value, or several *different* ids (property or name) are `malformed`.
+   **Status: Decided by Ed (2026-09-28), implemented.** (a) Leading zeros are accepted and normalized
+   (`TC-0153` == `TC-153`; `0`/`TC-000` stay malformed). (b) Only uppercase `TC-` counts in names, for
+   consistency and as a code convention (`tc-153` is `missing`). (c) Several different ids in one `<testcase>` stay
+   `malformed`; data providers / parameterized tests are supported because each invocation is its own
+   `<testcase>` and declares its own id (covered by a parser test). Limitation: a `tc-id` property placed at
+   `<testsuite>` level, or one name listing all ids, is not supported.
 5. **Parse errors.** A testcase without `name` or with an invalid `time` is reported in `parseErrors` and not
    persisted; the rest of the batch continues.
 6. **Replay response.** An idempotent replay returns `200` with the existing run and the diagnostics stored at

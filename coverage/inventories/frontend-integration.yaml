@@ -16,7 +16,7 @@ targets:
     description: test case detail distinguishes current definition from observed execution metadata; edit keeps the TC-ID
     surfaces: [src/features/test-cases/TestCaseDetailPage.tsx, src/features/test-cases/TestCaseForm.tsx]
   - id: FE-INT-005
-    description: deprecate with confirmation and error reporting
+    description: deprecate with confirmation, reactivate, and error reporting
     surfaces: [src/features/test-cases/TestCaseDetailPage.tsx]
   - id: FE-INT-006
     description: steps management (add, edit, cancel, delete, move up/down, empty and error states)

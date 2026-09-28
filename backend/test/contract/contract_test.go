@@ -70,6 +70,9 @@ func TestTestCases(t *testing.T) {
 	e.POST(otherPath+"/deprecate").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "deprecated")
 	e.POST("/api/v1/test-cases/0/deprecate").Expect().Status(http.StatusBadRequest)
 	e.POST("/api/v1/test-cases/987654/deprecate").Expect().Status(http.StatusNotFound)
+	e.POST(otherPath+"/reactivate").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "active")
+	e.POST("/api/v1/test-cases/0/reactivate").Expect().Status(http.StatusBadRequest)
+	e.POST("/api/v1/test-cases/987654/reactivate").Expect().Status(http.StatusNotFound)
 
 	e.GET("/api/v1/test-cases/xyz/results").Expect().Status(http.StatusBadRequest)
 	e.GET("/api/v1/test-cases/987654/results").Expect().Status(http.StatusNotFound)
@@ -177,6 +180,7 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.GET("/api/v1/test-cases/1").Expect())
 	problem(e.PATCH("/api/v1/test-cases/1").WithJSON(map[string]any{"title": "x"}).Expect())
 	problem(e.POST("/api/v1/test-cases/1/deprecate").Expect())
+	problem(e.POST("/api/v1/test-cases/1/reactivate").Expect())
 	problem(e.GET("/api/v1/test-cases/1/steps").Expect())
 	problem(e.POST("/api/v1/test-cases/1/steps").WithJSON(map[string]any{"action": "x"}).Expect())
 	problem(e.PUT("/api/v1/test-cases/1/steps/order").WithJSON(map[string]any{"stepIds": []int{}}).Expect())

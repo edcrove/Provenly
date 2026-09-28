@@ -25,6 +25,7 @@ type Querier interface {
 	ListTestCases(ctx context.Context, arg ListTestCasesParams) ([]TestCase, error)
 	ListTestSteps(ctx context.Context, arg ListTestStepsParams) ([]TestStep, error)
 	LockTestCase(ctx context.Context, id int64) (int64, error)
+	ReactivateTestCase(ctx context.Context, id int64) (TestCase, error)
 	SetTestStepPosition(ctx context.Context, arg SetTestStepPositionParams) error
 	ShiftTestStepsDown(ctx context.Context, arg ShiftTestStepsDownParams) error
 	UpdateTestCase(ctx context.Context, arg UpdateTestCaseParams) (TestCase, error)

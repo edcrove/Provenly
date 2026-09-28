@@ -61,6 +61,19 @@ export function useDeprecateTestCase(id: number) {
   })
 }
 
+export function useReactivateTestCase(id: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () =>
+      unwrap(
+        await api.POST('/api/v1/test-cases/{testCaseId}/reactivate', {
+          params: { path: { testCaseId: id } },
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.testCases }),
+  })
+}
+
 export function useTestSteps(id: number) {
   return useQuery({
     queryKey: keys.steps(id),

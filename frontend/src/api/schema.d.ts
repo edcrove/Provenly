@@ -80,6 +80,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/test-cases/{testCaseId}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Numeric TC-ID (without the `TC-` prefix) */
+                testCaseId: components["parameters"]["TestCaseId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reactivate a deprecated test case (idempotent). Same TC-ID; existing run snapshots are unchanged, future runs include it again if automated. */
+        post: operations["reactivateTestCase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-cases/{testCaseId}/steps": {
         parameters: {
             query?: never;
@@ -806,6 +826,32 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Deprecated test case */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    reactivateTestCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Numeric TC-ID (without the `TC-` prefix) */
+                testCaseId: components["parameters"]["TestCaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active test case */
             200: {
                 headers: {
                     [name: string]: unknown;

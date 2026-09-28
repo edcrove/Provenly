@@ -1,7 +1,7 @@
 # Frontend E2E inventory: UI journeys run by Playwright on the istanbul-instrumented bundle.
 targets:
   - id: FE-E2E-001
-    description: manage a test case in the UI (create, edit, steps, deprecate)
+    description: manage a test case in the UI (create, edit, steps, deprecate, reactivate)
   - id: FE-E2E-002
     description: POC demo flow (TC declared by an automated test -> CI JUnit -> summary with 3 percentages -> detail -> history)
   - id: FE-E2E-003

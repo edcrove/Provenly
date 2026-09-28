@@ -68,6 +68,10 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
    display and computes totals from the precise values (3 x 33.333333 shows a "Total 100%" row). A 0 denominator
    stays 0% (no null) and the UI always shows the counts next to it ("0 of 0 test cases executed").
 10. **Deprecation is one-way** in the POC (no re-activation endpoint); editing a deprecated test case is allowed.
+    **Status: Changed by Ed (2026-09-28) — option B, implemented.** `POST /api/v1/test-cases/{id}/reactivate`
+    (idempotent) brings a deprecated test case back to `active` with the same TC-ID; existing run snapshots are
+    unchanged and future runs include it again if automated. UI: "Reactivate" on deprecated test cases. Editing
+    deprecated test cases stays allowed.
 11. **shadcn/ui components are vendored manually** in `frontend/src/components/ui` (the shadcn registry was not
     reachable from the build environment); `components.json` is present so `npx shadcn add` works later.
 12. **Coverage exceptions (see `coverage/exceptions.yaml`).** Generated sqlc code, Postgres adapters and the process

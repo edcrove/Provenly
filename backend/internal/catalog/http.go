@@ -16,6 +16,7 @@ type API interface {
 	List(ctx context.Context, status *Status, page pagination.Page) (pagination.Result[TestCase], error)
 	Update(ctx context.Context, id int64, in UpdateInput) (TestCase, error)
 	Deprecate(ctx context.Context, id int64) (TestCase, error)
+	Reactivate(ctx context.Context, id int64) (TestCase, error)
 	ListSteps(ctx context.Context, testCaseID int64, page pagination.Page) (pagination.Result[TestStep], error)
 	CreateStep(ctx context.Context, testCaseID int64, in CreateStepInput) (TestStep, error)
 	UpdateStep(ctx context.Context, testCaseID, stepID int64, in UpdateStepInput) (TestStep, error)
@@ -107,6 +108,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}", h.get)
 	mux.HandleFunc("PATCH /api/v1/test-cases/{testCaseId}", h.update)
 	mux.HandleFunc("POST /api/v1/test-cases/{testCaseId}/deprecate", h.deprecate)
+	mux.HandleFunc("POST /api/v1/test-cases/{testCaseId}/reactivate", h.reactivate)
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}/steps", h.listSteps)
 	mux.HandleFunc("POST /api/v1/test-cases/{testCaseId}/steps", h.createStep)
 	mux.HandleFunc("PUT /api/v1/test-cases/{testCaseId}/steps/order", h.reorderSteps)
@@ -192,6 +194,20 @@ func (h *Handler) deprecate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tc, err := h.api.Deprecate(r.Context(), id)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, ToDTO(tc))
+}
+
+func (h *Handler) reactivate(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.PathID(r, "testCaseId")
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	tc, err := h.api.Reactivate(r.Context(), id)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

@@ -170,6 +170,23 @@ describe('FE-INT-005 deprecate', () => {
     expect(db.testCases[0]).toMatchObject({ id: 153, status: 'deprecated' })
   })
 
+  it('FE-INT-005 reactivates a deprecated test case with the same TC-ID', async () => {
+    db.testCases[0] = testCase({ status: 'deprecated', deprecatedAt: '2026-09-29T00:00:00Z' })
+    const { user } = renderRoute('/test-cases/153')
+    await user.click(await screen.findByRole('button', { name: 'Reactivate' }))
+    expect(await screen.findByRole('button', { name: 'Deprecate' })).toBeInTheDocument()
+    expect(db.testCases[0]).toMatchObject({ id: 153, status: 'active', deprecatedAt: null })
+  })
+
+  it('FE-INT-005 reports reactivation failures', async () => {
+    db.testCases[0] = testCase({ status: 'deprecated' })
+    const { user } = renderRoute('/test-cases/153')
+    const button = await screen.findByRole('button', { name: 'Reactivate' })
+    db.failing = true
+    await user.click(button)
+    expect(await screen.findByText('Could not reactivate')).toBeInTheDocument()
+  })
+
   it('FE-INT-005 reports deprecation failures', async () => {
     const { user } = renderRoute('/test-cases/153')
     await user.click(await screen.findByRole('button', { name: 'Deprecate' }))

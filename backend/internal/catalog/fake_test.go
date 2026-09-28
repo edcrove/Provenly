@@ -124,6 +124,19 @@ func (f *fakeRepo) DeprecateTestCase(_ context.Context, id int64) (TestCase, err
 	return tc, nil
 }
 
+func (f *fakeRepo) ReactivateTestCase(_ context.Context, id int64) (TestCase, error) {
+	if err := f.fail("ReactivateTestCase"); err != nil {
+		return TestCase{}, err
+	}
+	tc, ok := f.cases[id]
+	if !ok {
+		return TestCase{}, ErrNotFound
+	}
+	tc.Status, tc.DeprecatedAt = StatusActive, nil
+	f.cases[id] = tc
+	return tc, nil
+}
+
 func (f *fakeRepo) ListExpectedUniverse(context.Context) ([]int64, error) {
 	if err := f.fail("ListExpectedUniverse"); err != nil {
 		return nil, err

@@ -22,6 +22,8 @@ test.describe('Backend API journeys', () => {
     expect(await deprecated.json()).toMatchObject({ id: tc.id, status: 'deprecated' })
     const list = await request.get(`${apiURL}/api/v1/test-cases?status=deprecated&pageSize=100`)
     expect((await list.json()).items.map((t: { id: number }) => t.id)).toContain(tc.id)
+    const reactivated = await request.post(`${apiURL}/api/v1/test-cases/${tc.id}/reactivate`)
+    expect(await reactivated.json()).toMatchObject({ id: tc.id, key: tc.key, status: 'active', deprecatedAt: null })
     expect((await request.get(`${apiURL}/api/v1/test-cases/987654321`)).status()).toBe(404)
   })
 

@@ -131,6 +131,28 @@ const scenarios: Scenario[] = [
     call: (c) => c.POST('/api/v1/test-cases/{testCaseId}/deprecate', { params: { path: tc } }),
   },
   {
+    op: 'POST /api/v1/test-cases/{testCaseId}/reactivate',
+    status: 200,
+    call: (c) => c.POST('/api/v1/test-cases/{testCaseId}/reactivate', { params: { path: tc } }),
+  },
+  {
+    op: 'POST /api/v1/test-cases/{testCaseId}/reactivate',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/test-cases/{testCaseId}/reactivate', { params: { path: { testCaseId: 0 } } }),
+  },
+  {
+    op: 'POST /api/v1/test-cases/{testCaseId}/reactivate',
+    status: 404,
+    call: (c) => c.POST('/api/v1/test-cases/{testCaseId}/reactivate', { params: { path: unknownTc } }),
+  },
+  {
+    op: 'POST /api/v1/test-cases/{testCaseId}/reactivate',
+    status: 500,
+    setup: fail,
+    call: (c) => c.POST('/api/v1/test-cases/{testCaseId}/reactivate', { params: { path: tc } }),
+  },
+  {
     op: 'GET /api/v1/test-cases/{testCaseId}/results',
     status: 200,
     call: (c) =>

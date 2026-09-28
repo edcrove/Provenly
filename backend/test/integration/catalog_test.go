@@ -78,6 +78,17 @@ func TestCatalogPersistence(t *testing.T) {
 		assert.Equal(t, dep.DeprecatedAt, again.DeprecatedAt, "deprecation is idempotent")
 		assert.Equal(t, dep.UpdatedAt, again.UpdatedAt)
 
+		back, err := s.Catalog.Reactivate(ctx, tc.ID)
+		require.NoError(t, err)
+		assert.Equal(t, tc.ID, back.ID)
+		assert.Equal(t, catalog.StatusActive, back.Status)
+		assert.Nil(t, back.DeprecatedAt)
+		same, err := s.Catalog.Reactivate(ctx, tc.ID)
+		require.NoError(t, err)
+		assert.Equal(t, back.UpdatedAt, same.UpdatedAt, "reactivation is idempotent")
+		_, err = s.Catalog.Deprecate(ctx, tc.ID)
+		require.NoError(t, err)
+
 		for _, title := range []string{"x", "y", "z"} {
 			_, err := s.Catalog.Create(ctx, catalog.CreateInput{Title: title})
 			require.NoError(t, err)
@@ -99,6 +110,7 @@ func TestCatalogPersistence(t *testing.T) {
 				return err
 			}(),
 			func() error { _, err := s.Catalog.Deprecate(ctx, 987654); return err }(),
+			func() error { _, err := s.Catalog.Reactivate(ctx, 987654); return err }(),
 		} {
 			e, ok := apperr.As(err)
 			require.True(t, ok)

@@ -94,6 +94,7 @@ type Repository interface {
 	CountTestCases(ctx context.Context, status *Status) (int64, error)
 	UpdateTestCase(ctx context.Context, id int64, in UpdateInput) (TestCase, error)
 	DeprecateTestCase(ctx context.Context, id int64) (TestCase, error)
+	ReactivateTestCase(ctx context.Context, id int64) (TestCase, error)
 	ListExpectedUniverse(ctx context.Context) ([]int64, error)
 	ListTestCaseStatuses(ctx context.Context, ids []int64) (map[int64]Status, error)
 

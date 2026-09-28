@@ -143,6 +143,20 @@ func TestDeprecate(t *testing.T) {
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 }
 
+func TestReactivate(t *testing.T) {
+	svc, _, ctx := setup(t)
+	tc, _ := svc.Create(ctx, CreateInput{Title: "a", Automated: true})
+	_, _ = svc.Deprecate(ctx, tc.ID)
+	back, err := svc.Reactivate(ctx, tc.ID)
+	require.NoError(t, err)
+	assert.Equal(t, tc.ID, back.ID, "same TC-ID")
+	assert.Equal(t, StatusActive, back.Status)
+	ids, _ := svc.ExpectedUniverse(ctx)
+	assert.Equal(t, []int64{tc.ID}, ids, "future runs include it again")
+	_, err = svc.Reactivate(ctx, 99)
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
+}
+
 func TestExpectedUniverseAndStatuses(t *testing.T) {
 	svc, _, ctx := setup(t)
 	_, _ = svc.Create(ctx, CreateInput{Title: "auto", Automated: true})

@@ -44,7 +44,8 @@ func (s *stubAPI) Update(_ context.Context, _ int64, in UpdateInput) (TestCase, 
 	s.gotUpdate = in
 	return sample, s.err
 }
-func (s *stubAPI) Deprecate(context.Context, int64) (TestCase, error) { return sample, s.err }
+func (s *stubAPI) Deprecate(context.Context, int64) (TestCase, error)  { return sample, s.err }
+func (s *stubAPI) Reactivate(context.Context, int64) (TestCase, error) { return sample, s.err }
 func (s *stubAPI) ListSteps(_ context.Context, _ int64, p pagination.Page) (pagination.Result[TestStep], error) {
 	return pagination.Result[TestStep]{Items: []TestStep{sampleStep}, Page: p, Total: 1}, s.err
 }
@@ -81,6 +82,7 @@ func TestHandlerHappyPaths(t *testing.T) {
 		{"GET", "/api/v1/test-cases/153", "", 200, `"id":153`},
 		{"PATCH", "/api/v1/test-cases/153", `{"title":"x"}`, 200, `"deprecatedAt":null`},
 		{"POST", "/api/v1/test-cases/153/deprecate", "", 200, `"key":"TC-153"`},
+		{"POST", "/api/v1/test-cases/153/reactivate", "", 200, `"status":"active"`},
 		{"GET", "/api/v1/test-cases/153/steps", "", 200, `"action":"open"`},
 		{"POST", "/api/v1/test-cases/153/steps", `{"action":"a","position":2}`, 201, `"testCaseId":153`},
 		{"PUT", "/api/v1/test-cases/153/steps/order", `{"stepIds":[9]}`, 200, `"items":[{"id":9`},
@@ -121,6 +123,7 @@ func TestHandlerErrors(t *testing.T) {
 		{"GET", "/api/v1/test-cases/1", ""},
 		{"PATCH", "/api/v1/test-cases/1", `{"title":"a"}`},
 		{"POST", "/api/v1/test-cases/1/deprecate", ""},
+		{"POST", "/api/v1/test-cases/1/reactivate", ""},
 		{"GET", "/api/v1/test-cases/1/steps", ""},
 		{"POST", "/api/v1/test-cases/1/steps", `{"action":"a"}`},
 		{"PUT", "/api/v1/test-cases/1/steps/order", `{"stepIds":[]}`},
@@ -143,6 +146,7 @@ func TestHandlerErrors(t *testing.T) {
 		{"PATCH", "/api/v1/test-cases/abc", `{}`},
 		{"PATCH", "/api/v1/test-cases/1", `nope`},
 		{"POST", "/api/v1/test-cases/0/deprecate", ""},
+		{"POST", "/api/v1/test-cases/x/reactivate", ""},
 		{"GET", "/api/v1/test-cases/x/steps", ""},
 		{"GET", "/api/v1/test-cases/1/steps?pageSize=1000", ""},
 		{"POST", "/api/v1/test-cases/x/steps", `{"action":"a"}`},

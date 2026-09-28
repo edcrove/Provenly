@@ -2,7 +2,13 @@ import { useState } from 'react'
 import { useParams } from 'react-router'
 
 import type { TestCase } from '@/api/client'
-import { useDeprecateTestCase, useTestCase, useTestCaseHistory, useUpdateTestCase } from '@/api/queries'
+import {
+  useDeprecateTestCase,
+  useReactivateTestCase,
+  useTestCase,
+  useTestCaseHistory,
+  useUpdateTestCase,
+} from '@/api/queries'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +26,7 @@ function Definition({ tc }: { tc: TestCase }) {
   const [confirming, setConfirming] = useState(false)
   const update = useUpdateTestCase(tc.id)
   const deprecate = useDeprecateTestCase(tc.id)
+  const reactivate = useReactivateTestCase(tc.id)
   const history = useTestCaseHistory(tc.id, 1)
   const manualWithResults = tc.status === 'active' && !tc.automated && (history.data?.totalItems ?? 0) > 0
 
@@ -59,9 +66,15 @@ function Definition({ tc }: { tc: TestCase }) {
                 Deprecate
               </Button>
             ))}
+          {tc.status === 'deprecated' && (
+            <Button variant="outline" disabled={reactivate.isPending} onClick={() => reactivate.mutate()}>
+              Reactivate
+            </Button>
+          )}
         </div>
       </div>
       {deprecate.error ? <ErrorAlert error={deprecate.error} title="Could not deprecate" /> : null}
+      {reactivate.error ? <ErrorAlert error={reactivate.error} title="Could not reactivate" /> : null}
       {manualWithResults ? (
         <Alert data-testid="manual-with-results">
           <AlertTitle>Receives automated results but is marked manual</AlertTitle>

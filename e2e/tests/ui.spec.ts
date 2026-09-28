@@ -39,7 +39,10 @@ test.describe('Frontend UI journeys', () => {
 
     await page.getByRole('link', { name: 'Test Cases' }).click()
     await page.getByLabel('Filter by status').selectOption('deprecated')
-    await expect(page.getByRole('link', { name: key })).toBeVisible()
+    await page.getByRole('link', { name: key }).click()
+    await page.getByRole('button', { name: 'Reactivate' }).click()
+    await expect(page.getByRole('button', { name: 'Deprecate' })).toBeVisible()
+    await expect(heading).toContainText(key)
   })
 
   test('[FE-E2E-002] POC demo: TC declared by an automated test, CI report, summary, detail and history', async ({ page, provenly }) => {

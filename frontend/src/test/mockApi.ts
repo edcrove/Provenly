@@ -207,6 +207,16 @@ export const handlers = [
       return respond(tc)
     }),
   ),
+  http.post(
+    `${BASE}/test-cases/:testCaseId/reactivate`,
+    guard(({ params }) => {
+      const tc = findCase(params.testCaseId)
+      if (tc instanceof Response) return tc
+      tc.status = 'active'
+      tc.deprecatedAt = null
+      return respond(tc)
+    }),
+  ),
   http.get(
     `${BASE}/test-cases/:testCaseId/steps`,
     guard(({ params, request }) => {

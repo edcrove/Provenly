@@ -4,7 +4,7 @@ targets:
   - id: BE-E2E-001
     description: health check responds through the public interface
   - id: BE-E2E-002
-    description: test case lifecycle with server-assigned immutable TC-ID, edit and deprecate
+    description: test case lifecycle with server-assigned immutable TC-ID, edit, deprecate and reactivate
   - id: BE-E2E-003
     description: optional steps can be added, reordered, edited and deleted
   - id: BE-E2E-004

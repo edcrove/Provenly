@@ -147,6 +147,15 @@ func (s *Store) DeprecateTestCase(ctx context.Context, id int64) (catalog.TestCa
 	return toTestCase(r), nil
 }
 
+// ReactivateTestCase implements catalog.Repository.
+func (s *Store) ReactivateTestCase(ctx context.Context, id int64) (catalog.TestCase, error) {
+	r, err := s.q.ReactivateTestCase(ctx, id)
+	if err != nil {
+		return catalog.TestCase{}, notFound(err)
+	}
+	return toTestCase(r), nil
+}
+
 // ListExpectedUniverse implements catalog.Repository.
 func (s *Store) ListExpectedUniverse(ctx context.Context) ([]int64, error) {
 	ids, err := s.q.ListExpectedUniverse(ctx)

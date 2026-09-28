@@ -37,6 +37,14 @@ UPDATE test_cases SET
 WHERE id = @id
 RETURNING *;
 
+-- name: ReactivateTestCase :one
+UPDATE test_cases SET
+    status        = 'active',
+    deprecated_at = NULL,
+    updated_at    = CASE WHEN status = 'active' THEN updated_at ELSE now() END
+WHERE id = @id
+RETURNING *;
+
 -- name: ListExpectedUniverse :many
 SELECT id FROM test_cases WHERE status = 'active' AND automated ORDER BY id;
 

@@ -360,6 +360,32 @@ func (q *Queries) LockTestCase(ctx context.Context, id int64) (int64, error) {
 	return id, err
 }
 
+const reactivateTestCase = `-- name: ReactivateTestCase :one
+UPDATE test_cases SET
+    status        = 'active',
+    deprecated_at = NULL,
+    updated_at    = CASE WHEN status = 'active' THEN updated_at ELSE now() END
+WHERE id = $1
+RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at
+`
+
+func (q *Queries) ReactivateTestCase(ctx context.Context, id int64) (TestCase, error) {
+	row := q.db.QueryRow(ctx, reactivateTestCase, id)
+	var i TestCase
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.ExpectedResult,
+		&i.Status,
+		&i.Automated,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeprecatedAt,
+	)
+	return i, err
+}
+
 const setTestStepPosition = `-- name: SetTestStepPosition :exec
 UPDATE test_steps SET position = $1, updated_at = now()
 WHERE test_case_id = $2 AND id = $3

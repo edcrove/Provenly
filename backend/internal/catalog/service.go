@@ -107,6 +107,14 @@ func (s *Service) Deprecate(ctx context.Context, id int64) (TestCase, error) {
 	return tc, mapNotFound(err, id)
 }
 
+// Reactivate brings a deprecated test case back to active (idempotent), keeping
+// its TC-ID. Existing run snapshots are immutable; future runs include it again
+// when it is automated.
+func (s *Service) Reactivate(ctx context.Context, id int64) (TestCase, error) {
+	tc, err := s.repo.ReactivateTestCase(ctx, id)
+	return tc, mapNotFound(err, id)
+}
+
 // ExpectedUniverse returns the TC-IDs that are active and automated right now.
 func (s *Service) ExpectedUniverse(ctx context.Context) ([]int64, error) {
 	return s.repo.ListExpectedUniverse(ctx)

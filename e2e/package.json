@@ -1,6 +1,9 @@
 {
   "name": "provenly-e2e",
-  "scripts": {},
+  "scripts": {
+    "test": "playwright test",
+    "typecheck": "tsc -p ."
+  },
   "private": "true",
   "type": "module",
   "devDependencies": {

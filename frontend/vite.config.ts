@@ -5,6 +5,7 @@ import { defineConfig } from 'vite'
 import istanbul from 'vite-plugin-istanbul'
 
 const apiTarget = process.env.PROVENLY_API_URL ?? 'http://localhost:8080'
+const coverage = process.env.VITE_COVERAGE === 'true'
 const proxy = {
   '/api': { target: apiTarget, changeOrigin: true },
   '/healthz': { target: apiTarget, changeOrigin: true },
@@ -16,18 +17,21 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    istanbul({
-      include: 'src/*',
-      exclude: ['node_modules', 'src/**/*.test.*', 'src/test/**', 'src/contract/**'],
-      extension: ['.ts', '.tsx'],
-      requireEnv: true,
-      forceBuildInstrument: process.env.VITE_COVERAGE === 'true',
-    }),
+    ...(coverage
+      ? [
+          istanbul({
+            include: 'src/*',
+            exclude: ['node_modules', 'src/**/*.test.*', 'src/test/**', 'src/contract/**'],
+            extension: ['.ts', '.tsx'],
+            forceBuildInstrument: true,
+          }),
+        ]
+      : []),
   ],
   resolve: {
-    alias: { '@': path.resolve(__dirname, './src') },
+    alias: { '@': path.resolve(import.meta.dirname, './src') },
   },
-  build: { sourcemap: process.env.VITE_COVERAGE === 'true' },
+  build: { sourcemap: coverage },
   server: { port: 5173, proxy },
   preview: { port: 4173, proxy },
 })

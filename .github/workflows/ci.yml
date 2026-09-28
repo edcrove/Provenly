@@ -1,0 +1,262 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+  NODE_VERSION: "22"
+  SQLC_VERSION: "1.30.0"
+  GOLANGCI_LINT_VERSION: "v2.14.0"
+
+jobs:
+  backend-lint:
+    name: Backend · build, lint, vet, sqlc drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            tools/covgate/go.sum
+      - name: Build
+        working-directory: backend
+        run: go build ./...
+      - name: gofmt
+        run: test -z "$(gofmt -l backend tools)" || (gofmt -l backend tools; exit 1)
+      - name: go vet
+        working-directory: backend
+        run: go vet ./... && go vet -tags integration,contract ./test/...
+      - name: golangci-lint
+        working-directory: backend
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
+          golangci-lint run ./...
+          golangci-lint run --build-tags integration,contract ./test/...
+      - name: sqlc generated code is in sync
+        working-directory: backend
+        run: |
+          curl -sSL "https://github.com/sqlc-dev/sqlc/releases/download/v${SQLC_VERSION}/sqlc_${SQLC_VERSION}_linux_amd64.tar.gz" | tar xz -C /usr/local/bin sqlc
+          sqlc diff
+      - name: covgate tool tests
+        working-directory: tools/covgate
+        run: go vet ./... && go test ./...
+
+  frontend-lint:
+    name: Frontend · build, lint, typecheck, client drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: OpenAPI client is in sync with api/openapi.yaml
+        working-directory: frontend
+        run: npm run gen:api:check
+      - run: npm run lint
+        working-directory: frontend
+      - run: npm run format:check
+        working-directory: frontend
+      - run: npm run typecheck
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - name: E2E typecheck
+        working-directory: e2e
+        run: npm ci && npm run typecheck
+
+  backend-unit:
+    name: Backend · Unit gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            tools/covgate/go.sum
+      - run: make test-backend-unit
+      - name: Gate
+        run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates backend-unit -evidence=false
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-backend-unit
+          path: coverage/out/
+          if-no-files-found: ignore
+
+  backend-integration:
+    name: Backend · Integration gate (testcontainers)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            tools/covgate/go.sum
+      - run: make test-backend-integration
+      - name: Gate
+        run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates backend-integration -evidence=false
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-backend-integration
+          path: coverage/out/
+          if-no-files-found: ignore
+
+  backend-contract:
+    name: Backend · Contract gate (httpexpect + kin-openapi)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            tools/covgate/go.sum
+      - run: make test-backend-contract
+      - name: Gate
+        run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates backend-contract -evidence=false
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-backend-contract
+          path: coverage/out/
+          if-no-files-found: ignore
+
+  frontend-tests:
+    name: Frontend · ${{ matrix.layer }} gate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: [unit, integration, contract]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: tools/covgate/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run test:${{ matrix.layer }}
+        working-directory: frontend
+      - name: Gate
+        run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates frontend-${{ matrix.layer }} -evidence=false
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-frontend-${{ matrix.layer }}
+          path: frontend/coverage/
+          if-no-files-found: ignore
+
+  e2e:
+    name: E2E gates (Playwright, instrumented stack)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: provenly
+          POSTGRES_PASSWORD: provenly
+          POSTGRES_DB: provenly_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U provenly"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            tools/covgate/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: e2e
+      - run: ./scripts/e2e.sh
+        env:
+          CI: "true"
+          E2E_DATABASE_URL: postgres://provenly:provenly@localhost:5432/provenly_e2e?sslmode=disable
+      - name: Gates
+        run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates backend-e2e,frontend-e2e -evidence=false
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-e2e
+          path: e2e/coverage/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+
+  coverage-report:
+    name: Coverage · 8 gates + consolidated evidence
+    needs: [backend-unit, backend-integration, backend-contract, frontend-tests, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            tools/covgate/go.sum
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: evidence-backend-*
+          path: coverage/out
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: evidence-frontend-*
+          path: frontend/coverage
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: evidence-e2e
+          path: e2e/coverage
+      - name: Evaluate every gate (fails if any gate is below 100%)
+        run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/out/coverage-report.*

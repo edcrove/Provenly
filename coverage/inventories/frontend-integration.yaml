@@ -1,0 +1,44 @@
+# Frontend Integration inventory: components rendered against the API mocked
+# with MSW (Vitest + Testing Library). Every UI surface (.tsx under src/app,
+# src/features, src/components except vendored ui/) must be referenced by at
+# least one target; a new component without a target is reported as a gap.
+targets:
+  - id: FE-INT-001
+    description: application shell, navigation, index redirect and not-found page
+    surfaces: [src/app/Layout.tsx, src/app/routes.tsx, src/app/NotFoundPage.tsx]
+  - id: FE-INT-002
+    description: test case list with status filter, pagination and empty state
+    surfaces: [src/features/test-cases/TestCaseListPage.tsx, src/components/Pagination.tsx]
+  - id: FE-INT-003
+    description: create a test case (TC-ID from the backend), API validation errors, cancel
+    surfaces: [src/features/test-cases/NewTestCasePage.tsx, src/features/test-cases/TestCaseForm.tsx]
+  - id: FE-INT-004
+    description: test case detail distinguishes current definition from observed execution metadata; edit keeps the TC-ID
+    surfaces: [src/features/test-cases/TestCaseDetailPage.tsx, src/features/test-cases/TestCaseForm.tsx]
+  - id: FE-INT-005
+    description: deprecate with confirmation and error reporting
+    surfaces: [src/features/test-cases/TestCaseDetailPage.tsx]
+  - id: FE-INT-006
+    description: steps management (add, edit, cancel, delete, move up/down, empty and error states)
+    surfaces: [src/features/test-cases/StepsEditor.tsx]
+  - id: FE-INT-007
+    description: execution history of a TC-ID across runs with observed metadata and pagination
+    surfaces: [src/features/test-cases/TestCaseHistory.tsx]
+  - id: FE-INT-008
+    description: test run list with metadata, empty state and pagination
+    surfaces: [src/features/test-runs/TestRunListPage.tsx]
+  - id: FE-INT-009
+    description: test run detail with metadata and summary (counts and the three percentages, untested links)
+    surfaces: [src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/RunSummary.tsx, src/components/StatusBadge.tsx]
+  - id: FE-INT-010
+    description: TC-ID diagnostics (missing/malformed/unknown/deprecated) and outside-universe results
+    surfaces: [src/features/test-runs/RunDiagnostics.tsx]
+  - id: FE-INT-011
+    description: individual run results filtered by status and correlation, TC-ID links, pagination
+    surfaces: [src/features/test-runs/RunResults.tsx, src/components/StatusBadge.tsx]
+  - id: FE-INT-012
+    description: API failures and not-found resources are surfaced as error alerts
+    surfaces: [src/components/QueryState.tsx]
+  - id: FE-INT-013
+    description: the app boots with its providers and browser router
+    surfaces: [src/app/App.tsx]

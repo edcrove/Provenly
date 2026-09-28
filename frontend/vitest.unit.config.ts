@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config'
-import { nonSourceFiles, sourceFiles, withBase } from './vitest.shared'
+import { nonSourceFiles, sourceFiles, withBase } from './vitest.shared.ts'
 
 // Unit gate: logic, hooks and utils. The denominator is every source file;
 // files that belong to other layers are listed in coverage/exceptions.yaml.

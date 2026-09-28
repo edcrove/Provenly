@@ -171,7 +171,7 @@ func (f *fakeRepo) ListResultsForTestCase(ctx context.Context, tcID int64, limit
 		return nil, err
 	}
 	var out []HistoryEntry
-	for runID := int64(f.nextRun); runID >= 1; runID-- {
+	for runID := f.nextRun; runID >= 1; runID-- {
 		for _, r := range f.results[runID] {
 			if r.TestCaseID != nil && *r.TestCaseID == tcID {
 				run, _ := f.GetTestRun(ctx, runID)

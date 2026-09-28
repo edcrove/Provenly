@@ -27,7 +27,9 @@ type fakeCatalog struct {
 	askedIDs    []int64
 }
 
-func (f *fakeCatalog) ExpectedUniverse(context.Context) ([]int64, error) { return f.universe, f.universeErr }
+func (f *fakeCatalog) ExpectedUniverse(context.Context) ([]int64, error) {
+	return f.universe, f.universeErr
+}
 func (f *fakeCatalog) Statuses(_ context.Context, ids []int64) (map[int64]catalog.Status, error) {
 	f.askedIDs = ids
 	return f.statuses, f.statusErr

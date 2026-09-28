@@ -44,11 +44,11 @@ type stubCatalog struct{ err error }
 
 func (c stubCatalog) EnsureExists(context.Context, int64) error { return c.err }
 
-func serve(api API, cat TestCaseChecker, method, target string) *httptest.ResponseRecorder {
+func serve(api API, cat TestCaseChecker, target string) *httptest.ResponseRecorder {
 	mux := http.NewServeMux()
 	NewHandler(api, cat).Register(mux)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest(method, target, nil))
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	return rec
 }
 
@@ -61,23 +61,23 @@ func TestHandlerHappyPaths(t *testing.T) {
 		"/api/v1/test-cases/153/results":                              `"run":{"id":3`,
 	}
 	for target, want := range cases {
-		rec := serve(&stubAPI{}, stubCatalog{}, "GET", target)
+		rec := serve(&stubAPI{}, stubCatalog{}, target)
 		assert.Equal(t, http.StatusOK, rec.Code, target)
 		assert.Contains(t, rec.Body.String(), want, target)
 	}
-	rec := serve(&stubAPI{}, stubCatalog{}, "GET", "/api/v1/test-runs/3/summary")
+	rec := serve(&stubAPI{}, stubCatalog{}, "/api/v1/test-runs/3/summary")
 	assert.Contains(t, rec.Body.String(), `"testCases":[{"testCaseId":153,"status":"passed","resultCount":1},{"testCaseId":154,"status":"untested","resultCount":0}]`)
 	assert.Contains(t, rec.Body.String(), `"diagnostics":{"missing":1,"malformed":0,"unknown":0,"deprecated":0,"total":1}`)
 }
 
 func TestHandlerFilter(t *testing.T) {
 	api := &stubAPI{}
-	serve(api, stubCatalog{}, "GET", "/api/v1/test-runs/3/results?status=error&correlation=unknown")
+	serve(api, stubCatalog{}, "/api/v1/test-runs/3/results?status=error&correlation=unknown")
 	require.NotNil(t, api.gotFilter.Status)
 	assert.Equal(t, Error, *api.gotFilter.Status)
 	assert.Equal(t, CorrelationUnknown, *api.gotFilter.Correlation)
 
-	serve(api, stubCatalog{}, "GET", "/api/v1/test-runs/3/results")
+	serve(api, stubCatalog{}, "/api/v1/test-runs/3/results")
 	assert.Nil(t, api.gotFilter.Status)
 	assert.Nil(t, api.gotFilter.Correlation)
 }
@@ -88,9 +88,9 @@ func TestHandlerErrors(t *testing.T) {
 		"/api/v1/test-runs", "/api/v1/test-runs/3", "/api/v1/test-runs/3/results",
 		"/api/v1/test-runs/3/summary", "/api/v1/test-cases/1/results",
 	} {
-		assert.Equal(t, http.StatusNotFound, serve(failing, stubCatalog{}, "GET", target).Code, target)
+		assert.Equal(t, http.StatusNotFound, serve(failing, stubCatalog{}, target).Code, target)
 	}
-	assert.Equal(t, http.StatusNotFound, serve(&stubAPI{}, stubCatalog{err: apperr.NotFound("TC-1")}, "GET", "/api/v1/test-cases/1/results").Code)
+	assert.Equal(t, http.StatusNotFound, serve(&stubAPI{}, stubCatalog{err: apperr.NotFound("TC-1")}, "/api/v1/test-cases/1/results").Code)
 
 	for _, target := range []string{
 		"/api/v1/test-runs?page=x", "/api/v1/test-runs/x", "/api/v1/test-runs/x/results",
@@ -98,6 +98,6 @@ func TestHandlerErrors(t *testing.T) {
 		"/api/v1/test-runs/3/results?correlation=nope", "/api/v1/test-runs/x/summary",
 		"/api/v1/test-cases/x/results", "/api/v1/test-cases/1/results?pageSize=0",
 	} {
-		assert.Equal(t, http.StatusBadRequest, serve(&stubAPI{}, stubCatalog{}, "GET", target).Code, target)
+		assert.Equal(t, http.StatusBadRequest, serve(&stubAPI{}, stubCatalog{}, target).Code, target)
 	}
 }

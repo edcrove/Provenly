@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config'
-import { nonSourceFiles, sourceFiles, withBase } from './vitest.shared'
+import { nonSourceFiles, sourceFiles, withBase } from './vitest.shared.ts'
 
 // Integration gate: components rendered against the API mocked with MSW.
 // Code coverage here is evidence; the gate is the inventory in

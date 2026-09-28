@@ -1,0 +1,147 @@
+# Coverage exception registry (versioned). An exception removes elements from a
+# gate's REQUIRED denominator; they stay counted in reachableTotal and listed in
+# every report. covgate rejects exceptions with missing fields, unknown
+# categories, a status other than "approved", a past reviewBy date, or a target
+# that matches nothing (stale).
+#
+# Fields: id, gate (= side-layer), layer, side, target (glob over file paths or
+# target ids), reason, category, evidence (where it IS verified), owner,
+# createdAt, reviewBy (expiry), link (issue/decision), status.
+#
+# Categories: generated-code | other-layer | vendored-ui | entrypoint |
+#             not-reachable | tooling-limitation | test-support
+
+exceptions:
+  # ---------------------------------------------------------------- backend-unit
+  - id: EXC-BE-UNIT-001
+    gate: backend-unit
+    layer: unit
+    side: backend
+    target: internal/catalog/catalogdb/**
+    reason: sqlc-generated query code; it has no logic of its own and only runs against a real database.
+    category: generated-code
+    evidence: backend-integration gate targets BE-INT-Q:catalog.* (every query executed against Postgres).
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-BE-UNIT-002
+    gate: backend-unit
+    layer: unit
+    side: backend
+    target: internal/execution/executiondb/**
+    reason: sqlc-generated query code; it has no logic of its own and only runs against a real database.
+    category: generated-code
+    evidence: backend-integration gate targets BE-INT-Q:execution.*.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-BE-UNIT-003
+    gate: backend-unit
+    layer: unit
+    side: backend
+    target: internal/{catalog,execution}/postgres/**
+    reason: PostgreSQL repository adapters (thin mapping over sqlc); their behavior is persistence, verified against real Postgres.
+    category: other-layer
+    evidence: backend-integration gate (BE-INT-002..017) plus integration code-coverage evidence.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-BE-UNIT-004
+    gate: backend-unit
+    layer: unit
+    side: backend
+    target: internal/platform/postgres/**
+    reason: Opens the pgx pool and runs goose migrations; needs a real database.
+    category: other-layer
+    evidence: backend-integration targets BE-INT-001 (migrations) and BE-INT-015 (cli against Postgres).
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-BE-UNIT-005
+    gate: backend-unit
+    layer: unit
+    side: backend
+    target: cmd/provenly/main.go:13
+    reason: The single os.Exit(run(...)) statement of main; os.Exit terminates the test binary. run() itself is unit tested.
+    category: entrypoint
+    evidence: E2E runs the coverage-instrumented binary (go build -cover); main is executed in every E2E run.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+
+  # --------------------------------------------------------------- frontend-unit
+  - id: EXC-FE-UNIT-001
+    gate: frontend-unit
+    layer: unit
+    side: frontend
+    target: src/components/ui/**
+    reason: shadcn/ui primitives vendored as source (styling wrappers without product logic).
+    category: vendored-ui
+    evidence: rendered by every frontend-integration target; integration code-coverage evidence.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-FE-UNIT-002
+    gate: frontend-unit
+    layer: unit
+    side: frontend
+    target: src/main.tsx
+    reason: Browser entrypoint that mounts <App/> into #root.
+    category: entrypoint
+    evidence: frontend-e2e journeys load the istanbul-instrumented bundle.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-FE-UNIT-003
+    gate: frontend-unit
+    layer: unit
+    side: frontend
+    target: src/{app,features}/**
+    reason: Pages, layout and routes are components rendered against the API; they are Integration surfaces by the POC testing strategy.
+    category: other-layer
+    evidence: frontend-integration gate (every surface must be inventoried) and E2E journeys.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/WNVrzewZ/26-poc-testing-pyramid-foundation
+    status: approved
+  - id: EXC-FE-UNIT-004
+    gate: frontend-unit
+    layer: unit
+    side: frontend
+    target: src/components/*.tsx
+    reason: Shared product components (badges, pagination, query states) verified rendered, as Integration surfaces.
+    category: other-layer
+    evidence: frontend-integration targets FE-INT-002, FE-INT-009, FE-INT-011, FE-INT-012.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/WNVrzewZ/26-poc-testing-pyramid-foundation
+    status: approved
+  - id: EXC-FE-UNIT-005
+    gate: frontend-unit
+    layer: unit
+    side: frontend
+    target: src/api/queries.ts
+    reason: TanStack Query hooks around the generated client; their value is the HTTP interaction, verified against MSW.
+    category: other-layer
+    evidence: frontend-integration (all hooks rendered) and frontend-contract (every consumed operation variant).
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/WNVrzewZ/26-poc-testing-pyramid-foundation
+    status: approved

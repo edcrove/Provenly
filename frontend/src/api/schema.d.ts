@@ -330,7 +330,7 @@ export interface components {
             description?: string;
             expectedResult?: string;
             /** @default false */
-            automated: boolean;
+            automated?: boolean;
         };
         UpdateTestCaseRequest: {
             title?: string;

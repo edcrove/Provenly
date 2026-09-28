@@ -68,9 +68,9 @@ func TestDecodeJSON(t *testing.T) {
 	assert.Equal(t, "ok", b.Title)
 
 	for raw, msg := range map[string]string{
-		``:                        "request body is required",
-		`{"id":1}`:                "unknown field",
-		`{"title":`:               "malformed JSON",
+		``:                         "request body is required",
+		`{"id":1}`:                 "unknown field",
+		`{"title":`:                "malformed JSON",
 		`{"title":"a"}{"title":1}`: "single JSON object",
 	} {
 		_, err := decode(raw)

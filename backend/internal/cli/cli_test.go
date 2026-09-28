@@ -26,9 +26,7 @@ func testDeps(t *testing.T, env map[string]string, r *recorder) (Deps, *bytes.Bu
 	return Deps{
 		Getenv: func(k string) string { return env[k] },
 		Stderr: &stderr,
-		OpenDB: func(ctx context.Context, url string) (*pgxpool.Pool, error) {
-			return pgxpool.New(ctx, url) // lazy: does not connect
-		},
+		OpenDB: pgxpool.New, // lazy: does not connect
 		Migrate: func(_ context.Context, _ *pgxpool.Pool, cmd string) error {
 			r.migrations = append(r.migrations, cmd)
 			return nil

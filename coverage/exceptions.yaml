@@ -98,7 +98,7 @@ exceptions:
     layer: unit
     side: frontend
     target: src/main.tsx
-    reason: Browser entrypoint that mounts <App/> into #root.
+    reason: "Browser entrypoint that mounts <App/> into the #root element."
     category: entrypoint
     evidence: frontend-e2e journeys load the istanbul-instrumented bundle.
     owner: edcrove

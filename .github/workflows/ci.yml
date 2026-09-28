@@ -14,7 +14,7 @@ permissions:
 env:
   GOTOOLCHAIN: local
   NODE_VERSION: "22"
-  SQLC_VERSION: "1.30.0"
+  SQLC_VERSION: "1.31.1"
   GOLANGCI_LINT_VERSION: "v2.14.0"
 
 jobs:

@@ -73,7 +73,7 @@ exceptions:
     gate: backend-unit
     layer: unit
     side: backend
-    target: cmd/provenly/main.go:13
+    target: cmd/provenly/main.go:14
     reason: The single os.Exit(run(...)) statement of main; os.Exit terminates the test binary. run() itself is unit tested.
     category: entrypoint
     evidence: E2E runs the coverage-instrumented binary (go build -cover); main is executed in every E2E run.
@@ -176,7 +176,7 @@ exceptions:
     gate: backend-consolidated
     layer: consolidated
     side: backend
-    target: internal/platform/postgres/postgres.go:34
+    target: internal/platform/postgres/postgres.go:35
     reason: goose.SetDialect("postgres") error branch; the dialect is a constant that goose always supports.
     category: not-reachable
     evidence: Migrations run in BE-INT-001, BE-INT-015 and every E2E run.

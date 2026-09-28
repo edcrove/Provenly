@@ -86,5 +86,15 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
     absorb uncovered elements. Persistence error paths were covered with a new integration target (BE-INT-020); the
     25 statements no layer can reach (`not-reachable`) and the test infrastructure (`test-support`) are consolidated
     exceptions, listed line by line in the report (backend 1357/1357 required, 1390 reachable; frontend 288/288).
+    **Closed by Ed (2026-09-28) — option A.** Unit exceptions stay as they are (no DB mocks). Code no layer can
+    execute is a consolidated exception and does not count as reachable; **100% of the reachable code is covered**
+    (Go 1.27.1: backend 1389/1389 reachable of 1422 instrumented statements, 33 excepted; frontend 288/288). The
+    report columns are *Instrumented / Excepted / Reachable / Covered / Coverage of reachable*.
 13. **Toolchain.** Go 1.26 (current `pgx`, `testcontainers-go` and `goose` releases require it); TypeScript 5.9
     (`openapi-typescript` does not support TypeScript 6 yet).
+    **Status: Changed by Ed (2026-09-28), implemented — always work on the latest stable versions.** Go **1.27.1**
+    (`go.mod` of backend and covgate; CI reads it via `go-version-file`), Go dependencies upgraded to their latest
+    releases, sqlc **1.31.1** (generated code regenerated), golangci-lint 2.14.0 (latest; CI builds it with Go
+    1.27.1). `.tool-versions` pins the local toolchain (asdf/mise) to the same versions as CI. Not upgraded yet
+    (major versions with breaking changes, need their own change): TypeScript 7 (`openapi-typescript` peer is TS 5),
+    MSW 3, Playwright 1.63 (must match the pre-installed browser in CI/dev images), Node 24 LTS.

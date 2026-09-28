@@ -27,7 +27,7 @@ func (r Report) Markdown() string {
 	var b strings.Builder
 	b.WriteString("## Provenly coverage gates\n\n")
 	b.WriteString("Each gate must independently reach 100% of its own required denominator.\n\n")
-	b.WriteString("| Gate | Metric | Reachable | Covered | Exceptions | Required | Gaps | Effective | Raw | Target | Status |\n")
+	b.WriteString("| Gate | Metric | Total | Covered | Exceptions | Required | Gaps | Effective | Raw | Target | Status |\n")
 	b.WriteString("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|\n")
 	for _, g := range r.Gates {
 		if len(g.Metrics) == 0 {
@@ -82,9 +82,10 @@ func (r Report) ConsolidatedMarkdown() string {
 	b.WriteString("## Consolidated coverage (all layers merged)\n\n")
 	b.WriteString("Backend: unit + integration + contract + e2e raw coverage merged with `go tool covdata` (statements).\n")
 	b.WriteString("Frontend: unit + integration (v8) + e2e (istanbul) merged by executed line ranges (lines).\n\n")
-	b.WriteString("Lines no layer can execute are consolidated exceptions (`coverage/exceptions.yaml`, gates `*-consolidated`):\n")
-	b.WriteString("they are listed per file in *Excepted lines* and removed from *Required*; *Uncovered lines* must stay empty.\n\n")
-	b.WriteString("| Side | Metric | Covered | Reachable (raw %) | Required (effective %) |\n|---|---|---:|---:|---:|\n")
+	b.WriteString("Code no layer can execute (unreachable error paths, test infrastructure) is a consolidated exception\n")
+	b.WriteString("(`coverage/exceptions.yaml`, gates `*-consolidated`): it is listed per file in *Excepted lines* and is not\n")
+	b.WriteString("reachable. Everything reachable must be covered (100%); *Uncovered lines* must stay empty.\n\n")
+	b.WriteString("| Side | Metric | Instrumented | Excepted (unreachable) | Reachable | Covered | Coverage of reachable |\n|---|---|---:|---:|---:|---:|---:|\n")
 	for _, side := range []string{"backend", "frontend"} {
 		var raw, eff *CodeCoverage
 		for i, c := range r.CodeCoverage {
@@ -96,7 +97,7 @@ func (r Report) ConsolidatedMarkdown() string {
 			}
 		}
 		if raw != nil && eff != nil {
-			fmt.Fprintf(&b, "| %s | %s | %d | %d (%.2f%%) | %d (%.2f%%) |\n", side, raw.Metric, raw.Covered, raw.Total, raw.Percent, eff.Total, eff.Percent)
+			fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %d | %.2f%% |\n", side, raw.Metric, raw.Total, raw.Total-eff.Total, eff.Total, eff.Covered, eff.Percent)
 		}
 	}
 	join := func(ls []int) string {
@@ -107,12 +108,12 @@ func (r Report) ConsolidatedMarkdown() string {
 		return strings.Join(out, ", ")
 	}
 	for _, side := range []string{"backend", "frontend"} {
-		fmt.Fprintf(&b, "\n### %s\n\n| File | Covered | Reachable | Required | Effective %% | Uncovered lines | Excepted lines |\n|---|---:|---:|---:|---:|---|---|\n", side)
+		fmt.Fprintf(&b, "\n### %s\n\n| File | Instrumented | Excepted | Reachable | Covered | Coverage %% | Uncovered lines | Excepted lines |\n|---|---:|---:|---:|---:|---:|---|---|\n", side)
 		for _, f := range r.Files {
 			if f.Side != side {
 				continue
 			}
-			fmt.Fprintf(&b, "| %s | %d | %d | %d | %.2f%% | %s | %s |\n", f.File, f.Covered, f.Total, f.Required, f.Percent, join(f.Uncovered), join(f.Excepted))
+			fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %.2f%% | %s | %s |\n", f.File, f.Total, f.Total-f.Required, f.Required, f.Covered, f.Percent, join(f.Uncovered), join(f.Excepted))
 		}
 	}
 	return b.String()

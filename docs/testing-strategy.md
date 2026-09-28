@@ -85,7 +85,7 @@ make gates               # evaluate the 8 gates from collected evidence
 make coverage            # everything above
 ```
 
-## Spike: unifying Go raw coverage (Go 1.26)
+## Spike: unifying Go raw coverage (Go 1.26, re-verified on 1.27.1)
 
 Verified in this repository (not assumed):
 
@@ -94,6 +94,9 @@ Verified in this repository (not assumed):
 - Running `go test -cover` on packages **without test files** prints `go: no such tool "covdata"` in Go 1.26
   toolchains (the `covdata` binary is not pre-built). The Makefile therefore passes only packages that have tests and
   relies on `-coverpkg=./...` to instrument the rest.
+- Go 1.27 starts some coverage blocks at their first statement instead of the opening brace (e.g. a function body
+  or an `if` body), so line-targeted exceptions must point at the statement line; the stale-exception check catches
+  any drift after a toolchain bump.
 - The E2E binary is built with `go build -cover -covermode=atomic -coverpkg=./...` and run with `GOCOVERDIR`; it
   flushes counters on `os.Exit` after a graceful SIGTERM. The covermode **must match** (`atomic`) across unit,
   integration, contract and E2E, otherwise `go tool covdata` fails with "counter mode clash".

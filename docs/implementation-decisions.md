@@ -62,6 +62,7 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
    improve this with created/running and reconciliation.
 8. **Steps.** At most 100 steps per test case (so one page of the paginated steps listing always holds them all);
    reorder is `PUT /steps/order` with the full permutation of step ids.
+   **Status: Accepted by Ed (2026-09-28).**
 9. **Summary rounding.** Percentages are 0..100 rounded to 2 decimals; 0 when the denominator is 0.
 10. **Deprecation is one-way** in the POC (no re-activation endpoint); editing a deprecated test case is allowed.
 11. **shadcn/ui components are vendored manually** in `frontend/src/components/ui` (the shadcn registry was not

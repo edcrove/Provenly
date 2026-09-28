@@ -109,3 +109,15 @@ func TestTargetIDs(t *testing.T) {
 		t.Fatal("an id with a failing test is not covered")
 	}
 }
+
+func TestGateSelection(t *testing.T) {
+	sel := map[string]bool{"frontend-contract": true}
+	for _, g := range gates {
+		if got := isSelected(sel, g.name); got != (g.name == "frontend-contract") {
+			t.Errorf("%s selected=%v", g.name, got)
+		}
+	}
+	if !isSelected(map[string]bool{}, "backend-unit") || !knownGate("backend-e2e") || knownGate("nope") {
+		t.Fatal("selection helpers")
+	}
+}

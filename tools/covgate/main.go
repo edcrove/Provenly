@@ -40,11 +40,15 @@ func main() {
 		}
 	}
 	report := Report{GeneratedAt: time.Now().UTC().Format(time.RFC3339)}
+	for g := range selected {
+		if !knownGate(g) {
+			fatal(fmt.Errorf("unknown gate %q", g))
+		}
+	}
 	for _, g := range gates {
-		if len(selected) > 0 && !selected[g.name] {
+		if !isSelected(selected, g.name) {
 			continue
 		}
-		delete(selected, g.name)
 		r := &GateResult{Gate: g.name, Side: g.side, Layer: g.layer, Denominator: g.denominator, Target: 100,
 			GapDetails: []string{}, Exceptions: []AppliedExcept{}, Errors: []string{}}
 		elements := g.build(*root, r)
@@ -60,9 +64,6 @@ func main() {
 			}
 		}
 		report.Gates = append(report.Gates, *r)
-	}
-	for g := range selected {
-		fatal(fmt.Errorf("unknown gate %q", g))
 	}
 	if *evidence {
 		b, bn := backendEvidence(*root)
@@ -102,4 +103,18 @@ func main() {
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "covgate:", err)
 	os.Exit(2)
+}
+
+func knownGate(name string) bool {
+	for _, g := range gates {
+		if g.name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// isSelected reports whether a gate runs: all gates when none were selected.
+func isSelected(selected map[string]bool, name string) bool {
+	return len(selected) == 0 || selected[name]
 }

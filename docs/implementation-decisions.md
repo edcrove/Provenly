@@ -44,6 +44,9 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
    "<1 ms"); skipped tests keep whatever duration the framework reports. Parse errors are stored with the run
    (`test_run_parse_errors`, migration 00004) with `persisted` kept/discarded, exposed by
    `GET /api/v1/test-runs/{id}/parse-errors`, shown in the run detail, and returned on idempotent replays.
+   Parse errors have a `severity` (migration 00005): `error` (no name → discarded; invalid time → kept without
+   duration) or `warning` — for now a **passed or failed** result with a 0 ms duration is kept and flagged for
+   review (skipped/error results with 0 ms are not flagged).
 6. **Replay response.** An idempotent replay returns `200` with the existing run and the diagnostics stored at
    creation; nothing is re-parsed into the database.
 7. **Run lifecycle in the POC.** Runs are created synchronously when the final report is ingested and stored as

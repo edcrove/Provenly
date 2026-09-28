@@ -62,23 +62,28 @@ func TestParseInvalidCasesDoNotStopParsing(t *testing.T) {
 <testcase name="bad time" time="soon"><failure/></testcase>
 <testcase name="negative" time="-1"/>
 <testcase name="tiny" time="0.0004"/>
+<testcase name="zero fail" time="0"><failure/></testcase>
+<testcase name="zero skip" time="0"><skipped/></testcase>
+<testcase name="zero error" time="0"><error/></testcase>
 <testcase name="good"/>
 </testsuite></testsuites>`))
 	require.NoError(t, err)
-	assert.Equal(t, 5, rep.Received)
+	assert.Equal(t, 8, rep.Received)
 	names := make([]string, len(rep.Results))
 	for i, r := range rep.Results {
 		names[i] = r.TestName
 	}
-	assert.Equal(t, []string{"bad time", "negative", "tiny", "good"}, names, "only the nameless testcase is discarded")
+	assert.Equal(t, []string{"bad time", "negative", "tiny", "zero fail", "zero skip", "zero error", "good"}, names, "only the nameless testcase is discarded")
 	assert.Nil(t, rep.Results[0].DurationMs)
 	assert.Equal(t, Failed, rep.Results[0].Status, "an invalid time never hides a failure")
 	assert.Equal(t, int64(0), *rep.Results[2].DurationMs, "sub-millisecond durations round to 0")
 	assert.Equal(t, []CaseError{
-		{Index: 0, TestName: "", Message: "testcase has no name; result discarded"},
-		{Index: 1, TestName: "bad time", Message: `invalid time attribute "soon"; result kept without duration`, Persisted: true},
-		{Index: 2, TestName: "negative", Message: `invalid time attribute "-1"; result kept without duration`, Persisted: true},
-	}, rep.Errors)
+		{Index: 0, TestName: "", Message: "testcase has no name; result discarded", Severity: SeverityError},
+		{Index: 1, TestName: "bad time", Message: `invalid time attribute "soon"; result kept without duration`, Persisted: true, Severity: SeverityError},
+		{Index: 2, TestName: "negative", Message: `invalid time attribute "-1"; result kept without duration`, Persisted: true, Severity: SeverityError},
+		{Index: 3, TestName: "tiny", Message: "passed test reported a 0 ms duration (0 or under 0.5 ms); review the reporter", Persisted: true, Severity: SeverityWarning},
+		{Index: 4, TestName: "zero fail", Message: "failed test reported a 0 ms duration (0 or under 0.5 ms); review the reporter", Persisted: true, Severity: SeverityWarning},
+	}, rep.Errors, "skipped and error results with 0 ms are not flagged")
 }
 
 func ms(v int64) *int64 { return &v }

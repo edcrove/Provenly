@@ -34,6 +34,7 @@ func (r iteratorForInsertParseErrors) Values() ([]interface{}, error) {
 		r.rows[0].TestName,
 		r.rows[0].Message,
 		r.rows[0].Persisted,
+		r.rows[0].Severity,
 	}, nil
 }
 
@@ -42,7 +43,7 @@ func (r iteratorForInsertParseErrors) Err() error {
 }
 
 func (q *Queries) InsertParseErrors(ctx context.Context, arg []InsertParseErrorsParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"test_run_parse_errors"}, []string{"test_run_id", "case_index", "test_name", "message", "persisted"}, &iteratorForInsertParseErrors{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"test_run_parse_errors"}, []string{"test_run_id", "case_index", "test_name", "message", "persisted", "severity"}, &iteratorForInsertParseErrors{rows: arg})
 }
 
 // iteratorForInsertTestResults implements pgx.CopyFromSource.

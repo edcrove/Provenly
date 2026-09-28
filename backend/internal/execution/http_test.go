@@ -37,7 +37,7 @@ func (s *stubAPI) Summary(context.Context, int64) (Summary, error) {
 	return ComputeSummary(3, []int64{153, 154}, []ValidResult{{153, Passed}}, []Diagnostic{{Correlation: CorrelationMissing}}), s.err
 }
 func (s *stubAPI) ListParseErrors(_ context.Context, _ int64, p pagination.Page) (pagination.Result[ParseError], error) {
-	return pagination.Result[ParseError]{Items: []ParseError{{Index: 2, TestName: "t", Message: "m", Persisted: true}}, Page: p, Total: 1}, s.err
+	return pagination.Result[ParseError]{Items: []ParseError{{Index: 2, TestName: "t", Message: "m", Persisted: true, Severity: "warning"}}, Page: p, Total: 1}, s.err
 }
 func (s *stubAPI) History(_ context.Context, _ int64, p pagination.Page) (pagination.Result[HistoryEntry], error) {
 	return pagination.Result[HistoryEntry]{Items: []HistoryEntry{{Result: sampleResult, Run: sampleRun}}, Page: p, Total: 1}, s.err
@@ -62,7 +62,7 @@ func TestHandlerHappyPaths(t *testing.T) {
 		"/api/v1/test-runs/3/results?status=failed&correlation=valid": `"testCaseId":153`,
 		"/api/v1/test-runs/3/summary":                                 `"executionPercent":50`,
 		"/api/v1/test-cases/153/results":                              `"run":{"id":3`,
-		"/api/v1/test-runs/3/parse-errors":                            `"items":[{"index":2,"testName":"t","message":"m","persisted":true}]`,
+		"/api/v1/test-runs/3/parse-errors":                            `"items":[{"index":2,"testName":"t","message":"m","persisted":true,"severity":"warning"}]`,
 	}
 	for target, want := range cases {
 		rec := serve(&stubAPI{}, stubCatalog{}, target)

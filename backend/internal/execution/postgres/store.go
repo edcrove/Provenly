@@ -159,7 +159,7 @@ func (s *Store) InsertTestResults(ctx context.Context, runID int64, results []ex
 func (s *Store) InsertParseErrors(ctx context.Context, runID int64, errs []execution.ParseError) error {
 	rows := make([]executiondb.InsertParseErrorsParams, len(errs))
 	for i, e := range errs {
-		rows[i] = executiondb.InsertParseErrorsParams{TestRunID: runID, CaseIndex: e.Index, TestName: e.TestName, Message: e.Message, Persisted: e.Persisted}
+		rows[i] = executiondb.InsertParseErrorsParams{TestRunID: runID, CaseIndex: e.Index, TestName: e.TestName, Message: e.Message, Persisted: e.Persisted, Severity: e.Severity}
 	}
 	_, err := s.q.InsertParseErrors(ctx, rows)
 	return err
@@ -173,7 +173,7 @@ func (s *Store) ListParseErrors(ctx context.Context, runID int64, limit, offset 
 	}
 	out := make([]execution.ParseError, len(rows))
 	for i, r := range rows {
-		out[i] = execution.ParseError{Index: r.CaseIndex, TestName: r.TestName, Message: r.Message, Persisted: r.Persisted}
+		out[i] = execution.ParseError{Index: r.CaseIndex, TestName: r.TestName, Message: r.Message, Persisted: r.Persisted, Severity: r.Severity}
 	}
 	return out, nil
 }

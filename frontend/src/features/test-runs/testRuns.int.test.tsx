@@ -226,6 +226,7 @@ describe('FE-INT-015 report parse errors', () => {
           ? 'testcase has no name; result discarded'
           : 'invalid time attribute; result kept without duration',
       persisted: i !== 0,
+      severity: i === 1 ? ('warning' as const) : ('error' as const),
     }))
     const { user } = renderRoute('/test-runs/7')
     const table = await screen.findByRole('table', { name: 'Parse errors' })
@@ -233,6 +234,8 @@ describe('FE-INT-015 report parse errors', () => {
     expect(within(rows[0]).getByText('(no name)')).toBeInTheDocument()
     expect(within(rows[0]).getByText('discarded')).toBeInTheDocument()
     expect(within(rows[1]).getByText('kept')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('error')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('warning')).toBeInTheDocument()
     const card = table.closest('[data-slot="card"]') as HTMLElement
     await user.click(within(card).getByRole('button', { name: 'Next' }))
     expect(await within(card).findByText('t20')).toBeInTheDocument()

@@ -59,12 +59,17 @@ test.describe('Backend API journeys', () => {
         byName(`old TC-${deprecated.id}`),
         `<testcase name="login slow TC-${login.id}" time="soon"/>`,
         '<testcase name=""/>',
+        `<testcase name="login instant TC-${login.id}" time="0"/>`,
       ),
     )
     expect(res.status()).toBe(201)
     const body = await res.json()
-    expect(body).toMatchObject({ created: true, received: 8, persisted: 7 })
-    expect(body.parseErrors.map((e: { persisted: boolean }) => e.persisted)).toEqual([true, false])
+    expect(body).toMatchObject({ created: true, received: 9, persisted: 8 })
+    expect(body.parseErrors.map((e: { persisted: boolean; severity: string }) => [e.persisted, e.severity])).toEqual([
+      [true, 'error'],
+      [false, 'error'],
+      [true, 'warning'],
+    ])
     expect(body.diagnostics.map((d: { correlation: string }) => d.correlation)).toEqual([
       'missing',
       'malformed',
@@ -84,11 +89,15 @@ test.describe('Backend API journeys', () => {
       diagnostics: { missing: 1, malformed: 1, unknown: 1, deprecated: 1, total: 4 },
     })
     expect(summary.testCases).toEqual([
-      { testCaseId: login.id, status: 'failed', resultCount: 3 },
+      { testCaseId: login.id, status: 'failed', resultCount: 4 },
       { testCaseId: logout.id, status: 'untested', resultCount: 0 },
     ])
     const parseErrors = await (await request.get(`${apiURL}/api/v1/test-runs/${runId}/parse-errors`)).json()
-    expect(parseErrors.items).toMatchObject([{ index: 6, persisted: true }, { index: 7, persisted: false }])
+    expect(parseErrors.items).toMatchObject([
+      { index: 6, persisted: true, severity: 'error' },
+      { index: 7, persisted: false, severity: 'error' },
+      { index: 8, persisted: true, severity: 'warning' },
+    ])
     const slow = await (await request.get(`${apiURL}/api/v1/test-runs/${runId}/results?pageSize=100`)).json()
     expect(slow.items.find((r: { testName: string }) => r.testName.startsWith('login slow')).durationMs).toBeNull()
     const failed = await (await request.get(`${apiURL}/api/v1/test-runs/${runId}/results?status=failed`)).json()

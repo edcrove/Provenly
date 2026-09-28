@@ -125,12 +125,14 @@ type NewResult struct {
 }
 
 // ParseError is a testcase of the ingested report that could not be fully
-// normalized, stored with its run. Persisted tells whether its result was kept.
+// normalized or looks suspicious, stored with its run. Persisted tells whether
+// its result was kept; Severity is "error" or "warning".
 type ParseError struct {
 	Index     int32
 	TestName  string
 	Message   string
 	Persisted bool
+	Severity  string
 }
 
 // Diagnostic is a stored result whose TC-ID is not valid.

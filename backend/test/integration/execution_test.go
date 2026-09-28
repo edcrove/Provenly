@@ -100,23 +100,28 @@ func TestExecutionPersistence(t *testing.T) {
 			`<testcase name="slow TC-`+itoa(tc.ID)+`" time="soon"><failure/></testcase>`,
 			`<testcase name="no time TC-`+itoa(tc.ID)+`"/>`,
 			`<testcase name=""/>`,
+			`<testcase name="instant TC-`+itoa(tc.ID)+`" time="0.0001"/>`,
 		)
 		out, err := s.Ingestion.IngestJUnit(ctx, meta("900", 1), strings.NewReader(doc))
 		require.NoError(t, err)
-		require.Len(t, out.ParseErrors, 2)
+		require.Len(t, out.ParseErrors, 3)
 		assert.Equal(t, int32(0), out.ParseErrors[0].Index)
+		assert.Equal(t, "error", out.ParseErrors[0].Severity)
 		assert.Equal(t, int32(2), out.ParseErrors[1].Index)
+		assert.Equal(t, int32(3), out.ParseErrors[2].Index)
+		assert.Equal(t, "warning", out.ParseErrors[2].Severity, "a 0 ms pass is flagged for review")
 
 		res, err := s.Execution.ListRunResults(ctx, out.Run.ID, execution.ResultFilter{}, pagination.Default())
 		require.NoError(t, err)
-		require.Len(t, res.Items, 2)
+		require.Len(t, res.Items, 3)
+		assert.Equal(t, int64(0), *res.Items[2].DurationMs, "sub-millisecond durations are stored as 0")
 		assert.Nil(t, res.Items[0].DurationMs, "invalid time is stored as unknown, never 0")
 		assert.Equal(t, execution.Failed, res.Items[0].Status)
 		assert.Nil(t, res.Items[1].DurationMs, "absent time is unknown")
 
 		page, err := s.Execution.ListParseErrors(ctx, out.Run.ID, pagination.Page{Number: 2, Size: 1})
 		require.NoError(t, err)
-		assert.Equal(t, int64(2), page.Total)
+		assert.Equal(t, int64(3), page.Total)
 		assert.False(t, page.Items[0].Persisted)
 
 		replay, err := s.Ingestion.IngestJUnit(ctx, meta("900", 1), strings.NewReader(junitFor()))

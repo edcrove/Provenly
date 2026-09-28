@@ -50,4 +50,5 @@ type TestRunParseError struct {
 	TestName  string
 	Message   string
 	Persisted bool
+	Severity  string
 }

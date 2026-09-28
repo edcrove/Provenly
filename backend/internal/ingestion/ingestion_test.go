@@ -87,8 +87,8 @@ func TestIngestCorrelatesEveryResult(t *testing.T) {
 	assert.Equal(t, 7, out.Received)
 	assert.Equal(t, 6, out.Persisted)
 	assert.Equal(t, []execution.ParseError{
-		{Index: 5, TestName: "", Message: "testcase has no name; result discarded"},
-		{Index: 6, TestName: "slow TC-2", Message: `invalid time attribute "later"; result kept without duration`, Persisted: true},
+		{Index: 5, TestName: "", Message: "testcase has no name; result discarded", Severity: "error"},
+		{Index: 6, TestName: "slow TC-2", Message: `invalid time attribute "later"; result kept without duration`, Persisted: true, Severity: "error"},
 	}, rec.gotParse)
 	assert.Equal(t, []execution.ParseError{}, out.ParseErrors, "the response returns what is stored")
 	assert.Equal(t, []int64{153, 2, 404, 2}, cat.askedIDs)

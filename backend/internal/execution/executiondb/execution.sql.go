@@ -142,6 +142,7 @@ type InsertParseErrorsParams struct {
 	TestName  string
 	Message   string
 	Persisted bool
+	Severity  string
 }
 
 type InsertTestResultsParams struct {
@@ -253,7 +254,7 @@ func (q *Queries) ListExpectedCaseIDs(ctx context.Context, testRunID int64) ([]i
 }
 
 const listParseErrors = `-- name: ListParseErrors :many
-SELECT case_index, test_name, message, persisted FROM test_run_parse_errors
+SELECT case_index, test_name, message, persisted, severity FROM test_run_parse_errors
 WHERE test_run_id = $1
 ORDER BY case_index
 LIMIT $3 OFFSET $2
@@ -270,6 +271,7 @@ type ListParseErrorsRow struct {
 	TestName  string
 	Message   string
 	Persisted bool
+	Severity  string
 }
 
 func (q *Queries) ListParseErrors(ctx context.Context, arg ListParseErrorsParams) ([]ListParseErrorsRow, error) {
@@ -286,6 +288,7 @@ func (q *Queries) ListParseErrors(ctx context.Context, arg ListParseErrorsParams
 			&i.TestName,
 			&i.Message,
 			&i.Persisted,
+			&i.Severity,
 		); err != nil {
 			return nil, err
 		}

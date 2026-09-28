@@ -107,7 +107,7 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	}
 	parseErrors := make([]execution.ParseError, len(report.Errors))
 	for i, e := range report.Errors {
-		parseErrors[i] = execution.ParseError{Index: int32(e.Index), TestName: e.TestName, Message: e.Message, Persisted: e.Persisted}
+		parseErrors[i] = execution.ParseError{Index: int32(e.Index), TestName: e.TestName, Message: e.Message, Persisted: e.Persisted, Severity: string(e.Severity)}
 	}
 	run, created, err := s.recorder.RecordRun(ctx, execution.NewRun{
 		Provider: meta.Provider, ProviderRunID: meta.ProviderRunID, RunAttempt: meta.RunAttempt,

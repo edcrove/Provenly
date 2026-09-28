@@ -1151,7 +1151,7 @@ components:
     ParseError:
       type: object
       additionalProperties: false
-      required: [index, testName, message, persisted]
+      required: [index, testName, message, persisted, severity]
       properties:
         index:
           type: integer
@@ -1164,6 +1164,12 @@ components:
         persisted:
           type: boolean
           description: true when the result was still stored (e.g. invalid time), false when it was discarded
+        severity:
+          type: string
+          enum: [error, warning]
+          description: |
+            error = data was lost or is unknown (no name, invalid time);
+            warning = stored but worth reviewing (a passed/failed test with a 0 ms duration)
 
     ParseErrorPage:
       allOf:

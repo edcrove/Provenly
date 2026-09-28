@@ -71,6 +71,7 @@ type ParseErrorDTO struct {
 	TestName  string `json:"testName"`
 	Message   string `json:"message"`
 	Persisted bool   `json:"persisted"`
+	Severity  string `json:"severity"`
 }
 
 // ToParseErrorDTO converts a ParseError to its wire form.

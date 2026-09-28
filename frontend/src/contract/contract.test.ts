@@ -304,7 +304,9 @@ const scenarios: Scenario[] = [
     op: 'GET /api/v1/test-runs/{testRunId}/parse-errors',
     status: 200,
     setup: () => {
-      db.parseErrors[7] = [{ index: 0, testName: '', message: 'no name', persisted: false }]
+      db.parseErrors[7] = [
+        { index: 0, testName: '', message: 'no name', persisted: false, severity: 'error' },
+      ]
     },
     call: (c) =>
       c.GET('/api/v1/test-runs/{testRunId}/parse-errors', { params: { path: run, query: { page: 1 } } }),

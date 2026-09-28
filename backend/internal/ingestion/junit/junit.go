@@ -70,14 +70,25 @@ type Result struct {
 	Ref          TCRef
 }
 
-// CaseError reports a testcase that could not be fully normalized. It never
-// stops parsing: Persisted tells whether the result was still kept (e.g. with
-// an unknown duration) or discarded (e.g. no name).
+// Severity of a CaseError.
+type Severity string
+
+// Severities: an error means data was lost or is unknown; a warning flags a
+// suspicious but stored value that deserves review.
+const (
+	SeverityError   Severity = "error"
+	SeverityWarning Severity = "warning"
+)
+
+// CaseError reports a testcase that could not be fully normalized, or looks
+// suspicious. It never stops parsing: Persisted tells whether the result was
+// still kept (e.g. with an unknown duration) or discarded (e.g. no name).
 type CaseError struct {
 	Index     int
 	TestName  string
 	Message   string
 	Persisted bool
+	Severity  Severity
 }
 
 // Report is the outcome of parsing one document.
@@ -157,13 +168,13 @@ func walk(rep *Report, s xmlSuite, parent string) {
 	for _, c := range s.Cases {
 		index := rep.Received
 		rep.Received++
-		res, warning, err := normalize(c, suite, index)
+		res, issue, err := normalize(c, suite, index)
 		if err != nil {
-			rep.Errors = append(rep.Errors, CaseError{Index: index, TestName: c.Name, Message: err.Error()})
+			rep.Errors = append(rep.Errors, CaseError{Index: index, TestName: c.Name, Message: err.Error(), Severity: SeverityError})
 			continue
 		}
-		if warning != "" {
-			rep.Errors = append(rep.Errors, CaseError{Index: index, TestName: res.TestName, Message: warning, Persisted: true})
+		if issue != nil {
+			rep.Errors = append(rep.Errors, *issue)
 		}
 		rep.Results = append(rep.Results, res)
 	}
@@ -172,17 +183,17 @@ func walk(rep *Report, s xmlSuite, parent string) {
 	}
 }
 
-// normalize returns the result, a non-fatal warning, or an error when the
-// testcase cannot be kept at all.
-func normalize(c xmlCase, suite string, index int) (Result, string, error) {
+// normalize returns the result plus an optional issue on a kept result, or an
+// error when the testcase cannot be kept at all.
+func normalize(c xmlCase, suite string, index int) (Result, *CaseError, error) {
 	name := strings.TrimSpace(c.Name)
 	if name == "" {
-		return Result{}, "", fmt.Errorf("testcase has no name; result discarded")
+		return Result{}, nil, fmt.Errorf("testcase has no name; result discarded")
 	}
-	var warning string
+	var issue *CaseError
 	duration, err := parseDuration(c.Time)
 	if err != nil {
-		warning = err.Error() + "; result kept without duration"
+		issue = &CaseError{Index: index, TestName: name, Message: err.Error() + "; result kept without duration", Persisted: true, Severity: SeverityError}
 	}
 	res := Result{
 		Index: index, TestName: name, ClassName: c.ClassName, SuiteName: suite,
@@ -199,7 +210,11 @@ func normalize(c xmlCase, suite string, index int) (Result, string, error) {
 		res.Status = Skipped
 		res.ErrorMessage, res.ErrorDetails = outcomeText(c.Skipped)
 	}
-	return res, warning, nil
+	if duration != nil && *duration == 0 && (res.Status == Passed || res.Status == Failed) {
+		issue = &CaseError{Index: index, TestName: name, Persisted: true, Severity: SeverityWarning,
+			Message: fmt.Sprintf("%s test reported a 0 ms duration (0 or under 0.5 ms); review the reporter", res.Status)}
+	}
+	return res, issue, nil
 }
 
 func outcomeText(o *xmlOutcome) (string, string) {

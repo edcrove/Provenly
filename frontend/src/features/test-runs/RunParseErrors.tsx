@@ -29,6 +29,7 @@ export function RunParseErrors({ testRunId }: { testRunId: number }) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>#</TableHead>
+                    <TableHead>Severity</TableHead>
                     <TableHead>Test name</TableHead>
                     <TableHead>Problem</TableHead>
                     <TableHead>Result</TableHead>
@@ -38,10 +39,15 @@ export function RunParseErrors({ testRunId }: { testRunId: number }) {
                   {data.items.map((e) => (
                     <TableRow key={e.index} data-testid="parse-error-row">
                       <TableCell>{e.index + 1}</TableCell>
+                      <TableCell>
+                        <Badge variant={e.severity === 'warning' ? 'warning' : 'destructive'}>
+                          {e.severity}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{e.testName || '(no name)'}</TableCell>
                       <TableCell>{e.message}</TableCell>
                       <TableCell>
-                        <Badge variant={e.persisted ? 'secondary' : 'destructive'}>
+                        <Badge variant={e.persisted ? 'secondary' : 'outline'}>
                           {e.persisted ? 'kept' : 'discarded'}
                         </Badge>
                       </TableCell>

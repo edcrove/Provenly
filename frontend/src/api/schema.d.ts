@@ -567,6 +567,12 @@ export interface components {
             message: string;
             /** @description true when the result was still stored (e.g. invalid time), false when it was discarded */
             persisted: boolean;
+            /**
+             * @description error = data was lost or is unknown (no name, invalid time);
+             *     warning = stored but worth reviewing (a passed/failed test with a 0 ms duration)
+             * @enum {string}
+             */
+            severity: "error" | "warning";
         };
         ParseErrorPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["ParseError"][];

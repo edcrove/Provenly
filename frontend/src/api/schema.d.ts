@@ -268,7 +268,9 @@ export interface paths {
         /**
          * Ingest one complete JUnit XML report (batch) for a CI run attempt
          * @description `externalRunId` = `{provider}:{runId}:{runAttempt}`. Re-sending the same
-         *     attempt is idempotent (200, no duplicate run, no reprocessing); a new
+         *     attempt is idempotent (200, no duplicate run, no reprocessing; if the report
+         *     content differs from the original, a `warnings` entry says it was not
+         *     applied); a new
          *     attempt creates a new run (201). Individual invalid testcases never abort
          *     the batch: they are persisted with a correlation diagnostic, or reported in
          *     `parseErrors` (stored with the run; `persisted` tells whether the result
@@ -593,6 +595,12 @@ export interface components {
             persisted: number;
             diagnostics: components["schemas"]["IngestionDiagnostic"][];
             parseErrors: components["schemas"]["ParseError"][];
+            /**
+             * @description Non-blocking notices. On an idempotent replay whose report differs
+             *     (SHA-256) from the one that created the run, it says the new report
+             *     was not applied; send a new runAttempt to record it.
+             */
+            warnings: string[];
         };
     };
     responses: {

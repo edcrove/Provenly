@@ -10,6 +10,6 @@ targets:
   - id: BE-E2E-004
     description: CI ingestion with TC-ID extraction (property + name fallback), snapshot summary and diagnostics
   - id: BE-E2E-005
-    description: resending an attempt is idempotent and a rerun creates a new run
+    description: resending an attempt is idempotent (a different report is warned, not applied) and a rerun creates a new run
   - id: BE-E2E-006
     description: result history across runs and snapshot stability after catalog changes

@@ -44,7 +44,14 @@ type TestRunDTO struct {
 }
 
 // RunDTO converts a TestRun to its wire form.
-func RunDTO(r TestRun) TestRunDTO { return TestRunDTO(r) }
+func RunDTO(r TestRun) TestRunDTO {
+	return TestRunDTO{
+		ID: r.ID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
+		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.Commit, Status: r.Status,
+		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, CreatedAt: r.CreatedAt,
+		StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,
+	}
+}
 
 // TestResultDTO is the wire form of TestResult.
 type TestResultDTO struct {

@@ -78,6 +78,8 @@ type TestRun struct {
 	CreatedAt     time.Time
 	StartedAt     *time.Time
 	CompletedAt   *time.Time
+	// ReportSHA256 is the digest of the report that created the run (internal; not exposed).
+	ReportSHA256 string
 }
 
 // TestResult is one persisted result. TestCaseID is set when the correlation
@@ -108,6 +110,8 @@ type NewRun struct {
 	Branch        string
 	Commit        string
 	StartedAt     *time.Time
+	// ReportSHA256 is the digest of the ingested report.
+	ReportSHA256 string
 }
 
 // NewResult is a result to persist within a new run.

@@ -1,6 +1,6 @@
 -- name: InsertTestRun :one
-INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at)
-VALUES (@external_run_id, @provider, @provider_run_id, @run_attempt, @pipeline, @branch, @commit_sha, @status, @started_at, @completed_at)
+INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256)
+VALUES (@external_run_id, @provider, @provider_run_id, @run_attempt, @pipeline, @branch, @commit_sha, @status, @started_at, @completed_at, @report_sha256)
 ON CONFLICT (external_run_id) DO NOTHING
 RETURNING id;
 

@@ -49,6 +49,10 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
    review (skipped/error results with 0 ms are not flagged).
 6. **Replay response.** An idempotent replay returns `200` with the existing run and the diagnostics stored at
    creation; nothing is re-parsed into the database.
+   **Status: Changed by Ed (2026-09-28) — option B, implemented.** The run stores the SHA-256 of the report that
+   created it (migration 00006, internal field). A replay whose report differs still changes nothing, but the
+   response carries `warnings: ["report differs from the one already ingested for this attempt; it was not applied
+   (send a new runAttempt to record it)"]`; an identical replay has `warnings: []`.
 7. **Run lifecycle in the POC.** Runs are created synchronously when the final report is ingested and stored as
    `completed`; `startedAt` is the earliest `testsuite@timestamp` when present.
 8. **Steps.** At most 100 steps per test case (so one page of the paginated steps listing always holds them all);

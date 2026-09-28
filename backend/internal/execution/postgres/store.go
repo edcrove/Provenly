@@ -92,6 +92,7 @@ func toRun(r runRow) execution.TestRun {
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.CommitSha,
 		Status: execution.RunStatus(r.Status), ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount,
 		CreatedAt: r.CreatedAt.Time, StartedAt: timePtr(r.StartedAt), CompletedAt: timePtr(r.CompletedAt),
+		ReportSHA256: r.ReportSha256,
 	}
 }
 
@@ -109,7 +110,7 @@ func (s *Store) InsertTestRun(ctx context.Context, p execution.InsertRunParams) 
 	id, err := s.q.InsertTestRun(ctx, executiondb.InsertTestRunParams{
 		ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID, RunAttempt: p.RunAttempt,
 		Pipeline: p.Pipeline, Branch: p.Branch, CommitSha: p.Commit, Status: string(p.Status),
-		StartedAt: timestamptz(p.StartedAt), CompletedAt: timestamptz(&p.CompletedAt),
+		StartedAt: timestamptz(p.StartedAt), CompletedAt: timestamptz(&p.CompletedAt), ReportSha256: p.ReportSHA256,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
@@ -193,7 +194,7 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 		TestRun: executiondb.TestRun{
 			ID: r.ID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 			RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
-			CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,
+			CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, ReportSha256: r.ReportSha256,
 		},
 		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount,
 	}), nil

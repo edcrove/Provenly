@@ -37,6 +37,7 @@ type TestRun struct {
 	CreatedAt     pgtype.Timestamptz
 	StartedAt     pgtype.Timestamptz
 	CompletedAt   pgtype.Timestamptz
+	ReportSha256  string
 }
 
 type TestRunExpectedCase struct {

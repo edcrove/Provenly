@@ -45,11 +45,18 @@ type fakeRecorder struct {
 	recordErr  error
 	diagErr    error
 	parseErr   error
+	// storedDigest simulates the digest of the report that created an existing run.
+	storedDigest string
 }
 
 func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []int64, rs []execution.NewResult, pe []execution.ParseError) (execution.TestRun, bool, error) {
 	f.gotRun, f.gotExp, f.gotResults, f.gotParse = run, exp, rs, pe
-	return execution.TestRun{ID: 1, ExternalRunID: execution.ExternalRunID(run.Provider, run.ProviderRunID, run.RunAttempt), ResultCount: int32(len(rs))}, f.created, f.recordErr
+	digest := run.ReportSHA256
+	if f.storedDigest != "" {
+		digest = f.storedDigest
+	}
+	return execution.TestRun{ID: 1, ExternalRunID: execution.ExternalRunID(run.Provider, run.ProviderRunID, run.RunAttempt),
+		ResultCount: int32(len(rs)), ReportSHA256: digest}, f.created, f.recordErr
 }
 
 func (f *fakeRecorder) Diagnostics(context.Context, int64) ([]execution.Diagnostic, error) {
@@ -126,6 +133,13 @@ func TestIngestReplayAndEmptyParseErrors(t *testing.T) {
 	assert.False(t, out.Created)
 	assert.Equal(t, rec.storedPE, out.ParseErrors, "a replay reports the parse errors stored at creation")
 	assert.Empty(t, out.Diagnostics)
+	assert.Equal(t, []string{}, out.Warnings, "same report: no warning")
+	assert.Len(t, rec.gotRun.ReportSHA256, 64)
+
+	rec.storedDigest = "digest-of-another-report"
+	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
+	require.NoError(t, err)
+	assert.Equal(t, []string{ReportDiffersWarning}, out.Warnings)
 }
 
 func TestValidateMeta(t *testing.T) {
@@ -158,7 +172,7 @@ func TestIngestErrors(t *testing.T) {
 
 	tooLarge := &http.MaxBytesError{Limit: 1}
 	_, err = NewService(&fakeCatalog{}, &fakeRecorder{}).IngestJUnit(ctx, meta, errReader{tooLarge})
-	assert.ErrorAs(t, err, &tooLarge)
+	assert.ErrorAs(t, err, &tooLarge, "read errors (e.g. body too large) are returned as is")
 
 	_, err = NewService(&fakeCatalog{statusErr: errBoom}, &fakeRecorder{}).IngestJUnit(ctx, meta, strings.NewReader(report))
 	assert.ErrorIs(t, err, errBoom)

@@ -160,10 +160,16 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Equal(t, int64(1), runs.Total)
 		assert.Equal(t, int32(1), runs.Items[0].ResultCount)
 
+		same, err := s.Ingestion.IngestJUnit(ctx, meta("200", 1), strings.NewReader(doc))
+		require.NoError(t, err)
+		assert.False(t, same.Created)
+		assert.Empty(t, same.Warnings, "an identical replay is silent")
+
 		replay, err := s.Ingestion.IngestJUnit(ctx, meta("200", 1), strings.NewReader(junitFor()))
 		require.NoError(t, err)
 		assert.False(t, replay.Created)
-		assert.Equal(t, 1, replay.Persisted)
+		assert.Equal(t, 1, replay.Persisted, "a different report is not applied")
+		assert.Equal(t, []string{ingestion.ReportDiffersWarning}, replay.Warnings)
 	})
 
 	t.Run("BE-INT-009_rerun_attempt_creates_new_run_and_preserves_history", func(t *testing.T) {

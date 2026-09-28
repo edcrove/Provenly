@@ -19,7 +19,7 @@ targets:
   - id: BE-INT-007
     description: concurrent step creation is serialized per test case (row lock)
   - id: BE-INT-008
-    description: duplicate ingestion of the same externalRunId is idempotent, also under concurrency
+    description: duplicate ingestion of the same externalRunId is idempotent, also under concurrency; a different report is not applied and warned
   - id: BE-INT-009
     description: a rerun attempt creates a new run and preserves the previous attempt's history
   - id: BE-INT-010

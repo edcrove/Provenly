@@ -5,7 +5,10 @@
 package ingestion
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"regexp"
@@ -57,7 +60,13 @@ type Outcome struct {
 	Diagnostics []Diagnostic
 	// ParseErrors are the ones stored with the run (on a replay: those of the original ingestion).
 	ParseErrors []execution.ParseError
+	// Warnings are non-blocking notices about the request (e.g. a replay with a different report).
+	Warnings []string
 }
+
+// ReportDiffersWarning is returned when a replay of an attempt carries a report
+// different from the one that created the run; it is never applied.
+const ReportDiffersWarning = "report differs from the one already ingested for this attempt; it was not applied (send a new runAttempt to record it)"
 
 var (
 	providerPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,49}$`)
@@ -90,11 +99,14 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	if err := ValidateMeta(meta); err != nil {
 		return Outcome{}, err
 	}
-	report, err := junit.Parse(body)
+	raw, err := io.ReadAll(body)
 	if err != nil {
-		if isBodyTooLarge(err) {
-			return Outcome{}, err
-		}
+		return Outcome{}, err
+	}
+	digest := sha256.Sum256(raw)
+	reportSHA := hex.EncodeToString(digest[:])
+	report, err := junit.Parse(bytes.NewReader(raw))
+	if err != nil {
 		return Outcome{}, apperr.InvalidDocument("%s", err.Error())
 	}
 	results, err := s.correlate(ctx, report.Results)
@@ -112,6 +124,7 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	run, created, err := s.recorder.RecordRun(ctx, execution.NewRun{
 		Provider: meta.Provider, ProviderRunID: meta.ProviderRunID, RunAttempt: meta.RunAttempt,
 		Pipeline: meta.Pipeline, Branch: meta.Branch, Commit: meta.Commit, StartedAt: report.StartedAt,
+		ReportSHA256: reportSHA,
 	}, expected, results, parseErrors)
 	if err != nil {
 		return Outcome{}, err
@@ -133,6 +146,10 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	}
 	if out.ParseErrors == nil {
 		out.ParseErrors = []execution.ParseError{}
+	}
+	out.Warnings = []string{}
+	if !created && run.ReportSHA256 != reportSHA {
+		out.Warnings = append(out.Warnings, ReportDiffersWarning)
 	}
 	return out, nil
 }

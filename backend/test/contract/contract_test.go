@@ -119,7 +119,10 @@ func TestRunsAndIngestion(t *testing.T) {
 	created.Value("parseErrors").Array().Length().IsEqual(1)
 	runID := strconv.FormatInt(int64(created.Value("testRun").Object().Value("id").Number().Raw()), 10)
 
-	ingest(e, "1", 1, report(id)).Expect().Status(http.StatusOK).JSON().Object().HasValue("created", false)
+	ingest(e, "1", 1, report(id)).Expect().Status(http.StatusOK).JSON().Object().HasValue("created", false).
+		Value("warnings").Array().IsEmpty()
+	ingest(e, "1", 1, `<testsuite name="other"/>`).Expect().Status(http.StatusOK).JSON().Object().
+		Value("warnings").Array().Length().IsEqual(1)
 	ingest(e, "2", 1, `<testsuite name="no timestamp"/>`).Expect().Status(http.StatusCreated)
 
 	ingest(e, "1", 0, report(id)).Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "validation_error")

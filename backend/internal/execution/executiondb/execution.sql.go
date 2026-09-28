@@ -65,7 +65,7 @@ func (q *Queries) CountTestRuns(ctx context.Context) (int64, error) {
 }
 
 const getTestRun = `-- name: GetTestRun :one
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count
 FROM test_runs r WHERE r.id = $1
@@ -84,6 +84,7 @@ type GetTestRunRow struct {
 	CreatedAt     pgtype.Timestamptz
 	StartedAt     pgtype.Timestamptz
 	CompletedAt   pgtype.Timestamptz
+	ReportSha256  string
 	ExpectedCount int32
 	ResultCount   int32
 }
@@ -104,6 +105,7 @@ func (q *Queries) GetTestRun(ctx context.Context, id int64) (GetTestRunRow, erro
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.CompletedAt,
+		&i.ReportSha256,
 		&i.ExpectedCount,
 		&i.ResultCount,
 	)
@@ -160,8 +162,8 @@ type InsertTestResultsParams struct {
 }
 
 const insertTestRun = `-- name: InsertTestRun :one
-INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (external_run_id) DO NOTHING
 RETURNING id
 `
@@ -177,6 +179,7 @@ type InsertTestRunParams struct {
 	Status        string
 	StartedAt     pgtype.Timestamptz
 	CompletedAt   pgtype.Timestamptz
+	ReportSha256  string
 }
 
 func (q *Queries) InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error) {
@@ -191,6 +194,7 @@ func (q *Queries) InsertTestRun(ctx context.Context, arg InsertTestRunParams) (i
 		arg.Status,
 		arg.StartedAt,
 		arg.CompletedAt,
+		arg.ReportSha256,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -441,7 +445,7 @@ func (q *Queries) ListRunResults(ctx context.Context, arg ListRunResultsParams) 
 }
 
 const listTestRuns = `-- name: ListTestRuns :many
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count
 FROM test_runs r
@@ -467,6 +471,7 @@ type ListTestRunsRow struct {
 	CreatedAt     pgtype.Timestamptz
 	StartedAt     pgtype.Timestamptz
 	CompletedAt   pgtype.Timestamptz
+	ReportSha256  string
 	ExpectedCount int32
 	ResultCount   int32
 }
@@ -493,6 +498,7 @@ func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]L
 			&i.CreatedAt,
 			&i.StartedAt,
 			&i.CompletedAt,
+			&i.ReportSha256,
 			&i.ExpectedCount,
 			&i.ResultCount,
 		); err != nil {

@@ -31,6 +31,7 @@ type ingestionResponse struct {
 	Persisted   int                       `json:"persisted"`
 	Diagnostics []diagnosticDTO           `json:"diagnostics"`
 	ParseErrors []execution.ParseErrorDTO `json:"parseErrors"`
+	Warnings    []string                  `json:"warnings"`
 }
 
 // Handler is the REST adapter of the ingestion module.
@@ -76,6 +77,7 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 	resp := ingestionResponse{
 		Created: out.Created, TestRun: execution.RunDTO(out.Run), Received: out.Received, Persisted: out.Persisted,
 		Diagnostics: make([]diagnosticDTO, len(out.Diagnostics)), ParseErrors: make([]execution.ParseErrorDTO, len(out.ParseErrors)),
+		Warnings: out.Warnings,
 	}
 	for i, d := range out.Diagnostics {
 		resp.Diagnostics[i] = diagnosticDTO(d)

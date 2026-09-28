@@ -80,5 +80,10 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
 12. **Coverage exceptions (see `coverage/exceptions.yaml`).** Generated sqlc code, Postgres adapters and the process
     entrypoint are excluded from the backend Unit gate and verified by Integration/E2E; pages/components, query
     hooks and vendored UI are excluded from the frontend Unit gate and verified by Integration/Contract.
+    **Status: Accepted by Ed (2026-09-28), with a requirement implemented:** a consolidated coverage report merging
+    every layer, and cross-layer checks (`backend-cross-layer`, `frontend-cross-layer`) proving that everything
+    excepted from Unit is executed by another layer. Exceptions now only absorb uncovered elements. Persistence
+    error paths were covered with a new integration target (BE-INT-020); the 25 statements no layer can reach are
+    `not-reachable` cross-layer exceptions, listed line by line in the report.
 13. **Toolchain.** Go 1.26 (current `pgx`, `testcontainers-go` and `goose` releases require it); TypeScript 5.9
     (`openapi-typescript` does not support TypeScript 6 yet).

@@ -52,6 +52,8 @@ type AppliedExcept struct {
 	Category string `json:"category"`
 	Elements int    `json:"elements"`
 	Reason   string `json:"reason"`
+	// Details lists the uncovered elements the exception absorbed (truncated).
+	Details []string `json:"details"`
 }
 
 func pct(n, d int) float64 {
@@ -62,7 +64,9 @@ func pct(n, d int) float64 {
 }
 
 // evaluate turns elements into metrics, applying the gate's exceptions.
-// Exceptions never hide elements: they are counted and listed separately.
+// Covered elements always count as covered; an exception only absorbs
+// elements that are not covered, and every absorbed element is listed, so
+// exceptions never hide coverage nor gaps.
 func evaluate(r *GateResult, elements []Element, excs []*Exception) {
 	order := []string{}
 	metrics := map[string]*Metric{}
@@ -78,7 +82,7 @@ func evaluate(r *GateResult, elements []Element, excs []*Exception) {
 		raw := e.Covered
 		var exc *Exception
 		for _, x := range excs {
-			if x.matches(e.Key) || x.matches(e.Label) {
+			if !raw && (x.matches(e.Key) || x.matches(e.Label)) {
 				exc = x
 				break
 			}
@@ -96,6 +100,9 @@ func evaluate(r *GateResult, elements []Element, excs []*Exception) {
 				applied[exc.ID] = a
 			}
 			a.Elements++
+			if len(a.Details) < 50 {
+				a.Details = append(a.Details, e.Label)
+			}
 		case raw:
 			m.Covered++
 		default:

@@ -32,7 +32,7 @@ var paths = struct {
 	FrontendIntJSON:     "frontend/coverage/integration/results.json",
 	FrontendIntCoverage: "frontend/coverage/integration/coverage-final.json",
 	FrontendContract:    "frontend/coverage/contract/evidence.json",
-	FrontendE2ECoverage: "e2e/coverage/frontend",
+	FrontendE2ECoverage: "e2e/coverage/frontend-remapped",
 	FrontendQueries:     "frontend/src/api/queries.ts",
 	GoCovDirs: map[string]string{
 		"unit":        "coverage/out/gocov/unit",
@@ -58,6 +58,8 @@ var gates = []gateDef{
 	{"frontend-integration", "frontend", "integration", "reviewed component behaviors + every UI surface inventoried", frontendIntegration},
 	{"frontend-contract", "frontend", "contract", "consumed OpenAPI operations x declared response status", frontendContract},
 	{"frontend-e2e", "frontend", "e2e", "reviewed UI journeys (Playwright)", inventoryGate("frontend-e2e.yaml", paths.E2EResults, playwrightJSON)},
+	{"backend-cross-layer", "backend", "cross-layer", "statements excepted from backend-unit, executed by any layer (merged)", backendCrossLayer},
+	{"frontend-cross-layer", "frontend", "cross-layer", "lines excepted from frontend-unit, executed by any layer (merged)", frontendCrossLayer},
 }
 
 func fail(r *GateResult, format string, args ...any) []Element {

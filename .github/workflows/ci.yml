@@ -258,10 +258,13 @@ jobs:
         with:
           name: evidence-e2e
           path: e2e/coverage
-      - name: Evaluate every gate (fails if any gate is below 100%)
+      - name: Evaluate every gate, cross-layer checks and consolidated coverage (fails below 100%)
         run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report
-          path: coverage/out/coverage-report.*
+          path: |
+            coverage/out/coverage-report.*
+            coverage/out/consolidated-coverage.md
+            coverage/out/backend-consolidated.html

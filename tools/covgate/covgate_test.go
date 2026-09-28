@@ -48,6 +48,17 @@ func TestEvaluateKeepsExceptionsVisible(t *testing.T) {
 	if len(r.GapDetails) != 1 || !strings.Contains(r.GapDetails[0], "a.go:2") {
 		t.Fatalf("gap not listed: %v", r.GapDetails)
 	}
+	// A covered element is never absorbed by an exception.
+	covered := &GateResult{}
+	exc2 := &Exception{ID: "E2", Target: "gen/**", re: globRegexp("gen/**")}
+	evaluate(covered, []Element{{Metric: "statements", Key: "gen/y.go", Label: "gen/y.go:1", Covered: true}}, []*Exception{exc2})
+	if covered.Metrics[0].Covered != 1 || covered.Metrics[0].Exceptions != 0 || exc2.used {
+		t.Fatalf("covered elements must count as covered: %+v", covered.Metrics[0])
+	}
+	if len(r.Exceptions[0].Details) != 1 || r.Exceptions[0].Details[0] != "gen/x.go:1" {
+		t.Fatalf("absorbed elements must be listed: %+v", r.Exceptions[0].Details)
+	}
+
 	empty := &GateResult{}
 	evaluate(empty, nil, nil)
 	if len(empty.Errors) != 1 {

@@ -18,6 +18,7 @@ export const apiURL = `http://localhost:${apiPort}`
  */
 export default defineConfig({
   testDir: './tests',
+  globalTeardown: './support/remap-coverage.ts',
   fullyParallel: false,
   workers: 1,
   retries: 0,

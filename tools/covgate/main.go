@@ -33,6 +33,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	unitExceptions = map[string][]*Exception{"backend-unit": excs["backend-unit"], "frontend-unit": excs["frontend-unit"]}
 	selected := map[string]bool{}
 	for _, g := range strings.Split(*only, ",") {
 		if g = strings.TrimSpace(g); g != "" {
@@ -65,21 +66,23 @@ func main() {
 		}
 		report.Gates = append(report.Gates, *r)
 	}
+	dir := filepath.Join(*root, *out)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		fatal(err)
+	}
 	if *evidence {
-		b, bn := backendEvidence(*root)
-		f, fn := frontendEvidence(*root)
+		b, bf, bn := backendEvidence(*root, dir)
+		f, ff, fn := frontendEvidence(*root)
 		report.CodeCoverage = append(b, f...)
+		report.Files = append(bf, ff...)
 		report.EvidenceNotes = append(bn, fn...)
+		_ = os.WriteFile(filepath.Join(dir, "consolidated-coverage.md"), []byte(report.ConsolidatedMarkdown()), 0o644)
 	}
 	report.Pass = true
 	for _, g := range report.Gates {
 		report.Pass = report.Pass && g.Pass
 	}
 
-	dir := filepath.Join(*root, *out)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		fatal(err)
-	}
 	js, _ := json.MarshalIndent(report, "", "  ")
 	md := report.Markdown()
 	name := "coverage-report"

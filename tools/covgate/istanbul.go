@@ -15,6 +15,7 @@ type istanbulFile struct {
 	Path         string `json:"path"`
 	StatementMap map[string]struct {
 		Start struct{ Line int } `json:"start"`
+		End   struct{ Line int } `json:"end"`
 	} `json:"statementMap"`
 	S         map[string]int   `json:"s"`
 	B         map[string][]int `json:"b"`
@@ -104,19 +105,40 @@ func istanbulElements(m istanbulMap, base string) []Element {
 	return out
 }
 
-// istanbulLines returns covered lines per file (for consolidated line-union evidence).
-func istanbulLines(m istanbulMap, base string) map[string]map[int]bool {
+// statementLines returns, per file, the start line of every statement (the line universe).
+func statementLines(m istanbulMap, base string) map[string]map[int]bool {
 	out := map[string]map[int]bool{}
 	for _, f := range m {
 		rel := relPath(f.Path, base)
-		lines, ok := out[rel]
-		if !ok {
-			lines = map[int]bool{}
-			out[rel] = lines
+		if out[rel] == nil {
+			out[rel] = map[int]bool{}
+		}
+		for id := range f.S {
+			out[rel][f.StatementMap[id].Start.Line] = true
+		}
+	}
+	return out
+}
+
+// hitLines returns, per file, every line inside an executed statement's range.
+// Ranges (not start lines) make sources from different instrumenters (v8 vs
+// babel/istanbul over sourcemaps) comparable, as their start lines can differ.
+func hitLines(m istanbulMap, base string) map[string]map[int]bool {
+	out := map[string]map[int]bool{}
+	for _, f := range m {
+		rel := relPath(f.Path, base)
+		if out[rel] == nil {
+			out[rel] = map[int]bool{}
 		}
 		for id, n := range f.S {
-			line := f.StatementMap[id].Start.Line
-			lines[line] = lines[line] || n > 0
+			if n == 0 {
+				continue
+			}
+			loc := f.StatementMap[id]
+			end := max(loc.End.Line, loc.Start.Line)
+			for l := loc.Start.Line; l <= end; l++ {
+				out[rel][l] = true
+			}
 		}
 	}
 	return out

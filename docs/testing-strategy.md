@@ -18,6 +18,20 @@ gate.
 
 A target is covered only when at least one test carrying its id passed **and none failed**.
 
+### Cross-layer checks (exceptions must be covered elsewhere)
+
+Unit exceptions only absorb elements that unit tests do not execute, and those elements must then be executed by
+another layer. Two extra checks enforce it on the coverage of **all layers merged**:
+
+| Check | Denominator | Merged evidence |
+|---|---|---|
+| backend-cross-layer | statements matched by `backend-unit` exceptions | unit + integration + contract + e2e raw coverage (`go tool covdata textfmt` over every GOCOVERDIR) |
+| frontend-cross-layer | lines matched by `frontend-unit` exceptions | unit + integration (v8) + e2e (istanbul, remapped through source maps to original lines) |
+
+Anything no layer can execute needs its own `*-cross-layer` exception (category `not-reachable`), and every line it
+absorbs is listed in the report. The per-file consolidated report is written to
+`coverage/out/consolidated-coverage.md`, with a browsable backend report in `coverage/out/backend-consolidated.html`.
+
 ### Gate denominator vs code-coverage evidence
 
 Code coverage collected during Integration, Contract and E2E (`GOCOVERDIR` of the tests and of the
@@ -82,4 +96,7 @@ Verified in this repository (not assumed):
   flushes counters on `os.Exit` after a graceful SIGTERM. The covermode **must match** (`atomic`) across unit,
   integration, contract and E2E, otherwise `go tool covdata` fails with "counter mode clash".
 - `go tool covdata textfmt -i=unit,integration,contract,e2e -o merged.out` merges all of them (used for the
-  consolidated evidence).
+  consolidated evidence and the backend cross-layer check).
+- Frontend E2E coverage from `vite-plugin-istanbul` is measured on transformed code (JSX collapsed into single
+  lines) with an embedded source map; a Playwright global teardown remaps it with `istanbul-lib-source-maps` before
+  it is merged with the Vitest v8 coverage (`e2e/coverage/frontend-remapped`).

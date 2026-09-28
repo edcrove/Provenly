@@ -87,6 +87,10 @@ denominator** — a consolidated number never replaces a gate. Details: [`docs/t
 | frontend-contract | generated client + MSW validated against the spec | consumed operations × response status | `make test-frontend-contract` |
 | frontend-e2e | Playwright (UI) on istanbul-instrumented bundle | reviewed UI journeys | `make test-e2e` |
 
+On top of the 8 gates, two **cross-layer checks** require that everything excepted from a Unit gate is executed by
+another layer, on the coverage of all layers merged; the per-file consolidated report is
+`coverage/out/consolidated-coverage.md` (backend HTML: `coverage/out/backend-consolidated.html`).
+
 ```bash
 make up && make coverage    # runs every suite, then prints the 8 gate reports + consolidated code-coverage evidence
 make gates                  # re-evaluate gates from already collected evidence (coverage/out/coverage-report.md)

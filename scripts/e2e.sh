@@ -16,7 +16,10 @@ mkdir -p "$root/e2e/coverage/backend" "$root/e2e/coverage/frontend"
 
 echo "==> resetting the E2E database"
 for cmd in up reset; do
-  GOCOVERDIR="$root/e2e/coverage/backend" "$root/backend/bin/provenly-cover" migrate "$cmd" 2>/dev/null
+  if ! GOCOVERDIR="$root/e2e/coverage/backend" "$root/backend/bin/provenly-cover" migrate "$cmd" >/dev/null 2>&1; then
+    echo "error: cannot reach the E2E database ($PROVENLY_DATABASE_URL). Run 'make up' first." >&2
+    exit 1
+  fi
 done
 
 echo "==> running Playwright journeys"

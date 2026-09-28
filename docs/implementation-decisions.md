@@ -74,6 +74,9 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
     deprecated test cases stays allowed.
 11. **shadcn/ui components are vendored manually** in `frontend/src/components/ui` (the shadcn registry was not
     reachable from the build environment); `components.json` is present so `npx shadcn add` works later.
+    **Status: Accepted by Ed (2026-09-28) for the POC.** Core MVP follow-up: regenerate the components with the
+    official shadcn CLI and switch Checkbox/Select to the Radix-based ones (keyboard and screen-reader
+    accessibility), e.g. together with the Login UI.
 12. **Coverage exceptions (see `coverage/exceptions.yaml`).** Generated sqlc code, Postgres adapters and the process
     entrypoint are excluded from the backend Unit gate and verified by Integration/E2E; pages/components, query
     hooks and vendored UI are excluded from the frontend Unit gate and verified by Integration/Contract.

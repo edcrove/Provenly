@@ -38,3 +38,5 @@ targets:
     description: failed transactions roll back every write
   - id: BE-INT-017
     description: valid results outside the run snapshot are persisted, excluded from the summary and their TC-IDs listed
+  - id: BE-INT-018
+    description: parse errors and unknown durations are stored with the run, listed and replayed

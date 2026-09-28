@@ -73,3 +73,16 @@ LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountResultsForTestCase :one
 SELECT count(*) FROM test_results WHERE test_case_id = @test_case_id;
+
+-- name: InsertParseErrors :copyfrom
+INSERT INTO test_run_parse_errors (test_run_id, case_index, test_name, message, persisted)
+VALUES (@test_run_id, @case_index, @test_name, @message, @persisted);
+
+-- name: ListParseErrors :many
+SELECT case_index, test_name, message, persisted FROM test_run_parse_errors
+WHERE test_run_id = @test_run_id
+ORDER BY case_index
+LIMIT @page_limit OFFSET @page_offset;
+
+-- name: CountParseErrors :one
+SELECT count(*) FROM test_run_parse_errors WHERE test_run_id = @test_run_id;

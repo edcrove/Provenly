@@ -32,7 +32,7 @@ func TestParseStatusesAndFields(t *testing.T) {
 	assert.Empty(t, rep.Errors)
 	require.Len(t, rep.Results, 5)
 
-	assert.Equal(t, Result{Index: 0, TestName: "passes", ClassName: "pkg.Auth", SuiteName: "auth", Status: Passed, DurationMs: 1235,
+	assert.Equal(t, Result{Index: 0, TestName: "passes", ClassName: "pkg.Auth", SuiteName: "auth", Status: Passed, DurationMs: ms(1235),
 		Ref: TCRef{Kind: RefFound, Source: SourceProperty, Raw: "153", ID: 153}}, rep.Results[0])
 	assert.Equal(t, Failed, rep.Results[1].Status)
 	assert.Equal(t, "expected 1", rep.Results[1].ErrorMessage)
@@ -42,7 +42,8 @@ func TestParseStatusesAndFields(t *testing.T) {
 	assert.Equal(t, Skipped, rep.Results[3].Status)
 	assert.Equal(t, "not today", rep.Results[3].ErrorMessage)
 	assert.Equal(t, "inner", rep.Results[4].SuiteName)
-	assert.Equal(t, int64(1000500), rep.Results[4].DurationMs)
+	assert.Equal(t, int64(1000500), *rep.Results[4].DurationMs)
+	assert.Nil(t, rep.Results[2].DurationMs, "absent time is unknown, not 0")
 	assert.Equal(t, time.Date(2026, 9, 28, 9, 0, 0, 0, time.UTC), *rep.StartedAt)
 }
 
@@ -58,21 +59,29 @@ func TestParseSingleSuiteRoot(t *testing.T) {
 func TestParseInvalidCasesDoNotStopParsing(t *testing.T) {
 	rep, err := Parse(strings.NewReader(`<testsuites><testsuite name="s">
 <testcase name=""/>
-<testcase name="bad time" time="soon"/>
+<testcase name="bad time" time="soon"><failure/></testcase>
 <testcase name="negative" time="-1"/>
+<testcase name="tiny" time="0.0004"/>
 <testcase name="good"/>
 </testsuite></testsuites>`))
 	require.NoError(t, err)
-	assert.Equal(t, 4, rep.Received)
-	require.Len(t, rep.Results, 1)
-	assert.Equal(t, "good", rep.Results[0].TestName)
-	assert.Equal(t, 3, rep.Results[0].Index)
+	assert.Equal(t, 5, rep.Received)
+	names := make([]string, len(rep.Results))
+	for i, r := range rep.Results {
+		names[i] = r.TestName
+	}
+	assert.Equal(t, []string{"bad time", "negative", "tiny", "good"}, names, "only the nameless testcase is discarded")
+	assert.Nil(t, rep.Results[0].DurationMs)
+	assert.Equal(t, Failed, rep.Results[0].Status, "an invalid time never hides a failure")
+	assert.Equal(t, int64(0), *rep.Results[2].DurationMs, "sub-millisecond durations round to 0")
 	assert.Equal(t, []CaseError{
-		{Index: 0, TestName: "", Message: "testcase has no name"},
-		{Index: 1, TestName: "bad time", Message: `invalid time attribute "soon"`},
-		{Index: 2, TestName: "negative", Message: `invalid time attribute "-1"`},
+		{Index: 0, TestName: "", Message: "testcase has no name; result discarded"},
+		{Index: 1, TestName: "bad time", Message: `invalid time attribute "soon"; result kept without duration`, Persisted: true},
+		{Index: 2, TestName: "negative", Message: `invalid time attribute "-1"; result kept without duration`, Persisted: true},
 	}, rep.Errors)
 }
+
+func ms(v int64) *int64 { return &v }
 
 func TestParseDocumentErrors(t *testing.T) {
 	for _, doc := range []string{"", "not xml", "<html></html>", "<testsuites><testsuite>"} {

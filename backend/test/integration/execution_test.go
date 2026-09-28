@@ -44,14 +44,17 @@ func TestExecutionPersistence(t *testing.T) {
 			`<testcase name="bad TC-x1"/>`,
 			`<testcase name="ghost TC-987654"/>`,
 			`<testcase name="old TC-`+itoa(old.ID)+`"><skipped/></testcase>`,
-			`<testcase name="broken" time="later"/>`,
+			`<testcase name="login slow TC-`+itoa(login.ID)+`" time="later"/>`,
+			`<testcase name=""/>`,
 		)
 		out, err := s.Ingestion.IngestJUnit(ctx, meta("100", 1), strings.NewReader(doc))
 		require.NoError(t, err)
 		assert.True(t, out.Created)
-		assert.Equal(t, 7, out.Received)
-		assert.Equal(t, 6, out.Persisted)
-		assert.Len(t, out.ParseErrors, 1)
+		assert.Equal(t, 8, out.Received)
+		assert.Equal(t, 7, out.Persisted)
+		require.Len(t, out.ParseErrors, 2)
+		assert.True(t, out.ParseErrors[0].Persisted, "an invalid time keeps the result")
+		assert.False(t, out.ParseErrors[1].Persisted, "a nameless testcase is discarded")
 		require.Len(t, out.Diagnostics, 4)
 		assert.Equal(t, int32(2), out.Run.ExpectedCount)
 		assert.Equal(t, "github:100:1", out.Run.ExternalRunID)
@@ -61,11 +64,11 @@ func TestExecutionPersistence(t *testing.T) {
 
 		res, err := s.Execution.ListRunResults(ctx, out.Run.ID, execution.ResultFilter{}, pagination.Default())
 		require.NoError(t, err)
-		assert.Equal(t, int64(6), res.Total)
+		assert.Equal(t, int64(7), res.Total)
 		first := res.Items[0]
 		assert.Equal(t, login.ID, *first.TestCaseID)
 		assert.Equal(t, itoa(login.ID), *first.RequestedTestCaseID)
-		assert.Equal(t, int64(250), first.DurationMs)
+		assert.Equal(t, int64(250), *first.DurationMs)
 		assert.Equal(t, "suite", first.SuiteName)
 		assert.Equal(t, "c", first.ClassName)
 		assert.Equal(t, "boom", res.Items[1].ErrorMessage)
@@ -76,7 +79,7 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Equal(t, execution.StatusCounts{Untested: 1, Failed: 1}, sum.Counts)
 		assert.Equal(t, 50.0, sum.ExecutionPercent)
 		assert.Equal(t, execution.DiagnosticCounts{Missing: 1, Malformed: 1, Unknown: 1, Deprecated: 1, Total: 4}, sum.Diagnostics)
-		assert.Equal(t, []execution.TestCaseOutcome{{TestCaseID: login.ID, Status: "failed", ResultCount: 2}, {TestCaseID: logout.ID, Status: execution.Untested}}, sum.TestCases)
+		assert.Equal(t, []execution.TestCaseOutcome{{TestCaseID: login.ID, Status: "failed", ResultCount: 3}, {TestCaseID: logout.ID, Status: execution.Untested}}, sum.TestCases)
 
 		var count int
 		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM test_cases`).Scan(&count))
@@ -88,6 +91,38 @@ func TestExecutionPersistence(t *testing.T) {
 		require.Equal(t, int64(1), h.Total)
 		assert.Equal(t, execution.CorrelationDeprecated, h.Items[0].Result.Correlation)
 		assert.Equal(t, old.ID, *h.Items[0].Result.TestCaseID)
+	})
+
+	t.Run("BE-INT-018_parse_errors_and_unknown_durations_are_stored_with_the_run", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Automated: true})
+		doc := junitFor(
+			`<testcase name="slow TC-`+itoa(tc.ID)+`" time="soon"><failure/></testcase>`,
+			`<testcase name="no time TC-`+itoa(tc.ID)+`"/>`,
+			`<testcase name=""/>`,
+		)
+		out, err := s.Ingestion.IngestJUnit(ctx, meta("900", 1), strings.NewReader(doc))
+		require.NoError(t, err)
+		require.Len(t, out.ParseErrors, 2)
+		assert.Equal(t, int32(0), out.ParseErrors[0].Index)
+		assert.Equal(t, int32(2), out.ParseErrors[1].Index)
+
+		res, err := s.Execution.ListRunResults(ctx, out.Run.ID, execution.ResultFilter{}, pagination.Default())
+		require.NoError(t, err)
+		require.Len(t, res.Items, 2)
+		assert.Nil(t, res.Items[0].DurationMs, "invalid time is stored as unknown, never 0")
+		assert.Equal(t, execution.Failed, res.Items[0].Status)
+		assert.Nil(t, res.Items[1].DurationMs, "absent time is unknown")
+
+		page, err := s.Execution.ListParseErrors(ctx, out.Run.ID, pagination.Page{Number: 2, Size: 1})
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), page.Total)
+		assert.False(t, page.Items[0].Persisted)
+
+		replay, err := s.Ingestion.IngestJUnit(ctx, meta("900", 1), strings.NewReader(junitFor()))
+		require.NoError(t, err)
+		assert.False(t, replay.Created)
+		assert.Equal(t, out.ParseErrors, replay.ParseErrors, "a replay reports the stored parse errors")
 	})
 
 	t.Run("BE-INT-008_duplicate_ingestion_is_idempotent_even_when_concurrent", func(t *testing.T) {

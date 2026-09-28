@@ -45,5 +45,6 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 
 Outcomes: `valid`, `missing` (none declared; only uppercase `TC-` counts), `malformed` (not a single positive
 integer — leading zeros are accepted, `TC-0153` = `TC-153` — or several different ids in one `<testcase>`),
-`unknown` (no such TC), `deprecated`. Invalid testcases (no name, invalid `time`) are reported in `parseErrors` without
-stopping the batch; an unreadable document is a `400 invalid_junit`.
+`unknown` (no such TC), `deprecated`. Problems with individual testcases never stop the batch: a testcase without a
+name is discarded, an invalid `time` keeps the result with an unknown (`null`) duration; both are stored as run parse
+errors (`GET /api/v1/test-runs/{id}/parse-errors`). An unreadable document is a `400 invalid_junit`.

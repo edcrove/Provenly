@@ -11,6 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countParseErrors = `-- name: CountParseErrors :one
+SELECT count(*) FROM test_run_parse_errors WHERE test_run_id = $1
+`
+
+func (q *Queries) CountParseErrors(ctx context.Context, testRunID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countParseErrors, testRunID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countResultsForTestCase = `-- name: CountResultsForTestCase :one
 SELECT count(*) FROM test_results WHERE test_case_id = $1
 `
@@ -125,6 +136,14 @@ func (q *Queries) InsertExpectedCases(ctx context.Context, arg InsertExpectedCas
 	return err
 }
 
+type InsertParseErrorsParams struct {
+	TestRunID int64
+	CaseIndex int32
+	TestName  string
+	Message   string
+	Persisted bool
+}
+
 type InsertTestResultsParams struct {
 	TestRunID           int64
 	TestCaseID          pgtype.Int8
@@ -134,7 +153,7 @@ type InsertTestResultsParams struct {
 	ClassName           string
 	SuiteName           string
 	Status              string
-	DurationMs          int64
+	DurationMs          pgtype.Int8
 	ErrorMessage        string
 	ErrorDetails        string
 }
@@ -226,6 +245,51 @@ func (q *Queries) ListExpectedCaseIDs(ctx context.Context, testRunID int64) ([]i
 			return nil, err
 		}
 		items = append(items, test_case_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listParseErrors = `-- name: ListParseErrors :many
+SELECT case_index, test_name, message, persisted FROM test_run_parse_errors
+WHERE test_run_id = $1
+ORDER BY case_index
+LIMIT $3 OFFSET $2
+`
+
+type ListParseErrorsParams struct {
+	TestRunID  int64
+	PageOffset int32
+	PageLimit  int32
+}
+
+type ListParseErrorsRow struct {
+	CaseIndex int32
+	TestName  string
+	Message   string
+	Persisted bool
+}
+
+func (q *Queries) ListParseErrors(ctx context.Context, arg ListParseErrorsParams) ([]ListParseErrorsRow, error) {
+	rows, err := q.db.Query(ctx, listParseErrors, arg.TestRunID, arg.PageOffset, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListParseErrorsRow
+	for rows.Next() {
+		var i ListParseErrorsRow
+		if err := rows.Scan(
+			&i.CaseIndex,
+			&i.TestName,
+			&i.Message,
+			&i.Persisted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

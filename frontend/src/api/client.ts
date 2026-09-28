@@ -8,6 +8,7 @@ export type TestRun = components['schemas']['TestRun']
 export type TestResult = components['schemas']['TestResult']
 export type TestRunSummary = components['schemas']['TestRunSummary']
 export type TestCaseResult = components['schemas']['TestCaseResult']
+export type ParseError = components['schemas']['ParseError']
 export type CreateTestCaseRequest = components['schemas']['CreateTestCaseRequest']
 export type UpdateTestCaseRequest = components['schemas']['UpdateTestCaseRequest']
 

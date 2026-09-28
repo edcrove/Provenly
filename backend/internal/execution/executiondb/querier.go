@@ -11,16 +11,19 @@ import (
 )
 
 type Querier interface {
+	CountParseErrors(ctx context.Context, testRunID int64) (int64, error)
 	CountResultsForTestCase(ctx context.Context, testCaseID pgtype.Int8) (int64, error)
 	CountRunResults(ctx context.Context, arg CountRunResultsParams) (int64, error)
 	CountTestRuns(ctx context.Context) (int64, error)
 	GetTestRun(ctx context.Context, id int64) (GetTestRunRow, error)
 	GetTestRunIDByExternalID(ctx context.Context, externalRunID string) (int64, error)
 	InsertExpectedCases(ctx context.Context, arg InsertExpectedCasesParams) error
+	InsertParseErrors(ctx context.Context, arg []InsertParseErrorsParams) (int64, error)
 	InsertTestResults(ctx context.Context, arg []InsertTestResultsParams) (int64, error)
 	InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error)
 	ListDiagnosticResults(ctx context.Context, testRunID int64) ([]ListDiagnosticResultsRow, error)
 	ListExpectedCaseIDs(ctx context.Context, testRunID int64) ([]int64, error)
+	ListParseErrors(ctx context.Context, arg ListParseErrorsParams) ([]ListParseErrorsRow, error)
 	ListResultsForTestCase(ctx context.Context, arg ListResultsForTestCaseParams) ([]ListResultsForTestCaseRow, error)
 	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]TestResult, error)
 	ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]ListTestRunsRow, error)

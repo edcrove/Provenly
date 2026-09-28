@@ -299,6 +299,33 @@ const scenarios: Scenario[] = [
     call: (c) =>
       c.DELETE('/api/v1/test-cases/{testCaseId}/steps/{stepId}', { params: { path: { ...tc, stepId: 1 } } }),
   },
+  // Parse errors
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/parse-errors',
+    status: 200,
+    setup: () => {
+      db.parseErrors[7] = [{ index: 0, testName: '', message: 'no name', persisted: false }]
+    },
+    call: (c) =>
+      c.GET('/api/v1/test-runs/{testRunId}/parse-errors', { params: { path: run, query: { page: 1 } } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/parse-errors',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/test-runs/{testRunId}/parse-errors', { params: { path: run, query: { page: 0 } } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/parse-errors',
+    status: 404,
+    call: (c) => c.GET('/api/v1/test-runs/{testRunId}/parse-errors', { params: { path: unknownRun } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/parse-errors',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/test-runs/{testRunId}/parse-errors', { params: { path: run } }),
+  },
   // Runs
   {
     op: 'GET /api/v1/test-runs',

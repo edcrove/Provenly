@@ -23,7 +23,7 @@ var sampleRun = TestRun{ID: 3, ExternalRunID: "github:1:1", Provider: "github", 
 	Status: RunCompleted, CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 
 var sampleResult = TestResult{ID: 8, TestRunID: 3, TestCaseID: ptr(int64(153)), RequestedTestCaseID: ptr("153"),
-	Correlation: CorrelationValid, TestName: "login", Status: Passed, DurationMs: 12}
+	Correlation: CorrelationValid, TestName: "login", Status: Passed, DurationMs: ptr(int64(12))}
 
 func (s *stubAPI) GetRun(context.Context, int64) (TestRun, error) { return sampleRun, s.err }
 func (s *stubAPI) ListRuns(_ context.Context, p pagination.Page) (pagination.Result[TestRun], error) {
@@ -35,6 +35,9 @@ func (s *stubAPI) ListRunResults(_ context.Context, _ int64, f ResultFilter, p p
 }
 func (s *stubAPI) Summary(context.Context, int64) (Summary, error) {
 	return ComputeSummary(3, []int64{153, 154}, []ValidResult{{153, Passed}}, []Diagnostic{{Correlation: CorrelationMissing}}), s.err
+}
+func (s *stubAPI) ListParseErrors(_ context.Context, _ int64, p pagination.Page) (pagination.Result[ParseError], error) {
+	return pagination.Result[ParseError]{Items: []ParseError{{Index: 2, TestName: "t", Message: "m", Persisted: true}}, Page: p, Total: 1}, s.err
 }
 func (s *stubAPI) History(_ context.Context, _ int64, p pagination.Page) (pagination.Result[HistoryEntry], error) {
 	return pagination.Result[HistoryEntry]{Items: []HistoryEntry{{Result: sampleResult, Run: sampleRun}}, Page: p, Total: 1}, s.err
@@ -59,6 +62,7 @@ func TestHandlerHappyPaths(t *testing.T) {
 		"/api/v1/test-runs/3/results?status=failed&correlation=valid": `"testCaseId":153`,
 		"/api/v1/test-runs/3/summary":                                 `"executionPercent":50`,
 		"/api/v1/test-cases/153/results":                              `"run":{"id":3`,
+		"/api/v1/test-runs/3/parse-errors":                            `"items":[{"index":2,"testName":"t","message":"m","persisted":true}]`,
 	}
 	for target, want := range cases {
 		rec := serve(&stubAPI{}, stubCatalog{}, target)
@@ -86,7 +90,7 @@ func TestHandlerErrors(t *testing.T) {
 	failing := &stubAPI{err: apperr.NotFound("missing")}
 	for _, target := range []string{
 		"/api/v1/test-runs", "/api/v1/test-runs/3", "/api/v1/test-runs/3/results",
-		"/api/v1/test-runs/3/summary", "/api/v1/test-cases/1/results",
+		"/api/v1/test-runs/3/summary", "/api/v1/test-cases/1/results", "/api/v1/test-runs/3/parse-errors",
 	} {
 		assert.Equal(t, http.StatusNotFound, serve(failing, stubCatalog{}, target).Code, target)
 	}
@@ -97,6 +101,7 @@ func TestHandlerErrors(t *testing.T) {
 		"/api/v1/test-runs/3/results?page=0", "/api/v1/test-runs/3/results?status=untested",
 		"/api/v1/test-runs/3/results?correlation=nope", "/api/v1/test-runs/x/summary",
 		"/api/v1/test-cases/x/results", "/api/v1/test-cases/1/results?pageSize=0",
+		"/api/v1/test-runs/x/parse-errors", "/api/v1/test-runs/3/parse-errors?page=0",
 	} {
 		assert.Equal(t, http.StatusBadRequest, serve(&stubAPI{}, stubCatalog{}, target).Code, target)
 	}

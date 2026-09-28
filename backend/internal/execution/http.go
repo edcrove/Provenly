@@ -15,6 +15,7 @@ type API interface {
 	ListRuns(ctx context.Context, page pagination.Page) (pagination.Result[TestRun], error)
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, page pagination.Page) (pagination.Result[TestResult], error)
 	Summary(ctx context.Context, runID int64) (Summary, error)
+	ListParseErrors(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[ParseError], error)
 	History(ctx context.Context, testCaseID int64, page pagination.Page) (pagination.Result[HistoryEntry], error)
 }
 
@@ -56,13 +57,24 @@ type TestResultDTO struct {
 	ClassName           string       `json:"className"`
 	SuiteName           string       `json:"suiteName"`
 	Status              ResultStatus `json:"status"`
-	DurationMs          int64        `json:"durationMs"`
+	DurationMs          *int64       `json:"durationMs"`
 	ErrorMessage        string       `json:"errorMessage"`
 	ErrorDetails        string       `json:"errorDetails"`
 	CreatedAt           time.Time    `json:"createdAt"`
 }
 
 func resultDTO(r TestResult) TestResultDTO { return TestResultDTO(r) }
+
+// ParseErrorDTO is the wire form of ParseError.
+type ParseErrorDTO struct {
+	Index     int32  `json:"index"`
+	TestName  string `json:"testName"`
+	Message   string `json:"message"`
+	Persisted bool   `json:"persisted"`
+}
+
+// ToParseErrorDTO converts a ParseError to its wire form.
+func ToParseErrorDTO(p ParseError) ParseErrorDTO { return ParseErrorDTO(p) }
 
 type historyDTO struct {
 	Result TestResultDTO `json:"result"`
@@ -159,6 +171,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}", h.getRun)
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/results", h.listResults)
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/summary", h.summary)
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/parse-errors", h.parseErrors)
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}/results", h.history)
 }
 
@@ -255,6 +268,25 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toSummaryDTO(s))
+}
+
+func (h *Handler) parseErrors(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.PathID(r, "testRunId")
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	res, err := h.api.ListParseErrors(r.Context(), id, page)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, ToParseErrorDTO))
 }
 
 func (h *Handler) history(w http.ResponseWriter, r *http.Request) {

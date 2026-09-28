@@ -383,6 +383,30 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/test-runs/{testRunId}/parse-errors:
+    parameters:
+      - $ref: "#/components/parameters/TestRunId"
+    get:
+      tags: [test-runs]
+      operationId: listTestRunParseErrors
+      summary: Testcases of the ingested report that could not be fully normalized, in document order
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of parse errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParseErrorPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/ingestion/junit:
     post:
       tags: [ingestion]
@@ -392,8 +416,9 @@ paths:
         `externalRunId` = `{provider}:{runId}:{runAttempt}`. Re-sending the same
         attempt is idempotent (200, no duplicate run, no reprocessing); a new
         attempt creates a new run (201). Individual invalid testcases never abort
-        the batch: they are persisted with a correlation diagnostic or reported in
-        `parseErrors`.
+        the batch: they are persisted with a correlation diagnostic, or reported in
+        `parseErrors` (stored with the run; `persisted` tells whether the result
+        was kept, e.g. with an unknown duration, or discarded, e.g. without name).
       parameters:
         - name: provider
           in: query
@@ -915,6 +940,10 @@ components:
         durationMs:
           type: integer
           format: int64
+          nullable: true
+          description: |
+            Milliseconds, rounded from the JUnit `time` attribute (seconds). 0 means
+            reported as 0 or under 0.5 ms; null means not reported or invalid.
         errorMessage:
           type: string
         errorDetails:
@@ -1122,7 +1151,7 @@ components:
     ParseError:
       type: object
       additionalProperties: false
-      required: [index, testName, message]
+      required: [index, testName, message, persisted]
       properties:
         index:
           type: integer
@@ -1132,6 +1161,20 @@ components:
           type: string
         message:
           type: string
+        persisted:
+          type: boolean
+          description: true when the result was still stored (e.g. invalid time), false when it was discarded
+
+    ParseErrorPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ParseError"
 
     IngestionResponse:
       type: object

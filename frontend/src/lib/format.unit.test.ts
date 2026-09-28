@@ -8,7 +8,9 @@ describe('format', () => {
   })
 
   it('formats durations', () => {
-    expect(formatDuration(0)).toBe('0 ms')
+    expect(formatDuration(null)).toBe('—')
+    expect(formatDuration(0)).toBe('<1 ms')
+    expect(formatDuration(1)).toBe('1 ms')
     expect(formatDuration(999)).toBe('999 ms')
     expect(formatDuration(1500)).toBe('1.50 s')
     expect(formatDuration(12_340)).toBe('12.3 s')

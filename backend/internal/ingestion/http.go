@@ -24,19 +24,13 @@ type diagnosticDTO struct {
 	Message             string                `json:"message"`
 }
 
-type parseErrorDTO struct {
-	Index    int    `json:"index"`
-	TestName string `json:"testName"`
-	Message  string `json:"message"`
-}
-
 type ingestionResponse struct {
-	Created     bool                 `json:"created"`
-	TestRun     execution.TestRunDTO `json:"testRun"`
-	Received    int                  `json:"received"`
-	Persisted   int                  `json:"persisted"`
-	Diagnostics []diagnosticDTO      `json:"diagnostics"`
-	ParseErrors []parseErrorDTO      `json:"parseErrors"`
+	Created     bool                      `json:"created"`
+	TestRun     execution.TestRunDTO      `json:"testRun"`
+	Received    int                       `json:"received"`
+	Persisted   int                       `json:"persisted"`
+	Diagnostics []diagnosticDTO           `json:"diagnostics"`
+	ParseErrors []execution.ParseErrorDTO `json:"parseErrors"`
 }
 
 // Handler is the REST adapter of the ingestion module.
@@ -81,13 +75,13 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := ingestionResponse{
 		Created: out.Created, TestRun: execution.RunDTO(out.Run), Received: out.Received, Persisted: out.Persisted,
-		Diagnostics: make([]diagnosticDTO, len(out.Diagnostics)), ParseErrors: make([]parseErrorDTO, len(out.ParseErrors)),
+		Diagnostics: make([]diagnosticDTO, len(out.Diagnostics)), ParseErrors: make([]execution.ParseErrorDTO, len(out.ParseErrors)),
 	}
 	for i, d := range out.Diagnostics {
 		resp.Diagnostics[i] = diagnosticDTO(d)
 	}
 	for i, e := range out.ParseErrors {
-		resp.ParseErrors[i] = parseErrorDTO(e)
+		resp.ParseErrors[i] = execution.ToParseErrorDTO(e)
 	}
 	status := http.StatusOK
 	if out.Created {

@@ -45,3 +45,6 @@ targets:
   - id: FE-INT-014
     description: a manual test case that receives automated results shows a warning and can be marked automated
     surfaces: [src/features/test-cases/TestCaseDetailPage.tsx]
+  - id: FE-INT-015
+    description: report parse errors (kept/discarded) on the run detail and unknown vs sub-millisecond durations
+    surfaces: [src/features/test-runs/RunParseErrors.tsx]

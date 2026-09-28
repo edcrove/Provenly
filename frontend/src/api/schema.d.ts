@@ -237,6 +237,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/test-runs/{testRunId}/parse-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        /** Testcases of the ingested report that could not be fully normalized, in document order */
+        get: operations["listTestRunParseErrors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingestion/junit": {
         parameters: {
             query?: never;
@@ -251,8 +270,9 @@ export interface paths {
          * @description `externalRunId` = `{provider}:{runId}:{runAttempt}`. Re-sending the same
          *     attempt is idempotent (200, no duplicate run, no reprocessing); a new
          *     attempt creates a new run (201). Individual invalid testcases never abort
-         *     the batch: they are persisted with a correlation diagnostic or reported in
-         *     `parseErrors`.
+         *     the batch: they are persisted with a correlation diagnostic, or reported in
+         *     `parseErrors` (stored with the run; `persisted` tells whether the result
+         *     was kept, e.g. with an unknown duration, or discarded, e.g. without name).
          */
         post: operations["ingestJUnitReport"];
         delete?: never;
@@ -433,8 +453,12 @@ export interface components {
             className: string;
             suiteName: string;
             status: components["schemas"]["ResultStatus"];
-            /** Format: int64 */
-            durationMs: number;
+            /**
+             * Format: int64
+             * @description Milliseconds, rounded from the JUnit `time` attribute (seconds). 0 means
+             *     reported as 0 or under 0.5 ms; null means not reported or invalid.
+             */
+            durationMs: number | null;
             errorMessage: string;
             errorDetails: string;
             /** Format: date-time */
@@ -541,6 +565,11 @@ export interface components {
             index: number;
             testName: string;
             message: string;
+            /** @description true when the result was still stored (e.g. invalid time), false when it was discarded */
+            persisted: boolean;
+        };
+        ParseErrorPage: components["schemas"]["PageMeta"] & {
+            items: components["schemas"]["ParseError"][];
         };
         IngestionResponse: {
             /** @description false when the request was an idempotent replay */
@@ -1047,6 +1076,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TestRunSummary"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTestRunParseErrors: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of parse errors */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParseErrorPage"];
                 };
             };
             400: components["responses"]["BadRequest"];

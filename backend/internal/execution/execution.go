@@ -93,7 +93,7 @@ type TestResult struct {
 	ClassName           string
 	SuiteName           string
 	Status              ResultStatus
-	DurationMs          int64
+	DurationMs          *int64
 	ErrorMessage        string
 	ErrorDetails        string
 	CreatedAt           time.Time
@@ -119,9 +119,18 @@ type NewResult struct {
 	ClassName           string
 	SuiteName           string
 	Status              ResultStatus
-	DurationMs          int64
+	DurationMs          *int64
 	ErrorMessage        string
 	ErrorDetails        string
+}
+
+// ParseError is a testcase of the ingested report that could not be fully
+// normalized, stored with its run. Persisted tells whether its result was kept.
+type ParseError struct {
+	Index     int32
+	TestName  string
+	Message   string
+	Persisted bool
 }
 
 // Diagnostic is a stored result whose TC-ID is not valid.
@@ -164,6 +173,9 @@ type Repository interface {
 	GetTestRunIDByExternalID(ctx context.Context, externalRunID string) (int64, error)
 	InsertExpectedCases(ctx context.Context, runID int64, testCaseIDs []int64) error
 	InsertTestResults(ctx context.Context, runID int64, results []NewResult) error
+	InsertParseErrors(ctx context.Context, runID int64, errs []ParseError) error
+	ListParseErrors(ctx context.Context, runID int64, limit, offset int32) ([]ParseError, error)
+	CountParseErrors(ctx context.Context, runID int64) (int64, error)
 	GetTestRun(ctx context.Context, id int64) (TestRun, error)
 	ListTestRuns(ctx context.Context, limit, offset int32) ([]TestRun, error)
 	CountTestRuns(ctx context.Context) (int64, error)

@@ -11,6 +11,7 @@ type fakeRepo struct {
 	byExt    map[string]int64
 	expected map[int64][]int64
 	results  map[int64][]TestResult
+	parseErr map[int64][]ParseError
 	nextRun  int64
 	nextRes  int64
 	errs     map[string]error
@@ -18,7 +19,7 @@ type fakeRepo struct {
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{runs: map[int64]TestRun{}, byExt: map[string]int64{}, expected: map[int64][]int64{},
-		results: map[int64][]TestResult{}, errs: map[string]error{}}
+		results: map[int64][]TestResult{}, parseErr: map[int64][]ParseError{}, errs: map[string]error{}}
 }
 
 func (f *fakeRepo) InsertTestRun(_ context.Context, p InsertRunParams) (int64, bool, error) {
@@ -62,6 +63,32 @@ func (f *fakeRepo) InsertTestResults(_ context.Context, runID int64, rs []NewRes
 			RequestedTestCaseID: r.RequestedTestCaseID, Correlation: r.Correlation, TestName: r.TestName, Status: r.Status})
 	}
 	return nil
+}
+
+func (f *fakeRepo) InsertParseErrors(_ context.Context, runID int64, errs []ParseError) error {
+	if err := f.errs["InsertParseErrors"]; err != nil {
+		return err
+	}
+	f.parseErr[runID] = append(f.parseErr[runID], errs...)
+	return nil
+}
+
+func (f *fakeRepo) ListParseErrors(_ context.Context, runID int64, limit, offset int32) ([]ParseError, error) {
+	if err := f.errs["ListParseErrors"]; err != nil {
+		return nil, err
+	}
+	all := f.parseErr[runID]
+	if int(offset) >= len(all) {
+		return []ParseError{}, nil
+	}
+	return all[offset:min(len(all), int(offset)+int(limit))], nil
+}
+
+func (f *fakeRepo) CountParseErrors(_ context.Context, runID int64) (int64, error) {
+	if err := f.errs["CountParseErrors"]; err != nil {
+		return 0, err
+	}
+	return int64(len(f.parseErr[runID])), nil
 }
 
 func (f *fakeRepo) GetTestRun(_ context.Context, id int64) (TestRun, error) {

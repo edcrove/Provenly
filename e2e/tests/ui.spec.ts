@@ -64,6 +64,7 @@ test.describe('Frontend UI journeys', () => {
         byName(`login firefox TC-${id}`, '<failure message="button not found">trace</failure>'),
         byName('unlabelled test'),
         byName('ghost TC-987654321'),
+        '<testcase name=""/>',
       ),
     )
     expect(res.status()).toBe(201)
@@ -80,6 +81,7 @@ test.describe('Frontend UI journeys', () => {
     await expect(page.getByRole('link', { name: `TC-${other.id}` }).first()).toBeVisible()
     await expect(page.getByTestId('diagnostic-missing')).toHaveText('1')
     await expect(page.getByTestId('diagnostic-unknown')).toHaveText('1')
+    await expect(page.getByTestId('parse-error-row')).toContainText('discarded')
 
     // Both individual results are shown; the summary counts the TC once as failed.
     await expect(page.getByTestId('result-row')).toHaveCount(4)

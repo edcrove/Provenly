@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/edcrove/provenly/backend/internal/execution"
-	"github.com/edcrove/provenly/backend/internal/ingestion/junit"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 )
 
@@ -51,7 +50,7 @@ func TestIngestHandlerCreatedAndReplay(t *testing.T) {
 	api := &stubAPI{out: Outcome{
 		Created: true, Run: execution.TestRun{ID: 1, ExternalRunID: "github:7:2"}, Received: 2, Persisted: 1,
 		Diagnostics: []Diagnostic{{TestName: "x", Correlation: execution.CorrelationMissing, Message: "m"}},
-		ParseErrors: []junit.CaseError{{Index: 1, Message: "bad"}},
+		ParseErrors: []execution.ParseError{{Index: 1, Message: "bad", Persisted: true}},
 	}}
 	rec := post(api, 1024, q, "application/xml; charset=utf-8", "<testsuites/>")
 	assert.Equal(t, http.StatusCreated, rec.Code)
@@ -60,7 +59,7 @@ func TestIngestHandlerCreatedAndReplay(t *testing.T) {
 	body := rec.Body.String()
 	assert.Contains(t, body, `"created":true`)
 	assert.Contains(t, body, `"diagnostics":[{"testName":"x","correlation":"missing","requestedTestCaseId":null,"message":"m"}]`)
-	assert.Contains(t, body, `"parseErrors":[{"index":1,"testName":"","message":"bad"}]`)
+	assert.Contains(t, body, `"parseErrors":[{"index":1,"testName":"","message":"bad","persisted":true}]`)
 
 	api.out.Created = false
 	rec = post(api, 1024, q, "text/xml", "<testsuites/>")

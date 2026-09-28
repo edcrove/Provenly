@@ -141,6 +141,11 @@ func TestRunsAndIngestion(t *testing.T) {
 	e.GET("/api/v1/test-runs/"+runID+"/results").WithQuery("correlation", "bogus").Expect().Status(http.StatusBadRequest)
 	e.GET("/api/v1/test-runs/987654/results").Expect().Status(http.StatusNotFound)
 
+	e.GET("/api/v1/test-runs/"+runID+"/parse-errors").Expect().Status(http.StatusOK).
+		JSON().Object().HasValue("totalItems", 1).Value("items").Array().Value(0).Object().HasValue("persisted", false)
+	e.GET("/api/v1/test-runs/"+runID+"/parse-errors").WithQuery("page", 0).Expect().Status(http.StatusBadRequest)
+	e.GET("/api/v1/test-runs/987654/parse-errors").Expect().Status(http.StatusNotFound)
+
 	sum := e.GET("/api/v1/test-runs/" + runID + "/summary").Expect().Status(http.StatusOK).JSON().Object()
 	sum.Value("counts").Object().HasValue("failed", 1)
 	sum.HasValue("executionPercent", 100)
@@ -176,6 +181,7 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.GET("/api/v1/test-runs/1").Expect())
 	problem(e.GET("/api/v1/test-runs/1/results").Expect())
 	problem(e.GET("/api/v1/test-runs/1/summary").Expect())
+	problem(e.GET("/api/v1/test-runs/1/parse-errors").Expect())
 	problem(ingest(e, "1", 1, strings.ReplaceAll(report(1), "\n", "")).Expect())
 }
 

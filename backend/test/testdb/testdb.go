@@ -50,7 +50,7 @@ func Start(ctx context.Context) (*DB, error) {
 
 // Reset empties every table (TRUNCATE does not fire the row-level protection triggers).
 func (d *DB) Reset(ctx context.Context) error {
-	_, err := d.Pool.Exec(ctx, `TRUNCATE test_results, test_run_expected_cases, test_runs, test_steps, test_cases`)
+	_, err := d.Pool.Exec(ctx, `TRUNCATE test_run_parse_errors, test_results, test_run_expected_cases, test_runs, test_steps, test_cases`)
 	return err
 }
 

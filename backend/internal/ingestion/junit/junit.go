@@ -58,22 +58,26 @@ type TCRef struct {
 
 // Result is a NormalizedTestResult: independent of the input format.
 type Result struct {
-	Index        int
-	TestName     string
-	ClassName    string
-	SuiteName    string
-	Status       Status
-	DurationMs   int64
+	Index     int
+	TestName  string
+	ClassName string
+	SuiteName string
+	Status    Status
+	// DurationMs is the rounded `time` in milliseconds; nil when absent or invalid.
+	DurationMs   *int64
 	ErrorMessage string
 	ErrorDetails string
 	Ref          TCRef
 }
 
-// CaseError reports a testcase that could not be normalized. It does not stop parsing.
+// CaseError reports a testcase that could not be fully normalized. It never
+// stops parsing: Persisted tells whether the result was still kept (e.g. with
+// an unknown duration) or discarded (e.g. no name).
 type CaseError struct {
-	Index    int
-	TestName string
-	Message  string
+	Index     int
+	TestName  string
+	Message   string
+	Persisted bool
 }
 
 // Report is the outcome of parsing one document.
@@ -153,10 +157,13 @@ func walk(rep *Report, s xmlSuite, parent string) {
 	for _, c := range s.Cases {
 		index := rep.Received
 		rep.Received++
-		res, err := normalize(c, suite, index)
+		res, warning, err := normalize(c, suite, index)
 		if err != nil {
 			rep.Errors = append(rep.Errors, CaseError{Index: index, TestName: c.Name, Message: err.Error()})
 			continue
+		}
+		if warning != "" {
+			rep.Errors = append(rep.Errors, CaseError{Index: index, TestName: res.TestName, Message: warning, Persisted: true})
 		}
 		rep.Results = append(rep.Results, res)
 	}
@@ -165,14 +172,17 @@ func walk(rep *Report, s xmlSuite, parent string) {
 	}
 }
 
-func normalize(c xmlCase, suite string, index int) (Result, error) {
+// normalize returns the result, a non-fatal warning, or an error when the
+// testcase cannot be kept at all.
+func normalize(c xmlCase, suite string, index int) (Result, string, error) {
 	name := strings.TrimSpace(c.Name)
 	if name == "" {
-		return Result{}, fmt.Errorf("testcase has no name")
+		return Result{}, "", fmt.Errorf("testcase has no name; result discarded")
 	}
+	var warning string
 	duration, err := parseDuration(c.Time)
 	if err != nil {
-		return Result{}, err
+		warning = err.Error() + "; result kept without duration"
 	}
 	res := Result{
 		Index: index, TestName: name, ClassName: c.ClassName, SuiteName: suite,
@@ -189,7 +199,7 @@ func normalize(c xmlCase, suite string, index int) (Result, error) {
 		res.Status = Skipped
 		res.ErrorMessage, res.ErrorDetails = outcomeText(c.Skipped)
 	}
-	return res, nil
+	return res, warning, nil
 }
 
 func outcomeText(o *xmlOutcome) (string, string) {
@@ -200,16 +210,19 @@ func outcomeText(o *xmlOutcome) (string, string) {
 	return msg, strings.TrimSpace(o.Text)
 }
 
-func parseDuration(raw string) (int64, error) {
+// parseDuration converts the JUnit `time` (seconds) to rounded milliseconds;
+// nil when the attribute is absent or invalid.
+func parseDuration(raw string) (*int64, error) {
 	raw = strings.ReplaceAll(strings.TrimSpace(raw), ",", "")
 	if raw == "" {
-		return 0, nil
+		return nil, nil
 	}
 	secs, err := strconv.ParseFloat(raw, 64)
 	if err != nil || secs < 0 || math.IsInf(secs, 0) || math.IsNaN(secs) {
-		return 0, fmt.Errorf("invalid time attribute %q", raw)
+		return nil, fmt.Errorf("invalid time attribute %q", raw)
 	}
-	return int64(math.Round(secs * 1000)), nil
+	ms := int64(math.Round(secs * 1000))
+	return &ms, nil
 }
 
 // extractRef resolves the TC-ID reference of a testcase: the tc-id property

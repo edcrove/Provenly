@@ -3,8 +3,13 @@ export function tcKey(id: number): string {
   return `TC-${id}`
 }
 
-/** Formats milliseconds as a compact duration. */
-export function formatDuration(ms: number): string {
+/**
+ * Formats a duration in milliseconds. null means unknown (not reported or
+ * invalid); 0 means reported as 0 or rounded down from under 0.5 ms.
+ */
+export function formatDuration(ms: number | null): string {
+  if (ms === null) return '—'
+  if (ms === 0) return '<1 ms'
   if (ms < 1000) return `${ms} ms`
   const seconds = ms / 1000
   if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 2 : 1)} s`

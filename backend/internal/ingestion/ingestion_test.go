@@ -13,7 +13,6 @@ import (
 
 	"github.com/edcrove/provenly/backend/internal/catalog"
 	"github.com/edcrove/provenly/backend/internal/execution"
-	"github.com/edcrove/provenly/backend/internal/ingestion/junit"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 )
 
@@ -41,17 +40,24 @@ type fakeRecorder struct {
 	gotExp     []int64
 	gotResults []execution.NewResult
 	diags      []execution.Diagnostic
+	gotParse   []execution.ParseError
+	storedPE   []execution.ParseError
 	recordErr  error
 	diagErr    error
+	parseErr   error
 }
 
-func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []int64, rs []execution.NewResult) (execution.TestRun, bool, error) {
-	f.gotRun, f.gotExp, f.gotResults = run, exp, rs
+func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []int64, rs []execution.NewResult, pe []execution.ParseError) (execution.TestRun, bool, error) {
+	f.gotRun, f.gotExp, f.gotResults, f.gotParse = run, exp, rs, pe
 	return execution.TestRun{ID: 1, ExternalRunID: execution.ExternalRunID(run.Provider, run.ProviderRunID, run.RunAttempt), ResultCount: int32(len(rs))}, f.created, f.recordErr
 }
 
 func (f *fakeRecorder) Diagnostics(context.Context, int64) ([]execution.Diagnostic, error) {
 	return f.diags, f.diagErr
+}
+
+func (f *fakeRecorder) ParseErrors(context.Context, int64) ([]execution.ParseError, error) {
+	return f.storedPE, f.parseErr
 }
 
 var meta = RunMeta{Provider: "github", ProviderRunID: "99", RunAttempt: 1, Pipeline: "ci", Branch: "main", Commit: "abc"}
@@ -63,6 +69,7 @@ const report = `<testsuites><testsuite name="s" timestamp="2026-09-28T10:00:00">
 <testcase name="no id"/>
 <testcase name="bad TC-x"/>
 <testcase name=""/>
+<testcase name="slow TC-2" time="later"/>
 </testsuite></testsuites>`
 
 func TestIngestCorrelatesEveryResult(t *testing.T) {
@@ -77,10 +84,14 @@ func TestIngestCorrelatesEveryResult(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, out.Created)
-	assert.Equal(t, 6, out.Received)
-	assert.Equal(t, 5, out.Persisted)
-	assert.Equal(t, []junit.CaseError{{Index: 5, TestName: "", Message: "testcase has no name"}}, out.ParseErrors)
-	assert.Equal(t, []int64{153, 2, 404}, cat.askedIDs)
+	assert.Equal(t, 7, out.Received)
+	assert.Equal(t, 6, out.Persisted)
+	assert.Equal(t, []execution.ParseError{
+		{Index: 5, TestName: "", Message: "testcase has no name; result discarded"},
+		{Index: 6, TestName: "slow TC-2", Message: `invalid time attribute "later"; result kept without duration`, Persisted: true},
+	}, rec.gotParse)
+	assert.Equal(t, []execution.ParseError{}, out.ParseErrors, "the response returns what is stored")
+	assert.Equal(t, []int64{153, 2, 404, 2}, cat.askedIDs)
 	assert.Equal(t, []int64{153, 154}, rec.gotExp)
 	assert.Equal(t, "github", rec.gotRun.Provider)
 	require.NotNil(t, rec.gotRun.StartedAt)
@@ -109,11 +120,11 @@ func TestIngestCorrelatesEveryResult(t *testing.T) {
 func strPtr(s string) *string { return &s }
 
 func TestIngestReplayAndEmptyParseErrors(t *testing.T) {
-	rec := &fakeRecorder{created: false}
+	rec := &fakeRecorder{created: false, storedPE: []execution.ParseError{{Index: 1, Message: "stored"}}}
 	out, err := NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
 	require.NoError(t, err)
 	assert.False(t, out.Created)
-	assert.NotNil(t, out.ParseErrors)
+	assert.Equal(t, rec.storedPE, out.ParseErrors, "a replay reports the parse errors stored at creation")
 	assert.Empty(t, out.Diagnostics)
 }
 
@@ -156,6 +167,8 @@ func TestIngestErrors(t *testing.T) {
 	_, err = NewService(&fakeCatalog{}, &fakeRecorder{recordErr: errBoom}).IngestJUnit(ctx, meta, strings.NewReader(report))
 	assert.ErrorIs(t, err, errBoom)
 	_, err = NewService(&fakeCatalog{}, &fakeRecorder{diagErr: errBoom}).IngestJUnit(ctx, meta, strings.NewReader(report))
+	assert.ErrorIs(t, err, errBoom)
+	_, err = NewService(&fakeCatalog{}, &fakeRecorder{parseErr: errBoom}).IngestJUnit(ctx, meta, strings.NewReader(report))
 	assert.ErrorIs(t, err, errBoom)
 }
 

@@ -9,6 +9,42 @@ import (
 	"context"
 )
 
+// iteratorForInsertParseErrors implements pgx.CopyFromSource.
+type iteratorForInsertParseErrors struct {
+	rows                 []InsertParseErrorsParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForInsertParseErrors) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForInsertParseErrors) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].TestRunID,
+		r.rows[0].CaseIndex,
+		r.rows[0].TestName,
+		r.rows[0].Message,
+		r.rows[0].Persisted,
+	}, nil
+}
+
+func (r iteratorForInsertParseErrors) Err() error {
+	return nil
+}
+
+func (q *Queries) InsertParseErrors(ctx context.Context, arg []InsertParseErrorsParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"test_run_parse_errors"}, []string{"test_run_id", "case_index", "test_name", "message", "persisted"}, &iteratorForInsertParseErrors{rows: arg})
+}
+
 // iteratorForInsertTestResults implements pgx.CopyFromSource.
 type iteratorForInsertTestResults struct {
 	rows                 []InsertTestResultsParams

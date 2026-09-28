@@ -25,8 +25,9 @@ type Catalog interface {
 
 // Recorder is what ingestion needs from the execution module.
 type Recorder interface {
-	RecordRun(ctx context.Context, run execution.NewRun, expected []int64, results []execution.NewResult) (execution.TestRun, bool, error)
+	RecordRun(ctx context.Context, run execution.NewRun, expected []int64, results []execution.NewResult, parseErrors []execution.ParseError) (execution.TestRun, bool, error)
 	Diagnostics(ctx context.Context, runID int64) ([]execution.Diagnostic, error)
+	ParseErrors(ctx context.Context, runID int64) ([]execution.ParseError, error)
 }
 
 // RunMeta is the CI metadata sent with a report.
@@ -54,7 +55,8 @@ type Outcome struct {
 	Received    int
 	Persisted   int
 	Diagnostics []Diagnostic
-	ParseErrors []junit.CaseError
+	// ParseErrors are the ones stored with the run (on a replay: those of the original ingestion).
+	ParseErrors []execution.ParseError
 }
 
 var (
@@ -103,10 +105,14 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	if err != nil {
 		return Outcome{}, err
 	}
+	parseErrors := make([]execution.ParseError, len(report.Errors))
+	for i, e := range report.Errors {
+		parseErrors[i] = execution.ParseError{Index: int32(e.Index), TestName: e.TestName, Message: e.Message, Persisted: e.Persisted}
+	}
 	run, created, err := s.recorder.RecordRun(ctx, execution.NewRun{
 		Provider: meta.Provider, ProviderRunID: meta.ProviderRunID, RunAttempt: meta.RunAttempt,
 		Pipeline: meta.Pipeline, Branch: meta.Branch, Commit: meta.Commit, StartedAt: report.StartedAt,
-	}, expected, results)
+	}, expected, results, parseErrors)
 	if err != nil {
 		return Outcome{}, err
 	}
@@ -114,15 +120,19 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	if err != nil {
 		return Outcome{}, err
 	}
+	storedParseErrors, err := s.recorder.ParseErrors(ctx, run.ID)
+	if err != nil {
+		return Outcome{}, err
+	}
 	out := Outcome{
 		Created: created, Run: run, Received: report.Received, Persisted: int(run.ResultCount),
-		Diagnostics: make([]Diagnostic, len(stored)), ParseErrors: report.Errors,
+		Diagnostics: make([]Diagnostic, len(stored)), ParseErrors: storedParseErrors,
 	}
 	for i, d := range stored {
 		out.Diagnostics[i] = Diagnostic{TestName: d.TestName, Correlation: d.Correlation, RequestedTestCaseID: d.RequestedTestCaseID, Message: diagnosticMessage(d)}
 	}
 	if out.ParseErrors == nil {
-		out.ParseErrors = []junit.CaseError{}
+		out.ParseErrors = []execution.ParseError{}
 	}
 	return out, nil
 }

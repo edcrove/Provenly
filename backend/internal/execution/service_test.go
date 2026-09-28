@@ -32,7 +32,7 @@ func valid(id int64, s ResultStatus, name string) NewResult {
 
 func TestRecordRunIsIdempotentPerAttempt(t *testing.T) {
 	svc, _, ctx := setup()
-	first, created, err := svc.RecordRun(ctx, run(1), []int64{1, 2}, []NewResult{valid(1, Passed, "a")})
+	first, created, err := svc.RecordRun(ctx, run(1), []int64{1, 2}, []NewResult{valid(1, Passed, "a")}, nil)
 	require.NoError(t, err)
 	assert.True(t, created)
 	assert.Equal(t, "github:42:1", first.ExternalRunID)
@@ -41,14 +41,14 @@ func TestRecordRunIsIdempotentPerAttempt(t *testing.T) {
 	assert.Equal(t, int32(1), first.ResultCount)
 	assert.Equal(t, fixedNow, *first.CompletedAt)
 
-	replay, created, err := svc.RecordRun(ctx, run(1), []int64{1, 2, 3}, []NewResult{valid(1, Failed, "a"), valid(2, Passed, "b")})
+	replay, created, err := svc.RecordRun(ctx, run(1), []int64{1, 2, 3}, []NewResult{valid(1, Failed, "a"), valid(2, Passed, "b")}, nil)
 	require.NoError(t, err)
 	assert.False(t, created)
 	assert.Equal(t, first.ID, replay.ID)
 	assert.Equal(t, int32(2), replay.ExpectedCount, "snapshot is not recomputed on replay")
 	assert.Equal(t, int32(1), replay.ResultCount, "replay does not add results")
 
-	rerun, created, err := svc.RecordRun(ctx, run(2), []int64{1}, nil)
+	rerun, created, err := svc.RecordRun(ctx, run(2), []int64{1}, nil, nil)
 	require.NoError(t, err)
 	assert.True(t, created)
 	assert.NotEqual(t, first.ID, rerun.ID)
@@ -60,23 +60,23 @@ func TestRecordRunIsIdempotentPerAttempt(t *testing.T) {
 }
 
 func TestRecordRunErrors(t *testing.T) {
-	for _, m := range []string{"InTx", "InsertTestRun", "InsertExpectedCases", "InsertTestResults", "GetTestRun"} {
+	for _, m := range []string{"InTx", "InsertTestRun", "InsertExpectedCases", "InsertTestResults", "InsertParseErrors", "GetTestRun"} {
 		svc, repo, ctx := setup()
 		repo.errs[m] = errBoom
-		_, _, err := svc.RecordRun(ctx, run(1), []int64{1}, nil)
+		_, _, err := svc.RecordRun(ctx, run(1), []int64{1}, nil, nil)
 		assert.ErrorIs(t, err, errBoom, m)
 	}
 	svc, repo, ctx := setup()
-	_, _, _ = svc.RecordRun(ctx, run(1), nil, nil)
+	_, _, _ = svc.RecordRun(ctx, run(1), nil, nil, nil)
 	repo.errs["GetTestRunIDByExternalID"] = errBoom
-	_, _, err := svc.RecordRun(ctx, run(1), nil, nil)
+	_, _, err := svc.RecordRun(ctx, run(1), nil, nil, nil)
 	assert.ErrorIs(t, err, errBoom)
 }
 
 func TestGetAndListRuns(t *testing.T) {
 	svc, repo, ctx := setup()
-	_, _, _ = svc.RecordRun(ctx, run(1), nil, nil)
-	_, _, _ = svc.RecordRun(ctx, run(2), nil, nil)
+	_, _, _ = svc.RecordRun(ctx, run(1), nil, nil, nil)
+	_, _, _ = svc.RecordRun(ctx, run(2), nil, nil, nil)
 	res, err := svc.ListRuns(ctx, pagination.Page{Number: 1, Size: 1})
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), res.Total)
@@ -104,7 +104,7 @@ func TestListRunResultsAndDiagnostics(t *testing.T) {
 	r, _, _ := svc.RecordRun(ctx, run(1), []int64{1}, []NewResult{
 		valid(1, Passed, "chrome"), valid(1, Failed, "firefox"),
 		{Correlation: CorrelationUnknown, RequestedTestCaseID: ptr("TC-9"), TestName: "ghost", Status: Passed},
-	})
+	}, nil)
 	res, err := svc.ListRunResults(ctx, r.ID, ResultFilter{Status: ptr(Failed)}, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), res.Total)
@@ -130,7 +130,7 @@ func TestListRunResultsAndDiagnostics(t *testing.T) {
 
 func TestSummaryUsesSnapshot(t *testing.T) {
 	svc, repo, ctx := setup()
-	r, _, _ := svc.RecordRun(ctx, run(1), []int64{1, 2}, []NewResult{valid(1, Passed, "chrome"), valid(1, Failed, "firefox")})
+	r, _, _ := svc.RecordRun(ctx, run(1), []int64{1, 2}, []NewResult{valid(1, Passed, "chrome"), valid(1, Failed, "firefox")}, nil)
 	s, err := svc.Summary(ctx, r.ID)
 	require.NoError(t, err)
 	assert.Equal(t, StatusCounts{Untested: 1, Failed: 1}, s.Counts)
@@ -147,8 +147,8 @@ func TestSummaryUsesSnapshot(t *testing.T) {
 
 func TestHistory(t *testing.T) {
 	svc, repo, ctx := setup()
-	_, _, _ = svc.RecordRun(ctx, run(1), []int64{1}, []NewResult{valid(1, Passed, "a")})
-	_, _, _ = svc.RecordRun(ctx, run(2), []int64{1}, []NewResult{valid(1, Failed, "a")})
+	_, _, _ = svc.RecordRun(ctx, run(1), []int64{1}, []NewResult{valid(1, Passed, "a")}, nil)
+	_, _, _ = svc.RecordRun(ctx, run(2), []int64{1}, []NewResult{valid(1, Failed, "a")}, nil)
 	h, err := svc.History(ctx, 1, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), h.Total)
@@ -160,5 +160,30 @@ func TestHistory(t *testing.T) {
 	assert.ErrorIs(t, err, errBoom)
 	repo.errs["ListResultsForTestCase"] = errBoom
 	_, err = svc.History(ctx, 1, pagination.Default())
+	assert.ErrorIs(t, err, errBoom)
+}
+
+func TestParseErrors(t *testing.T) {
+	svc, repo, ctx := setup()
+	pe := []ParseError{{Index: 0, TestName: "", Message: "no name"}, {Index: 3, TestName: "t", Message: "bad time", Persisted: true}}
+	r, _, err := svc.RecordRun(ctx, run(1), nil, nil, pe)
+	require.NoError(t, err)
+
+	all, err := svc.ParseErrors(ctx, r.ID)
+	require.NoError(t, err)
+	assert.Equal(t, pe, all)
+
+	page, err := svc.ListParseErrors(ctx, r.ID, pagination.Page{Number: 2, Size: 1})
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), page.Total)
+	assert.Equal(t, pe[1:], page.Items)
+
+	_, err = svc.ListParseErrors(ctx, 99, pagination.Default())
+	assert.Error(t, err)
+	repo.errs["CountParseErrors"] = errBoom
+	_, err = svc.ListParseErrors(ctx, r.ID, pagination.Default())
+	assert.ErrorIs(t, err, errBoom)
+	repo.errs["ListParseErrors"] = errBoom
+	_, err = svc.ListParseErrors(ctx, r.ID, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 }

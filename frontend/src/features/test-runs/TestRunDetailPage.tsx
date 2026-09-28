@@ -8,6 +8,7 @@ import { formatDateTime } from '@/lib/format'
 import { positiveInt } from '@/lib/status'
 
 import { RunDiagnostics } from './RunDiagnostics'
+import { RunParseErrors } from './RunParseErrors'
 import { RunResults } from './RunResults'
 import { RunSummary } from './RunSummary'
 
@@ -78,6 +79,7 @@ export function TestRunDetailPage() {
               </>
             )}
           </QueryState>
+          <RunParseErrors testRunId={r.id} />
           <Card>
             <CardHeader>
               <CardTitle>Results</CardTitle>

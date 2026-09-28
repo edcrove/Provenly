@@ -57,11 +57,14 @@ test.describe('Backend API journeys', () => {
         byName('broken TC-abc'),
         byName('ghost TC-987654321'),
         byName(`old TC-${deprecated.id}`),
+        `<testcase name="login slow TC-${login.id}" time="soon"/>`,
+        '<testcase name=""/>',
       ),
     )
     expect(res.status()).toBe(201)
     const body = await res.json()
-    expect(body).toMatchObject({ created: true, received: 6, persisted: 6 })
+    expect(body).toMatchObject({ created: true, received: 8, persisted: 7 })
+    expect(body.parseErrors.map((e: { persisted: boolean }) => e.persisted)).toEqual([true, false])
     expect(body.diagnostics.map((d: { correlation: string }) => d.correlation)).toEqual([
       'missing',
       'malformed',
@@ -81,9 +84,13 @@ test.describe('Backend API journeys', () => {
       diagnostics: { missing: 1, malformed: 1, unknown: 1, deprecated: 1, total: 4 },
     })
     expect(summary.testCases).toEqual([
-      { testCaseId: login.id, status: 'failed', resultCount: 2 },
+      { testCaseId: login.id, status: 'failed', resultCount: 3 },
       { testCaseId: logout.id, status: 'untested', resultCount: 0 },
     ])
+    const parseErrors = await (await request.get(`${apiURL}/api/v1/test-runs/${runId}/parse-errors`)).json()
+    expect(parseErrors.items).toMatchObject([{ index: 6, persisted: true }, { index: 7, persisted: false }])
+    const slow = await (await request.get(`${apiURL}/api/v1/test-runs/${runId}/results?pageSize=100`)).json()
+    expect(slow.items.find((r: { testName: string }) => r.testName.startsWith('login slow')).durationMs).toBeNull()
     const failed = await (await request.get(`${apiURL}/api/v1/test-runs/${runId}/results?status=failed`)).json()
     expect(failed.items).toHaveLength(1)
     const oldHistory = await (await request.get(`${apiURL}/api/v1/test-cases/${deprecated.id}/results`)).json()

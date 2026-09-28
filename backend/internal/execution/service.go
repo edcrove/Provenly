@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
@@ -26,7 +27,7 @@ func runNotFound(id int64) error { return apperr.NotFound("test run %d not found
 // with its expected-universe snapshot and results, atomically. When the run
 // already exists the call is an idempotent replay: nothing is written, the
 // snapshot is not recomputed, and the existing run is returned with created=false.
-func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, results []NewResult) (TestRun, bool, error) {
+func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, results []NewResult, parseErrors []ParseError) (TestRun, bool, error) {
 	externalID := ExternalRunID(run.Provider, run.ProviderRunID, run.RunAttempt)
 	var (
 		out     TestRun
@@ -49,6 +50,9 @@ func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, r
 				return err
 			}
 			if err := r.InsertTestResults(ctx, id, results); err != nil {
+				return err
+			}
+			if err := r.InsertParseErrors(ctx, id, parseErrors); err != nil {
 				return err
 			}
 		}
@@ -99,6 +103,27 @@ func (s *Service) ListRunResults(ctx context.Context, runID int64, f ResultFilte
 // Diagnostics returns the stored results of a run whose TC-ID is not valid.
 func (s *Service) Diagnostics(ctx context.Context, runID int64) ([]Diagnostic, error) {
 	return s.repo.ListDiagnostics(ctx, runID)
+}
+
+// ParseErrors returns every stored parse error of a run, in document order.
+func (s *Service) ParseErrors(ctx context.Context, runID int64) ([]ParseError, error) {
+	return s.repo.ListParseErrors(ctx, runID, math.MaxInt32, 0)
+}
+
+// ListParseErrors returns a page of the stored parse errors of a run.
+func (s *Service) ListParseErrors(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[ParseError], error) {
+	if _, err := s.GetRun(ctx, runID); err != nil {
+		return pagination.Result[ParseError]{}, err
+	}
+	items, err := s.repo.ListParseErrors(ctx, runID, page.Limit(), page.Offset())
+	if err != nil {
+		return pagination.Result[ParseError]{}, err
+	}
+	total, err := s.repo.CountParseErrors(ctx, runID)
+	if err != nil {
+		return pagination.Result[ParseError]{}, err
+	}
+	return pagination.Result[ParseError]{Items: items, Page: page, Total: total}, nil
 }
 
 // Summary computes the summary of a run against its immutable snapshot.

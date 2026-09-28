@@ -18,7 +18,7 @@ type TestResult struct {
 	ClassName           string
 	SuiteName           string
 	Status              string
-	DurationMs          int64
+	DurationMs          pgtype.Int8
 	ErrorMessage        string
 	ErrorDetails        string
 	CreatedAt           pgtype.Timestamptz
@@ -42,4 +42,12 @@ type TestRun struct {
 type TestRunExpectedCase struct {
 	TestRunID  int64
 	TestCaseID int64
+}
+
+type TestRunParseError struct {
+	TestRunID int64
+	CaseIndex int32
+	TestName  string
+	Message   string
+	Persisted bool
 }

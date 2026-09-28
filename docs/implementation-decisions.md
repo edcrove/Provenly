@@ -38,6 +38,12 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
    `<testsuite>` level, or one name listing all ids, is not supported.
 5. **Parse errors.** A testcase without `name` or with an invalid `time` is reported in `parseErrors` and not
    persisted; the rest of the batch continues.
+   **Status: Changed by Ed (2026-09-28) — options B + C, implemented.** Only nameless testcases are discarded; an
+   invalid `time` keeps the result with an unknown duration. `durationMs` (JUnit `time` is in seconds, stored as
+   rounded milliseconds) is nullable: null = not reported/invalid, 0 = reported as 0 or under 0.5 ms (UI: "—" vs
+   "<1 ms"); skipped tests keep whatever duration the framework reports. Parse errors are stored with the run
+   (`test_run_parse_errors`, migration 00004) with `persisted` kept/discarded, exposed by
+   `GET /api/v1/test-runs/{id}/parse-errors`, shown in the run detail, and returned on idempotent replays.
 6. **Replay response.** An idempotent replay returns `200` with the existing run and the diagnostics stored at
    creation; nothing is re-parsed into the database.
 7. **Run lifecycle in the POC.** Runs are created synchronously when the final report is ingested and stored as

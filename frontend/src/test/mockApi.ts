@@ -1,6 +1,14 @@
 import { http, HttpResponse, type JsonBodyType } from 'msw'
 
-import type { TestCase, TestCaseResult, TestResult, TestRun, TestRunSummary, TestStep } from '@/api/client'
+import type {
+  ParseError,
+  TestCase,
+  TestCaseResult,
+  TestResult,
+  TestRun,
+  TestRunSummary,
+  TestStep,
+} from '@/api/client'
 
 import { summary, testCase, testResult, testRun, testStep } from './fixtures'
 
@@ -15,6 +23,7 @@ export interface MockDb {
   runs: TestRun[]
   results: TestResult[]
   summaries: Record<number, TestRunSummary>
+  parseErrors: Record<number, ParseError[]>
   /** When true every handler answers 500 (server failure). */
   failing: boolean
   nextId: number
@@ -47,6 +56,7 @@ export function seed(): MockDb {
       }),
     ],
     summaries: { 7: summary() },
+    parseErrors: {},
     failing: false,
     nextId: 1000,
   }
@@ -324,6 +334,14 @@ export const handlers = [
       const run = findRun(params.testRunId)
       if (run instanceof Response) return run
       return respond(db.summaries[run.id] ?? summary({ testRunId: run.id }))
+    }),
+  ),
+  http.get(
+    `${BASE}/test-runs/:testRunId/parse-errors`,
+    guard(({ params, request }) => {
+      const run = findRun(params.testRunId)
+      if (run instanceof Response) return run
+      return respond(pageOf(new URL(request.url), db.parseErrors[run.id] ?? []))
     }),
   ),
 ]

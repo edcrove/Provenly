@@ -166,3 +166,15 @@ export function useTestRunResults(
       ),
   })
 }
+
+export function useTestRunParseErrors(id: number, page: number) {
+  return useQuery({
+    queryKey: [...keys.testRun(id), 'parse-errors', page],
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/test-runs/{testRunId}/parse-errors', {
+          params: { path: { testRunId: id }, query: { page } },
+        }),
+      ),
+  })
+}

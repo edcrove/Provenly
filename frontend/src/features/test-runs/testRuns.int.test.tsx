@@ -208,3 +208,44 @@ describe('FE-INT-011 run results', () => {
 function rows() {
   return within(screen.getByRole('table', { name: 'Results' })).queryAllByTestId('result-row')
 }
+
+describe('FE-INT-015 report parse errors', () => {
+  it('FE-INT-015 is hidden when the report had no parse errors', async () => {
+    renderRoute('/test-runs/7')
+    await screen.findByRole('table', { name: 'Results' })
+    await screen.findAllByTestId('result-row')
+    expect(screen.queryByText('Report parse errors')).not.toBeInTheDocument()
+  })
+
+  it('FE-INT-015 lists kept and discarded testcases and paginates', async () => {
+    db.parseErrors[7] = Array.from({ length: 21 }, (_, i) => ({
+      index: i,
+      testName: i === 0 ? '' : `t${i}`,
+      message:
+        i === 0
+          ? 'testcase has no name; result discarded'
+          : 'invalid time attribute; result kept without duration',
+      persisted: i !== 0,
+    }))
+    const { user } = renderRoute('/test-runs/7')
+    const table = await screen.findByRole('table', { name: 'Parse errors' })
+    const rows = within(table).getAllByTestId('parse-error-row')
+    expect(within(rows[0]).getByText('(no name)')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('discarded')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('kept')).toBeInTheDocument()
+    const card = table.closest('[data-slot="card"]') as HTMLElement
+    await user.click(within(card).getByRole('button', { name: 'Next' }))
+    expect(await within(card).findByText('t20')).toBeInTheDocument()
+  })
+
+  it('FE-INT-015 shows unknown and sub-millisecond durations distinctly', async () => {
+    db.results = [
+      testResult({ id: 1, durationMs: null, testName: 'unknown' }),
+      testResult({ id: 2, durationMs: 0, testName: 'tiny' }),
+    ]
+    renderRoute('/test-runs/7')
+    const rows = await screen.findAllByTestId('result-row')
+    expect(within(rows[0]).getByText('—')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('<1 ms')).toBeInTheDocument()
+  })
+})

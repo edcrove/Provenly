@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatDateTime, formatDuration, formatPercent, shortCommit, tcKey } from './format'
+import { formatDateTime, formatDuration, formatPercent, shortCommit, sumPercents, tcKey } from './format'
 
 describe('format', () => {
   it('formats TC keys', () => {
@@ -27,7 +27,16 @@ describe('format', () => {
   it('formats percentages', () => {
     expect(formatPercent(100)).toBe('100%')
     expect(formatPercent(33.33)).toBe('33.33%')
+    expect(formatPercent(33.333333)).toBe('33.33%')
+    expect(formatPercent(66.666667)).toBe('66.67%')
+    expect(formatPercent(99.999999)).toBe('100%')
     expect(formatPercent(12.5)).toBe('12.50%')
+  })
+
+  it('sums precise percentages so rounded totals read 100%', () => {
+    const total = sumPercents([33.333333, 33.333333, 33.333333])
+    expect(formatPercent(total)).toBe('100%')
+    expect(sumPercents([])).toBe(0)
   })
 
   it('shortens commits', () => {

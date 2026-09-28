@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import type { TestRunSummary } from '@/api/client'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatPercent, tcKey } from '@/lib/format'
+import { formatPercent, sumPercents, tcKey } from '@/lib/format'
 import { resultStatuses, summaryStatuses } from '@/lib/status'
 
 /** Snapshot-based summary: counts, % of expected, % of executed and execution %. */
@@ -28,6 +28,9 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
           <div className="text-muted-foreground">Execution</div>
           <div className="text-2xl font-semibold" data-testid="execution-percent">
             {formatPercent(summary.executionPercent)}
+          </div>
+          <div className="text-muted-foreground text-xs" data-testid="execution-counts">
+            {summary.executedTotal} of {summary.expectedTotal} test cases executed
           </div>
         </div>
       </div>
@@ -55,6 +58,16 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
               </TableCell>
             </TableRow>
           ))}
+          <TableRow data-testid="summary-total" className="font-medium">
+            <TableCell>Total</TableCell>
+            <TableCell>{summary.expectedTotal}</TableCell>
+            <TableCell>
+              {formatPercent(sumPercents(summaryStatuses.map((s) => summary.percentOfExpected[s])))}
+            </TableCell>
+            <TableCell>
+              {formatPercent(sumPercents(resultStatuses.map((s) => summary.percentOfExecuted[s])))}
+            </TableCell>
+          </TableRow>
         </TableBody>
       </Table>
       <p className="text-muted-foreground text-xs">

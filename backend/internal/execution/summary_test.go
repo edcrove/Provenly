@@ -55,10 +55,14 @@ func TestComputeSummary(t *testing.T) {
 
 func TestComputeSummaryRoundingAndEmpty(t *testing.T) {
 	s := ComputeSummary(1, []int64{1, 2, 3}, []ValidResult{{1, Passed}}, nil)
-	assert.Equal(t, 33.33, s.PercentOfExpected.Passed)
-	assert.Equal(t, 66.67, s.PercentOfExpected.Untested)
+	assert.Equal(t, 33.333333, s.PercentOfExpected.Passed)
+	assert.Equal(t, 66.666667, s.PercentOfExpected.Untested)
 	assert.Equal(t, 100.0, s.PercentOfExecuted.Passed)
-	assert.Equal(t, 33.33, s.ExecutionPercent)
+	assert.Equal(t, 33.333333, s.ExecutionPercent)
+
+	thirds := ComputeSummary(3, []int64{1, 2, 3}, []ValidResult{{1, Passed}, {2, Failed}, {3, Error}}, nil)
+	sum := thirds.PercentOfExecuted.Passed + thirds.PercentOfExecuted.Failed + thirds.PercentOfExecuted.Error
+	assert.InDelta(t, 100, sum, 0.00001, "precise values add up to 100 once rounded for display")
 
 	empty := ComputeSummary(2, nil, []ValidResult{{1, Passed}}, nil)
 	assert.Equal(t, int32(0), empty.ExpectedTotal)

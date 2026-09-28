@@ -72,11 +72,15 @@ type Summary struct {
 	TestCases          []TestCaseOutcome
 }
 
+// percentPrecision keeps 6 decimals: clients sum the precise values and round
+// only for display, so e.g. 3 x 33.333333 is shown as a 100% total.
+const percentPrecision = 1e6
+
 func percent(part, total int32) float64 {
 	if total == 0 {
 		return 0
 	}
-	return math.Round(float64(part)*10000/float64(total)) / 100
+	return math.Round(float64(part)*100*percentPrecision/float64(total)) / percentPrecision
 }
 
 // ComputeSummary derives the summary of a run from its immutable snapshot

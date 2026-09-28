@@ -58,6 +58,52 @@ describe('FE-INT-009 test run detail and summary', () => {
         .map((c) => c.textContent),
     ).toEqual(['untested', '1', '50%', '—'])
     expect(screen.getByRole('link', { name: 'TC-154' })).toHaveAttribute('href', '/test-cases/154')
+    const total = screen.getByTestId('summary-total')
+    expect(
+      within(total)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['Total', '2', '100%', '100%'])
+    expect(screen.getByTestId('execution-counts')).toHaveTextContent('1 of 2 test cases executed')
+  })
+
+  it('FE-INT-009 an empty universe reads 0% with its counts (0 of 0)', async () => {
+    db.summaries[7] = summary({
+      expectedTotal: 0,
+      executedTotal: 0,
+      counts: { untested: 0, passed: 0, failed: 0, error: 0, skipped: 0 },
+      percentOfExpected: { untested: 0, passed: 0, failed: 0, error: 0, skipped: 0 },
+      percentOfExecuted: { passed: 0, failed: 0, error: 0, skipped: 0 },
+      executionPercent: 0,
+      testCases: [],
+    })
+    renderRoute('/test-runs/7')
+    expect(await screen.findByTestId('execution-percent')).toHaveTextContent('0%')
+    expect(screen.getByTestId('execution-counts')).toHaveTextContent('0 of 0 test cases executed')
+  })
+
+  it('FE-INT-009 rounds only for display so thirds add up to a 100% total', async () => {
+    db.summaries[7] = summary({
+      expectedTotal: 3,
+      executedTotal: 3,
+      counts: { untested: 0, passed: 1, failed: 1, error: 1, skipped: 0 },
+      percentOfExpected: { untested: 0, passed: 33.333333, failed: 33.333333, error: 33.333333, skipped: 0 },
+      percentOfExecuted: { passed: 33.333333, failed: 33.333333, error: 33.333333, skipped: 0 },
+      executionPercent: 100,
+    })
+    renderRoute('/test-runs/7')
+    const passed = await screen.findByTestId('summary-passed')
+    expect(
+      within(passed)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['passed', '1', '33.33%', '33.33%'])
+    const total = screen.getByTestId('summary-total')
+    expect(
+      within(total)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['Total', '3', '100%', '100%'])
   })
 
   it('FE-INT-009 renders runs without optional metadata and without untested cases', async () => {

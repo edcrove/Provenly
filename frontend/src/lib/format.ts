@@ -25,9 +25,15 @@ export function formatDateTime(iso: string | null | undefined): string {
   return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
 }
 
-/** Formats a 0..100 percentage as returned by the API. */
+/** Formats a 0..100 percentage for display, rounded to 2 decimals (the API sends 6). */
 export function formatPercent(value: number): string {
-  return `${Number.isInteger(value) ? value : value.toFixed(2)}%`
+  const rounded = Math.round(value * 100) / 100
+  return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(2)}%`
+}
+
+/** Sums precise percentages (the API sends 6 decimals); round only when displaying the result. */
+export function sumPercents(values: number[]): number {
+  return values.reduce((acc, v) => acc + v, 0)
 }
 
 /** Shortens a commit SHA for display. */

@@ -525,7 +525,8 @@ export interface components {
         };
         /**
          * @description Computed against the run's immutable expected-universe snapshot.
-         *     Percentages are 0..100 rounded to 2 decimals (0 when the denominator is 0).
+         *     Percentages are 0..100 with 6 decimals (0 when the denominator is 0);
+         *     clients round them for display and compute totals from these precise values.
          *     Results with an invalid TC-ID are excluded and reported in `diagnostics`.
          *     Valid results for test cases outside the snapshot (e.g. automated=false)
          *     are excluded and counted in `outsideUniverse`.

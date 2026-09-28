@@ -144,4 +144,35 @@ test.describe('Frontend UI journeys', () => {
     await page.goto('/test-runs/987654321')
     await expect(page.getByRole('alert')).toContainText('not found')
   })
+
+  test('[FE-E2E-006] a manual TC receiving automated results is flagged and can be marked automated', async ({ page, provenly }) => {
+    await provenly.isolateUniverse()
+    const manual = await provenly.createTestCase({ title: 'Forgot to mark automated', automated: false })
+    const run1 = await (await provenly.ingest(uniqueRunId(), 1, junit(byProperty('forgotten', manual.id)))).json()
+
+    await page.goto(`/test-runs/${run1.testRun.id}`)
+    await expect(page.getByTestId('expected-total')).toHaveText('0')
+    const item = page.getByTestId(`outside-${manual.id}`)
+    await expect(item).toContainText('Forgot to mark automated')
+    await item.getByRole('button', { name: 'Mark as automated' }).click()
+    await expect(item).toContainText('Now automated')
+    await page.reload()
+    await expect(page.getByTestId('expected-total')).toHaveText('0')
+
+    const run2 = await (await provenly.ingest(uniqueRunId(), 1, junit(byProperty('forgotten', manual.id)))).json()
+    await page.goto(`/test-runs/${run2.testRun.id}`)
+    await expect(page.getByTestId('expected-total')).toHaveText('1')
+    await expect(page.getByTestId('execution-percent')).toHaveText('100%')
+  })
+
+  test('[FE-E2E-006] the test case page warns when a manual TC has automated results', async ({ page, provenly }) => {
+    const manual = await provenly.createTestCase({ title: 'Manual with results', automated: false })
+    await provenly.ingest(uniqueRunId(), 1, junit(byProperty('manual', manual.id)))
+    await page.goto(`/test-cases/${manual.id}`)
+    const alert = page.getByTestId('manual-with-results')
+    await expect(alert).toBeVisible()
+    await alert.getByRole('button', { name: 'Mark as automated' }).click()
+    await expect(alert).toHaveCount(0)
+    await expect(page.getByText('automated', { exact: true })).toBeVisible()
+  })
 })

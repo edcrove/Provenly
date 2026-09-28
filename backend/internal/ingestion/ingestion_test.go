@@ -93,7 +93,7 @@ func TestIngestCorrelatesEveryResult(t *testing.T) {
 	assert.Equal(t, int64(153), *got["valid"].TestCaseID)
 	assert.Equal(t, "153", *got["valid"].RequestedTestCaseID)
 	assert.Equal(t, execution.CorrelationDeprecated, got["deprecated TC-2"].Correlation)
-	assert.Nil(t, got["deprecated TC-2"].TestCaseID)
+	assert.Equal(t, int64(2), *got["deprecated TC-2"].TestCaseID, "deprecated results stay linked for history")
 	assert.Equal(t, execution.CorrelationUnknown, got["unknown TC-404"].Correlation)
 	assert.Equal(t, execution.CorrelationMissing, got["no id"].Correlation)
 	assert.Nil(t, got["no id"].RequestedTestCaseID)

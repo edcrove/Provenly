@@ -86,6 +86,8 @@ test.describe('Backend API journeys', () => {
     ])
     const failed = await (await request.get(`${apiURL}/api/v1/test-runs/${runId}/results?status=failed`)).json()
     expect(failed.items).toHaveLength(1)
+    const oldHistory = await (await request.get(`${apiURL}/api/v1/test-cases/${deprecated.id}/results`)).json()
+    expect(oldHistory.items).toMatchObject([{ result: { correlation: 'deprecated', testCaseId: deprecated.id } }])
     const unknownTC = await request.get(`${apiURL}/api/v1/test-cases?pageSize=100`)
     expect((await unknownTC.json()).items.some((t: { id: number }) => t.id === 987654321)).toBe(false)
   })

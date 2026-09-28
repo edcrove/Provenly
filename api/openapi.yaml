@@ -897,7 +897,7 @@ components:
           type: integer
           format: int64
           nullable: true
-          description: Set only when correlation is `valid`
+          description: Set when correlation is `valid` or `deprecated` (a result received after the test case was deprecated still belongs to its history)
         requestedTestCaseId:
           type: string
           nullable: true
@@ -1065,6 +1065,7 @@ components:
         - executionPercent
         - diagnostics
         - outsideUniverse
+        - outsideUniverseTestCaseIds
         - testCases
       properties:
         testRunId:
@@ -1089,6 +1090,13 @@ components:
         outsideUniverse:
           type: integer
           format: int32
+          description: Valid results whose test case was not in the snapshot (e.g. automated=false at run creation)
+        outsideUniverseTestCaseIds:
+          type: array
+          description: Distinct TC-IDs behind `outsideUniverse`, so the UI can warn and offer to mark them automated
+          items:
+            type: integer
+            format: int64
         testCases:
           type: array
           description: Aggregated status per TC-ID of the snapshot (failed > error > skipped > passed; untested when no result)

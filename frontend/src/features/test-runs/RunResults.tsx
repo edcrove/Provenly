@@ -77,19 +77,21 @@ export function RunResults({ testRunId }: { testRunId: number }) {
                 {data.items.map((r) => (
                   <TableRow key={r.id} data-testid="result-row">
                     <TableCell>
-                      {r.testCaseId ? (
-                        <Link to={`/test-cases/${r.testCaseId}`} className="font-mono underline">
-                          {tcKey(r.testCaseId)}
-                        </Link>
-                      ) : (
-                        <span
-                          className="flex items-center gap-2"
-                          title={correlationExplanation(r.correlation)}
-                        >
-                          <CorrelationBadge correlation={r.correlation} />
-                          <span className="font-mono text-xs">{r.requestedTestCaseId ?? ''}</span>
-                        </span>
-                      )}
+                      <span className="flex items-center gap-2" title={correlationExplanation(r.correlation)}>
+                        {r.testCaseId ? (
+                          <Link to={`/test-cases/${r.testCaseId}`} className="font-mono underline">
+                            {tcKey(r.testCaseId)}
+                          </Link>
+                        ) : null}
+                        {r.correlation !== 'valid' ? (
+                          <>
+                            <CorrelationBadge correlation={r.correlation} />
+                            {r.testCaseId ? null : (
+                              <span className="font-mono text-xs">{r.requestedTestCaseId ?? ''}</span>
+                            )}
+                          </>
+                        ) : null}
+                      </span>
                     </TableCell>
                     <TableCell>{r.testName}</TableCell>
                     <TableCell>

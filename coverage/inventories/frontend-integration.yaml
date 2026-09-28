@@ -31,7 +31,7 @@ targets:
     description: test run detail with metadata and summary (counts and the three percentages, untested links)
     surfaces: [src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/RunSummary.tsx, src/components/StatusBadge.tsx]
   - id: FE-INT-010
-    description: TC-ID diagnostics (missing/malformed/unknown/deprecated) and outside-universe results
+    description: TC-ID diagnostics (missing/malformed/unknown/deprecated) and outside-universe test cases with "mark as automated"
     surfaces: [src/features/test-runs/RunDiagnostics.tsx]
   - id: FE-INT-011
     description: individual run results filtered by status and correlation, TC-ID links, pagination
@@ -42,3 +42,6 @@ targets:
   - id: FE-INT-013
     description: the app boots with its providers and browser router
     surfaces: [src/app/App.tsx]
+  - id: FE-INT-014
+    description: a manual test case that receives automated results shows a warning and can be marked automated
+    surfaces: [src/features/test-cases/TestCaseDetailPage.tsx]

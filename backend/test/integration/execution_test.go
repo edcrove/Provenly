@@ -81,6 +81,13 @@ func TestExecutionPersistence(t *testing.T) {
 		var count int
 		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM test_cases`).Scan(&count))
 		assert.Equal(t, 3, count, "unknown TC-IDs never create test cases")
+
+		// A result received after deprecation stays in the deprecated test case's history.
+		h, err := s.Execution.History(ctx, old.ID, pagination.Default())
+		require.NoError(t, err)
+		require.Equal(t, int64(1), h.Total)
+		assert.Equal(t, execution.CorrelationDeprecated, h.Items[0].Result.Correlation)
+		assert.Equal(t, old.ID, *h.Items[0].Result.TestCaseID)
 	})
 
 	t.Run("BE-INT-008_duplicate_ingestion_is_idempotent_even_when_concurrent", func(t *testing.T) {
@@ -169,9 +176,11 @@ func TestExecutionPersistence(t *testing.T) {
 		out, err := s.Ingestion.IngestJUnit(ctx, meta("500", 1), strings.NewReader(junitFor()))
 		require.NoError(t, err)
 		_, err = db.Pool.Exec(ctx, `INSERT INTO test_results (test_run_id, correlation, test_name, status) VALUES ($1, 'valid', 'x', 'passed')`, out.Run.ID)
-		assert.ErrorContains(t, err, "test_results_valid_has_test_case")
+		assert.ErrorContains(t, err, "test_results_linked_has_test_case")
 		_, err = db.Pool.Exec(ctx, `INSERT INTO test_results (test_run_id, test_case_id, correlation, test_name, status) VALUES ($1, 1, 'unknown', 'x', 'passed')`, out.Run.ID)
-		assert.ErrorContains(t, err, "test_results_valid_has_test_case")
+		assert.ErrorContains(t, err, "test_results_linked_has_test_case")
+		_, err = db.Pool.Exec(ctx, `INSERT INTO test_results (test_run_id, correlation, test_name, status) VALUES ($1, 'deprecated', 'x', 'passed')`, out.Run.ID)
+		assert.ErrorContains(t, err, "test_results_linked_has_test_case", "deprecated results must keep the TC-ID link")
 		_, err = db.Pool.Exec(ctx, `INSERT INTO test_results (test_run_id, correlation, test_name, status) VALUES ($1, 'missing', 'x', 'untested')`, out.Run.ID)
 		assert.Error(t, err, "untested is never persisted")
 		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ('x:y:1', 'github', '1', 1, 'completed')`)
@@ -240,6 +249,7 @@ func TestExecutionPersistence(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int32(0), sum.ExpectedTotal)
 		assert.Equal(t, int32(1), sum.OutsideUniverse)
+		assert.Equal(t, []int64{manual.ID}, sum.OutsideUniverseIDs)
 	})
 }
 

@@ -10,3 +10,5 @@ targets:
     description: editing/deprecating test cases later does not change an existing run summary
   - id: FE-E2E-005
     description: unknown pages and missing resources are reported
+  - id: FE-E2E-006
+    description: a manual TC receiving automated results is flagged; marking it automated includes it in the next run only

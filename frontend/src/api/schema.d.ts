@@ -423,7 +423,7 @@ export interface components {
             testRunId: number;
             /**
              * Format: int64
-             * @description Set only when correlation is `valid`
+             * @description Set when correlation is `valid` or `deprecated` (a result received after the test case was deprecated still belongs to its history)
              */
             testCaseId: number | null;
             /** @description Raw TC-ID reference as declared by the test (for diagnostics) */
@@ -516,8 +516,13 @@ export interface components {
             percentOfExecuted: components["schemas"]["ExecutedPercentages"];
             executionPercent: number;
             diagnostics: components["schemas"]["DiagnosticCounts"];
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Valid results whose test case was not in the snapshot (e.g. automated=false at run creation)
+             */
             outsideUniverse: number;
+            /** @description Distinct TC-IDs behind `outsideUniverse`, so the UI can warn and offer to mark them automated */
+            outsideUniverseTestCaseIds: number[];
             /** @description Aggregated status per TC-ID of the snapshot (failed > error > skipped > passed; untested when no result) */
             testCases: components["schemas"]["TestCaseOutcome"][];
         };

@@ -1,9 +1,11 @@
 import { screen, waitFor, within } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
 import { summary, testResult, testRun } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { renderRoute } from '@/test/render'
+import { server } from '@/test/server'
 
 describe('FE-INT-008 test run list', () => {
   it('FE-INT-008 lists runs newest first with their metadata', async () => {
@@ -91,6 +93,45 @@ describe('FE-INT-010 TC-ID diagnostics', () => {
     expect(screen.getByTestId('diagnostic-deprecated')).toHaveTextContent('3')
     expect(screen.queryByTestId('diagnostic-unknown')).not.toBeInTheDocument()
     expect(screen.getByTestId('outside-universe')).toHaveTextContent('2 result(s)')
+    expect(
+      screen.getByRole('list', { name: 'Test cases outside the expected universe' }),
+    ).toBeEmptyDOMElement()
+  })
+
+  it('FE-INT-010 warns about manual test cases outside the universe and marks them automated', async () => {
+    db.testCases[1] = { ...db.testCases[1], automated: false }
+    db.summaries[7] = summary({ outsideUniverse: 2, outsideUniverseTestCaseIds: [154] })
+    const { user } = renderRoute('/test-runs/7')
+    const item = await screen.findByTestId('outside-154')
+    expect(within(item).getByRole('link', { name: 'TC-154' })).toHaveAttribute('href', '/test-cases/154')
+    expect(await within(item).findByText('Logout works')).toBeInTheDocument()
+    await user.click(within(item).getByRole('button', { name: 'Mark as automated' }))
+    expect(await within(item).findByText(/Now automated: future runs include it/)).toBeInTheDocument()
+    expect(db.testCases[1].automated).toBe(true)
+  })
+
+  it('FE-INT-010 reports failures when marking a test case automated', async () => {
+    db.testCases[1] = { ...db.testCases[1], automated: false }
+    db.summaries[7] = summary({ outsideUniverse: 1, outsideUniverseTestCaseIds: [154] })
+    const { user } = renderRoute('/test-runs/7')
+    const item = await screen.findByTestId('outside-154')
+    await within(item).findByText('Logout works')
+    server.use(
+      http.patch('*/api/v1/test-cases/:id', () =>
+        HttpResponse.json(
+          {
+            type: 'about:blank',
+            title: 'Internal Server Error',
+            status: 500,
+            code: 'internal_error',
+            detail: 'boom',
+          },
+          { status: 500, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+    await user.click(within(item).getByRole('button', { name: 'Mark as automated' }))
+    expect(await within(item).findByText('Could not update the test case')).toBeInTheDocument()
   })
 
   it('FE-INT-010 states when every TC-ID is valid', async () => {
@@ -112,6 +153,17 @@ describe('FE-INT-011 run results', () => {
     expect(within(rows[1]).getByText('boom')).toHaveAttribute('title', 'trace')
     expect(within(rows[2]).getByText('missing')).toBeInTheDocument()
     expect(within(rows[0]).getByText('1.20 s')).toBeInTheDocument()
+  })
+
+  it('FE-INT-011 shows deprecated results linked to their test case with a badge', async () => {
+    db.results = [
+      testResult({ id: 9, correlation: 'deprecated', requestedTestCaseId: 'TC-153', testName: 'late' }),
+    ]
+    renderRoute('/test-runs/7')
+    const row = await screen.findByTestId('result-row')
+    expect(within(row).getByRole('link', { name: 'TC-153' })).toBeInTheDocument()
+    expect(within(row).getByText('deprecated')).toBeInTheDocument()
+    expect(within(row).queryByText('TC-153', { selector: 'span' })).not.toBeInTheDocument()
   })
 
   it('FE-INT-011 filters by status and correlation', async () => {

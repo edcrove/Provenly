@@ -161,6 +161,9 @@ func (s *Service) correlate(ctx context.Context, parsed []junit.Result) ([]execu
 				nr.TestCaseID = &id
 				nr.Correlation = execution.CorrelationValid
 			case catalog.StatusDeprecated:
+				// Kept linked for history; excluded from summaries as a diagnostic.
+				id := r.Ref.ID
+				nr.TestCaseID = &id
 				nr.Correlation = execution.CorrelationDeprecated
 			default:
 				nr.Correlation = execution.CorrelationUnknown

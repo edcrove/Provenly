@@ -31,7 +31,7 @@ func TestComputeSummary(t *testing.T) {
 		{2, Passed},
 		{3, Error},
 		{4, Skipped},
-		{99, Passed}, // valid but outside the snapshot
+		{99, Passed}, {99, Failed}, {98, Passed}, // valid but outside the snapshot
 	}
 	diags := []Diagnostic{
 		{Correlation: CorrelationMissing}, {Correlation: CorrelationMalformed},
@@ -46,7 +46,8 @@ func TestComputeSummary(t *testing.T) {
 	assert.Equal(t, ExecutedPercentages{Passed: 25, Failed: 25, Error: 25, Skipped: 25}, s.PercentOfExecuted)
 	assert.Equal(t, 80.0, s.ExecutionPercent)
 	assert.Equal(t, DiagnosticCounts{Missing: 1, Malformed: 1, Unknown: 2, Deprecated: 1, Total: 5}, s.Diagnostics)
-	assert.Equal(t, int32(1), s.OutsideUniverse)
+	assert.Equal(t, int32(3), s.OutsideUniverse)
+	assert.Equal(t, []int64{98, 99}, s.OutsideUniverseIDs)
 	assert.Equal(t, []TestCaseOutcome{
 		{1, "failed", 2}, {2, "passed", 1}, {3, "error", 1}, {4, "skipped", 1}, {5, Untested, 0},
 	}, s.TestCases)
@@ -64,6 +65,8 @@ func TestComputeSummaryRoundingAndEmpty(t *testing.T) {
 	assert.Equal(t, 0.0, empty.ExecutionPercent)
 	assert.Equal(t, 0.0, empty.PercentOfExecuted.Passed)
 	assert.Equal(t, int32(1), empty.OutsideUniverse)
+	assert.Equal(t, []int64{1}, empty.OutsideUniverseIDs)
+	assert.Equal(t, []int64{}, s.OutsideUniverseIDs)
 	assert.Empty(t, empty.TestCases)
 }
 

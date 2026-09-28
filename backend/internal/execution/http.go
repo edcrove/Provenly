@@ -111,16 +111,17 @@ type testCaseOutcomeDTO struct {
 }
 
 type summaryDTO struct {
-	TestRunID         int64                  `json:"testRunId"`
-	ExpectedTotal     int32                  `json:"expectedTotal"`
-	ExecutedTotal     int32                  `json:"executedTotal"`
-	Counts            statusCountsDTO        `json:"counts"`
-	PercentOfExpected statusPercentagesDTO   `json:"percentOfExpected"`
-	PercentOfExecuted executedPercentagesDTO `json:"percentOfExecuted"`
-	ExecutionPercent  float64                `json:"executionPercent"`
-	Diagnostics       diagnosticCountsDTO    `json:"diagnostics"`
-	OutsideUniverse   int32                  `json:"outsideUniverse"`
-	TestCases         []testCaseOutcomeDTO   `json:"testCases"`
+	TestRunID          int64                  `json:"testRunId"`
+	ExpectedTotal      int32                  `json:"expectedTotal"`
+	ExecutedTotal      int32                  `json:"executedTotal"`
+	Counts             statusCountsDTO        `json:"counts"`
+	PercentOfExpected  statusPercentagesDTO   `json:"percentOfExpected"`
+	PercentOfExecuted  executedPercentagesDTO `json:"percentOfExecuted"`
+	ExecutionPercent   float64                `json:"executionPercent"`
+	Diagnostics        diagnosticCountsDTO    `json:"diagnostics"`
+	OutsideUniverse    int32                  `json:"outsideUniverse"`
+	OutsideUniverseIDs []int64                `json:"outsideUniverseTestCaseIds"`
+	TestCases          []testCaseOutcomeDTO   `json:"testCases"`
 }
 
 func toSummaryDTO(s Summary) summaryDTO {
@@ -130,13 +131,14 @@ func toSummaryDTO(s Summary) summaryDTO {
 	}
 	return summaryDTO{
 		TestRunID: s.TestRunID, ExpectedTotal: s.ExpectedTotal, ExecutedTotal: s.ExecutedTotal,
-		Counts:            statusCountsDTO(s.Counts),
-		PercentOfExpected: statusPercentagesDTO(s.PercentOfExpected),
-		PercentOfExecuted: executedPercentagesDTO(s.PercentOfExecuted),
-		ExecutionPercent:  s.ExecutionPercent,
-		Diagnostics:       diagnosticCountsDTO(s.Diagnostics),
-		OutsideUniverse:   s.OutsideUniverse,
-		TestCases:         cases,
+		Counts:             statusCountsDTO(s.Counts),
+		PercentOfExpected:  statusPercentagesDTO(s.PercentOfExpected),
+		PercentOfExecuted:  executedPercentagesDTO(s.PercentOfExecuted),
+		ExecutionPercent:   s.ExecutionPercent,
+		Diagnostics:        diagnosticCountsDTO(s.Diagnostics),
+		OutsideUniverse:    s.OutsideUniverse,
+		OutsideUniverseIDs: s.OutsideUniverseIDs,
+		TestCases:          cases,
 	}
 }
 

@@ -67,7 +67,9 @@ type Summary struct {
 	ExecutionPercent  float64
 	Diagnostics       DiagnosticCounts
 	OutsideUniverse   int32
-	TestCases         []TestCaseOutcome
+	// OutsideUniverseIDs are the distinct TC-IDs behind OutsideUniverse, ascending.
+	OutsideUniverseIDs []int64
+	TestCases          []TestCaseOutcome
 }
 
 func percent(part, total int32) float64 {
@@ -85,14 +87,20 @@ func ComputeSummary(runID int64, expected []int64, valid []ValidResult, diagnost
 	for _, id := range expected {
 		byCase[id] = nil
 	}
-	s := Summary{TestRunID: runID, ExpectedTotal: int32(len(expected))}
+	s := Summary{TestRunID: runID, ExpectedTotal: int32(len(expected)), OutsideUniverseIDs: []int64{}}
+	outside := map[int64]bool{}
 	for _, r := range valid {
 		if _, ok := byCase[r.TestCaseID]; !ok {
 			s.OutsideUniverse++
+			if !outside[r.TestCaseID] {
+				outside[r.TestCaseID] = true
+				s.OutsideUniverseIDs = append(s.OutsideUniverseIDs, r.TestCaseID)
+			}
 			continue
 		}
 		byCase[r.TestCaseID] = append(byCase[r.TestCaseID], r.Status)
 	}
+	sort.Slice(s.OutsideUniverseIDs, func(i, j int) bool { return s.OutsideUniverseIDs[i] < s.OutsideUniverseIDs[j] })
 	ids := append([]int64(nil), expected...)
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	s.TestCases = make([]TestCaseOutcome, 0, len(ids))

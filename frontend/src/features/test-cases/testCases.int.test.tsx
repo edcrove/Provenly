@@ -134,6 +134,30 @@ describe('FE-INT-004 test case detail and edit', () => {
   })
 })
 
+describe('FE-INT-014 manual test case receiving automated results', () => {
+  it('FE-INT-014 warns and marks the test case automated', async () => {
+    db.testCases[0] = testCase({ automated: false })
+    const { user } = renderRoute('/test-cases/153')
+    const alert = await screen.findByTestId('manual-with-results')
+    expect(alert).toHaveTextContent('Receives automated results but is marked manual')
+    await user.click(within(alert).getByRole('button', { name: 'Mark as automated' }))
+    await waitFor(() => expect(screen.queryByTestId('manual-with-results')).not.toBeInTheDocument())
+    expect(db.testCases[0].automated).toBe(true)
+  })
+
+  it('FE-INT-014 does not warn without results or when deprecated', async () => {
+    db.testCases[1] = testCase({ id: 154, title: 'Logout works', automated: false })
+    const first = renderRoute('/test-cases/154')
+    await screen.findByText('No results yet for this TC-ID.')
+    expect(screen.queryByTestId('manual-with-results')).not.toBeInTheDocument()
+    first.unmount()
+    db.testCases[0] = testCase({ automated: false, status: 'deprecated' })
+    renderRoute('/test-cases/153')
+    await screen.findByRole('table', { name: 'Execution history' })
+    expect(screen.queryByTestId('manual-with-results')).not.toBeInTheDocument()
+  })
+})
+
 describe('FE-INT-005 deprecate', () => {
   it('FE-INT-005 requires confirmation and keeps the TC-ID', async () => {
     const { user } = renderRoute('/test-cases/153')
@@ -166,6 +190,13 @@ describe('FE-INT-007 execution history', () => {
     )
     expect(within(table).getAllByText('0123456789')).toHaveLength(2)
     expect(within(table).getByText('failed')).toBeInTheDocument()
+  })
+
+  it('FE-INT-007 marks results received after deprecation', async () => {
+    db.results = [{ ...db.results[0], correlation: 'deprecated' }]
+    renderRoute('/test-cases/153')
+    const table = await screen.findByRole('table', { name: 'Execution history' })
+    expect(within(table).getByText('after deprecation')).toBeInTheDocument()
   })
 
   it('FE-INT-007 shows an empty history and paginates', async () => {

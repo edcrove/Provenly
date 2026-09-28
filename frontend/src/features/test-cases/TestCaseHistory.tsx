@@ -5,6 +5,7 @@ import { useTestCaseHistory } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
 import { StatusBadge } from '@/components/StatusBadge'
+import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime, formatDuration, shortCommit } from '@/lib/format'
 
@@ -35,7 +36,17 @@ export function TestCaseHistory({ testCaseId }: { testCaseId: number }) {
                 {data.items.map(({ result, run }) => (
                   <TableRow key={result.id}>
                     <TableCell>
-                      <StatusBadge status={result.status} />
+                      <span className="flex items-center gap-2">
+                        <StatusBadge status={result.status} />
+                        {result.correlation === 'deprecated' ? (
+                          <Badge
+                            variant="outline"
+                            title="Received after this test case was deprecated; not counted in run summaries"
+                          >
+                            after deprecation
+                          </Badge>
+                        ) : null}
+                      </span>
                     </TableCell>
                     <TableCell>{result.testName}</TableCell>
                     <TableCell className="font-mono">

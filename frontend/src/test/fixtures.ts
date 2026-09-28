@@ -82,6 +82,7 @@ export function summary(overrides: Partial<TestRunSummary> = {}): TestRunSummary
     executionPercent: 50,
     diagnostics: { missing: 1, malformed: 0, unknown: 0, deprecated: 0, total: 1 },
     outsideUniverse: 0,
+    outsideUniverseTestCaseIds: [],
     testCases: [
       { testCaseId: 153, status: 'failed', resultCount: 2 },
       { testCaseId: 154, status: 'untested', resultCount: 0 },

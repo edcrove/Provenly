@@ -15,12 +15,19 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
    **Status: Accepted by Ed (2026-09-28).** Follow-up requested: when a run has `outsideUniverse` results, the UI
    warns that the TC receives automated results while marked manual, and the user can (1) mark the TC
    `automated=true` and (2) explicitly include it in *that* run's universe so the summary reflects it.
+   (1) is **implemented**: the summary exposes `outsideUniverseTestCaseIds`; the run detail lists them with a
+   "Mark as automated" action and the test case page warns when a manual TC has results (FE-INT-010/014,
+   FE-E2E-006). Marking affects future runs only.
    (2) conflicts with the frozen invariant "the snapshot is never modified after creation", so it needs a Decision
    Register change first. Proposed shape: an explicit, audited *snapshot amendment* per run (who, when, which
    TC-ID, only TC-IDs that already have valid results in the run), never an automatic recomputation.
 3. **Deprecated TC-IDs in results.** Following "testCaseId when the TC-ID is valid", results that reference a
    deprecated test case keep only `requestedTestCaseId` + `correlation=deprecated`; they are therefore not listed in
    that test case's history.
+   **Status: Changed by Ed (2026-09-28) — option B, implemented.** Deprecated results now keep `testCaseId`
+   (migration 00003: the TC-ID link is required for `valid` and `deprecated` correlations), appear in the test
+   case's history marked "after deprecation", and remain excluded from summaries as diagnostics. Domain Model
+   wording "testCaseId when the TC-ID is valid" should be updated to "valid or deprecated".
 4. **Malformed rules.** `tc-id` accepts `153` or `TC-153`; `0`, leading zeros, non-digits, >18 digits, an empty
    value, or several *different* ids (property or name) are `malformed`.
 5. **Parse errors.** A testcase without `name` or with an invalid `time` is reported in `parseErrors` and not

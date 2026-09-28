@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useParams } from 'react-router'
 
 import type { TestCase } from '@/api/client'
-import { useDeprecateTestCase, useTestCase, useUpdateTestCase } from '@/api/queries'
+import { useDeprecateTestCase, useTestCase, useTestCaseHistory, useUpdateTestCase } from '@/api/queries'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -19,6 +20,8 @@ function Definition({ tc }: { tc: TestCase }) {
   const [confirming, setConfirming] = useState(false)
   const update = useUpdateTestCase(tc.id)
   const deprecate = useDeprecateTestCase(tc.id)
+  const history = useTestCaseHistory(tc.id, 1)
+  const manualWithResults = tc.status === 'active' && !tc.automated && (history.data?.totalItems ?? 0) > 0
 
   return (
     <div className="grid gap-4">
@@ -59,6 +62,22 @@ function Definition({ tc }: { tc: TestCase }) {
         </div>
       </div>
       {deprecate.error ? <ErrorAlert error={deprecate.error} title="Could not deprecate" /> : null}
+      {manualWithResults ? (
+        <Alert data-testid="manual-with-results">
+          <AlertTitle>Receives automated results but is marked manual</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            Runs do not count it in their expected universe. Mark it as automated so future runs include it.
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={update.isPending}
+              onClick={() => update.mutate({ automated: true })}
+            >
+              Mark as automated
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <Card>
         <CardHeader>

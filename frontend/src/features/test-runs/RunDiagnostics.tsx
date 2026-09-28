@@ -1,8 +1,43 @@
+import { Link } from 'react-router'
+
 import type { TestRunSummary } from '@/api/client'
+import { useTestCase, useUpdateTestCase } from '@/api/queries'
+import { ErrorAlert } from '@/components/QueryState'
 import { CorrelationBadge } from '@/components/StatusBadge'
+import { Button } from '@/components/ui/button'
+import { tcKey } from '@/lib/format'
 import { correlationExplanation, invalidCorrelations } from '@/lib/status'
 
-/** Results excluded from the summary because their TC-ID is not valid. */
+/** A TC with valid results that was not in this run's snapshot, with a shortcut to mark it automated. */
+function OutsideUniverseCase({ id }: { id: number }) {
+  const tc = useTestCase(id)
+  const update = useUpdateTestCase(id)
+  return (
+    <li className="flex flex-wrap items-center gap-2" data-testid={`outside-${id}`}>
+      <Link to={`/test-cases/${id}`} className="font-mono underline">
+        {tcKey(id)}
+      </Link>
+      <span>{tc.data?.title}</span>
+      {tc.data?.automated ? (
+        <span className="text-muted-foreground">
+          Now automated: future runs include it; this run&apos;s snapshot is unchanged.
+        </span>
+      ) : (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={update.isPending}
+          onClick={() => update.mutate({ automated: true })}
+        >
+          Mark as automated
+        </Button>
+      )}
+      {update.error ? <ErrorAlert error={update.error} title="Could not update the test case" /> : null}
+    </li>
+  )
+}
+
+/** Results excluded from the summary because their TC-ID is not valid or not in the snapshot. */
 export function RunDiagnostics({ summary }: { summary: TestRunSummary }) {
   const { diagnostics } = summary
   return (
@@ -23,11 +58,18 @@ export function RunDiagnostics({ summary }: { summary: TestRunSummary }) {
         </ul>
       )}
       {summary.outsideUniverse > 0 && (
-        <p className="text-muted-foreground" data-testid="outside-universe">
-          {summary.outsideUniverse} result(s) point to valid test cases outside this run&apos;s expected
-          universe (e.g. not automated when the run was created); they are listed below but not counted in the
-          summary.
-        </p>
+        <div className="grid gap-2 rounded-md border p-3" role="status">
+          <p data-testid="outside-universe">
+            {summary.outsideUniverse} result(s) point to test cases that were not automated when this run was
+            created, so they are not counted in this summary. If they should be automated, mark them so future
+            runs include them.
+          </p>
+          <ul className="grid gap-2" aria-label="Test cases outside the expected universe">
+            {summary.outsideUniverseTestCaseIds.map((id) => (
+              <OutsideUniverseCase key={id} id={id} />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   )

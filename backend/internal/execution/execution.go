@@ -80,8 +80,9 @@ type TestRun struct {
 	CompletedAt   *time.Time
 }
 
-// TestResult is one persisted result. TestCaseID is set only when the
-// correlation is valid; RequestedTestCaseID keeps the raw declared reference.
+// TestResult is one persisted result. TestCaseID is set when the correlation
+// is valid or deprecated (so the result belongs to the test case's history);
+// RequestedTestCaseID keeps the raw declared reference.
 type TestResult struct {
 	ID                  int64
 	TestRunID           int64

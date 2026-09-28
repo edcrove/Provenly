@@ -26,7 +26,7 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 | Idempotent TestRun per `{provider}:{run_id}:{run_attempt}` | `UNIQUE(external_run_id)` + `INSERT … ON CONFLICT DO NOTHING` in one transaction with snapshot and results |
 | Expected-universe snapshot is immutable | written once at run creation; trigger forbids `UPDATE`/`DELETE` |
 | `untested` is never persisted | `CHECK` on `test_results.status`; derived in `execution.ComputeSummary` |
-| `testCaseId` only for valid correlations | `CHECK ((correlation = 'valid') = (test_case_id IS NOT NULL))` |
+| `testCaseId` only for valid or deprecated correlations (deprecated results stay in history) | `CHECK ((correlation IN ('valid','deprecated')) = (test_case_id IS NOT NULL))` |
 
 ## REST conventions (see `api/openapi.yaml`)
 

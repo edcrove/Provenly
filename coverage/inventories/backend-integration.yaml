@@ -25,9 +25,9 @@ targets:
   - id: BE-INT-010
     description: the expected-universe snapshot is immutable and isolated from later catalog changes
   - id: BE-INT-011
-    description: database enforces result/run invariants (valid <=> TC-ID, no untested rows, externalRunId format)
+    description: database enforces result/run invariants (TC-ID link only for valid/deprecated, no untested rows, externalRunId format)
   - id: BE-INT-012
-    description: JUnit ingestion persists run, results and TC-ID diagnostics end to end on Postgres
+    description: JUnit ingestion persists run, results and TC-ID diagnostics end to end on Postgres (deprecated results stay in history)
   - id: BE-INT-013
     description: run results filters (status, correlation) and pagination
   - id: BE-INT-014
@@ -37,4 +37,4 @@ targets:
   - id: BE-INT-016
     description: failed transactions roll back every write
   - id: BE-INT-017
-    description: valid results outside the run snapshot are persisted but excluded from the summary
+    description: valid results outside the run snapshot are persisted, excluded from the summary and their TC-IDs listed

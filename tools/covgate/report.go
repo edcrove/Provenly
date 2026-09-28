@@ -52,7 +52,7 @@ func (r Report) Markdown() string {
 		}
 		for _, e := range g.Exceptions {
 			fmt.Fprintf(&b, "- EXCEPTION %s (%s) `%s`: %d uncovered elements — %s\n", e.ID, e.Category, e.Target, e.Elements, e.Reason)
-			if g.Layer == "cross-layer" {
+			if g.Layer == "consolidated" {
 				for _, d := range e.Details {
 					fmt.Fprintf(&b, "  - %s\n", d)
 				}
@@ -82,22 +82,37 @@ func (r Report) ConsolidatedMarkdown() string {
 	b.WriteString("## Consolidated coverage (all layers merged)\n\n")
 	b.WriteString("Backend: unit + integration + contract + e2e raw coverage merged with `go tool covdata` (statements).\n")
 	b.WriteString("Frontend: unit + integration (v8) + e2e (istanbul) merged by executed line ranges (lines).\n\n")
-	for _, c := range r.CodeCoverage {
-		if strings.HasPrefix(c.Source, "consolidated") {
-			fmt.Fprintf(&b, "- **%s**: %d/%d %s (%.2f%%)\n", c.Side, c.Covered, c.Total, c.Metric, c.Percent)
+	b.WriteString("Lines no layer can execute are consolidated exceptions (`coverage/exceptions.yaml`, gates `*-consolidated`):\n")
+	b.WriteString("they are listed per file in *Excepted lines* and removed from *Required*; *Uncovered lines* must stay empty.\n\n")
+	b.WriteString("| Side | Metric | Covered | Reachable (raw %) | Required (effective %) |\n|---|---|---:|---:|---:|\n")
+	for _, side := range []string{"backend", "frontend"} {
+		var raw, eff *CodeCoverage
+		for i, c := range r.CodeCoverage {
+			if c.Side == side && c.Source == "consolidated (all layers merged)" {
+				raw = &r.CodeCoverage[i]
+			}
+			if c.Side == side && strings.HasPrefix(c.Source, "consolidated, effective") {
+				eff = &r.CodeCoverage[i]
+			}
+		}
+		if raw != nil && eff != nil {
+			fmt.Fprintf(&b, "| %s | %s | %d | %d (%.2f%%) | %d (%.2f%%) |\n", side, raw.Metric, raw.Covered, raw.Total, raw.Percent, eff.Total, eff.Percent)
 		}
 	}
+	join := func(ls []int) string {
+		out := make([]string, len(ls))
+		for i, l := range ls {
+			out[i] = fmt.Sprint(l)
+		}
+		return strings.Join(out, ", ")
+	}
 	for _, side := range []string{"backend", "frontend"} {
-		fmt.Fprintf(&b, "\n### %s\n\n| File | Covered | Total | %% | Uncovered lines |\n|---|---:|---:|---:|---|\n", side)
+		fmt.Fprintf(&b, "\n### %s\n\n| File | Covered | Reachable | Required | Effective %% | Uncovered lines | Excepted lines |\n|---|---:|---:|---:|---:|---|---|\n", side)
 		for _, f := range r.Files {
 			if f.Side != side {
 				continue
 			}
-			lines := make([]string, len(f.Uncovered))
-			for i, l := range f.Uncovered {
-				lines[i] = fmt.Sprint(l)
-			}
-			fmt.Fprintf(&b, "| %s | %d | %d | %.2f%% | %s |\n", f.File, f.Covered, f.Total, f.Percent, strings.Join(lines, ", "))
+			fmt.Fprintf(&b, "| %s | %d | %d | %d | %.2f%% | %s | %s |\n", f.File, f.Covered, f.Total, f.Required, f.Percent, join(f.Uncovered), join(f.Excepted))
 		}
 	}
 	return b.String()

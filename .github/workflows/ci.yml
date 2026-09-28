@@ -232,7 +232,7 @@ jobs:
           path: e2e/playwright-report/
 
   coverage-report:
-    name: Coverage · 8 gates + consolidated evidence
+    name: Coverage · 8 gates + consolidated
     needs: [backend-unit, backend-integration, backend-contract, frontend-tests, e2e]
     if: always()
     runs-on: ubuntu-latest
@@ -258,7 +258,7 @@ jobs:
         with:
           name: evidence-e2e
           path: e2e/coverage
-      - name: Evaluate every gate, cross-layer checks and consolidated coverage (fails below 100%)
+      - name: Evaluate the 8 gates and the 2 consolidated gates (fails below 100%)
         run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE"
       - uses: actions/upload-artifact@v4
         if: always()

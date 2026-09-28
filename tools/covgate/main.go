@@ -34,6 +34,7 @@ func main() {
 		fatal(err)
 	}
 	unitExceptions = map[string][]*Exception{"backend-unit": excs["backend-unit"], "frontend-unit": excs["frontend-unit"]}
+	consolidatedExceptions = map[string][]*Exception{"backend-consolidated": excs["backend-consolidated"], "frontend-consolidated": excs["frontend-consolidated"]}
 	selected := map[string]bool{}
 	for _, g := range strings.Split(*only, ",") {
 		if g = strings.TrimSpace(g); g != "" {

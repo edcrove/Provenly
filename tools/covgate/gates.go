@@ -58,8 +58,8 @@ var gates = []gateDef{
 	{"frontend-integration", "frontend", "integration", "reviewed component behaviors + every UI surface inventoried", frontendIntegration},
 	{"frontend-contract", "frontend", "contract", "consumed OpenAPI operations x declared response status", frontendContract},
 	{"frontend-e2e", "frontend", "e2e", "reviewed UI journeys (Playwright)", inventoryGate("frontend-e2e.yaml", paths.E2EResults, playwrightJSON)},
-	{"backend-cross-layer", "backend", "cross-layer", "statements excepted from backend-unit, executed by any layer (merged)", backendCrossLayer},
-	{"frontend-cross-layer", "frontend", "cross-layer", "lines excepted from frontend-unit, executed by any layer (merged)", frontendCrossLayer},
+	{"backend-consolidated", "backend", "consolidated", "every statement, executed by any layer (unit + integration + contract + e2e merged)", backendConsolidated},
+	{"frontend-consolidated", "frontend", "consolidated", "every line, executed by any layer (unit + integration + e2e merged)", frontendConsolidatedGate},
 }
 
 func fail(r *GateResult, format string, args ...any) []Element {

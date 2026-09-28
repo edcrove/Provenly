@@ -18,19 +18,21 @@ gate.
 
 A target is covered only when at least one test carrying its id passed **and none failed**.
 
-### Cross-layer checks (exceptions must be covered elsewhere)
+### Consolidated gates (all layers merged)
 
-Unit exceptions only absorb elements that unit tests do not execute, and those elements must then be executed by
-another layer. Two extra checks enforce it on the coverage of **all layers merged**:
+Exceptions only absorb elements that are not covered. On top of the 8 layer gates, two **consolidated gates**
+require that *all* code is executed by some layer, on the coverage of every layer merged — so anything a Unit gate
+excepts must be covered by another layer:
 
-| Check | Denominator | Merged evidence |
+| Gate | Denominator | Merged evidence |
 |---|---|---|
-| backend-cross-layer | statements matched by `backend-unit` exceptions | unit + integration + contract + e2e raw coverage (`go tool covdata textfmt` over every GOCOVERDIR) |
-| frontend-cross-layer | lines matched by `frontend-unit` exceptions | unit + integration (v8) + e2e (istanbul, remapped through source maps to original lines) |
+| backend-consolidated | every statement of the backend module | unit + integration + contract + e2e raw coverage (`go tool covdata textfmt` over every GOCOVERDIR) |
+| frontend-consolidated | every statement line of `frontend/src` | unit + integration (v8) + e2e (istanbul, remapped through source maps to original lines) |
 
-Anything no layer can execute needs its own `*-cross-layer` exception (category `not-reachable`), and every line it
-absorbs is listed in the report. The per-file consolidated report is written to
-`coverage/out/consolidated-coverage.md`, with a browsable backend report in `coverage/out/backend-consolidated.html`.
+Lines no layer can execute are `*-consolidated` exceptions (`not-reachable`, `test-support`); every line they absorb
+is listed. The per-file report (`coverage/out/consolidated-coverage.md`, backend HTML
+`coverage/out/backend-consolidated.html`) shows covered / reachable / required / effective %, uncovered lines (must be
+empty) and excepted lines.
 
 ### Gate denominator vs code-coverage evidence
 
@@ -96,7 +98,7 @@ Verified in this repository (not assumed):
   flushes counters on `os.Exit` after a graceful SIGTERM. The covermode **must match** (`atomic`) across unit,
   integration, contract and E2E, otherwise `go tool covdata` fails with "counter mode clash".
 - `go tool covdata textfmt -i=unit,integration,contract,e2e -o merged.out` merges all of them (used for the
-  consolidated evidence and the backend cross-layer check).
+  consolidated evidence and the backend-consolidated gate).
 - Frontend E2E coverage from `vite-plugin-istanbul` is measured on transformed code (JSX collapsed into single
   lines) with an embedded source map; a Playwright global teardown remaps it with `istanbul-lib-source-maps` before
   it is merged with the Vitest v8 coverage (`e2e/coverage/frontend-remapped`).

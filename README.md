@@ -87,8 +87,9 @@ denominator** — a consolidated number never replaces a gate. Details: [`docs/t
 | frontend-contract | generated client + MSW validated against the spec | consumed operations × response status | `make test-frontend-contract` |
 | frontend-e2e | Playwright (UI) on istanbul-instrumented bundle | reviewed UI journeys | `make test-e2e` |
 
-On top of the 8 gates, two **cross-layer checks** require that everything excepted from a Unit gate is executed by
-another layer, on the coverage of all layers merged; the per-file consolidated report is
+On top of the 8 gates, two **consolidated gates** require 100% of all code to be executed by some layer, on the
+coverage of all layers merged (so anything excepted from a Unit gate must be covered elsewhere; lines no layer can
+execute are listed exceptions). The per-file consolidated report is
 `coverage/out/consolidated-coverage.md` (backend HTML: `coverage/out/backend-consolidated.html`).
 
 ```bash

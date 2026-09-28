@@ -11,9 +11,9 @@
 # Categories: generated-code | other-layer | vendored-ui | entrypoint |
 #             not-reachable | tooling-limitation | test-support
 #
-# Unit exceptions only absorb uncovered elements, and their elements must then
-# be executed by another layer: the backend/frontend-cross-layer gates check it
-# on the coverage of all layers merged.
+# Exceptions only absorb uncovered elements. Everything excepted from a Unit
+# gate must then be executed by another layer: the backend/frontend-consolidated
+# gates require 100% of all code on the coverage of all layers merged.
 
 exceptions:
   # ---------------------------------------------------------------- backend-unit
@@ -150,12 +150,13 @@ exceptions:
     link: https://trello.com/c/WNVrzewZ/26-poc-testing-pyramid-foundation
     status: approved
 
-  # ------------------------------------------------ backend-cross-layer
-  # Elements excepted from backend-unit must be executed by another layer
-  # (all layers merged). These are the ones no layer can reach.
-  - id: EXC-BE-XL-001
-    gate: backend-cross-layer
-    layer: cross-layer
+  # ----------------------------------------------- backend-consolidated
+  # Every statement must be executed by some layer (all layers merged), which
+  # includes everything excepted from backend-unit. These are the ones no layer
+  # can reach, plus test infrastructure compiled into the merged profile.
+  - id: EXC-BE-CONS-001
+    gate: backend-consolidated
+    layer: consolidated
     side: backend
     target: internal/{catalog,execution}/{catalog,execution}db/*.sql.go
     reason: >-
@@ -171,14 +172,27 @@ exceptions:
     reviewBy: "2026-12-31"
     link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
     status: approved
-  - id: EXC-BE-XL-002
-    gate: backend-cross-layer
-    layer: cross-layer
+  - id: EXC-BE-CONS-002
+    gate: backend-consolidated
+    layer: consolidated
     side: backend
     target: internal/platform/postgres/postgres.go:34
     reason: goose.SetDialect("postgres") error branch; the dialect is a constant that goose always supports.
     category: not-reachable
     evidence: Migrations run in BE-INT-001, BE-INT-015 and every E2E run.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-BE-CONS-003
+    gate: backend-consolidated
+    layer: consolidated
+    side: backend
+    target: test/**
+    reason: Test infrastructure (testcontainers bootstrap) compiled into the merged profile by -coverpkg=./...; not product code. Its uncovered lines are container start-up failure paths.
+    category: test-support
+    evidence: Executed by every integration and contract run; failures there fail those suites.
     owner: edcrove
     createdAt: "2026-09-28"
     reviewBy: "2026-12-31"

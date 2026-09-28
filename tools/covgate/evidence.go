@@ -19,16 +19,24 @@ type CodeCoverage struct {
 	Percent float64 `json:"percent"`
 }
 
-// FileCoverage is the consolidated coverage of one source file across every layer.
+// FileCoverage is the consolidated coverage of one source file across every
+// layer. Uncovered elements matched by a consolidated exception are listed
+// apart (Excepted) and removed from the required total, never hidden.
 type FileCoverage struct {
 	Side      string  `json:"side"`
 	File      string  `json:"file"`
 	Metric    string  `json:"metric"`
 	Covered   int     `json:"covered"`
 	Total     int     `json:"total"`
+	Excepted  []int   `json:"exceptedLines"`
+	Required  int     `json:"required"`
 	Percent   float64 `json:"percent"`
 	Uncovered []int   `json:"uncoveredLines"`
+	excepted  int
 }
+
+// consolidatedExceptions are the exceptions of the consolidated gates, set by main.
+var consolidatedExceptions = map[string][]*Exception{}
 
 var backendLayers = []string{"unit", "integration", "contract", "e2e"}
 
@@ -149,6 +157,7 @@ func backendEvidence(root, outDir string) ([]CodeCoverage, []FileCoverage, []str
 	if b, err := html.CombinedOutput(); err != nil {
 		notes = append(notes, fmt.Sprintf("backend HTML report not generated: %v %s", err, b))
 	}
+	excs := consolidatedExceptions["backend-consolidated"]
 	byFile := map[string]*FileCoverage{}
 	for _, b := range blocks {
 		f := byFile[b.File]
@@ -157,13 +166,19 @@ func backendEvidence(root, outDir string) ([]CodeCoverage, []FileCoverage, []str
 			byFile[b.File] = f
 		}
 		f.Total += b.Statements
-		if b.Count > 0 {
+		switch {
+		case b.Count > 0:
 			f.Covered += b.Statements
-		} else {
+		case matchesAny(excs, b.File, fmt.Sprintf("%s:%d", b.File, b.StartLine)):
+			f.excepted += b.Statements
+			f.Excepted = append(f.Excepted, b.StartLine)
+		default:
 			f.Uncovered = append(f.Uncovered, b.StartLine)
 		}
 	}
-	return out, sortedFiles(byFile), notes
+	files := sortedFiles(byFile)
+	out = append(out, effectiveTotal("backend", "statements", files))
+	return out, files, notes
 }
 
 // frontendEvidence reports lines covered per layer and consolidated, plus per-file consolidation.
@@ -191,20 +206,27 @@ func frontendEvidence(root string) ([]CodeCoverage, []FileCoverage, []string) {
 	}
 	c, t := lineTotals(universe, hits)
 	out = append(out, CodeCoverage{Side: "frontend", Source: "consolidated (all layers merged)", Metric: "lines", Covered: c, Total: t, Percent: pct(c, t)})
+	excs := consolidatedExceptions["frontend-consolidated"]
 	byFile := map[string]*FileCoverage{}
 	for file, lines := range universe {
 		f := &FileCoverage{Side: "frontend", File: file, Metric: "lines"}
 		for l := range lines {
 			f.Total++
-			if anyHit(hits, file, l) {
+			switch {
+			case anyHit(hits, file, l):
 				f.Covered++
-			} else {
+			case matchesAny(excs, file, fmt.Sprintf("%s:%d", file, l)):
+				f.excepted++
+				f.Excepted = append(f.Excepted, l)
+			default:
 				f.Uncovered = append(f.Uncovered, l)
 			}
 		}
 		byFile[file] = f
 	}
-	return out, sortedFiles(byFile), notes
+	files := sortedFiles(byFile)
+	out = append(out, effectiveTotal("frontend", "lines", files))
+	return out, files, notes
 }
 
 func lineTotals(universe map[string]map[int]bool, hits []map[string]map[int]bool) (int, int) {
@@ -220,11 +242,24 @@ func lineTotals(universe map[string]map[int]bool, hits []map[string]map[int]bool
 	return c, t
 }
 
+// effectiveTotal is the consolidated coverage over the required total
+// (reachable minus consolidated exceptions).
+func effectiveTotal(side, metric string, files []FileCoverage) CodeCoverage {
+	c, t := 0, 0
+	for _, f := range files {
+		c += f.Covered
+		t += f.Required
+	}
+	return CodeCoverage{Side: side, Source: "consolidated, effective (minus consolidated exceptions)", Metric: metric, Covered: c, Total: t, Percent: pct(c, t)}
+}
+
 func sortedFiles(byFile map[string]*FileCoverage) []FileCoverage {
 	out := make([]FileCoverage, 0, len(byFile))
 	for _, f := range byFile {
 		sort.Ints(f.Uncovered)
-		f.Percent = pct(f.Covered, f.Total)
+		sort.Ints(f.Excepted)
+		f.Required = f.Total - f.excepted
+		f.Percent = pct(f.Covered, f.Required)
 		out = append(out, *f)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].File < out[j].File })

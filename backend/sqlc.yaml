@@ -1,0 +1,23 @@
+# Each module generates its own typed query package from its own migrations
+# only: there is no shared global schema across modules.
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations/00001_catalog.sql
+    queries: queries/catalog.sql
+    gen:
+      go:
+        package: catalogdb
+        out: internal/catalog/catalogdb
+        sql_package: pgx/v5
+        emit_interface: true
+        emit_json_tags: false
+  - engine: postgresql
+    schema: migrations/00002_execution.sql
+    queries: queries/execution.sql
+    gen:
+      go:
+        package: executiondb
+        out: internal/execution/executiondb
+        sql_package: pgx/v5
+        emit_interface: true

@@ -1,0 +1,1153 @@
+openapi: 3.0.3
+info:
+  title: Provenly API
+  version: 0.1.0
+  description: |
+    Public REST contract of the Provenly POC. This file is the authoritative
+    inventory of public operations: backend Contract coverage and the frontend
+    generated client are both derived from it.
+
+    Conventions:
+    - Errors: every non-2xx response uses `application/problem+json` with the
+      `Problem` schema (RFC 9457 shape plus a machine-readable `code`).
+    - Pagination: every listing endpoint accepts `page` (1-based) and `pageSize`
+      (1..100, default 20) and returns `items` plus `page`, `pageSize`,
+      `totalItems` and `totalPages`.
+    - Test Case identity: numeric `id`, displayed as `key` = `TC-<id>`. The id is
+      assigned by the server, immutable and never reused.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: system
+  - name: test-cases
+  - name: test-steps
+  - name: test-runs
+  - name: ingestion
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      operationId: getHealth
+      summary: Liveness check
+      responses:
+        "200":
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /api/v1/test-cases:
+    get:
+      tags: [test-cases]
+      operationId: listTestCases
+      summary: List test cases (newest id first)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TestCaseStatus"
+      responses:
+        "200":
+          description: Page of test cases
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestCasePage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [test-cases]
+      operationId: createTestCase
+      summary: Create a test case. The TC-ID is assigned by the server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTestCaseRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestCase"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-cases/{testCaseId}:
+    parameters:
+      - $ref: "#/components/parameters/TestCaseId"
+    get:
+      tags: [test-cases]
+      operationId: getTestCase
+      summary: Get a test case by its numeric id
+      responses:
+        "200":
+          description: Test case
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestCase"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [test-cases]
+      operationId: updateTestCase
+      summary: Edit test case content. Never changes the TC-ID nor creates a version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTestCaseRequest"
+      responses:
+        "200":
+          description: Updated test case
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestCase"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-cases/{testCaseId}/deprecate:
+    parameters:
+      - $ref: "#/components/parameters/TestCaseId"
+    post:
+      tags: [test-cases]
+      operationId: deprecateTestCase
+      summary: Deprecate a test case (idempotent). History is preserved; it leaves the expected universe of future runs.
+      responses:
+        "200":
+          description: Deprecated test case
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestCase"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-cases/{testCaseId}/steps:
+    parameters:
+      - $ref: "#/components/parameters/TestCaseId"
+    get:
+      tags: [test-steps]
+      operationId: listTestSteps
+      summary: List the steps of a test case, ordered by position
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of steps
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestStepPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [test-steps]
+      operationId: createTestStep
+      summary: Add a step. Appended at the end unless `position` is given.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTestStepRequest"
+      responses:
+        "201":
+          description: Created step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestStep"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-cases/{testCaseId}/steps/order:
+    parameters:
+      - $ref: "#/components/parameters/TestCaseId"
+    put:
+      tags: [test-steps]
+      operationId: reorderTestSteps
+      summary: Reorder steps. `stepIds` must be a permutation of all current step ids.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderTestStepsRequest"
+      responses:
+        "200":
+          description: Steps in their new order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestStepList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-cases/{testCaseId}/steps/{stepId}:
+    parameters:
+      - $ref: "#/components/parameters/TestCaseId"
+      - $ref: "#/components/parameters/StepId"
+    patch:
+      tags: [test-steps]
+      operationId: updateTestStep
+      summary: Edit a step's action and/or expected result
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTestStepRequest"
+      responses:
+        "200":
+          description: Updated step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestStep"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [test-steps]
+      operationId: deleteTestStep
+      summary: Delete a step. Remaining steps are renumbered contiguously.
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-cases/{testCaseId}/results:
+    parameters:
+      - $ref: "#/components/parameters/TestCaseId"
+    get:
+      tags: [test-cases]
+      operationId: listTestCaseResults
+      summary: Result history of a TC-ID across runs (newest first), with observed execution metadata
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of historical results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestCaseResultPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-runs:
+    get:
+      tags: [test-runs]
+      operationId: listTestRuns
+      summary: List test runs (newest first)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of test runs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestRunPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-runs/{testRunId}:
+    parameters:
+      - $ref: "#/components/parameters/TestRunId"
+    get:
+      tags: [test-runs]
+      operationId: getTestRun
+      summary: Get a test run
+      responses:
+        "200":
+          description: Test run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestRun"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-runs/{testRunId}/results:
+    parameters:
+      - $ref: "#/components/parameters/TestRunId"
+    get:
+      tags: [test-runs]
+      operationId: listTestRunResults
+      summary: Individual results of a run, optionally filtered by status and/or TC-ID correlation
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ResultStatus"
+        - name: correlation
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Correlation"
+      responses:
+        "200":
+          description: Page of results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestResultPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-runs/{testRunId}/summary:
+    parameters:
+      - $ref: "#/components/parameters/TestRunId"
+    get:
+      tags: [test-runs]
+      operationId: getTestRunSummary
+      summary: Snapshot-based summary with counts and the three percentages
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestRunSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/ingestion/junit:
+    post:
+      tags: [ingestion]
+      operationId: ingestJUnitReport
+      summary: Ingest one complete JUnit XML report (batch) for a CI run attempt
+      description: |
+        `externalRunId` = `{provider}:{runId}:{runAttempt}`. Re-sending the same
+        attempt is idempotent (200, no duplicate run, no reprocessing); a new
+        attempt creates a new run (201). Individual invalid testcases never abort
+        the batch: they are persisted with a correlation diagnostic or reported in
+        `parseErrors`.
+      parameters:
+        - name: provider
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-z0-9][a-z0-9_-]{0,49}$"
+          example: github
+        - name: runId
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9._-]{1,100}$"
+          example: "9876543210"
+        - name: runAttempt
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+          example: 1
+        - name: pipeline
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - name: branch
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+        - name: commit
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 64
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              type: string
+              description: JUnit XML document (`<testsuites>` or `<testsuite>` root)
+      responses:
+        "201":
+          description: New test run created and results persisted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionResponse"
+        "200":
+          description: Idempotent replay; the existing run is returned unchanged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 20
+    TestCaseId:
+      name: testCaseId
+      in: path
+      required: true
+      description: Numeric TC-ID (without the `TC-` prefix)
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    StepId:
+      name: stepId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    TestRunId:
+      name: testRunId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+  responses:
+    BadRequest:
+      description: Invalid request (parameters, body or document)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    PayloadTooLarge:
+      description: Request body exceeds the allowed size
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnsupportedMediaType:
+      description: Unsupported Content-Type
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          description: URI reference identifying the problem type
+          example: about:blank
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        code:
+          type: string
+          description: Stable machine-readable error code
+          enum:
+            - bad_request
+            - validation_error
+            - invalid_junit
+            - not_found
+            - payload_too_large
+            - unsupported_media_type
+            - internal_error
+        detail:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+
+    FieldError:
+      type: object
+      additionalProperties: false
+      required: [field, message]
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+
+    PageMeta:
+      type: object
+      required: [page, pageSize, totalItems, totalPages]
+      properties:
+        page:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    TestCaseStatus:
+      type: string
+      enum: [active, deprecated]
+
+    TestCase:
+      type: object
+      additionalProperties: false
+      required: [id, key, title, description, expectedResult, status, automated, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 153
+        key:
+          type: string
+          pattern: "^TC-[1-9][0-9]*$"
+          example: TC-153
+        title:
+          type: string
+        description:
+          type: string
+        expectedResult:
+          type: string
+        status:
+          $ref: "#/components/schemas/TestCaseStatus"
+        automated:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        deprecatedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    TestCasePage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/TestCase"
+
+    CreateTestCaseRequest:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 10000
+        expectedResult:
+          type: string
+          maxLength: 10000
+        automated:
+          type: boolean
+          default: false
+
+    UpdateTestCaseRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 10000
+        expectedResult:
+          type: string
+          maxLength: 10000
+        automated:
+          type: boolean
+
+    TestStep:
+      type: object
+      additionalProperties: false
+      required: [id, testCaseId, position, action, expectedResult, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        testCaseId:
+          type: integer
+          format: int64
+        position:
+          type: integer
+          format: int32
+          minimum: 1
+          description: 1-based, contiguous order within the test case
+        action:
+          type: string
+        expectedResult:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TestStepPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/TestStep"
+
+    TestStepList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TestStep"
+
+    CreateTestStepRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        expectedResult:
+          type: string
+          maxLength: 2000
+        position:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Insert at this 1-based position (clamped to the end)
+
+    UpdateTestStepRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        action:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        expectedResult:
+          type: string
+          maxLength: 2000
+
+    ReorderTestStepsRequest:
+      type: object
+      additionalProperties: false
+      required: [stepIds]
+      properties:
+        stepIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+
+    TestRunStatus:
+      type: string
+      enum: [created, running, completed, failed, cancelled]
+
+    TestRun:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - externalRunId
+        - provider
+        - providerRunId
+        - runAttempt
+        - pipeline
+        - branch
+        - commit
+        - status
+        - expectedCount
+        - resultCount
+        - createdAt
+      properties:
+        id:
+          type: integer
+          format: int64
+        externalRunId:
+          type: string
+          example: github:9876543210:1
+        provider:
+          type: string
+        providerRunId:
+          type: string
+        runAttempt:
+          type: integer
+          format: int32
+        pipeline:
+          type: string
+        branch:
+          type: string
+        commit:
+          type: string
+        status:
+          $ref: "#/components/schemas/TestRunStatus"
+        expectedCount:
+          type: integer
+          format: int32
+          description: Size of the immutable expected-universe snapshot
+        resultCount:
+          type: integer
+          format: int32
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    TestRunPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/TestRun"
+
+    ResultStatus:
+      type: string
+      enum: [passed, failed, error, skipped]
+
+    Correlation:
+      type: string
+      description: Outcome of TC-ID extraction/validation for a result
+      enum: [valid, missing, malformed, unknown, deprecated]
+
+    TestResult:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - testRunId
+        - testCaseId
+        - requestedTestCaseId
+        - correlation
+        - testName
+        - className
+        - suiteName
+        - status
+        - durationMs
+        - errorMessage
+        - errorDetails
+        - createdAt
+      properties:
+        id:
+          type: integer
+          format: int64
+        testRunId:
+          type: integer
+          format: int64
+        testCaseId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Set only when correlation is `valid`
+        requestedTestCaseId:
+          type: string
+          nullable: true
+          description: Raw TC-ID reference as declared by the test (for diagnostics)
+        correlation:
+          $ref: "#/components/schemas/Correlation"
+        testName:
+          type: string
+        className:
+          type: string
+        suiteName:
+          type: string
+        status:
+          $ref: "#/components/schemas/ResultStatus"
+        durationMs:
+          type: integer
+          format: int64
+        errorMessage:
+          type: string
+        errorDetails:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    TestResultPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/TestResult"
+
+    TestCaseResult:
+      type: object
+      additionalProperties: false
+      description: A historical result of a TC-ID plus the metadata observed at execution time
+      required: [result, run]
+      properties:
+        result:
+          $ref: "#/components/schemas/TestResult"
+        run:
+          $ref: "#/components/schemas/TestRun"
+
+    TestCaseResultPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/TestCaseResult"
+
+    SummaryStatus:
+      type: string
+      enum: [untested, passed, failed, error, skipped]
+
+    StatusCounts:
+      type: object
+      additionalProperties: false
+      required: [untested, passed, failed, error, skipped]
+      properties:
+        untested:
+          type: integer
+          format: int32
+        passed:
+          type: integer
+          format: int32
+        failed:
+          type: integer
+          format: int32
+        error:
+          type: integer
+          format: int32
+        skipped:
+          type: integer
+          format: int32
+
+    StatusPercentages:
+      type: object
+      additionalProperties: false
+      required: [untested, passed, failed, error, skipped]
+      properties:
+        untested:
+          type: number
+        passed:
+          type: number
+        failed:
+          type: number
+        error:
+          type: number
+        skipped:
+          type: number
+
+    ExecutedPercentages:
+      type: object
+      additionalProperties: false
+      required: [passed, failed, error, skipped]
+      properties:
+        passed:
+          type: number
+        failed:
+          type: number
+        error:
+          type: number
+        skipped:
+          type: number
+
+    DiagnosticCounts:
+      type: object
+      additionalProperties: false
+      required: [missing, malformed, unknown, deprecated, total]
+      properties:
+        missing:
+          type: integer
+          format: int32
+        malformed:
+          type: integer
+          format: int32
+        unknown:
+          type: integer
+          format: int32
+        deprecated:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int32
+
+    TestCaseOutcome:
+      type: object
+      additionalProperties: false
+      required: [testCaseId, status, resultCount]
+      properties:
+        testCaseId:
+          type: integer
+          format: int64
+        status:
+          $ref: "#/components/schemas/SummaryStatus"
+        resultCount:
+          type: integer
+          format: int32
+
+    TestRunSummary:
+      type: object
+      additionalProperties: false
+      description: |
+        Computed against the run's immutable expected-universe snapshot.
+        Percentages are 0..100 rounded to 2 decimals (0 when the denominator is 0).
+        Results with an invalid TC-ID are excluded and reported in `diagnostics`.
+        Valid results for test cases outside the snapshot (e.g. automated=false)
+        are excluded and counted in `outsideUniverse`.
+      required:
+        - testRunId
+        - expectedTotal
+        - executedTotal
+        - counts
+        - percentOfExpected
+        - percentOfExecuted
+        - executionPercent
+        - diagnostics
+        - outsideUniverse
+        - testCases
+      properties:
+        testRunId:
+          type: integer
+          format: int64
+        expectedTotal:
+          type: integer
+          format: int32
+        executedTotal:
+          type: integer
+          format: int32
+        counts:
+          $ref: "#/components/schemas/StatusCounts"
+        percentOfExpected:
+          $ref: "#/components/schemas/StatusPercentages"
+        percentOfExecuted:
+          $ref: "#/components/schemas/ExecutedPercentages"
+        executionPercent:
+          type: number
+        diagnostics:
+          $ref: "#/components/schemas/DiagnosticCounts"
+        outsideUniverse:
+          type: integer
+          format: int32
+        testCases:
+          type: array
+          description: Aggregated status per TC-ID of the snapshot (failed > error > skipped > passed; untested when no result)
+          items:
+            $ref: "#/components/schemas/TestCaseOutcome"
+
+    IngestionDiagnostic:
+      type: object
+      additionalProperties: false
+      required: [testName, correlation, requestedTestCaseId, message]
+      properties:
+        testName:
+          type: string
+        correlation:
+          type: string
+          enum: [missing, malformed, unknown, deprecated]
+        requestedTestCaseId:
+          type: string
+          nullable: true
+        message:
+          type: string
+
+    ParseError:
+      type: object
+      additionalProperties: false
+      required: [index, testName, message]
+      properties:
+        index:
+          type: integer
+          format: int32
+          description: 0-based position of the testcase in document order
+        testName:
+          type: string
+        message:
+          type: string
+
+    IngestionResponse:
+      type: object
+      additionalProperties: false
+      required: [created, testRun, received, persisted, diagnostics, parseErrors]
+      properties:
+        created:
+          type: boolean
+          description: false when the request was an idempotent replay
+        testRun:
+          $ref: "#/components/schemas/TestRun"
+        received:
+          type: integer
+          format: int32
+          description: testcase elements found in the document
+        persisted:
+          type: integer
+          format: int32
+          description: results stored for the run
+        diagnostics:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngestionDiagnostic"
+        parseErrors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParseError"

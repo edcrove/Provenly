@@ -30,3 +30,4 @@ E2E database, 1440×900 viewport, full page. Regenerate after any UI change.
 | 23 | Test case not found | `23-test-case-not-found.png` |
 | 24 | Test run not found | `24-test-run-not-found.png` |
 | 25 | Unknown page | `25-page-not-found.png` |
+| 26 | Test case list, second page | `26-test-cases-pagination.png` |

@@ -101,6 +101,14 @@ test.describe('Frontend UI journeys', () => {
     await expect(history.getByText('login chrome (renamed later)')).toBeVisible()
     await expect(page.getByText('Current definition')).toBeVisible()
     await expect(page.getByText(/Observed at execution time/)).toBeVisible()
+
+    // 5. Editing the TC content later does not change how its earlier results read.
+    await page.getByRole('button', { name: 'Edit' }).click()
+    await page.getByLabel('Title').fill('Demo: user can log in (edited)')
+    await page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('(edited)')
+    await expect(history.getByTestId('status-badge')).toHaveText(['passed', 'failed', 'passed'])
+    await expect(history.getByText('login chrome (renamed later)')).toBeVisible()
   })
 
   test('[FE-E2E-003] resend is idempotent and a rerun appears as a new run in the UI', async ({ page, provenly }) => {

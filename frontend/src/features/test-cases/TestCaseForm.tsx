@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { ApiError } from '@/lib/problem'
 
 export interface TestCaseFormValues {
   title: string
@@ -25,11 +26,24 @@ interface Props {
 
 const empty: TestCaseFormValues = { title: '', description: '', expectedResult: '', automated: false }
 
+/** Validation message of one field, linked to its input through aria-describedby. */
+function FieldError({ id, message }: { id: string; message?: string }) {
+  return message ? (
+    <p id={id} className="text-destructive text-sm">
+      {message}
+    </p>
+  ) : null
+}
+
 /** Form for the editable content of a test case. The TC-ID is never editable. */
 export function TestCaseForm({ initial = empty, submitLabel, pending, error, onSubmit, onCancel }: Props) {
   const [values, setValues] = useState(initial)
   const set = <K extends keyof TestCaseFormValues>(key: K, value: TestCaseFormValues[K]) =>
     setValues((v) => ({ ...v, [key]: value }))
+
+  const fieldErrors = error instanceof ApiError ? error.fieldErrors : {}
+  const invalid = (field: string) =>
+    fieldErrors[field] ? { 'aria-invalid': true, 'aria-describedby': `tc-${field}-error` } : {}
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -47,7 +61,9 @@ export function TestCaseForm({ initial = empty, submitLabel, pending, error, onS
           onChange={(e) => set('title', e.target.value)}
           required
           maxLength={200}
+          {...invalid('title')}
         />
+        <FieldError id="tc-title-error" message={fieldErrors.title && `Title ${fieldErrors.title}`} />
       </div>
       <div className="grid gap-2">
         <Label htmlFor="tc-description">Description</Label>
@@ -55,6 +71,11 @@ export function TestCaseForm({ initial = empty, submitLabel, pending, error, onS
           id="tc-description"
           value={values.description}
           onChange={(e) => set('description', e.target.value)}
+          {...invalid('description')}
+        />
+        <FieldError
+          id="tc-description-error"
+          message={fieldErrors.description && `Description ${fieldErrors.description}`}
         />
       </div>
       <div className="grid gap-2">
@@ -63,6 +84,11 @@ export function TestCaseForm({ initial = empty, submitLabel, pending, error, onS
           id="tc-expected"
           value={values.expectedResult}
           onChange={(e) => set('expectedResult', e.target.value)}
+          {...invalid('expectedResult')}
+        />
+        <FieldError
+          id="tc-expectedResult-error"
+          message={fieldErrors.expectedResult && `Expected result ${fieldErrors.expectedResult}`}
         />
       </div>
       <Label htmlFor="tc-automated">

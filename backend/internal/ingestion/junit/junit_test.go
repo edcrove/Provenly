@@ -47,6 +47,27 @@ func TestParseStatusesAndFields(t *testing.T) {
 	assert.Equal(t, time.Date(2026, 9, 28, 9, 0, 0, 0, time.UTC), *rep.StartedAt)
 }
 
+func TestParseSuiteTimestampFormats(t *testing.T) {
+	want := time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC)
+	for _, ts := range []string{
+		"2026-09-28T10:00:00",           // no zone (Surefire, pytest): UTC
+		"2026-09-28T10:00:00Z",          // UTC designator
+		"2026-09-28T10:00:00.000Z",      // Playwright: Date.toISOString()
+		"2026-09-28T07:00:00-03:00",     // explicit offset
+		"2026-09-28T12:00:00.000+02:00", // offset with fraction
+		" 2026-09-28T10:00:00 ",         // surrounding spaces
+	} {
+		rep, err := Parse(strings.NewReader(`<testsuite name="s" timestamp="` + ts + `"><testcase name="TC-1 ok"/></testsuite>`))
+		require.NoError(t, err)
+		if assert.NotNil(t, rep.StartedAt, ts) {
+			assert.Equal(t, want, *rep.StartedAt, ts)
+		}
+	}
+	rep, err := Parse(strings.NewReader(`<testsuites><testsuite name="a" timestamp="2026-09-28T10:00:00.500Z"/><testsuite name="b" timestamp="2026-09-28T12:00:00+03:00"/></testsuites>`))
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2026, 9, 28, 9, 0, 0, 0, time.UTC), *rep.StartedAt, "the earliest instant wins across zones")
+}
+
 func TestParseSingleSuiteRoot(t *testing.T) {
 	rep, err := Parse(strings.NewReader(`<testsuite name="s" timestamp="bad"><testcase name="TC-1 ok"/></testsuite>`))
 	require.NoError(t, err)

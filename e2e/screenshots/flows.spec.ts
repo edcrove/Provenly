@@ -138,9 +138,11 @@ test('UI flows', async ({ page, request }) => {
   await expect(page.getByTestId('expected-total')).toBeVisible()
   await shot(page, 'test-run-detail')
   await page.getByLabel('Filter by status').selectOption('failed')
+  await expect(page.getByTestId('result-row')).toHaveCount(1)
   await shot(page, 'test-run-results-filter-failed')
   await page.getByLabel('Filter by status').selectOption('')
   await page.getByLabel('Filter by TC-ID correlation').selectOption('unknown')
+  await expect(page.getByTestId('result-row')).toHaveCount(1)
   await shot(page, 'test-run-results-filter-unknown')
 
   await page.goto(`/test-runs/${failedRun}`)
@@ -175,6 +177,7 @@ test('UI flows', async ({ page, request }) => {
   await page.goto('/test-cases/new')
   await page.getByLabel('Title').fill('   ')
   await page.getByRole('button', { name: 'Create test case' }).click()
+  await expect(page.getByLabel('Title')).toHaveAttribute('aria-invalid', 'true')
   await shot(page, 'test-case-new-validation-error')
   await page.goto('/test-cases/987654321')
   await expect(page.getByRole('alert')).toBeVisible()
@@ -184,4 +187,11 @@ test('UI flows', async ({ page, request }) => {
   await shot(page, 'test-run-not-found')
   await page.goto('/does-not-exist')
   await shot(page, 'page-not-found')
+
+  // Pagination (20 per page).
+  for (let i = 1; i <= 20; i++) await createTC(request, `Catalog entry ${String(i).padStart(2, '0')}`, i % 2 === 0)
+  await page.goto('/test-cases')
+  await page.getByRole('button', { name: 'Next' }).click()
+  await expect(page.getByText('Page 2 of 2')).toBeVisible()
+  await shot(page, 'test-cases-pagination')
 })

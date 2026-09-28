@@ -43,7 +43,9 @@ describe('FE-INT-002 test case list', () => {
   it('FE-INT-012 surfaces API failures as an error alert', async () => {
     db.failing = true
     renderRoute('/test-cases')
-    expect(await screen.findByRole('alert')).toHaveTextContent('an unexpected error occurred')
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Something went wrongan unexpected error occurred',
+    )
   })
 })
 
@@ -69,6 +71,9 @@ describe('FE-INT-003 create test case', () => {
     await user.type(await screen.findByLabelText('Title'), '   ')
     await user.click(screen.getByRole('button', { name: 'Create test case' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('title: is required')
+    const title = screen.getByLabelText('Title')
+    expect(title).toHaveAttribute('aria-invalid', 'true')
+    expect(title).toHaveAccessibleDescription('Title is required')
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(router.state.location.pathname).toBe('/test-cases')
   })
@@ -125,7 +130,7 @@ describe('FE-INT-004 test case detail and edit', () => {
 
   it('FE-INT-012 shows not found and invalid id errors', async () => {
     renderRoute('/test-cases/999')
-    expect(await screen.findByRole('alert')).toHaveTextContent('test case TC-999 not found')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not foundtest case TC-999 not found')
   })
 
   it('FE-INT-012 rejects a non-numeric id', async () => {

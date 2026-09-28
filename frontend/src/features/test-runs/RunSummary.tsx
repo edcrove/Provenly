@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import type { TestRunSummary } from '@/api/client'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatPercent, sumPercents, tcKey } from '@/lib/format'
+import { formatPercent, plural, sumPercents, tcKey } from '@/lib/format'
 import { resultStatuses, summaryStatuses } from '@/lib/status'
 
 /** Snapshot-based summary: counts, % of expected, % of executed and execution %. */
@@ -30,7 +30,7 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
             {formatPercent(summary.executionPercent)}
           </div>
           <div className="text-muted-foreground text-xs" data-testid="execution-counts">
-            {summary.executedTotal} of {summary.expectedTotal} test cases executed
+            {summary.executedTotal} of {plural(summary.expectedTotal, 'test case')} executed
           </div>
         </div>
       </div>

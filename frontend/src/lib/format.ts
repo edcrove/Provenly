@@ -12,9 +12,10 @@ export function formatDuration(ms: number | null): string {
   if (ms === 0) return '<1 ms'
   if (ms < 1000) return `${ms} ms`
   const seconds = ms / 1000
-  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 2 : 1)} s`
-  const minutes = Math.floor(seconds / 60)
-  return `${minutes}m ${Math.round(seconds % 60)}s`
+  if (seconds < 10) return `${seconds.toFixed(2)} s`
+  if (Math.round(seconds * 10) < 600) return `${seconds.toFixed(1)} s`
+  const total = Math.round(seconds)
+  return `${Math.floor(total / 60)}m ${total % 60}s`
 }
 
 /** Formats an ISO timestamp (UTC) for tables; empty for null. */
@@ -39,4 +40,9 @@ export function sumPercents(values: number[]): number {
 /** Shortens a commit SHA for display. */
 export function shortCommit(commit: string): string {
   return commit.length > 10 ? commit.slice(0, 10) : commit || '—'
+}
+
+/** "1 result", "2 results": count plus the singular or plural noun. */
+export function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`
 }

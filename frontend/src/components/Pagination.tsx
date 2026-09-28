@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { plural } from '@/lib/format'
 
 interface Props {
   page: number
@@ -11,7 +12,8 @@ export function Pagination({ page, totalPages, totalItems, onPageChange }: Props
   return (
     <nav aria-label="pagination" className="flex items-center justify-between gap-2 pt-3 text-sm">
       <span className="text-muted-foreground">
-        Page {Math.min(page, Math.max(totalPages, 1))} of {Math.max(totalPages, 1)} · {totalItems} items
+        Page {Math.min(page, Math.max(totalPages, 1))} of {Math.max(totalPages, 1)} ·{' '}
+        {plural(totalItems, 'item')}
       </span>
       <div className="flex gap-2">
         <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>

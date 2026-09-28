@@ -183,11 +183,16 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.False(t, same.Created)
 		assert.Empty(t, same.Warnings, "an identical replay is silent")
 
+		_, _ = s.Catalog.Create(ctx, catalog.CreateInput{Title: "added after the run", Automated: true})
 		replay, err := s.Ingestion.IngestJUnit(ctx, meta("200", 1), strings.NewReader(junitFor()))
 		require.NoError(t, err)
 		assert.False(t, replay.Created)
 		assert.Equal(t, 1, replay.Persisted, "a different report is not applied")
 		assert.Equal(t, []string{ingestion.ReportDiffersWarning}, replay.Warnings)
+		assert.Equal(t, int32(1), replay.Run.ExpectedCount, "a replay never recomputes the snapshot")
+		sum, err := s.Execution.Summary(ctx, replay.Run.ID)
+		require.NoError(t, err)
+		assert.Equal(t, int32(1), sum.ExpectedTotal)
 	})
 
 	t.Run("BE-INT-009_rerun_attempt_creates_new_run_and_preserves_history", func(t *testing.T) {
@@ -249,6 +254,16 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Error(t, err, "untested is never persisted")
 		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ('x:y:1', 'github', '1', 1, 'completed')`)
 		assert.ErrorContains(t, err, "external_run_id_format")
+
+		// The full lifecycle is supported by the model even though the POC only
+		// records final statuses (created/running arrive with live streaming).
+		for i, status := range []string{"created", "running", "completed", "failed", "cancelled"} {
+			_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ($1, 'github', 'life', $2, $3)`,
+				"github:life:"+itoa(int64(i+1)), i+1, status)
+			assert.NoError(t, err, status)
+		}
+		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ('github:life:9', 'github', 'life', 9, 'paused')`)
+		assert.Error(t, err, "unknown run statuses are rejected")
 	})
 
 	t.Run("BE-INT-013_run_results_filters_and_pagination", func(t *testing.T) {

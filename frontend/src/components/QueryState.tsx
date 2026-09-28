@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { errorMessage } from '@/lib/problem'
+import { ApiError, errorMessage } from '@/lib/problem'
 
-export function ErrorAlert({ error, title = 'Something went wrong' }: { error: unknown; title?: string }) {
+export function ErrorAlert({ error, title }: { error: unknown; title?: string }) {
+  const fallback = error instanceof ApiError && error.status === 404 ? 'Not found' : 'Something went wrong'
   return (
     <Alert variant="destructive">
-      <AlertTitle>{title}</AlertTitle>
+      <AlertTitle>{title ?? fallback}</AlertTitle>
       <AlertDescription>{errorMessage(error)}</AlertDescription>
     </Alert>
   )

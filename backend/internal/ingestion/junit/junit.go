@@ -159,7 +159,7 @@ func walk(rep *Report, s xmlSuite, parent string) {
 	suite := parent
 	if s.XMLName.Local == "testsuite" {
 		suite = s.Name
-		if ts, err := time.Parse("2006-01-02T15:04:05", strings.TrimSuffix(s.Timestamp, "Z")); err == nil {
+		if ts, ok := parseTimestamp(s.Timestamp); ok {
 			if rep.StartedAt == nil || ts.Before(*rep.StartedAt) {
 				rep.StartedAt = &ts
 			}
@@ -181,6 +181,22 @@ func walk(rep *Report, s xmlSuite, parent string) {
 	for _, child := range s.Suites {
 		walk(rep, child, suite)
 	}
+}
+
+// timestampLayouts are the suite timestamp forms reporters emit: ISO 8601 with
+// an offset or Z (e.g. Playwright's toISOString(), with milliseconds) or without
+// a zone (Maven Surefire, pytest), read as UTC.
+var timestampLayouts = []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999"}
+
+// parseTimestamp reads a suite timestamp and normalizes it to UTC.
+func parseTimestamp(raw string) (time.Time, bool) {
+	raw = strings.TrimSpace(raw)
+	for _, layout := range timestampLayouts {
+		if ts, err := time.Parse(layout, raw); err == nil {
+			return ts.UTC(), true
+		}
+	}
+	return time.Time{}, false
 }
 
 // normalize returns the result plus an optional issue on a kept result, or an

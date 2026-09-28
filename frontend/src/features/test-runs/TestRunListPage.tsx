@@ -6,7 +6,7 @@ import { QueryState } from '@/components/QueryState'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatDateTime, shortCommit } from '@/lib/format'
+import { formatDateTime, plural, shortCommit } from '@/lib/format'
 import { positiveInt, runStatusVariant } from '@/lib/status'
 
 export function TestRunListPage() {
@@ -58,7 +58,7 @@ export function TestRunListPage() {
                         <Badge variant={runStatusVariant(run.status)}>{run.status}</Badge>
                       </TableCell>
                       <TableCell>
-                        {run.resultCount} results · {run.expectedCount} expected
+                        {plural(run.resultCount, 'result')} · {run.expectedCount} expected
                       </TableCell>
                       <TableCell>{formatDateTime(run.createdAt)}</TableCell>
                     </TableRow>

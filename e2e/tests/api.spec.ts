@@ -67,6 +67,7 @@ test.describe('Backend API journeys', () => {
     expect(res.status()).toBe(201)
     const body = await res.json()
     expect(body).toMatchObject({ created: true, received: 9, persisted: 8 })
+    expect(body.testRun.startedAt).toBe('2026-09-28T10:00:00Z')
     expect(body.parseErrors.map((e: { persisted: boolean; severity: string }) => [e.persisted, e.severity])).toEqual([
       [true, 'error'],
       [false, 'error'],

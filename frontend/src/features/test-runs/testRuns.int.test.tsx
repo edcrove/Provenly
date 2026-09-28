@@ -11,12 +11,21 @@ describe('FE-INT-008 test run list', () => {
   it('FE-INT-008 lists runs newest first with their metadata', async () => {
     db.runs = [
       testRun(),
-      testRun({ id: 8, externalRunId: 'github:9876:2', runAttempt: 2, pipeline: '', branch: '', commit: '' }),
+      testRun({
+        id: 8,
+        externalRunId: 'github:9876:2',
+        runAttempt: 2,
+        pipeline: '',
+        branch: '',
+        commit: '',
+        resultCount: 1,
+      }),
     ]
     renderRoute('/test-runs')
     const rows = (await screen.findAllByRole('row')).slice(1)
     expect(within(rows[0]).getByText('github:9876:2')).toBeInTheDocument()
     expect(within(rows[0]).getAllByText('—')).toHaveLength(3)
+    expect(within(rows[0]).getByText('1 result · 2 expected')).toBeInTheDocument()
     expect(within(rows[1]).getByText('3 results · 2 expected')).toBeInTheDocument()
     expect(within(rows[1]).getByRole('link', { name: '#7' })).toHaveAttribute('href', '/test-runs/7')
   })
@@ -138,7 +147,7 @@ describe('FE-INT-009 test run detail and summary', () => {
 
   it('FE-INT-012 shows errors for unknown runs', async () => {
     renderRoute('/test-runs/999')
-    expect(await screen.findByRole('alert')).toHaveTextContent('test run 999 not found')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not foundtest run 999 not found')
   })
 })
 
@@ -154,7 +163,9 @@ describe('FE-INT-010 TC-ID diagnostics', () => {
     expect(screen.getByTestId('diagnostic-malformed')).toHaveTextContent('2')
     expect(screen.getByTestId('diagnostic-deprecated')).toHaveTextContent('3')
     expect(screen.queryByTestId('diagnostic-unknown')).not.toBeInTheDocument()
-    expect(screen.getByTestId('outside-universe')).toHaveTextContent('2 result(s)')
+    expect(screen.getByTestId('outside-universe')).toHaveTextContent(
+      '2 results point to test cases that were not automated',
+    )
     expect(
       screen.getByRole('list', { name: 'Test cases outside the expected universe' }),
     ).toBeEmptyDOMElement()
@@ -191,6 +202,9 @@ describe('FE-INT-010 TC-ID diagnostics', () => {
           { status: 500, headers: { 'Content-Type': 'application/problem+json' } },
         ),
       ),
+    )
+    expect(screen.getByTestId('outside-universe')).toHaveTextContent(
+      '1 result points to a test case that was not automated',
     )
     await user.click(within(item).getByRole('button', { name: 'Mark as automated' }))
     expect(await within(item).findByText('Could not update the test case')).toBeInTheDocument()

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatDateTime, formatDuration, formatPercent, shortCommit, sumPercents, tcKey } from './format'
+import {
+  formatDateTime,
+  formatDuration,
+  formatPercent,
+  plural,
+  shortCommit,
+  sumPercents,
+  tcKey,
+} from './format'
 
 describe('format', () => {
   it('formats TC keys', () => {
@@ -15,6 +23,19 @@ describe('format', () => {
     expect(formatDuration(1500)).toBe('1.50 s')
     expect(formatDuration(12_340)).toBe('12.3 s')
     expect(formatDuration(125_000)).toBe('2m 5s')
+    // Rounding never produces "60.0 s" or "1m 60s".
+    expect(formatDuration(9_999)).toBe('10.00 s')
+    expect(formatDuration(59_940)).toBe('59.9 s')
+    expect(formatDuration(59_960)).toBe('1m 0s')
+    expect(formatDuration(119_600)).toBe('2m 0s')
+  })
+
+  it('pluralizes counts', () => {
+    expect(plural(0, 'result')).toBe('0 results')
+    expect(plural(1, 'result')).toBe('1 result')
+    expect(plural(2, 'test case')).toBe('2 test cases')
+    expect(plural(1, 'entry', 'entries')).toBe('1 entry')
+    expect(plural(3, 'entry', 'entries')).toBe('3 entries')
   })
 
   it('formats timestamps in UTC', () => {

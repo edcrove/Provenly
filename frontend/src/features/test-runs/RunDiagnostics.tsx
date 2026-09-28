@@ -8,6 +8,12 @@ import { Button } from '@/components/ui/button'
 import { tcKey } from '@/lib/format'
 import { correlationExplanation, invalidCorrelations } from '@/lib/status'
 
+function outsideUniverseMessage(n: number): string {
+  return n === 1
+    ? '1 result points to a test case that was not automated when this run was created, so it is not counted in this summary. If it should be automated, mark it so future runs include it.'
+    : `${n} results point to test cases that were not automated when this run was created, so they are not counted in this summary. If they should be automated, mark them so future runs include them.`
+}
+
 /** A TC with valid results that was not in this run's snapshot, with a shortcut to mark it automated. */
 function OutsideUniverseCase({ id }: { id: number }) {
   const tc = useTestCase(id)
@@ -59,11 +65,7 @@ export function RunDiagnostics({ summary }: { summary: TestRunSummary }) {
       )}
       {summary.outsideUniverse > 0 && (
         <div className="grid gap-2 rounded-md border p-3" role="status">
-          <p data-testid="outside-universe">
-            {summary.outsideUniverse} result(s) point to test cases that were not automated when this run was
-            created, so they are not counted in this summary. If they should be automated, mark them so future
-            runs include them.
-          </p>
+          <p data-testid="outside-universe">{outsideUniverseMessage(summary.outsideUniverse)}</p>
           <ul className="grid gap-2" aria-label="Test cases outside the expected universe">
             {summary.outsideUniverseTestCaseIds.map((id) => (
               <OutsideUniverseCase key={id} id={id} />

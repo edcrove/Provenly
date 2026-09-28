@@ -52,9 +52,9 @@ export class ProvenlyApi {
 /** A unique CI run id per test execution. */
 export const uniqueRunId = () => `${Date.now()}${Math.floor(Math.random() * 1000)}`
 
-/** Builds a JUnit XML document from testcase snippets. */
+/** Builds a JUnit XML document from testcase snippets (timestamp as Playwright's JUnit reporter writes it). */
 export const junit = (...cases: string[]) =>
-  `<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="e2e" timestamp="2026-09-28T10:00:00">${cases.join('')}</testsuite></testsuites>`
+  `<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="e2e" timestamp="2026-09-28T10:00:00.000Z">${cases.join('')}</testsuite></testsuites>`
 
 /** A testcase declaring its TC-ID through the tc-id property (primary source). */
 export const byProperty = (name: string, id: number, outcome = '') =>

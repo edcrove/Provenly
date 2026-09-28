@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 
 	"github.com/edcrove/provenly/backend/internal/catalog"
 	catalogpg "github.com/edcrove/provenly/backend/internal/catalog/postgres"
+	"github.com/edcrove/provenly/backend/internal/ingestion"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
@@ -181,6 +183,33 @@ func TestCatalogPersistence(t *testing.T) {
 
 		after, _ := s.Catalog.Get(ctx, tc.ID)
 		assert.Equal(t, tc.ID, after.ID)
+	})
+
+	t.Run("BE-INT-021_editing_content_and_steps_keeps_identity_and_history", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "login", ExpectedResult: "dashboard", Automated: true})
+		a, _ := s.Catalog.CreateStep(ctx, tc.ID, catalog.CreateStepInput{Action: "open"})
+		b, _ := s.Catalog.CreateStep(ctx, tc.ID, catalog.CreateStepInput{Action: "submit"})
+		_, err := s.Ingestion.IngestJUnit(ctx, ingestion.RunMeta{Provider: "github", ProviderRunID: "900", RunAttempt: 1},
+			strings.NewReader(`<testsuite name="s"><testcase name="login TC-`+itoa(tc.ID)+`"><failure/></testcase></testsuite>`))
+		require.NoError(t, err)
+		before, err := s.Execution.History(ctx, tc.ID, pagination.Default())
+		require.NoError(t, err)
+
+		_, err = s.Catalog.Update(ctx, tc.ID, catalog.UpdateInput{Title: ptr("login v2"), ExpectedResult: ptr("home page")})
+		require.NoError(t, err)
+		_, err = s.Catalog.UpdateStep(ctx, tc.ID, a.ID, catalog.UpdateStepInput{Action: ptr("open app")})
+		require.NoError(t, err)
+		_, err = s.Catalog.ReorderSteps(ctx, tc.ID, []int64{b.ID, a.ID})
+		require.NoError(t, err)
+		require.NoError(t, s.Catalog.DeleteStep(ctx, tc.ID, b.ID))
+
+		after, err := s.Execution.History(ctx, tc.ID, pagination.Default())
+		require.NoError(t, err)
+		assert.Equal(t, before, after, "old results are read against the same TC-ID, unchanged")
+		got, _ := s.Catalog.Get(ctx, tc.ID)
+		assert.Equal(t, tc.ID, got.ID)
+		assert.Equal(t, "login v2", got.Title, "no new version: the test case itself changed")
 	})
 
 	t.Run("BE-INT-007_concurrent_step_creation_is_serialized_per_test_case", func(t *testing.T) {

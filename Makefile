@@ -8,7 +8,7 @@ GOCOV       := $(OUT)/gocov
 BACKEND_PKG := $$(go list -f '{{if .TestGoFiles}}{{.ImportPath}}{{end}}' ./cmd/... ./internal/...)
 DATABASE_URL ?= postgres://provenly:provenly@localhost:5432/provenly?sslmode=disable
 
-.PHONY: help setup up down migrate dev-backend dev-frontend generate check-generated lint \
+.PHONY: help setup up down migrate dev-backend dev-frontend generate check-generated lint screenshots \
 	test-backend-unit test-backend-integration test-backend-contract \
 	test-frontend-unit test-frontend-integration test-frontend-contract test-e2e \
 	test gates coverage clean
@@ -84,6 +84,9 @@ test-e2e: ## E2E journeys (Playwright) on the instrumented stack; needs `make up
 	./scripts/e2e.sh
 
 test: test-backend-unit test-backend-integration test-backend-contract test-frontend-unit test-frontend-integration test-frontend-contract test-e2e ## Run every suite
+
+screenshots: ## Capture every UI flow into docs/screenshots (needs make up; resets the E2E database)
+	./scripts/screenshots.sh
 
 gates: ## Evaluate the 8 coverage gates from the evidence already collected
 	cd tools/covgate && go run . -root $(ROOT)

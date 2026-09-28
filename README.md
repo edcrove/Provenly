@@ -43,6 +43,8 @@ make dev-backend              # API on http://localhost:8080  (terminal 1)
 make dev-frontend             # UI  on http://localhost:5173  (terminal 2)
 ```
 
+Screenshots of every UI flow: [`docs/screenshots`](docs/screenshots/README.md) (regenerate with `make screenshots`).
+
 ### Try the POC flow with curl
 
 ```bash

@@ -64,9 +64,6 @@ INSERT INTO test_steps (test_case_id, position, action, expected_result)
 VALUES (@test_case_id, @position, @action, @expected_result)
 RETURNING *;
 
--- name: GetTestStep :one
-SELECT * FROM test_steps WHERE test_case_id = @test_case_id AND id = @id;
-
 -- name: UpdateTestStep :one
 UPDATE test_steps SET
     action          = coalesce(sqlc.narg('action'), action),

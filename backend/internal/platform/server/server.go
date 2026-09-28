@@ -3,15 +3,18 @@ package server
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net"
 	"net/http"
 	"time"
 )
 
-// Run serves handler on listener until ctx is done, then shuts down gracefully.
-func Run(ctx context.Context, listener net.Listener, handler http.Handler) error {
+// ShutdownTimeout bounds graceful shutdown.
+const ShutdownTimeout = 10 * time.Second
+
+// Run serves handler on listener until ctx is done, then shuts down gracefully
+// waiting at most shutdownTimeout for in-flight requests.
+func Run(ctx context.Context, listener net.Listener, handler http.Handler, shutdownTimeout time.Duration) error {
 	srv := &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
@@ -24,14 +27,10 @@ func Run(ctx context.Context, listener net.Listener, handler http.Handler) error
 		return err
 	case <-ctx.Done():
 	}
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return err
-	}
-	if err := <-errc; !errors.Is(err, http.ErrServerClosed) {
-		return err
-	}
-	slog.Info("http server stopped")
-	return nil
+	err := srv.Shutdown(shutdownCtx)
+	<-errc
+	slog.Info("http server stopped", "error", err)
+	return err
 }

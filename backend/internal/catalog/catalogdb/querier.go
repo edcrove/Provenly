@@ -19,7 +19,6 @@ type Querier interface {
 	DeleteTestStep(ctx context.Context, arg DeleteTestStepParams) (int32, error)
 	DeprecateTestCase(ctx context.Context, id int64) (TestCase, error)
 	GetTestCase(ctx context.Context, id int64) (TestCase, error)
-	GetTestStep(ctx context.Context, arg GetTestStepParams) (TestStep, error)
 	ListAllTestSteps(ctx context.Context, testCaseID int64) ([]TestStep, error)
 	ListExpectedUniverse(ctx context.Context) ([]int64, error)
 	ListTestCaseStatuses(ctx context.Context, ids []int64) ([]ListTestCaseStatusesRow, error)

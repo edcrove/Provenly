@@ -1,0 +1,72 @@
+package execution
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestAggregatePrecedence(t *testing.T) {
+	cases := []struct {
+		in   []ResultStatus
+		want SummaryStatus
+	}{
+		{nil, Untested},
+		{[]ResultStatus{Passed}, "passed"},
+		{[]ResultStatus{Passed, Failed}, "failed"},
+		{[]ResultStatus{Failed, Error}, "failed"},
+		{[]ResultStatus{Error, Skipped, Passed}, "error"},
+		{[]ResultStatus{Passed, Skipped}, "skipped"},
+		{[]ResultStatus{Skipped, Passed}, "skipped"},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, Aggregate(c.in), "%v", c.in)
+	}
+}
+
+func TestComputeSummary(t *testing.T) {
+	expected := []int64{5, 1, 2, 3, 4}
+	valid := []ValidResult{
+		{1, Passed}, {1, Failed}, // Chrome=PASS + Firefox=FAIL => failed
+		{2, Passed},
+		{3, Error},
+		{4, Skipped},
+		{99, Passed}, // valid but outside the snapshot
+	}
+	diags := []Diagnostic{
+		{Correlation: CorrelationMissing}, {Correlation: CorrelationMalformed},
+		{Correlation: CorrelationUnknown}, {Correlation: CorrelationUnknown}, {Correlation: CorrelationDeprecated},
+	}
+	s := ComputeSummary(7, expected, valid, diags)
+	assert.Equal(t, int64(7), s.TestRunID)
+	assert.Equal(t, int32(5), s.ExpectedTotal)
+	assert.Equal(t, int32(4), s.ExecutedTotal)
+	assert.Equal(t, StatusCounts{Untested: 1, Passed: 1, Failed: 1, Error: 1, Skipped: 1}, s.Counts)
+	assert.Equal(t, StatusPercentages{Untested: 20, Passed: 20, Failed: 20, Error: 20, Skipped: 20}, s.PercentOfExpected)
+	assert.Equal(t, ExecutedPercentages{Passed: 25, Failed: 25, Error: 25, Skipped: 25}, s.PercentOfExecuted)
+	assert.Equal(t, 80.0, s.ExecutionPercent)
+	assert.Equal(t, DiagnosticCounts{Missing: 1, Malformed: 1, Unknown: 2, Deprecated: 1, Total: 5}, s.Diagnostics)
+	assert.Equal(t, int32(1), s.OutsideUniverse)
+	assert.Equal(t, []TestCaseOutcome{
+		{1, "failed", 2}, {2, "passed", 1}, {3, "error", 1}, {4, "skipped", 1}, {5, Untested, 0},
+	}, s.TestCases)
+}
+
+func TestComputeSummaryRoundingAndEmpty(t *testing.T) {
+	s := ComputeSummary(1, []int64{1, 2, 3}, []ValidResult{{1, Passed}}, nil)
+	assert.Equal(t, 33.33, s.PercentOfExpected.Passed)
+	assert.Equal(t, 66.67, s.PercentOfExpected.Untested)
+	assert.Equal(t, 100.0, s.PercentOfExecuted.Passed)
+	assert.Equal(t, 33.33, s.ExecutionPercent)
+
+	empty := ComputeSummary(2, nil, []ValidResult{{1, Passed}}, nil)
+	assert.Equal(t, int32(0), empty.ExpectedTotal)
+	assert.Equal(t, 0.0, empty.ExecutionPercent)
+	assert.Equal(t, 0.0, empty.PercentOfExecuted.Passed)
+	assert.Equal(t, int32(1), empty.OutsideUniverse)
+	assert.Empty(t, empty.TestCases)
+}
+
+func TestExternalRunID(t *testing.T) {
+	assert.Equal(t, "github:123:2", ExternalRunID("github", "123", 2))
+}

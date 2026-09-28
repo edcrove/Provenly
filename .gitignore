@@ -1,0 +1,25 @@
+# Go
+/backend/bin/
+*.test
+*.out
+
+# Node
+node_modules/
+/frontend/dist/
+/frontend/coverage/
+/frontend/.nyc_output/
+/e2e/test-results/
+/e2e/playwright-report/
+/e2e/.nyc_output/
+/e2e/coverage/
+
+# Coverage & gate reports (generated)
+/coverage/out/
+
+# Env
+.env
+.env.local
+
+# OS / editors
+.DS_Store
+.idea/

@@ -181,30 +181,6 @@ func (q *Queries) GetTestCase(ctx context.Context, id int64) (TestCase, error) {
 	return i, err
 }
 
-const getTestStep = `-- name: GetTestStep :one
-SELECT id, test_case_id, position, action, expected_result, created_at, updated_at FROM test_steps WHERE test_case_id = $1 AND id = $2
-`
-
-type GetTestStepParams struct {
-	TestCaseID int64
-	ID         int64
-}
-
-func (q *Queries) GetTestStep(ctx context.Context, arg GetTestStepParams) (TestStep, error) {
-	row := q.db.QueryRow(ctx, getTestStep, arg.TestCaseID, arg.ID)
-	var i TestStep
-	err := row.Scan(
-		&i.ID,
-		&i.TestCaseID,
-		&i.Position,
-		&i.Action,
-		&i.ExpectedResult,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const listAllTestSteps = `-- name: ListAllTestSteps :many
 SELECT id, test_case_id, position, action, expected_result, created_at, updated_at FROM test_steps WHERE test_case_id = $1 ORDER BY position
 `

@@ -1137,6 +1137,12 @@ export interface operations {
                 pipeline?: string;
                 branch?: string;
                 commit?: string;
+                /**
+                 * @description How the CI execution ended. `failed` or `cancelled` mark a run whose
+                 *     pipeline broke or was stopped, so its report may be incomplete and its
+                 *     untested test cases may simply not have run.
+                 */
+                status?: "completed" | "failed" | "cancelled";
             };
             header?: never;
             path?: never;

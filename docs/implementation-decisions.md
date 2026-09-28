@@ -55,6 +55,11 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
    (send a new runAttempt to record it)"]`; an identical replay has `warnings: []`.
 7. **Run lifecycle in the POC.** Runs are created synchronously when the final report is ingested and stored as
    `completed`; `startedAt` is the earliest `testsuite@timestamp` when present.
+   **Status: Changed by Ed (2026-09-28) — option B, implemented.** CI may send `status=completed|failed|cancelled`
+   (default `completed`) with the final report, for pipelines that broke or were stopped. The run keeps that status
+   (a replay never changes it and warns if it differs); the UI badges it and flags failed/cancelled runs as possibly
+   incomplete ("untested may simply not have run"). Test outcomes stay in the summary. Live streaming (Core MVP) will
+   improve this with created/running and reconciliation.
 8. **Steps.** At most 100 steps per test case (so one page of the paginated steps listing always holds them all);
    reorder is `PUT /steps/order` with the full permutation of step ids.
 9. **Summary rounding.** Percentages are 0..100 rounded to 2 decimals; 0 when the denominator is 0.

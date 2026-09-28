@@ -3,9 +3,11 @@ import { useParams } from 'react-router'
 import type { TestRun } from '@/api/client'
 import { useTestRun, useTestRunSummary } from '@/api/queries'
 import { QueryState } from '@/components/QueryState'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDateTime } from '@/lib/format'
-import { positiveInt } from '@/lib/status'
+import { isInterruptedRun, positiveInt, runStatusVariant } from '@/lib/status'
 
 import { RunDiagnostics } from './RunDiagnostics'
 import { RunParseErrors } from './RunParseErrors'
@@ -47,7 +49,18 @@ export function TestRunDetailPage() {
     <QueryState query={run}>
       {(r) => (
         <div className="grid gap-4">
-          <h1 className="text-2xl font-semibold">Test run #{r.id}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold">Test run #{r.id}</h1>
+            <Badge variant={runStatusVariant(r.status)}>{r.status}</Badge>
+          </div>
+          {isInterruptedRun(r.status) ? (
+            <Alert variant="destructive" data-testid="interrupted-run">
+              <AlertTitle>The CI execution {r.status === 'failed' ? 'failed' : 'was cancelled'}</AlertTitle>
+              <AlertDescription>
+                The report may be incomplete: untested test cases may simply not have run.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <Card>
             <CardHeader>
               <CardTitle>Run metadata</CardTitle>

@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"io"
@@ -47,6 +48,8 @@ type fakeRecorder struct {
 	parseErr   error
 	// storedDigest simulates the digest of the report that created an existing run.
 	storedDigest string
+	// storedStatus simulates the status recorded for an existing run.
+	storedStatus execution.RunStatus
 }
 
 func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []int64, rs []execution.NewResult, pe []execution.ParseError) (execution.TestRun, bool, error) {
@@ -55,8 +58,9 @@ func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []
 	if f.storedDigest != "" {
 		digest = f.storedDigest
 	}
+	status := cmp.Or(f.storedStatus, run.Status, execution.RunCompleted)
 	return execution.TestRun{ID: 1, ExternalRunID: execution.ExternalRunID(run.Provider, run.ProviderRunID, run.RunAttempt),
-		ResultCount: int32(len(rs)), ReportSHA256: digest}, f.created, f.recordErr
+		ResultCount: int32(len(rs)), ReportSHA256: digest, Status: status}, f.created, f.recordErr
 }
 
 func (f *fakeRecorder) Diagnostics(context.Context, int64) ([]execution.Diagnostic, error) {
@@ -140,6 +144,22 @@ func TestIngestReplayAndEmptyParseErrors(t *testing.T) {
 	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
 	require.NoError(t, err)
 	assert.Equal(t, []string{ReportDiffersWarning}, out.Warnings)
+
+	rec.storedDigest, rec.storedStatus = "", execution.RunFailed
+	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
+	require.NoError(t, err)
+	assert.Equal(t, []string{`status "completed" differs from "failed", recorded for this attempt; it was not applied`}, out.Warnings)
+}
+
+func TestIngestPassesTheReportedRunStatus(t *testing.T) {
+	rec := &fakeRecorder{created: true}
+	m := meta
+	m.Status = execution.RunCancelled
+	out, err := NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), m, strings.NewReader(`<testsuite name="s"/>`))
+	require.NoError(t, err)
+	assert.Equal(t, execution.RunCancelled, rec.gotRun.Status)
+	assert.Equal(t, execution.RunCancelled, out.Run.Status)
+	assert.Empty(t, out.Warnings)
 }
 
 func TestValidateMeta(t *testing.T) {
@@ -152,6 +172,7 @@ func TestValidateMeta(t *testing.T) {
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Pipeline: strings.Repeat("p", 201)},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Branch: strings.Repeat("b", 256)},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Commit: strings.Repeat("c", 65)},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Status: execution.RunRunning},
 	}
 	for _, m := range bad {
 		e, ok := apperr.As(ValidateMeta(m))

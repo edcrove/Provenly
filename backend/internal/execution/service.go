@@ -29,13 +29,17 @@ func runNotFound(id int64) error { return apperr.NotFound("test run %d not found
 // snapshot is not recomputed, and the existing run is returned with created=false.
 func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, results []NewResult, parseErrors []ParseError) (TestRun, bool, error) {
 	externalID := ExternalRunID(run.Provider, run.ProviderRunID, run.RunAttempt)
+	status := run.Status
+	if status == "" {
+		status = RunCompleted
+	}
 	var (
 		out     TestRun
 		created bool
 	)
 	err := s.repo.InTx(ctx, func(r Repository) error {
 		id, ok, err := r.InsertTestRun(ctx, InsertRunParams{
-			NewRun: run, ExternalRunID: externalID, Status: RunCompleted, CompletedAt: s.now(),
+			NewRun: run, ExternalRunID: externalID, Status: status, CompletedAt: s.now(),
 		})
 		if err != nil {
 			return err

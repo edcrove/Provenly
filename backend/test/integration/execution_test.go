@@ -130,6 +130,24 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Equal(t, out.ParseErrors, replay.ParseErrors, "a replay reports the stored parse errors")
 	})
 
+	t.Run("BE-INT-019_ci_reported_run_status_is_stored_and_not_changed_by_replays", func(t *testing.T) {
+		s, ctx := fresh(t)
+		m := meta("950", 1)
+		m.Status = execution.RunFailed
+		out, err := s.Ingestion.IngestJUnit(ctx, m, strings.NewReader(junitFor()))
+		require.NoError(t, err)
+		assert.Equal(t, execution.RunFailed, out.Run.Status)
+		run, err := s.Execution.GetRun(ctx, out.Run.ID)
+		require.NoError(t, err)
+		assert.Equal(t, execution.RunFailed, run.Status)
+
+		replay, err := s.Ingestion.IngestJUnit(ctx, meta("950", 1), strings.NewReader(junitFor()))
+		require.NoError(t, err)
+		assert.Equal(t, execution.RunFailed, replay.Run.Status, "a replay never changes the recorded status")
+		require.Len(t, replay.Warnings, 1)
+		assert.Contains(t, replay.Warnings[0], `status "completed" differs from "failed"`)
+	})
+
 	t.Run("BE-INT-008_duplicate_ingestion_is_idempotent_even_when_concurrent", func(t *testing.T) {
 		s, ctx := fresh(t)
 		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Automated: true})

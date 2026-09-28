@@ -74,6 +74,22 @@ describe('FE-INT-009 test run detail and summary', () => {
     expect(screen.queryByText('Untested:')).not.toBeInTheDocument()
   })
 
+  it('FE-INT-016 flags runs whose CI execution failed or was cancelled', async () => {
+    db.runs = [testRun({ status: 'failed' })]
+    const first = renderRoute('/test-runs/7')
+    expect(await screen.findByTestId('interrupted-run')).toHaveTextContent('The CI execution failed')
+    first.unmount()
+    db.runs = [testRun({ status: 'cancelled' })]
+    renderRoute('/test-runs/7')
+    expect(await screen.findByTestId('interrupted-run')).toHaveTextContent('was cancelled')
+  })
+
+  it('FE-INT-016 does not flag completed runs', async () => {
+    renderRoute('/test-runs/7')
+    await screen.findByTestId('expected-total')
+    expect(screen.queryByTestId('interrupted-run')).not.toBeInTheDocument()
+  })
+
   it('FE-INT-012 shows errors for unknown runs', async () => {
     renderRoute('/test-runs/999')
     expect(await screen.findByRole('alert')).toHaveTextContent('test run 999 not found')

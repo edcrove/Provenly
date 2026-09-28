@@ -5,6 +5,8 @@ import {
   correlations,
   correlationVariant,
   invalidCorrelations,
+  isInterruptedRun,
+  runStatusVariant,
   pickEnum,
   positiveInt,
   resultStatuses,
@@ -30,6 +32,16 @@ describe('status helpers', () => {
     ])
     expect(correlationVariant('valid')).toBe('outline')
     expect(correlationVariant('unknown')).toBe('warning')
+  })
+
+  it('maps run statuses and detects interrupted runs', () => {
+    expect(runStatusVariant('completed')).toBe('secondary')
+    expect(runStatusVariant('failed')).toBe('destructive')
+    expect(runStatusVariant('cancelled')).toBe('warning')
+    expect(runStatusVariant('running')).toBe('outline')
+    expect(isInterruptedRun('failed')).toBe(true)
+    expect(isInterruptedRun('cancelled')).toBe(true)
+    expect(isInterruptedRun('completed')).toBe(false)
   })
 
   it('explains every correlation', () => {

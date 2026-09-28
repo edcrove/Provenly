@@ -12,3 +12,5 @@ targets:
     description: unknown pages and missing resources are reported
   - id: FE-E2E-006
     description: a manual TC receiving automated results is flagged; marking it automated includes it in the next run only
+  - id: FE-E2E-007
+    description: a run whose CI pipeline broke (status=failed) is flagged as possibly incomplete

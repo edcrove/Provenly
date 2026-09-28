@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime, shortCommit } from '@/lib/format'
-import { positiveInt } from '@/lib/status'
+import { positiveInt, runStatusVariant } from '@/lib/status'
 
 export function TestRunListPage() {
   const [params, setParams] = useSearchParams()
@@ -55,7 +55,7 @@ export function TestRunListPage() {
                       <TableCell>{run.branch || '—'}</TableCell>
                       <TableCell className="font-mono">{shortCommit(run.commit)}</TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{run.status}</Badge>
+                        <Badge variant={runStatusVariant(run.status)}>{run.status}</Badge>
                       </TableCell>
                       <TableCell>
                         {run.resultCount} results · {run.expectedCount} expected

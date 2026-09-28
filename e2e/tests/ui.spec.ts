@@ -177,4 +177,20 @@ test.describe('Frontend UI journeys', () => {
     await expect(alert).toHaveCount(0)
     await expect(page.getByText('automated', { exact: true })).toBeVisible()
   })
+
+  test('[FE-E2E-007] a run whose CI pipeline broke is flagged as possibly incomplete', async ({ page, provenly }) => {
+    await provenly.isolateUniverse()
+    const a = await provenly.createTestCase({ title: 'Broken pipeline A', automated: true })
+    await provenly.createTestCase({ title: 'Broken pipeline B', automated: true })
+    const res = await provenly.ingest(uniqueRunId(), 1, junit(byProperty('a', a.id)), { status: 'failed' })
+    expect(res.status()).toBe(201)
+    const run = await res.json()
+    expect(run.testRun.status).toBe('failed')
+
+    await page.goto('/test-runs')
+    await expect(page.getByRole('row', { name: new RegExp(run.testRun.externalRunId) })).toContainText('failed')
+    await page.goto(`/test-runs/${run.testRun.id}`)
+    await expect(page.getByTestId('interrupted-run')).toContainText('The CI execution failed')
+    await expect(page.getByTestId('summary-untested').getByRole('cell').nth(1)).toHaveText('1')
+  })
 })

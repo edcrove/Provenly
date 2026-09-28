@@ -44,7 +44,7 @@ func post(api API, maxBytes int64, query, contentType, body string) *httptest.Re
 	return rec
 }
 
-const q = "provider=github&runId=7&runAttempt=2&pipeline=ci&branch=main&commit=abc"
+const q = "provider=github&runId=7&runAttempt=2&pipeline=ci&branch=main&commit=abc&status=failed"
 
 func TestIngestHandlerCreatedAndReplay(t *testing.T) {
 	api := &stubAPI{out: Outcome{
@@ -55,7 +55,7 @@ func TestIngestHandlerCreatedAndReplay(t *testing.T) {
 	}}
 	rec := post(api, 1024, q, "application/xml; charset=utf-8", "<testsuites/>")
 	assert.Equal(t, http.StatusCreated, rec.Code)
-	assert.Equal(t, RunMeta{Provider: "github", ProviderRunID: "7", RunAttempt: 2, Pipeline: "ci", Branch: "main", Commit: "abc"}, api.gotMeta)
+	assert.Equal(t, RunMeta{Provider: "github", ProviderRunID: "7", RunAttempt: 2, Pipeline: "ci", Branch: "main", Commit: "abc", Status: execution.RunFailed}, api.gotMeta)
 	assert.Equal(t, "<testsuites/>", api.gotBody)
 	body := rec.Body.String()
 	assert.Contains(t, body, `"created":true`)

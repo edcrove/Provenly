@@ -3,6 +3,7 @@ import type { components } from '@/api/schema'
 export type ResultStatus = components['schemas']['ResultStatus']
 export type SummaryStatus = components['schemas']['SummaryStatus']
 export type Correlation = components['schemas']['Correlation']
+export type RunStatus = components['schemas']['TestRunStatus']
 export type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'outline'
 
 export const resultStatuses: ResultStatus[] = ['passed', 'failed', 'error', 'skipped']
@@ -52,4 +53,21 @@ export function pickEnum<T extends string>(value: string | null, allowed: readon
 export function positiveInt(value: string | null | undefined, fallback: number): number {
   const n = Number(value)
   return Number.isInteger(n) && n >= 1 ? n : fallback
+}
+
+const runStatusVariants: Record<RunStatus, BadgeVariant> = {
+  completed: 'secondary',
+  running: 'outline',
+  created: 'outline',
+  failed: 'destructive',
+  cancelled: 'warning',
+}
+
+export function runStatusVariant(status: RunStatus): BadgeVariant {
+  return runStatusVariants[status]
+}
+
+/** True when CI reported that the execution broke or was stopped (the report may be incomplete). */
+export function isInterruptedRun(status: RunStatus): boolean {
+  return status === 'failed' || status === 'cancelled'
 }

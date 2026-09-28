@@ -48,3 +48,6 @@ targets:
   - id: FE-INT-015
     description: report parse errors (kept/discarded) on the run detail and unknown vs sub-millisecond durations
     surfaces: [src/features/test-runs/RunParseErrors.tsx]
+  - id: FE-INT-016
+    description: runs whose CI execution failed or was cancelled are flagged as possibly incomplete
+    surfaces: [src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/TestRunListPage.tsx]

@@ -6,12 +6,14 @@ package ingestion
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"unicode/utf8"
 
 	"github.com/edcrove/provenly/backend/internal/catalog"
@@ -41,6 +43,8 @@ type RunMeta struct {
 	Pipeline      string
 	Branch        string
 	Commit        string
+	// Status is how the CI execution ended (completed when empty).
+	Status execution.RunStatus
 }
 
 // Diagnostic explains why a result has no valid TC-ID.
@@ -63,6 +67,10 @@ type Outcome struct {
 	// Warnings are non-blocking notices about the request (e.g. a replay with a different report).
 	Warnings []string
 }
+
+// StatusDiffersWarning is returned when a replay reports another final status
+// than the one recorded for the attempt; it is never applied.
+const StatusDiffersWarning = "status %q differs from %q, recorded for this attempt; it was not applied"
 
 // ReportDiffersWarning is returned when a replay of an attempt carries a report
 // different from the one that created the run; it is never applied.
@@ -91,6 +99,7 @@ func ValidateMeta(m RunMeta) error {
 	v.Check(utf8.RuneCountInString(m.Pipeline) <= 200, "pipeline", "must be at most 200 characters")
 	v.Check(utf8.RuneCountInString(m.Branch) <= 255, "branch", "must be at most 255 characters")
 	v.Check(utf8.RuneCountInString(m.Commit) <= 64, "commit", "must be at most 64 characters")
+	v.Check(m.Status == "" || slices.Contains(execution.FinalStatuses, m.Status), "status", "must be one of completed, failed, cancelled")
 	return v.Err()
 }
 
@@ -124,7 +133,7 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	run, created, err := s.recorder.RecordRun(ctx, execution.NewRun{
 		Provider: meta.Provider, ProviderRunID: meta.ProviderRunID, RunAttempt: meta.RunAttempt,
 		Pipeline: meta.Pipeline, Branch: meta.Branch, Commit: meta.Commit, StartedAt: report.StartedAt,
-		ReportSHA256: reportSHA,
+		ReportSHA256: reportSHA, Status: meta.Status,
 	}, expected, results, parseErrors)
 	if err != nil {
 		return Outcome{}, err
@@ -150,6 +159,9 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	out.Warnings = []string{}
 	if !created && run.ReportSHA256 != reportSHA {
 		out.Warnings = append(out.Warnings, ReportDiffersWarning)
+	}
+	if requested := cmp.Or(meta.Status, execution.RunCompleted); !created && run.Status != requested {
+		out.Warnings = append(out.Warnings, fmt.Sprintf(StatusDiffersWarning, requested, run.Status))
 	}
 	return out, nil
 }

@@ -462,6 +462,17 @@ paths:
           schema:
             type: string
             maxLength: 64
+        - name: status
+          in: query
+          required: false
+          description: |
+            How the CI execution ended. `failed` or `cancelled` mark a run whose
+            pipeline broke or was stopped, so its report may be incomplete and its
+            untested test cases may simply not have run.
+          schema:
+            type: string
+            enum: [completed, failed, cancelled]
+            default: completed
       requestBody:
         required: true
         content:

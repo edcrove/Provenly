@@ -59,6 +59,15 @@ func TestRecordRunIsIdempotentPerAttempt(t *testing.T) {
 	assert.Equal(t, int32(1), old.ResultCount, "previous attempt history is preserved")
 }
 
+func TestRecordRunStoresTheReportedStatus(t *testing.T) {
+	svc, _, ctx := setup()
+	r := run(1)
+	r.Status = RunFailed
+	got, _, err := svc.RecordRun(ctx, r, nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, RunFailed, got.Status)
+}
+
 func TestRecordRunErrors(t *testing.T) {
 	for _, m := range []string{"InTx", "InsertTestRun", "InsertExpectedCases", "InsertTestResults", "InsertParseErrors", "GetTestRun"} {
 		svc, repo, ctx := setup()

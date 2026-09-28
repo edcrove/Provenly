@@ -126,13 +126,16 @@ func TestRunsAndIngestion(t *testing.T) {
 	ingest(e, "2", 1, `<testsuite name="no timestamp"/>`).Expect().Status(http.StatusCreated)
 
 	ingest(e, "1", 0, report(id)).Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "validation_error")
+	ingest(e, "3", 1, report(id)).WithQuery("status", "cancelled").Expect().Status(http.StatusCreated).
+		JSON().Object().Value("testRun").Object().HasValue("status", "cancelled")
+	ingest(e, "4", 1, report(id)).WithQuery("status", "running").Expect().Status(http.StatusBadRequest)
 	ingest(e, "1", 1, "<not-xml").Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "invalid_junit")
 	e.POST("/api/v1/ingestion/junit").WithQuery("provider", "github").WithQuery("runId", "1").WithQuery("runAttempt", 1).
 		WithJSON(map[string]any{}).Expect().Status(http.StatusUnsupportedMediaType)
 	small := api(t, app.NewServices(db.Pool, time.Now), 64)
 	ingest(small, "9", 1, report(id)).Expect().Status(http.StatusRequestEntityTooLarge).JSON(problemOpts).Object().HasValue("code", "payload_too_large")
 
-	e.GET("/api/v1/test-runs").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 2)
+	e.GET("/api/v1/test-runs").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 3)
 	e.GET("/api/v1/test-runs").WithQuery("pageSize", 0).Expect().Status(http.StatusBadRequest)
 
 	e.GET("/api/v1/test-runs/"+runID).Expect().Status(http.StatusOK).JSON().Object().HasValue("externalRunId", "github:1:1")
@@ -156,7 +159,7 @@ func TestRunsAndIngestion(t *testing.T) {
 	e.GET("/api/v1/test-runs/987654/summary").Expect().Status(http.StatusNotFound)
 
 	e.GET("/api/v1/test-cases/"+strconv.FormatInt(id, 10)+"/results").Expect().Status(http.StatusOK).
-		JSON().Object().HasValue("totalItems", 2)
+		JSON().Object().HasValue("totalItems", 4)
 }
 
 // TestInternalErrors covers the 500 variant of every operation that declares

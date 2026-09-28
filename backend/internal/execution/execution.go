@@ -15,7 +15,8 @@ import (
 type RunStatus string
 
 // Run lifecycle statuses. The POC creates runs synchronously on ingestion of
-// the final report, so they are stored as completed.
+// the final report: completed by default, or failed/cancelled when CI reports
+// that the execution broke or was stopped (the report may be incomplete).
 const (
 	RunCreated   RunStatus = "created"
 	RunRunning   RunStatus = "running"
@@ -112,7 +113,12 @@ type NewRun struct {
 	StartedAt     *time.Time
 	// ReportSHA256 is the digest of the ingested report.
 	ReportSHA256 string
+	// Status is how the execution ended; empty means completed.
+	Status RunStatus
 }
+
+// FinalStatuses are the statuses CI may report with a final report.
+var FinalStatuses = []RunStatus{RunCompleted, RunFailed, RunCancelled}
 
 // NewResult is a result to persist within a new run.
 type NewResult struct {

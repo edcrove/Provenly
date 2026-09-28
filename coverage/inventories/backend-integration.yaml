@@ -40,3 +40,5 @@ targets:
     description: valid results outside the run snapshot are persisted, excluded from the summary and their TC-IDs listed
   - id: BE-INT-018
     description: parse errors and unknown durations are stored with the run, listed and replayed
+  - id: BE-INT-019
+    description: the run status reported by CI (completed/failed/cancelled) is stored and never changed by replays

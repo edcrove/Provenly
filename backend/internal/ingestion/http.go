@@ -62,6 +62,7 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 	meta := RunMeta{
 		Provider: q.Get("provider"), ProviderRunID: q.Get("runId"),
 		Pipeline: q.Get("pipeline"), Branch: q.Get("branch"), Commit: q.Get("commit"),
+		Status: execution.RunStatus(q.Get("status")),
 	}
 	attempt, err := strconv.ParseInt(q.Get("runAttempt"), 10, 32)
 	if err != nil {

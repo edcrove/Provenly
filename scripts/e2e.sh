@@ -3,7 +3,10 @@
 # leaves raw coverage evidence in e2e/coverage/{backend,frontend}.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-export PROVENLY_DATABASE_URL="${E2E_DATABASE_URL:-postgres://provenly:provenly@localhost:5432/provenly_e2e?sslmode=disable}"
+# shellcheck source=lib/ephemeral-db.sh
+source "$root/scripts/lib/ephemeral-db.sh"
+ephemeral_db "$root"
+export PROVENLY_DATABASE_URL="$E2E_DATABASE_URL"
 
 echo "==> building coverage-instrumented backend (go build -cover)"
 (cd "$root/backend" && go build -cover -covermode=atomic -coverpkg=./... -o bin/provenly-cover ./cmd/provenly)
@@ -17,7 +20,7 @@ mkdir -p "$root/e2e/coverage/backend" "$root/e2e/coverage/frontend"
 echo "==> resetting the E2E database"
 for cmd in up reset; do
   if ! GOCOVERDIR="$root/e2e/coverage/backend" "$root/backend/bin/provenly-cover" migrate "$cmd" >/dev/null 2>&1; then
-    echo "error: cannot reach the E2E database ($PROVENLY_DATABASE_URL). Run 'make up' first." >&2
+    echo "error: cannot reach the E2E database ($PROVENLY_DATABASE_URL)." >&2
     exit 1
   fi
 done

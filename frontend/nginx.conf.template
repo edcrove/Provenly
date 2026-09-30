@@ -1,0 +1,34 @@
+# Rendered by the nginx image (envsubst) at start: only ${API_UPSTREAM} is replaced.
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+
+    # Docker DNS; re-resolved so a restarted api container is picked up.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $api_upstream ${API_UPSTREAM};
+
+    # JUnit reports up to PROVENLY_MAX_INGEST_BYTES (10 MiB by default).
+    client_max_body_size 11m;
+
+    location /api/ {
+        proxy_pass $api_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location = /healthz {
+        proxy_pass $api_upstream;
+    }
+
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # Single-page app: every other route is rendered by the client router.
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri /index.html;
+    }
+}

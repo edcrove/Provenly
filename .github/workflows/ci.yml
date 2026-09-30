@@ -231,6 +231,39 @@ jobs:
           name: playwright-report
           path: e2e/playwright-report/
 
+  docker:
+    name: Docker · images and environment smoke test
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE: docker compose --env-file envs/qa.env
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images and start the demo environment (docker compose up)
+        run: docker compose up -d --build --wait
+      - name: Demo starts from the demo snapshot
+        run: curl -fsS localhost:8080/api/v1/test-runs | grep -q '"totalItems":5'
+      - name: Smoke test through nginx
+        run: ./scripts/smoke.sh http://localhost:3000
+      - name: Data persists across down/up
+        run: |
+          docker compose down
+          docker compose up -d --wait
+          curl -fsS localhost:8080/api/v1/test-cases?pageSize=100 | grep -q 'Smoke test case'
+      - name: A second environment runs side by side (qa)
+        run: |
+          $COMPOSE up -d --wait
+          ./scripts/smoke.sh http://localhost:3100
+      - name: demo-reset brings demo back to its snapshot
+        run: |
+          make demo-reset
+          ! curl -fsS localhost:8080/api/v1/test-cases?pageSize=100 | grep -q 'Smoke test case'
+      - name: Logs
+        if: failure()
+        run: docker compose logs; $COMPOSE logs
+      - name: Clean up
+        if: always()
+        run: docker compose down -v; $COMPOSE down -v
+
   coverage-report:
     name: Coverage · 8 gates + consolidated
     needs: [backend-unit, backend-integration, backend-contract, frontend-tests, e2e]

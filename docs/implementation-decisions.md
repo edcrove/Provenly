@@ -98,3 +98,11 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
     1.27.1). `.tool-versions` pins the local toolchain (asdf/mise) to the same versions as CI. Not upgraded yet
     (major versions with breaking changes, need their own change): TypeScript 7 (`openapi-typescript` peer is TS 5),
     MSW 3, Playwright 1.63 (must match the pre-installed browser in CI/dev images), Node 24 LTS.
+14. **Dockerized environments.** `docker compose up` starts the whole stack (postgres, seed, migrate, api, web).
+    **Decided by Ed (2026-09-30), implemented** (see [`environments.md`](environments.md)): alpine runtime images
+    (API healthcheck with `wget`, UI on nginx); three persistent environments, one compose project and volume each,
+    runnable side by side: `demo` (demo data only), `qa` (manual testing) and `prod` (a project's real data, resets
+    guarded by `CONFIRM=prod` plus an automatic dump). Environments start from a seed snapshot (`seeds/<name>.sql`,
+    restored only into an empty database, then migrated); any environment can be snapshotted as a new seed
+    (`make seed-snapshot`). Hot reload through `docker-compose.dev.yml` (air + Vite). Automation always uses
+    ephemeral databases: testcontainers for Integration/Contract, an in-memory Postgres for E2E and screenshots.

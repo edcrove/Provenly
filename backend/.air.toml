@@ -1,0 +1,16 @@
+# Hot reload for the dev compose override (docker-compose.dev.yml): rebuild and
+# restart the API whenever a Go source, query or migration changes.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/provenly ./cmd/provenly"
+  entrypoint = ["./tmp/provenly", "serve"]
+  include_ext = ["go", "sql"]
+  exclude_dir = ["tmp", "bin", "test"]
+  exclude_regex = ["_test\\.go$"]
+  delay = 300
+  poll = true
+
+[log]
+  time = true

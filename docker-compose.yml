@@ -1,21 +1,102 @@
-# Local infrastructure for the POC: PostgreSQL only (no auth, no queues).
+# Provenly: the whole stack with one command.
+#
+#   docker compose up -d                         # demo environment (defaults below)
+#   docker compose --env-file envs/qa.env up -d  # or: make up ENV=qa
+#
+# Each environment (demo, qa, prod) is its own compose project (provenly-<env>)
+# with its own volume and ports, so they can run side by side and their data
+# persists across `down`/`up`. Only `down -v` (or `make db-reset`) deletes it.
+#
+# Start order: postgres (healthy) -> seed (restores a snapshot into an EMPTY
+# database, once) -> migrate (goose up) -> api (healthy) -> web.
+name: provenly-${PROVENLY_ENV:-demo}
+
+x-db: &db
+  POSTGRES_USER: ${POSTGRES_USER:-provenly}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-provenly}
+  POSTGRES_DB: ${POSTGRES_DB:-provenly}
+
+x-api-build: &api-build
+  context: ./backend
+  target: runtime
+  secrets: [extra_ca]
+
+x-app-env: &app-env
+  PROVENLY_ENV: ${PROVENLY_ENV:-demo}
+  PROVENLY_DATABASE_URL: postgres://${POSTGRES_USER:-provenly}:${POSTGRES_PASSWORD:-provenly}@postgres:5432/${POSTGRES_DB:-provenly}?sslmode=disable
+  PROVENLY_LOG_LEVEL: ${PROVENLY_LOG_LEVEL:-info}
+  PROVENLY_MAX_INGEST_BYTES: ${PROVENLY_MAX_INGEST_BYTES:-10485760}
+
 services:
   postgres:
     image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-provenly}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-provenly}
-      POSTGRES_DB: ${POSTGRES_DB:-provenly}
+    environment: *db
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${BIND_ADDR:-127.0.0.1}:${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./scripts/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-provenly}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 2s
       timeout: 3s
       retries: 30
+    restart: unless-stopped
+
+  seed:
+    image: postgres:16-alpine
+    entrypoint: ["/bin/sh", "/scripts/seed.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-provenly}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-provenly}
+      PGDATABASE: ${POSTGRES_DB:-provenly}
+      SEED: ${SEED:-}
+    volumes:
+      - ./seeds:/seeds:ro
+      - ./scripts/db:/scripts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  migrate:
+    image: provenly-api:${IMAGE_TAG:-local}
+    build: *api-build
+    command: ["migrate", "up"]
+    environment: *app-env
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    restart: "no"
+
+  api:
+    image: provenly-api:${IMAGE_TAG:-local}
+    build: *api-build
+    environment: *app-env
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${API_PORT:-8080}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    image: provenly-web:${IMAGE_TAG:-local}
+    build:
+      context: ./frontend
+      target: runtime
+      secrets: [extra_ca]
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-3000}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:
+
+# Optional CA for builds behind a TLS-intercepting proxy (EXTRA_CA_CERT=<pem path>).
+secrets:
+  extra_ca:
+    file: ${EXTRA_CA_CERT:-/dev/null}

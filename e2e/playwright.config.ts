@@ -6,7 +6,7 @@ const root = path.resolve(import.meta.dirname, '..')
 const apiPort = process.env.E2E_API_PORT ?? '8081'
 const webPort = process.env.E2E_WEB_PORT ?? '4173'
 const databaseUrl =
-  process.env.PROVENLY_DATABASE_URL ?? 'postgres://provenly:provenly@localhost:5432/provenly_e2e?sslmode=disable'
+  process.env.PROVENLY_DATABASE_URL ?? 'postgres://provenly:provenly@localhost:5439/provenly_e2e?sslmode=disable'
 
 export const apiURL = `http://localhost:${apiPort}`
 

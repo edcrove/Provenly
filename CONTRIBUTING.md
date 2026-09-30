@@ -16,6 +16,13 @@
 - **Never hand-write API types.** Run `npm run gen:api` after changing `api/openapi.yaml`; CI fails on drift.
 - UI primitives come from shadcn/ui (`src/components/ui`, vendored source, `components.json`).
 
+## Local environments
+
+Use `make dev ENV=qa` for hot reload on the qa data, or `make infra ENV=qa` plus `make dev-backend` /
+`make dev-frontend` without containers. A new migration is applied by the `migrate` service on the next start; a
+schema change that makes an older seed fail to migrate must refresh the seed (`make seed-rebuild-demo`). Never
+commit seeds with real data. Details: [`docs/environments.md`](docs/environments.md).
+
 ## API changes
 
 `api/openapi.yaml` is the contract and lives next to the code. A change to a public operation updates, in the same

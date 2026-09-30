@@ -23,3 +23,10 @@ node_modules/
 # OS / editors
 .DS_Store
 .idea/
+
+# Hot reload build output
+/backend/tmp/
+
+# Environments: real credentials and local backups never go to git
+/envs/prod.env
+/backups/

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Captures screenshots of every relevant UI flow into docs/screenshots.
-# Resets the E2E database (make up first).
+# Runs on an ephemeral database (see scripts/lib/ephemeral-db.sh).
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-export PROVENLY_DATABASE_URL="${E2E_DATABASE_URL:-postgres://provenly:provenly@localhost:5432/provenly_e2e?sslmode=disable}"
+# shellcheck source=lib/ephemeral-db.sh
+source "$root/scripts/lib/ephemeral-db.sh"
+ephemeral_db "$root"
+export PROVENLY_DATABASE_URL="$E2E_DATABASE_URL"
 
 (cd "$root/backend" && go build -o bin/provenly ./cmd/provenly)
 (cd "$root/frontend" && npx vite build --logLevel error)

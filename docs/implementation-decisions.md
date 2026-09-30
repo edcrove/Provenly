@@ -1,7 +1,19 @@
-# Implementation decisions pending review
+# Implementation decisions
 
-Decisions taken while implementing the POC that the Decision Register / Domain Model did not settle. Each one is
-small and reversible; they are flagged here for Ed's review (Notion stays canonical for *why*).
+Decisions taken while implementing the POC that the Decision Register / Domain Model did not settle. All of them were
+reviewed and closed by Ed; each one is recorded in the Notion Decision Register (canonical for *why*):
+
+| Here | Notion | | Here | Notion |
+|---|---|---|---|---|
+| 1 | DEC-40 | | 8 | DEC-48 |
+| 2 | DEC-41, DEC-42 (snapshot amendment) | | 9 | DEC-49 |
+| 3 | DEC-43 | | 10 | DEC-50 |
+| 4 | DEC-44 | | 11 | DEC-51 |
+| 5 | DEC-45 | | 12 | DEC-52 |
+| 6 | DEC-46 | | 13 | DEC-53 |
+| 7 | DEC-47 | | 14 | DEC-54 |
+
+Project rename (OpenTestHub → Provenly): DEC-39.
 
 1. **Ingestion transport.** `POST /api/v1/ingestion/junit` receives the raw JUnit XML body (`application/xml`) and
    the run metadata as query parameters (`provider`, `runId`, `runAttempt`, `pipeline`, `branch`, `commit`). Chosen so
@@ -21,6 +33,9 @@ small and reversible; they are flagged here for Ed's review (Notion stays canoni
    (2) conflicts with the frozen invariant "the snapshot is never modified after creation", so it needs a Decision
    Register change first. Proposed shape: an explicit, audited *snapshot amendment* per run (who, when, which
    TC-ID, only TC-IDs that already have valid results in the run), never an automatic recomputation.
+   **Accepted by Ed (2026-09-30) — DEC-42, pending implementation (Trello card).** An amended run must carry a
+   visible "edited" mark (run list, run detail and API) with the amendment history, so an amended summary is never
+   mistaken for the original snapshot.
 3. **Deprecated TC-IDs in results.** Following "testCaseId when the TC-ID is valid", results that reference a
    deprecated test case keep only `requestedTestCaseId` + `correlation=deprecated`; they are therefore not listed in
    that test case's history.

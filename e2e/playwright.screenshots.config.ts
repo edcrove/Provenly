@@ -19,7 +19,12 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: [['list']],
-  use: { baseURL: `http://localhost:${webPort}`, viewport: { width: 1440, height: 900 }, colorScheme: 'light' },
+  use: {
+    baseURL: `http://localhost:${webPort}`,
+    viewport: { width: 1440, height: 900 },
+    colorScheme: 'light',
+    launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined },
+  },
   webServer: [
     {
       command: `${path.join(root, 'backend/bin/provenly')} serve`,

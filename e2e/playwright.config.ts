@@ -24,7 +24,12 @@ export default defineConfig({
   retries: 0,
   forbidOnly: !!process.env.CI,
   reporter: [['list'], ['json', { outputFile: 'coverage/results.json' }], ['html', { open: 'never' }]],
-  use: { baseURL: `http://localhost:${webPort}`, trace: 'retain-on-failure' },
+  use: {
+    baseURL: `http://localhost:${webPort}`,
+    trace: 'retain-on-failure',
+    // Optional: run on an already installed Chromium instead of Playwright's own build.
+    launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined },
+  },
   webServer: [
     {
       command: `${path.join(root, 'backend/bin/provenly-cover')} serve`,

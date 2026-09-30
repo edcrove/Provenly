@@ -80,7 +80,7 @@ unknown category, non-approved status, expired `reviewBy` and stale targets. Exc
 ```bash
 make test-backend-unit | test-backend-integration | test-backend-contract
 make test-frontend-unit | test-frontend-integration | test-frontend-contract
-make test-e2e            # needs `make up`
+make test-e2e            # starts its own ephemeral database
 make gates               # evaluate the 8 gates from collected evidence
 make coverage            # everything above
 ```
@@ -105,3 +105,6 @@ Verified in this repository (not assumed):
 - Frontend E2E coverage from `vite-plugin-istanbul` is measured on transformed code (JSX collapsed into single
   lines) with an embedded source map; a Playwright global teardown remaps it with `istanbul-lib-source-maps` before
   it is merged with the Vitest v8 coverage (`e2e/coverage/frontend-remapped`).
+
+E2E and screenshots use Playwright's own Chromium build (`npx playwright install chromium`). To reuse a Chromium
+already installed on the machine, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chrome`.

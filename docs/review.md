@@ -44,7 +44,7 @@ Layers: **U** = unit, **I** = integration (backend: testcontainers; frontend: Te
 | Frontend Scaffolding | React 19 + shadcn, routing and layout | I FE-INT-001, FE-INT-013 |
 | | Client generated with openapi-typescript, with no handwritten types | `make check-generated` in CI; U `createApiClient` |
 | | Vitest + Testing Library + MSW; istanbul build | frontend-unit/integration gates; frontend-e2e evidence (istanbul) |
-| Local Development Setup | Compose, `.env.example`, scripts, reproducible from README | Verified from a fresh clone; `make up/migrate/dev-*`; `.tool-versions` |
+| Local Development Setup | Compose, `.env.example`, scripts, reproducible from README | Verified from a fresh clone; `.tool-versions`. Superseded 2026-09-30 by the Docker environments (DEC-54): `docker compose up`, `make up/dev ENV=…`, CI docker smoke job |
 | POC Testing Pyramid Foundation | 4 layers × 2 sides with real tests | 8 gates at 100% + 2 consolidated gates |
 | CI Pipeline | Push/PR; build, lint, vet, typecheck, generated-code drift; all layers | `.github/workflows/ci.yml` (10 jobs) |
 | | Gates publish actual/target/gap; failures turn CI red; exceptions justified | `coverage/out/coverage-report.md`; U covgate `TestEvaluateKeepsExceptionsVisible`, `TestGateSelection` |

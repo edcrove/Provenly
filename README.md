@@ -123,7 +123,7 @@ execute are listed exceptions). The per-file consolidated report is
 `coverage/out/consolidated-coverage.md` (backend HTML: `coverage/out/backend-consolidated.html`).
 
 ```bash
-make up && make coverage    # runs every suite, then prints the 8 gate reports + consolidated code-coverage evidence
+make coverage               # runs every suite (ephemeral databases), then prints the 8 gate reports + consolidated evidence
 make gates                  # re-evaluate gates from already collected evidence (coverage/out/coverage-report.md)
 ```
 

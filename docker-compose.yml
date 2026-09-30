@@ -50,7 +50,7 @@ services:
       PGUSER: ${POSTGRES_USER:-provenly}
       PGPASSWORD: ${POSTGRES_PASSWORD:-provenly}
       PGDATABASE: ${POSTGRES_DB:-provenly}
-      SEED: ${SEED:-}
+      SEED: ${SEED-demo}
     volumes:
       - ./seeds:/seeds:ro
       - ./scripts/db:/scripts:ro

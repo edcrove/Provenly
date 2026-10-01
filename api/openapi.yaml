@@ -36,6 +36,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Health"
+  /readyz:
+    get:
+      tags: [system]
+      operationId: getReadiness
+      summary: Readiness check (the database is reachable)
+      responses:
+        "200":
+          description: Service can serve requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 
   /api/v1/test-cases:
     get:
@@ -595,6 +609,12 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    ServiceUnavailable:
+      description: A dependency (the database) is unreachable
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     InternalError:
       description: Unexpected server error
       content:
@@ -639,6 +659,7 @@ components:
             - method_not_allowed
             - payload_too_large
             - unsupported_media_type
+            - service_unavailable
             - internal_error
         detail:
           type: string

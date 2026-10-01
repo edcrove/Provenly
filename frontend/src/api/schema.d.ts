@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/readyz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Readiness check (the database is reachable) */
+        get: operations["getReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-cases": {
         parameters: {
             query?: never;
@@ -324,7 +341,7 @@ export interface components {
              * @description Stable machine-readable error code. Requests that match no operation get `not_found` (404), or `method_not_allowed` (405, with an `Allow` header) when the path exists for other methods.
              * @enum {string}
              */
-            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "method_not_allowed" | "payload_too_large" | "unsupported_media_type" | "internal_error";
+            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "method_not_allowed" | "payload_too_large" | "unsupported_media_type" | "service_unavailable" | "internal_error";
             detail?: string;
             errors?: components["schemas"]["FieldError"][];
         };
@@ -661,6 +678,15 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description A dependency (the database) is unreachable */
+        ServiceUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description Unexpected server error */
         InternalError: {
             headers: {
@@ -703,6 +729,27 @@ export interface operations {
                     "application/json": components["schemas"]["Health"];
                 };
             };
+        };
+    };
+    getReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Service can serve requests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
+                };
+            };
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listTestCases: {

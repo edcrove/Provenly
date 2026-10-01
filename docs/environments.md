@@ -14,8 +14,8 @@ postgres (healthy) ──► seed (once, only into an EMPTY database) ──► 
 | `postgres` | `postgres:16-alpine` | Database; data in the project's `pgdata` volume. |
 | `seed` | `postgres:16-alpine` | `scripts/db/seed.sh`: restores `seeds/$SEED.sql` when the database has never been migrated. |
 | `migrate` | `provenly-api` | `provenly migrate up`, then exits; applies migrations newer than the seed. |
-| `api` | `provenly-api` (`backend/Dockerfile`, alpine) | REST API; healthcheck on `/healthz`. |
-| `web` | `provenly-web` (`frontend/Dockerfile`, nginx) | Production UI build; proxies `/api` and `/healthz` to `api`, SPA fallback. |
+| `api` | `provenly-api` (`backend/Dockerfile`, alpine) | REST API; container healthcheck on `/readyz` (database reachable). `/healthz` is liveness only. |
+| `web` | `provenly-web` (`frontend/Dockerfile`, nginx) | Production UI build; proxies `/api`, `/healthz` and `/readyz` to `api`, SPA fallback. |
 
 Ports are bound to `127.0.0.1` (`BIND_ADDR`) because the POC has no authentication.
 

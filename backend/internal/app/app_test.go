@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -46,8 +48,27 @@ func TestHandlerWiring(t *testing.T) {
 
 func TestRoutePatterns(t *testing.T) {
 	patterns := RoutePatterns()
-	assert.Len(t, patterns, 19)
+	assert.Len(t, patterns, 20)
+	assert.Contains(t, patterns, "GET /readyz")
 	assert.Contains(t, patterns, "GET /healthz")
 	assert.Contains(t, patterns, "POST /api/v1/ingestion/junit")
 	assert.Contains(t, patterns, "GET /api/v1/test-cases/{testCaseId}/results")
+}
+
+func TestReadiness(t *testing.T) {
+	ready := func(err error) http.Handler {
+		return NewHandler(Services{Ready: func(context.Context) error { return err }}, 1024)
+	}
+
+	rec := httptest.NewRecorder()
+	ready(nil).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"status":"ok"}`, rec.Body.String())
+
+	rec = httptest.NewRecorder()
+	ready(errors.New("connection refused")).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
+	assert.Contains(t, rec.Body.String(), `"code":"service_unavailable"`)
+	assert.NotContains(t, rec.Body.String(), "connection refused")
 }

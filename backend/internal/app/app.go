@@ -2,6 +2,8 @@
 package app
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -21,14 +23,20 @@ type Services struct {
 	Catalog   *catalog.Service
 	Execution *execution.Service
 	Ingestion *ingestion.Service
+	// Ready reports whether the dependencies needed to serve requests (the
+	// database) are reachable.
+	Ready func(context.Context) error
 }
 
 // NewServices wires the modules on a PostgreSQL pool.
 func NewServices(pool *pgxpool.Pool, now func() time.Time) Services {
 	cat := catalog.NewService(catalogpg.NewStore(pool))
 	exe := execution.NewService(executionpg.NewStore(pool), now)
-	return Services{Catalog: cat, Execution: exe, Ingestion: ingestion.NewService(cat, exe)}
+	return Services{Catalog: cat, Execution: exe, Ingestion: ingestion.NewService(cat, exe), Ready: pool.Ping}
 }
+
+// readyTimeout bounds the readiness probe so a hung database fails it quickly.
+const readyTimeout = 2 * time.Second
 
 // NewHandler builds the REST API handler.
 func NewHandler(s Services, maxIngestBytes int64) http.Handler {
@@ -47,6 +55,16 @@ func RoutePatterns() []string {
 
 func register(r httpx.Router, s Services, maxIngestBytes int64) {
 	r.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	r.HandleFunc("GET /readyz", func(w http.ResponseWriter, req *http.Request) {
+		ctx, cancel := context.WithTimeout(req.Context(), readyTimeout)
+		defer cancel()
+		if err := s.Ready(ctx); err != nil {
+			slog.WarnContext(ctx, "not ready", "error", err)
+			httpx.WriteProblem(w, http.StatusServiceUnavailable, httpx.CodeServiceUnavailable, "database is unreachable")
+			return
+		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	catalog.NewHandler(s.Catalog).Register(r)

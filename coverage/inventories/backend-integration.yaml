@@ -44,3 +44,5 @@ targets:
     description: the run status reported by CI (completed/failed/cancelled) is stored and never changed by replays
   - id: BE-INT-021
     description: editing test case content and steps (edit, reorder, delete) keeps the TC-ID and leaves the result history unchanged
+  - id: BE-INT-022
+    description: readiness reflects database reachability (200 with a live pool, 503 Problem once the pool is closed)

@@ -7,6 +7,7 @@ curl_() { curl -fsS --noproxy '*' "$@"; }
 fail() { echo "smoke: $*" >&2; exit 1; }
 
 curl_ "$web/healthz" | grep -q '"ok"' || fail "health check through the proxy"
+curl_ "$web/readyz" | grep -q '"ok"' || fail "readiness (database) through the proxy"
 curl_ -o /dev/null "$web/test-runs/1" || fail "SPA route not served"
 tc=$(curl_ -H 'Content-Type: application/json' -X POST "$web/api/v1/test-cases" \
   -d '{"title":"Smoke test case","automated":true}' | sed -n 's/^{"id":\([0-9]*\).*/\1/p')

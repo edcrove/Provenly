@@ -9,6 +9,7 @@ const coverage = process.env.VITE_COVERAGE === 'true'
 const proxy = {
   '/api': { target: apiTarget, changeOrigin: true },
   '/healthz': { target: apiTarget, changeOrigin: true },
+  '/readyz': { target: apiTarget, changeOrigin: true },
 }
 
 // VITE_COVERAGE=true builds an istanbul-instrumented bundle so E2E runs

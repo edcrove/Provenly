@@ -31,7 +31,7 @@ COPY --from=build /out/provenly /usr/local/bin/provenly
 USER provenly
 ENV PROVENLY_HTTP_ADDR=:8080
 EXPOSE 8080
-HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=20 \
-    CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
+HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=6 \
+    CMD wget -qO- http://127.0.0.1:8080/readyz >/dev/null || exit 1
 ENTRYPOINT ["provenly"]
 CMD ["serve"]

@@ -4,6 +4,7 @@ package contract
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -51,6 +52,12 @@ func TestRoutesMatchContract(t *testing.T) {
 func TestSystem(t *testing.T) {
 	e := api(t, fresh(t), 1<<20)
 	e.GET("/healthz").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "ok")
+	e.GET("/readyz").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "ok")
+
+	down := app.NewServices(db.Pool, time.Now)
+	down.Ready = func(context.Context) error { return errors.New("database is down") }
+	api(t, down, 1<<20).GET("/readyz").Expect().Status(http.StatusServiceUnavailable).
+		JSON(problemOpts).Object().HasValue("code", "service_unavailable")
 }
 
 func TestTestCases(t *testing.T) {

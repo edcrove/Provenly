@@ -7,12 +7,14 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/edcrove/provenly/backend/internal/app"
 	"github.com/edcrove/provenly/backend/internal/cli"
 	"github.com/edcrove/provenly/backend/internal/platform/postgres"
 )
@@ -29,6 +31,21 @@ func TestPlatform(t *testing.T) {
 		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_name LIKE 'test_%'`).Scan(&n))
 		assert.Equal(t, 6, n)
 		assert.ErrorContains(t, postgres.Migrate(ctx, db.Pool, "sideways"), "migrate sideways")
+	})
+
+	t.Run("BE-INT-022_readiness_reflects_database_reachability", func(t *testing.T) {
+		ctx := context.Background()
+		probe := func(s app.Services) int {
+			rec := httptest.NewRecorder()
+			app.NewHandler(s, 1024).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+			return rec.Code
+		}
+		assert.Equal(t, http.StatusOK, probe(app.NewServices(db.Pool, time.Now)))
+
+		pool, err := postgres.Open(ctx, db.URL)
+		require.NoError(t, err)
+		pool.Close()
+		assert.Equal(t, http.StatusServiceUnavailable, probe(app.NewServices(pool, time.Now)))
 	})
 
 	t.Run("BE-INT-015_cli_migrates_and_serves_against_postgres", func(t *testing.T) {

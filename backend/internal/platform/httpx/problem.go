@@ -20,6 +20,7 @@ const (
 	CodeMethodNotAllowed     = "method_not_allowed"
 	CodePayloadTooLarge      = "payload_too_large"
 	CodeUnsupportedMediaType = "unsupported_media_type"
+	CodeServiceUnavailable   = "service_unavailable"
 	CodeInternal             = "internal_error"
 )
 

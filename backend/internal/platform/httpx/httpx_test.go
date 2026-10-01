@@ -150,8 +150,33 @@ func TestMiddleware(t *testing.T) {
 	ok.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	assert.Equal(t, http.StatusTeapot, rec.Code)
 
-	rec = httptest.NewRecorder()
-	NotFoundHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/missing", nil))
+}
+
+func TestRoutes(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /items", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("POST /items", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusCreated) })
+	h := Routes(mux)
+	serve := func(method, path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
+		return rec
+	}
+
+	assert.Equal(t, http.StatusNoContent, serve(http.MethodGet, "/items").Code)
+	assert.Equal(t, http.StatusCreated, serve(http.MethodPost, "/items").Code)
+
+	rec := serve(http.MethodDelete, "/items")
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	assert.Equal(t, "GET, HEAD, POST", rec.Header().Get("Allow"))
+	p := decodeProblem(t, rec)
+	assert.Equal(t, CodeMethodNotAllowed, p.Code)
+	assert.Equal(t, "method DELETE is not allowed for /items", p.Detail)
+
+	rec = serve(http.MethodDelete, "/missing")
 	assert.Equal(t, http.StatusNotFound, rec.Code)
-	assert.Contains(t, decodeProblem(t, rec).Detail, "DELETE /missing")
+	assert.Empty(t, rec.Header().Get("Allow"))
+	p = decodeProblem(t, rec)
+	assert.Equal(t, CodeNotFound, p.Code)
+	assert.Equal(t, "no route for DELETE /missing", p.Detail)
 }

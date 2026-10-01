@@ -39,6 +39,5 @@ func NewHandler(s Services, maxIngestBytes int64) http.Handler {
 	catalog.NewHandler(s.Catalog).Register(mux)
 	execution.NewHandler(s.Execution, s.Catalog).Register(mux)
 	ingestion.NewHandler(s.Ingestion, maxIngestBytes).Register(mux)
-	mux.Handle("/", httpx.NotFoundHandler())
-	return httpx.Recover(httpx.AccessLog(mux))
+	return httpx.Recover(httpx.AccessLog(httpx.Routes(mux)))
 }

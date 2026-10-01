@@ -27,6 +27,12 @@ func TestHandlerWiring(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
 
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/healthz", nil))
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	assert.Equal(t, "GET, HEAD", rec.Header().Get("Allow"))
+	assert.Equal(t, "application/problem+json", rec.Header().Get("Content-Type"))
+
 	// Every module is mounted: validation errors are answered before storage is touched.
 	for _, target := range []string{"/api/v1/test-cases/x", "/api/v1/test-runs/x", "/api/v1/test-cases/x/results"} {
 		rec = httptest.NewRecorder()

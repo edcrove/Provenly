@@ -17,6 +17,7 @@ const (
 	CodeValidation           = "validation_error"
 	CodeInvalidJUnit         = "invalid_junit"
 	CodeNotFound             = "not_found"
+	CodeMethodNotAllowed     = "method_not_allowed"
 	CodePayloadTooLarge      = "payload_too_large"
 	CodeUnsupportedMediaType = "unsupported_media_type"
 	CodeInternal             = "internal_error"

@@ -321,10 +321,10 @@ export interface components {
             /** Format: int32 */
             status: number;
             /**
-             * @description Stable machine-readable error code
+             * @description Stable machine-readable error code. Requests that match no operation get `not_found` (404), or `method_not_allowed` (405, with an `Allow` header) when the path exists for other methods.
              * @enum {string}
              */
-            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "payload_too_large" | "unsupported_media_type" | "internal_error";
+            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "method_not_allowed" | "payload_too_large" | "unsupported_media_type" | "internal_error";
             detail?: string;
             errors?: components["schemas"]["FieldError"][];
         };

@@ -1,4 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type MutateOptions,
+  type UseMutationOptions,
+} from '@tanstack/react-query'
+import { useRef } from 'react'
 
 import { unwrap } from '@/lib/problem'
 import type { Correlation, ResultStatus } from '@/lib/status'
@@ -16,6 +23,30 @@ export const keys = {
   testRun: (id: number) => ['test-runs', id] as const,
 }
 
+/**
+ * useMutation whose mutate ignores calls while the previous one is in flight: a double click fires two events
+ * before React re-renders the button as disabled, and must not send the request twice (e.g. two test cases).
+ */
+function useExclusiveMutation<TData, TVariables = void>(
+  options: UseMutationOptions<TData, Error, TVariables>,
+) {
+  const mutation = useMutation(options)
+  const busy = useRef(false)
+  const mutate = (...[variables, callbacks]: Parameters<typeof mutation.mutate>) => {
+    if (busy.current) return
+    busy.current = true
+    const options: MutateOptions<TData, Error, TVariables> = {
+      ...callbacks,
+      onSettled: (...args) => {
+        busy.current = false
+        callbacks?.onSettled?.(...args)
+      },
+    }
+    mutation.mutate(variables as TVariables, options)
+  }
+  return { ...mutation, mutate }
+}
+
 export function useTestCases(page: number, status?: 'active' | 'deprecated') {
   return useQuery({
     queryKey: [...keys.testCases, 'list', page, status],
@@ -26,6 +57,7 @@ export function useTestCases(page: number, status?: 'active' | 'deprecated') {
 export function useTestCase(id: number) {
   return useQuery({
     queryKey: keys.testCase(id),
+    enabled: id > 0,
     queryFn: async () =>
       unwrap(await api.GET('/api/v1/test-cases/{testCaseId}', { params: { path: { testCaseId: id } } })),
   })
@@ -33,7 +65,7 @@ export function useTestCase(id: number) {
 
 export function useCreateTestCase() {
   const qc = useQueryClient()
-  return useMutation({
+  return useExclusiveMutation({
     mutationFn: async (body: CreateTestCaseRequest) => unwrap(await api.POST('/api/v1/test-cases', { body })),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.testCases }),
   })
@@ -41,7 +73,7 @@ export function useCreateTestCase() {
 
 export function useUpdateTestCase(id: number) {
   const qc = useQueryClient()
-  return useMutation({
+  return useExclusiveMutation({
     mutationFn: async (body: UpdateTestCaseRequest) =>
       unwrap(
         await api.PATCH('/api/v1/test-cases/{testCaseId}', { params: { path: { testCaseId: id } }, body }),
@@ -52,7 +84,7 @@ export function useUpdateTestCase(id: number) {
 
 export function useDeprecateTestCase(id: number) {
   const qc = useQueryClient()
-  return useMutation({
+  return useExclusiveMutation({
     mutationFn: async () =>
       unwrap(
         await api.POST('/api/v1/test-cases/{testCaseId}/deprecate', { params: { path: { testCaseId: id } } }),
@@ -63,7 +95,7 @@ export function useDeprecateTestCase(id: number) {
 
 export function useReactivateTestCase(id: number) {
   const qc = useQueryClient()
-  return useMutation({
+  return useExclusiveMutation({
     mutationFn: async () =>
       unwrap(
         await api.POST('/api/v1/test-cases/{testCaseId}/reactivate', {
@@ -91,12 +123,12 @@ export function useStepMutations(id: number) {
   const onSuccess = () => qc.invalidateQueries({ queryKey: keys.steps(id) })
   const path = { testCaseId: id }
   return {
-    create: useMutation({
+    create: useExclusiveMutation({
       mutationFn: async (body: { action: string; expectedResult: string }) =>
         unwrap(await api.POST('/api/v1/test-cases/{testCaseId}/steps', { params: { path }, body })),
       onSuccess,
     }),
-    update: useMutation({
+    update: useExclusiveMutation({
       mutationFn: async ({ stepId, ...body }: { stepId: number; action: string; expectedResult: string }) =>
         unwrap(
           await api.PATCH('/api/v1/test-cases/{testCaseId}/steps/{stepId}', {
@@ -106,7 +138,7 @@ export function useStepMutations(id: number) {
         ),
       onSuccess,
     }),
-    remove: useMutation({
+    remove: useExclusiveMutation({
       mutationFn: async (stepId: number) =>
         unwrap(
           await api.DELETE('/api/v1/test-cases/{testCaseId}/steps/{stepId}', {
@@ -115,7 +147,7 @@ export function useStepMutations(id: number) {
         ),
       onSuccess,
     }),
-    reorder: useMutation({
+    reorder: useExclusiveMutation({
       mutationFn: async (stepIds: number[]) =>
         unwrap(
           await api.PUT('/api/v1/test-cases/{testCaseId}/steps/order', {
@@ -150,6 +182,7 @@ export function useTestRuns(page: number) {
 export function useTestRun(id: number) {
   return useQuery({
     queryKey: keys.testRun(id),
+    enabled: id > 0,
     queryFn: async () =>
       unwrap(await api.GET('/api/v1/test-runs/{testRunId}', { params: { path: { testRunId: id } } })),
   })
@@ -158,6 +191,7 @@ export function useTestRun(id: number) {
 export function useTestRunSummary(id: number) {
   return useQuery({
     queryKey: [...keys.testRun(id), 'summary'],
+    enabled: id > 0,
     queryFn: async () =>
       unwrap(await api.GET('/api/v1/test-runs/{testRunId}/summary', { params: { path: { testRunId: id } } })),
   })

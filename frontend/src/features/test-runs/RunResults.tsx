@@ -17,12 +17,12 @@ export function RunResults({ testRunId }: { testRunId: number }) {
   const correlation = pickEnum(params.get('correlation'), correlations)
   const query = useTestRunResults(testRunId, page, status, correlation)
 
-  const update = (key: string, value: string) => {
+  const update = (key: string, value: string, replace = false) => {
     const next = new URLSearchParams(params)
     if (value) next.set(key, value)
     else next.delete(key)
     if (key !== 'page') next.delete('page')
-    setParams(next)
+    setParams(next, { replace })
   }
 
   return (
@@ -109,7 +109,7 @@ export function RunResults({ testRunId }: { testRunId: number }) {
               page={data.page}
               totalPages={data.totalPages}
               totalItems={data.totalItems}
-              onPageChange={(p) => update('page', String(p))}
+              onPageChange={(p, replace) => update('page', String(p), replace)}
             />
           </>
         )}

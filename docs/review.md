@@ -18,6 +18,16 @@ Layers: **U** = unit, **I** = integration (backend: testcontainers; frontend: Te
 | 5 | A missing resource showed "Something went wrong". | 404 errors are titled "Not found". | I FE-INT-012; screenshots 23–24 |
 | 6 | Screenshots 13–14 were cut off (captured before the filtered table rendered). | The capture waits for the filtered rows. | screenshots 13–14 |
 
+## Findings fixed during card validation (2026-10-01)
+
+| # | Card | Finding | Fix | Test |
+|---|---|---|---|---|
+| 7 | Test Case CRUD API | A huge `page` overflowed the SQL offset (500 on every list). | 400 when the offset does not fit; JSON bodies require `application/json` (415); empty known parameters are invalid. | U `TestQueryEdgeCases`, fuzz `FuzzParsePage`/`FuzzPathID`/`FuzzParse`; C `TestRobustness` |
+| 8 | Test Case UI | A fast double click on "Create test case" created two test cases. | Mutations ignore calls while one is in flight. | I FE-INT-018 |
+| 9 | Test Case UI | `?page=999` showed "No test cases yet." with items present. | A page past the end moves to the last page (history replace). | I FE-INT-018 |
+| 10 | Test Case UI | At 375 px the list header overflowed and TC-IDs wrapped. | The header wraps; TC-IDs do not break. | Manual (Chromium 375 px) |
+| 11 | Test Case UI | Invalid ids (`/test-cases/abc`) called the API and read "Something went wrong"; error/loading pages kept the generic tab title; a filter without matches read "No test cases yet." | Invalid ids render *Page not found* without a request; tab titles "Loading…", "Not found", "Error"; "No deprecated test cases." | I FE-INT-018 |
+
 ## Acceptance criteria that lacked an explicit test (added)
 
 | Card | AC | Added test |

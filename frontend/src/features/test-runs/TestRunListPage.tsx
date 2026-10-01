@@ -73,7 +73,7 @@ export function TestRunListPage() {
                 page={data.page}
                 totalPages={data.totalPages}
                 totalItems={data.totalItems}
-                onPageChange={(p) => setParams({ page: String(p) })}
+                onPageChange={(p, replace) => setParams({ page: String(p) }, { replace })}
               />
             </>
           )}

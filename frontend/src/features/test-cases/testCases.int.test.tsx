@@ -1,9 +1,10 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { testCase } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { renderRoute } from '@/test/render'
+import { server } from '@/test/server'
 
 describe('FE-INT-002 test case list', () => {
   it('FE-INT-002 lists test cases with TC-ID, title, status and automated', async () => {
@@ -132,11 +133,6 @@ describe('FE-INT-004 test case detail and edit', () => {
     renderRoute('/test-cases/999')
     expect(await screen.findByRole('alert')).toHaveTextContent('Not foundtest case TC-999 not found')
   })
-
-  it('FE-INT-012 rejects a non-numeric id', async () => {
-    renderRoute('/test-cases/abc')
-    expect(await screen.findByRole('alert')).toHaveTextContent('request validation failed')
-  })
 })
 
 describe('FE-INT-014 manual test case receiving automated results', () => {
@@ -234,5 +230,74 @@ describe('FE-INT-007 execution history', () => {
     const history = screen.getByRole('table', { name: 'Execution history' }).parentElement!.parentElement!
     await user.click(within(history).getByRole('button', { name: 'Next' }))
     expect(await screen.findByText('Page 2 of 2 · 21 items')).toBeInTheDocument()
+  })
+})
+
+describe('FE-INT-018 Test Case UI robustness', () => {
+  it('FE-INT-018 a double click on create sends one request and creates one test case', async () => {
+    const before = db.testCases.length
+    const { user, router } = renderRoute('/test-cases/new')
+    await user.type(await screen.findByLabelText('Title'), 'Once')
+    // Two clicks in the same tick, as a fast double click in a real browser (before React disables the button).
+    const create = screen.getByRole('button', { name: 'Create test case' })
+    fireEvent.click(create)
+    fireEvent.click(create)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/test-cases/1001'))
+    expect(db.testCases).toHaveLength(before + 1)
+  })
+
+  it('FE-INT-018 a double click on add step adds one step', async () => {
+    const { user } = renderRoute('/test-cases/153')
+    const add = await screen.findByRole('form', { name: 'Add step' })
+    await user.type(within(add).getByLabelText('Step action'), 'Once')
+    const button = within(add).getByRole('button', { name: 'Add step' })
+    fireEvent.click(button)
+    fireEvent.click(button)
+    await waitFor(() =>
+      expect(within(screen.getByRole('list', { name: 'Steps' })).getAllByRole('listitem')).toHaveLength(3),
+    )
+    expect(db.steps.filter((s) => s.action === 'Once')).toHaveLength(1)
+  })
+
+  it('FE-INT-018 a page past the end moves to the last page without a new history entry', async () => {
+    db.testCases = Array.from({ length: 25 }, (_, i) => testCase({ id: i + 1, title: `Case ${i + 1}` }))
+    const { router } = renderRoute('/test-cases?page=9')
+    await waitFor(() => expect(router.state.location.search).toBe('?page=2'))
+    expect(await screen.findByText('Case 1')).toBeInTheDocument()
+    expect(router.state.historyAction).toBe('REPLACE')
+  })
+
+  it('FE-INT-018 a filter without matches says so', async () => {
+    db.testCases = [testCase({ status: 'active' })]
+    renderRoute('/test-cases?status=deprecated')
+    expect(await screen.findByText('No deprecated test cases.')).toBeInTheDocument()
+  })
+
+  it.each(['abc', '0', '1.5'])(
+    'FE-INT-018 /test-cases/%s is not found without calling the API',
+    async (id) => {
+      const requests: string[] = []
+      server.events.on('request:start', ({ request }) => {
+        requests.push(request.url)
+      })
+      renderRoute(`/test-cases/${id}`)
+      expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+      await waitFor(() => expect(document.title).toBe('Page not found · Provenly'))
+      expect(requests).toEqual([])
+      server.events.removeAllListeners()
+    },
+  )
+
+  it('FE-INT-018 an unknown test case sets the tab title to Not found', async () => {
+    renderRoute('/test-cases/987654')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not found')
+    await waitFor(() => expect(document.title).toBe('Not found · Provenly'))
+  })
+
+  it('FE-INT-018 a failing test case page sets the tab title to Error', async () => {
+    db.failing = true
+    renderRoute('/test-cases/153')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong')
+    await waitFor(() => expect(document.title).toBe('Error · Provenly'))
   })
 })

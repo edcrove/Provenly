@@ -328,3 +328,30 @@ describe('FE-INT-015 report parse errors', () => {
     expect(within(rows[1]).getByText('<1 ms')).toBeInTheDocument()
   })
 })
+
+describe('FE-INT-018 test run pages robustness', () => {
+  it('FE-INT-018 an invalid run id is not found', async () => {
+    renderRoute('/test-runs/abc')
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+  })
+
+  it('FE-INT-018 run list and results move a page past the end to the last page', async () => {
+    db.runs = Array.from({ length: 21 }, (_, i) => testRun({ id: i + 1, externalRunId: `github:${i + 1}:1` }))
+    const list = renderRoute('/test-runs?page=5')
+    await waitFor(() => expect(list.router.state.location.search).toBe('?page=2'))
+    expect(await screen.findByText('Page 2 of 2 · 21 items')).toBeInTheDocument()
+    list.unmount()
+
+    db.runs = [testRun()]
+    db.results = Array.from({ length: 21 }, (_, i) => testResult({ id: i + 1, testName: `t${i + 1}` }))
+    const { router } = renderRoute('/test-runs/7?page=5')
+    await waitFor(() => expect(router.state.location.search).toBe('?page=2'))
+    expect(router.state.historyAction).toBe('REPLACE')
+  })
+
+  it('FE-INT-018 a run page sets the tab title while loading', async () => {
+    renderRoute('/test-runs/7')
+    await waitFor(() => expect(document.title).toBe('Loading… · Provenly'))
+    await waitFor(() => expect(document.title).toBe('Test run #7 · Provenly'))
+  })
+})

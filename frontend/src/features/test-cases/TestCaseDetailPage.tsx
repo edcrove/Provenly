@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
+import { NotFoundPage } from '@/app/NotFoundPage'
 import { formatDateTime } from '@/lib/format'
 import { positiveInt } from '@/lib/status'
 
@@ -55,6 +56,7 @@ function Definition({ tc }: { tc: TestCase }) {
               <>
                 <Button
                   variant="destructive"
+                  disabled={deprecate.isPending}
                   onClick={() => deprecate.mutate(undefined, { onSuccess: () => setConfirming(false) })}
                 >
                   Confirm deprecation
@@ -159,5 +161,10 @@ export function TestCaseDetailPage() {
   const { testCaseId } = useParams()
   const id = positiveInt(testCaseId, 0)
   const query = useTestCase(id)
-  return <QueryState query={query}>{(tc) => <Definition key={tc.id} tc={tc} />}</QueryState>
+  if (!id) return <NotFoundPage />
+  return (
+    <QueryState page query={query}>
+      {(tc) => <Definition key={tc.id} tc={tc} />}
+    </QueryState>
+  )
 }

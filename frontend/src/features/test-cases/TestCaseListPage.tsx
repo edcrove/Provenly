@@ -20,23 +20,23 @@ export function TestCaseListPage() {
   const status = pickEnum(params.get('status'), statuses)
   const query = useTestCases(page, status)
 
-  const update = (next: Record<string, string | undefined>) => {
+  const update = (next: Record<string, string | undefined>, replace = false) => {
     const merged = new URLSearchParams(params)
     for (const [k, v] of Object.entries(next)) {
       if (v) merged.set(k, v)
       else merged.delete(k)
     }
-    setParams(merged)
+    setParams(merged, { replace })
   }
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between">
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
         <PageTitle title="Test Cases" />
         <CardTitle as="h1" className="text-xl">
           Test Cases
         </CardTitle>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <NativeSelect
             aria-label="Filter by status"
             value={status ?? ''}
@@ -70,13 +70,13 @@ export function TestCaseListPage() {
                   {data.items.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-muted-foreground">
-                        No test cases yet.
+                        {status ? `No ${status} test cases.` : 'No test cases yet.'}
                       </TableCell>
                     </TableRow>
                   )}
                   {data.items.map((tc) => (
                     <TableRow key={tc.id}>
-                      <TableCell className="font-mono">
+                      <TableCell className="font-mono whitespace-nowrap">
                         <Link to={`/test-cases/${tc.id}`} className="underline">
                           {tc.key}
                         </Link>
@@ -94,7 +94,7 @@ export function TestCaseListPage() {
                 page={data.page}
                 totalPages={data.totalPages}
                 totalItems={data.totalItems}
-                onPageChange={(p) => update({ page: String(p) })}
+                onPageChange={(p, replace) => update({ page: String(p) }, replace)}
               />
             </>
           )}

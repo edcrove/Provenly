@@ -2,6 +2,7 @@ import { useParams } from 'react-router'
 
 import type { TestRun } from '@/api/client'
 import { useTestRun, useTestRunSummary } from '@/api/queries'
+import { NotFoundPage } from '@/app/NotFoundPage'
 import { QueryState } from '@/components/QueryState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -46,8 +47,9 @@ export function TestRunDetailPage() {
   const id = positiveInt(testRunId, 0)
   const run = useTestRun(id)
   const summary = useTestRunSummary(id)
+  if (!id) return <NotFoundPage />
   return (
-    <QueryState query={run}>
+    <QueryState page query={run}>
       {(r) => (
         <div className="grid gap-4">
           <div className="flex items-center gap-3">

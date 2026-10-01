@@ -94,6 +94,8 @@ paths:
                 $ref: "#/components/schemas/TestCase"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -136,6 +138,8 @@ paths:
                 $ref: "#/components/schemas/TestCase"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -225,6 +229,8 @@ paths:
                 $ref: "#/components/schemas/TestStep"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -252,6 +258,8 @@ paths:
                 $ref: "#/components/schemas/TestStepList"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -280,6 +288,8 @@ paths:
                 $ref: "#/components/schemas/TestStep"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":

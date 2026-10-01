@@ -221,3 +221,83 @@ func TestInternalErrors(t *testing.T) {
 }
 
 var problemOpts = httpexpect.ContentOpts{MediaType: "application/problem+json"}
+
+// TestRobustness sends edge-case inputs to every list and JSON operation: the
+// API never answers 5xx, every error is a Problem declared by the contract
+// (validated by the recording transport), unknown parameters are ignored and
+// pages beyond the int32 SQL offset are rejected instead of failing.
+func TestRobustness(t *testing.T) {
+	e := api(t, fresh(t), 1<<20)
+	tc := e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "Edge", "automated": true}).
+		Expect().Status(http.StatusCreated).JSON().Object()
+	id := strconv.FormatInt(int64(tc.Value("id").Number().Raw()), 10)
+	run := ingest(e, "edge", 1, report(int64(tc.Value("id").Number().Raw()))).Expect().Status(http.StatusCreated).
+		JSON().Object().Value("testRun").Object()
+	runID := strconv.FormatInt(int64(run.Value("id").Number().Raw()), 10)
+
+	lists := []string{
+		"/api/v1/test-cases", "/api/v1/test-runs",
+		"/api/v1/test-cases/" + id + "/steps", "/api/v1/test-cases/" + id + "/results",
+		"/api/v1/test-runs/" + runID + "/results", "/api/v1/test-runs/" + runID + "/parse-errors",
+	}
+	cases := []struct {
+		query  string
+		status int
+	}{
+		{"page=21474838&pageSize=100", http.StatusBadRequest}, // offset past int32
+		{"page=21474837&pageSize=100", http.StatusOK},         // last representable page: empty
+		{"page=2147483648", http.StatusBadRequest},
+		{"pageSize=5&pageSize=1&foo=bar&limit=1", http.StatusOK}, // first value wins, unknown ignored
+		{"pageSize=5.0", http.StatusBadRequest},
+		{"pageSize=1e1", http.StatusBadRequest},
+		{"pageSize=%205", http.StatusBadRequest},
+		{"page=05", http.StatusOK},
+	}
+	for _, path := range lists {
+		for _, c := range cases {
+			r := e.GET(path).WithQueryString(c.query).Expect()
+			r.Status(c.status)
+			if c.status == http.StatusBadRequest {
+				r.JSON(problemOpts).Object().HasValue("code", "validation_error").HasValue("detail", "request validation failed")
+			}
+		}
+	}
+	e.GET("/api/v1/test-cases").WithQueryString("page=21474837&pageSize=100").Expect().Status(http.StatusOK).
+		JSON().Object().Value("items").Array().IsEmpty()
+
+	// Known parameters present but empty are invalid; enums are case-sensitive; both result filters combine.
+	for _, q := range []string{"status=", "page=", "pageSize="} {
+		e.GET("/api/v1/test-cases").WithQueryString(q).Expect().Status(http.StatusBadRequest)
+	}
+	e.GET("/api/v1/test-cases").WithQueryString("status=ACTIVE").Expect().Status(http.StatusBadRequest)
+	e.GET("/api/v1/test-runs/"+runID+"/results").WithQueryString("status=failed&correlation=valid").Expect().
+		Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	e.GET("/api/v1/test-runs/"+runID+"/results").WithQueryString("status=passed&correlation=missing").Expect().
+		Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+
+	// Path ids: leading zeros resolve, out of range is a validation error, the max int64 is just not found.
+	e.GET("/api/v1/test-cases/0" + id).Expect().Status(http.StatusOK)
+	e.GET("/api/v1/test-cases/9223372036854775807").Expect().Status(http.StatusNotFound)
+	for _, bad := range []string{"0", "-1", "1.0", "9223372036854775808"} {
+		e.GET("/api/v1/test-cases/"+bad).Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().
+			HasValue("detail", "request validation failed")
+	}
+
+	// JSON operations require application/json.
+	steps := "/api/v1/test-cases/" + id + "/steps"
+	step := e.POST(steps).WithJSON(map[string]any{"action": "open"}).Expect().Status(http.StatusCreated).JSON().Object()
+	stepPath := steps + "/" + strconv.FormatInt(int64(step.Value("id").Number().Raw()), 10)
+	for _, op := range []struct{ method, path, body string }{
+		{"POST", "/api/v1/test-cases", `{"title":"x"}`},
+		{"PATCH", "/api/v1/test-cases/" + id, `{"title":"x"}`},
+		{"POST", steps, `{"action":"x"}`},
+		{"PUT", steps + "/order", `{"stepIds":[1]}`},
+		{"PATCH", stepPath, `{"action":"x"}`},
+	} {
+		e.Request(op.method, op.path).WithHeader("Content-Type", "text/plain").WithText(op.body).Expect().
+			Status(http.StatusUnsupportedMediaType).JSON(problemOpts).Object().HasValue("code", "unsupported_media_type")
+	}
+	// Duplicate JSON keys: the last value wins.
+	e.POST("/api/v1/test-cases").WithHeader("Content-Type", "application/json").WithBytes([]byte(`{"title":"a","title":"b"}`)).
+		Expect().Status(http.StatusCreated).JSON().Object().HasValue("title", "b")
+}

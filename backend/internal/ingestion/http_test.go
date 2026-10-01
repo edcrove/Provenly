@@ -79,6 +79,10 @@ func TestIngestHandlerErrors(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "runAttempt")
 
+	rec = post(&stubAPI{}, 1024, "provider=github&runId=7&runAttempt=1&status=", "application/xml", "<x/>")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"field":"status"`)
+
 	rec = post(&stubAPI{err: apperr.InvalidDocument("bad")}, 1024, q, "application/xml", "<x")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "invalid_junit")

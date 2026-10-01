@@ -23,7 +23,7 @@ LOAD_DOTENV := set -a; [ ! -f $(ROOT)/.env.local ] || . $(ROOT)/.env.local; set 
 
 .PHONY: help setup up dev down ps logs infra db-dump db-reset db-restore demo-reset seed-snapshot seed-rebuild-demo \
 	check-env guard-prod migrate dev-backend dev-frontend generate check-generated lint screenshots \
-	test-backend-unit test-backend-integration test-backend-contract \
+	test-backend-unit test-backend-integration test-backend-contract fuzz \
 	test-frontend-unit test-frontend-integration test-frontend-contract test-e2e \
 	test gates coverage clean
 
@@ -124,6 +124,12 @@ test-backend-unit: $(OUT) ## Backend Unit (testing+testify), raw coverage in GOC
 	rm -rf $(GOCOV)/unit && mkdir -p $(GOCOV)/unit
 	cd backend && go test -covermode=atomic -coverpkg=./... $(BACKEND_PKG) -args -test.gocoverdir=$(GOCOV)/unit
 	cd backend && go tool covdata textfmt -i=$(GOCOV)/unit -o=$(OUT)/backend-unit.out
+
+FUZZTIME ?= 10s
+fuzz: ## Backend fuzzing (request parameters and JUnit parser), FUZZTIME each
+	cd backend && go test -run '^$$' -fuzz '^FuzzParsePage$$' -fuzztime $(FUZZTIME) ./internal/platform/httpx/
+	cd backend && go test -run '^$$' -fuzz '^FuzzPathID$$' -fuzztime $(FUZZTIME) ./internal/platform/httpx/
+	cd backend && go test -run '^$$' -fuzz '^FuzzParse$$' -fuzztime $(FUZZTIME) ./internal/ingestion/junit/
 
 test-backend-integration: $(OUT) ## Backend Integration (testcontainers-go, real Postgres; needs Docker)
 	rm -rf $(GOCOV)/integration && mkdir -p $(GOCOV)/integration

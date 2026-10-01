@@ -57,6 +57,10 @@ func WriteProblem(w http.ResponseWriter, status int, code, detail string, fields
 // WriteError maps an error returned by a service to a Problem response.
 // Unknown errors are logged and reported as a generic 500 without internals.
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, ErrUnsupportedMediaType) {
+		WriteProblem(w, http.StatusUnsupportedMediaType, CodeUnsupportedMediaType, err.Error())
+		return
+	}
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
 		WriteProblem(w, http.StatusRequestEntityTooLarge, CodePayloadTooLarge, "request body is too large")

@@ -106,6 +106,8 @@ jobs:
             backend/go.sum
             tools/covgate/go.sum
       - run: make test-backend-unit
+      - name: Fuzz (request parameters, JUnit parser)
+        run: make fuzz
       - name: Gate
         run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates backend-unit -evidence=false
       - uses: actions/upload-artifact@v5

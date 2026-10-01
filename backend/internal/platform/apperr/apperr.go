@@ -35,6 +35,9 @@ type Error struct {
 
 func (e *Error) Error() string { return e.Message }
 
+// ValidationFailed is the detail of every request validation error that lists field errors.
+const ValidationFailed = "request validation failed"
+
 // Validation builds a KindValidation error.
 func Validation(message string, fields ...FieldError) error {
 	return &Error{Kind: KindValidation, Message: message, Fields: fields}
@@ -74,5 +77,5 @@ func (v *Validator) Err() error {
 	if len(v.fields) == 0 {
 		return nil
 	}
-	return Validation("request validation failed", v.fields...)
+	return Validation(ValidationFailed, v.fields...)
 }

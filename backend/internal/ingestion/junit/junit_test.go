@@ -186,3 +186,32 @@ func TestExtractRef(t *testing.T) {
 		assert.Equal(t, c.want, extractRef(c.name, c.props), "%s %v", c.name, c.props)
 	}
 }
+
+// FuzzParse: arbitrary input never panics; a parsed report only holds known
+// statuses and positive TC-IDs for found references.
+func FuzzParse(f *testing.F) {
+	for _, s := range []string{
+		`<testsuites><testsuite name="s"><testcase name="a TC-1" time="1.5"/></testsuite></testsuites>`,
+		`<testsuite><testcase name="b"><properties><property name="tc-id" value="007"/></properties><failure/></testcase></testsuite>`,
+		`<testsuite><testcase name="c" time="abc"><skipped/></testcase><testcase/></testsuite>`,
+		`<testsuites><testsuite><testsuite><testcase name="TC-99999999999999999999"/></testsuite></testsuite></testsuites>`,
+		`<html/>`, ``, `<`,
+	} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, doc string) {
+		rep, err := Parse(strings.NewReader(doc))
+		if err != nil {
+			return
+		}
+		for _, r := range rep.Results {
+			require.Contains(t, []Status{Passed, Failed, Error, Skipped}, r.Status)
+			if r.Ref.Kind == RefFound {
+				require.Positive(t, r.Ref.ID)
+			}
+			if r.DurationMs != nil {
+				require.GreaterOrEqual(t, *r.DurationMs, int64(0))
+			}
+		}
+	})
+}

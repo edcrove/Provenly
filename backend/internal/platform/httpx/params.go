@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
@@ -37,16 +38,20 @@ func ParsePage(r *http.Request) (pagination.Page, error) {
 	p := pagination.Default()
 	var v apperr.Validator
 	q := r.URL.Query()
-	if raw := q.Get("page"); raw != "" {
-		n, err := strconv.ParseInt(raw, 10, 32)
+	if q.Has("page") {
+		n, err := strconv.ParseInt(q.Get("page"), 10, 32)
 		v.Check(err == nil && n >= 1, "page", "must be an integer >= 1")
 		p.Number = int32(n)
 	}
-	if raw := q.Get("pageSize"); raw != "" {
-		n, err := strconv.ParseInt(raw, 10, 32)
+	if q.Has("pageSize") {
+		n, err := strconv.ParseInt(q.Get("pageSize"), 10, 32)
 		v.Check(err == nil && n >= 1 && n <= pagination.MaxSize, "pageSize", fmt.Sprintf("must be an integer between 1 and %d", pagination.MaxSize))
 		p.Size = int32(n)
 	}
+	if err := v.Err(); err != nil {
+		return p, err
+	}
+	v.Check(int64(p.Number-1)*int64(p.Size) <= pagination.MaxOffset, "page", "is too large for the page size")
 	return p, v.Err()
 }
 
@@ -54,21 +59,22 @@ func ParsePage(r *http.Request) (pagination.Page, error) {
 func PathID(r *http.Request, name string) (int64, error) {
 	n, err := strconv.ParseInt(r.PathValue(name), 10, 64)
 	if err != nil || n < 1 {
-		return 0, apperr.Validation("invalid path parameter", apperr.FieldError{Field: name, Message: "must be a positive integer"})
+		return 0, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: name, Message: "must be a positive integer"})
 	}
 	return n, nil
 }
 
 // EnumQuery reads an optional query parameter restricted to allowed values.
 func EnumQuery(r *http.Request, name string, allowed ...string) (*string, error) {
-	raw := r.URL.Query().Get(name)
-	if raw == "" {
+	q := r.URL.Query()
+	if !q.Has(name) {
 		return nil, nil
 	}
+	raw := q.Get(name)
 	for _, a := range allowed {
 		if raw == a {
 			return &raw, nil
 		}
 	}
-	return nil, apperr.Validation("invalid query parameter", apperr.FieldError{Field: name, Message: fmt.Sprintf("must be one of %v", allowed)})
+	return nil, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: name, Message: "must be one of " + strings.Join(allowed, ", ")})
 }

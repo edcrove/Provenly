@@ -67,8 +67,12 @@ func (s *stubAPI) ReorderSteps(_ context.Context, _ int64, ids []int64) ([]TestS
 func serve(api API, method, target, body string) *httptest.ResponseRecorder {
 	mux := http.NewServeMux()
 	NewHandler(api).Register(mux)
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest(method, target, strings.NewReader(body)))
+	mux.ServeHTTP(rec, req)
 	return rec
 }
 

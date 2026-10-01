@@ -64,9 +64,13 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 		Pipeline: q.Get("pipeline"), Branch: q.Get("branch"), Commit: q.Get("commit"),
 		Status: execution.RunStatus(q.Get("status")),
 	}
+	if q.Has("status") && meta.Status == "" {
+		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "status", Message: "must be one of completed, failed, cancelled"}))
+		return
+	}
 	attempt, err := strconv.ParseInt(q.Get("runAttempt"), 10, 32)
 	if err != nil {
-		httpx.WriteError(w, r, apperr.Validation("invalid query parameter", apperr.FieldError{Field: "runAttempt", Message: "must be an integer >= 1"}))
+		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "runAttempt", Message: "must be an integer >= 1"}))
 		return
 	}
 	meta.RunAttempt = int32(attempt)

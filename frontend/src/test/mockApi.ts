@@ -82,6 +82,7 @@ const problem = (
 const statusText: Record<number, string> = {
   400: 'Bad Request',
   404: 'Not Found',
+  415: 'Unsupported Media Type',
   500: 'Internal Server Error',
 }
 
@@ -125,6 +126,14 @@ const guard =
   (info) =>
     db.failing ? problem(500, 'internal_error', 'an unexpected error occurred') : fn(info)
 
+/** Wraps a handler whose request body is JSON: other content types answer 415 like the server. */
+const jsonGuard =
+  (fn: Handler): Handler =>
+  (info) =>
+    info.request.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() === 'application/json'
+      ? fn(info)
+      : problem(415, 'unsupported_media_type', 'Content-Type must be application/json')
+
 function findCase(raw: string | readonly string[] | undefined): TestCase | Response {
   const id = pathId(raw)
   if (id === undefined) return validation('testCaseId', 'must be a positive integer')
@@ -162,23 +171,25 @@ export const handlers = [
   ),
   http.post(
     `${BASE}/test-cases`,
-    guard(async ({ request }) => {
-      const body = await readBody(request)
-      const title = typeof body?.title === 'string' ? body.title.trim() : ''
-      if (!body || 'id' in body) return validation('body', 'unknown field "id"')
-      if (!title) return validation('title', 'is required')
-      const tc = testCase({
-        id: ++db.nextId,
-        title,
-        description: String(body.description ?? ''),
-        expectedResult: String(body.expectedResult ?? ''),
-        automated: Boolean(body.automated),
-        createdAt: now(),
-        updatedAt: now(),
-      })
-      db.testCases.push(tc)
-      return respond(tc, 201)
-    }),
+    guard(
+      jsonGuard(async ({ request }) => {
+        const body = await readBody(request)
+        const title = typeof body?.title === 'string' ? body.title.trim() : ''
+        if (!body || 'id' in body) return validation('body', 'unknown field "id"')
+        if (!title) return validation('title', 'is required')
+        const tc = testCase({
+          id: ++db.nextId,
+          title,
+          description: String(body.description ?? ''),
+          expectedResult: String(body.expectedResult ?? ''),
+          automated: Boolean(body.automated),
+          createdAt: now(),
+          updatedAt: now(),
+        })
+        db.testCases.push(tc)
+        return respond(tc, 201)
+      }),
+    ),
   ),
   http.get(
     `${BASE}/test-cases/:testCaseId`,
@@ -186,16 +197,19 @@ export const handlers = [
   ),
   http.patch(
     `${BASE}/test-cases/:testCaseId`,
-    guard(async ({ params, request }) => {
-      const tc = findCase(params.testCaseId)
-      if (tc instanceof Response) return tc
-      const body = await readBody(request)
-      if (!body || Object.keys(body).length === 0) return validation('body', 'at least one field is required')
-      if (body.title !== undefined && !String(body.title).trim())
-        return validation('title', 'must not be empty')
-      Object.assign(tc, body, { updatedAt: now() })
-      return respond(tc)
-    }),
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const tc = findCase(params.testCaseId)
+        if (tc instanceof Response) return tc
+        const body = await readBody(request)
+        if (!body || Object.keys(body).length === 0)
+          return validation('body', 'at least one field is required')
+        if (body.title !== undefined && !String(body.title).trim())
+          return validation('title', 'must not be empty')
+        Object.assign(tc, body, { updatedAt: now() })
+        return respond(tc)
+      }),
+    ),
   ),
   http.post(
     `${BASE}/test-cases/:testCaseId/deprecate`,
@@ -227,56 +241,63 @@ export const handlers = [
   ),
   http.post(
     `${BASE}/test-cases/:testCaseId/steps`,
-    guard(async ({ params, request }) => {
-      const tc = findCase(params.testCaseId)
-      if (tc instanceof Response) return tc
-      const body = await readBody(request)
-      const action = typeof body?.action === 'string' ? body.action.trim() : ''
-      if (!action) return validation('action', 'must not be empty')
-      const step = testStep({
-        id: ++db.nextId,
-        testCaseId: tc.id,
-        position: stepsOf(tc.id).length + 1,
-        action,
-        expectedResult: String(body?.expectedResult ?? ''),
-      })
-      db.steps.push(step)
-      return respond(step, 201)
-    }),
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const tc = findCase(params.testCaseId)
+        if (tc instanceof Response) return tc
+        const body = await readBody(request)
+        const action = typeof body?.action === 'string' ? body.action.trim() : ''
+        if (!action) return validation('action', 'must not be empty')
+        const step = testStep({
+          id: ++db.nextId,
+          testCaseId: tc.id,
+          position: stepsOf(tc.id).length + 1,
+          action,
+          expectedResult: String(body?.expectedResult ?? ''),
+        })
+        db.steps.push(step)
+        return respond(step, 201)
+      }),
+    ),
   ),
   http.put(
     `${BASE}/test-cases/:testCaseId/steps/order`,
-    guard(async ({ params, request }) => {
-      const tc = findCase(params.testCaseId)
-      if (tc instanceof Response) return tc
-      const body = await readBody(request)
-      const ids = Array.isArray(body?.stepIds) ? (body.stepIds as number[]) : []
-      const current = stepsOf(tc.id)
-      const valid = ids.length === current.length && current.every((s) => ids.includes(s.id))
-      if (!valid) return validation('stepIds', 'must list every step of the test case exactly once')
-      ids.forEach((id, i) => {
-        const step = current.find((s) => s.id === id)!
-        step.position = i + 1
-      })
-      return respond({ items: stepsOf(tc.id) })
-    }),
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const tc = findCase(params.testCaseId)
+        if (tc instanceof Response) return tc
+        const body = await readBody(request)
+        const ids = Array.isArray(body?.stepIds) ? (body.stepIds as number[]) : []
+        const current = stepsOf(tc.id)
+        const valid = ids.length === current.length && current.every((s) => ids.includes(s.id))
+        if (!valid) return validation('stepIds', 'must list every step of the test case exactly once')
+        ids.forEach((id, i) => {
+          const step = current.find((s) => s.id === id)!
+          step.position = i + 1
+        })
+        return respond({ items: stepsOf(tc.id) })
+      }),
+    ),
   ),
   http.patch(
     `${BASE}/test-cases/:testCaseId/steps/:stepId`,
-    guard(async ({ params, request }) => {
-      const tc = findCase(params.testCaseId)
-      if (tc instanceof Response) return tc
-      const stepId = pathId(params.stepId)
-      if (stepId === undefined) return validation('stepId', 'must be a positive integer')
-      const body = await readBody(request)
-      if (!body || Object.keys(body).length === 0) return validation('body', 'at least one field is required')
-      if (body.action !== undefined && !String(body.action).trim())
-        return validation('action', 'must not be empty')
-      const step = stepsOf(tc.id).find((s) => s.id === stepId)
-      if (!step) return notFound(`step ${stepId}`)
-      Object.assign(step, body, { updatedAt: now() })
-      return respond(step)
-    }),
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const tc = findCase(params.testCaseId)
+        if (tc instanceof Response) return tc
+        const stepId = pathId(params.stepId)
+        if (stepId === undefined) return validation('stepId', 'must be a positive integer')
+        const body = await readBody(request)
+        if (!body || Object.keys(body).length === 0)
+          return validation('body', 'at least one field is required')
+        if (body.action !== undefined && !String(body.action).trim())
+          return validation('action', 'must not be empty')
+        const step = stepsOf(tc.id).find((s) => s.id === stepId)
+        if (!step) return notFound(`step ${stepId}`)
+        Object.assign(step, body, { updatedAt: now() })
+        return respond(step)
+      }),
+    ),
   ),
   http.delete(
     `${BASE}/test-cases/:testCaseId/steps/:stepId`,

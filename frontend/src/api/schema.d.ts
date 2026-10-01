@@ -801,6 +801,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -857,6 +858,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -968,6 +970,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -998,6 +1001,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -1054,6 +1058,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };

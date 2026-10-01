@@ -35,7 +35,11 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,
   `totalItems`, `totalPages`.
 - Query parameters: unknown ones are ignored; every known parameter is applied and validated (an invalid value of a
-  known parameter is a `400` even when unknown ones are present).
+  known parameter is a `400` even when unknown ones are present). A known parameter present but empty (`status=`) is
+  invalid; a repeated one uses its first value. A page whose offset does not fit the database is a `400`.
+- Request bodies: JSON operations require `Content-Type: application/json` (`415 unsupported_media_type` otherwise);
+  duplicate keys keep the last value. Every validation error has the detail `request validation failed` and lists
+  the offending fields in `errors`.
 - Ingestion: `POST /api/v1/ingestion/junit?provider=&runId=&runAttempt=[&pipeline=&branch=&commit=]` with the
   JUnit XML as `application/xml` body (one request per complete report). `201` creates the run, `200` is an idempotent
   replay (nothing re-processed).

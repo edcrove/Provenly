@@ -28,6 +28,7 @@ const tc = { testCaseId: 153 }
 const unknownTc = { testCaseId: 987654 }
 const run = { testRunId: 7 }
 const unknownRun = { testRunId: 987654 }
+const textPlain = { 'Content-Type': 'text/plain' }
 const fail = () => {
   db.failing = true
 }
@@ -428,6 +429,52 @@ const scenarios: Scenario[] = [
     status: 500,
     setup: fail,
     call: (c) => c.GET('/api/v1/test-runs/{testRunId}/summary', { params: { path: run } }),
+  },
+  // Non-JSON bodies on JSON operations (415).
+  {
+    op: 'POST /api/v1/test-cases',
+    status: 415,
+    call: (c) => c.POST('/api/v1/test-cases', { body: { title: 'x' }, headers: textPlain }),
+  },
+  {
+    op: 'PATCH /api/v1/test-cases/{testCaseId}',
+    status: 415,
+    call: (c) =>
+      c.PATCH('/api/v1/test-cases/{testCaseId}', {
+        params: { path: tc },
+        body: { title: 'x' },
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-cases/{testCaseId}/steps',
+    status: 415,
+    call: (c) =>
+      c.POST('/api/v1/test-cases/{testCaseId}/steps', {
+        params: { path: tc },
+        body: { action: 'x' },
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'PUT /api/v1/test-cases/{testCaseId}/steps/order',
+    status: 415,
+    call: (c) =>
+      c.PUT('/api/v1/test-cases/{testCaseId}/steps/order', {
+        params: { path: tc },
+        body: { stepIds: [1, 2] },
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/test-cases/{testCaseId}/steps/{stepId}',
+    status: 415,
+    call: (c) =>
+      c.PATCH('/api/v1/test-cases/{testCaseId}/steps/{stepId}', {
+        params: { path: { ...tc, stepId: 1 } },
+        body: { action: 'x' },
+        headers: textPlain,
+      }),
   },
 ]
 

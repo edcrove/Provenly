@@ -66,6 +66,7 @@ screenshots use an ephemeral in-memory database (`docker-compose.e2e.yml`) destr
 
 ```bash
 make setup                    # go mod download + npm ci (frontend, e2e)
+cp .env.example .env.local    # optional: local settings (database URL, log level, API port...)
 make infra ENV=qa             # only qa's PostgreSQL (seeded + migrated) on :5433
 make dev-backend              # API on http://localhost:8080  (terminal 1; stop the demo env first)
 make dev-frontend             # UI  on http://localhost:5173  (terminal 2)

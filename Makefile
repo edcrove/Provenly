@@ -14,8 +14,12 @@ DEV_COMPOSE := $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 TIMESTAMP   := $(shell date +%Y%m%d-%H%M%S)
 # Optional CA for image builds behind a TLS-intercepting proxy.
 export EXTRA_CA_CERT
-# Local, non-docker runs (make dev-backend / migrate) use the qa database by default.
-DATABASE_URL ?= postgres://provenly:provenly@localhost:5433/provenly?sslmode=disable
+# Local, non-docker runs (make dev-backend / dev-frontend / migrate) read an optional .env.local
+# (copy .env.example); without it they use the qa database. The variables are loaded only
+# into those recipes so they never leak into the docker environments' configuration.
+LOCAL_DB    := postgres://provenly:provenly@localhost:5433/provenly?sslmode=disable
+LOAD_DOTENV := set -a; [ ! -f $(ROOT)/.env.local ] || . $(ROOT)/.env.local; set +a; \
+	export PROVENLY_DATABASE_URL="$${PROVENLY_DATABASE_URL:-$(LOCAL_DB)}";
 
 .PHONY: help setup up dev down ps logs infra db-dump db-reset db-restore demo-reset seed-snapshot seed-rebuild-demo \
 	check-env guard-prod migrate dev-backend dev-frontend generate check-generated lint screenshots \
@@ -91,14 +95,14 @@ seed-rebuild-demo: ## Regenerate seeds/demo.sql from scripts/seed/demo-data.sh (
 	./scripts/seed/demo-data.sh http://localhost:8080
 	$(MAKE) --no-print-directory seed-snapshot FROM=demo NAME=demo
 
-migrate: ## Apply goose migrations to $$DATABASE_URL
-	cd backend && PROVENLY_DATABASE_URL='$(DATABASE_URL)' go run ./cmd/provenly migrate up
+migrate: ## Apply goose migrations to $$PROVENLY_DATABASE_URL (.env, default: the qa database)
+	$(LOAD_DOTENV) cd backend && go run ./cmd/provenly migrate up
 
 dev-backend: ## Run the API on :8080 (applies migrations on start)
-	cd backend && PROVENLY_DATABASE_URL='$(DATABASE_URL)' PROVENLY_AUTO_MIGRATE=true go run ./cmd/provenly serve
+	$(LOAD_DOTENV) cd backend && PROVENLY_AUTO_MIGRATE=true go run ./cmd/provenly serve
 
 dev-frontend: ## Run the UI on :5173 (proxies /api to :8080)
-	cd frontend && npm run dev
+	$(LOAD_DOTENV) cd frontend && npm run dev
 
 generate: ## Regenerate sqlc queries and the OpenAPI TypeScript client
 	cd backend && sqlc generate

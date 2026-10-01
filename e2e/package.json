@@ -5,6 +5,7 @@
     "typecheck": "tsc -p ."
   },
   "private": "true",
+  "license": "Apache-2.0",
   "type": "module",
   "devDependencies": {
     "@playwright/test": "^1.63.0",

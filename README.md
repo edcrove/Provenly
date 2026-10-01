@@ -134,3 +134,7 @@ gate on each push / pull request; the `coverage-report` job publishes all 8 gate
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) (gofmt/golangci-lint, eslint/prettier, generated code, how a feature updates
 every test layer, coverage exceptions).
+
+## License
+
+[Apache License 2.0](LICENSE). See [`NOTICE`](NOTICE).

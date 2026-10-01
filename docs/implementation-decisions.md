@@ -12,6 +12,7 @@ reviewed and closed by Ed; each one is recorded in the Notion Decision Register 
 | 5 | DEC-45 | | 12 | DEC-52 |
 | 6 | DEC-46 | | 13 | DEC-53 |
 | 7 | DEC-47 | | 14 | DEC-54 |
+| | | | 15 | DEC-55 |
 
 Project rename (OpenTestHub → Provenly): DEC-39.
 
@@ -121,3 +122,6 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     restored only into an empty database, then migrated); any environment can be snapshotted as a new seed
     (`make seed-snapshot`). Hot reload through `docker-compose.dev.yml` (air + Vite). Automation always uses
     ephemeral databases: testcontainers for Integration/Contract, an in-memory Postgres for E2E and screenshots.
+15. **License.** Provenly is open source under the **Apache License 2.0** (`LICENSE`, `NOTICE`).
+    **Decided by Ed (2026-10-01).** Chosen over MIT for the explicit patent grant and trademark clause; contributions
+    are inbound = outbound (section 5), no CLA. Closes Planning Backlog #2; unblocks the Public Readiness Gate.

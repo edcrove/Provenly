@@ -51,3 +51,8 @@ See [`docs/testing-strategy.md`](docs/testing-strategy.md).
 ## Commits and pull requests
 
 Small, focused commits with imperative subjects. Nothing merges with red CI.
+
+## License of contributions
+
+Provenly is licensed under the [Apache License 2.0](LICENSE). Unless you state otherwise, any contribution you submit
+is licensed under the same terms (section 5 of the license); no separate CLA is required.

@@ -34,6 +34,8 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
   optional field `errors`. Internal errors never leak details.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,
   `totalItems`, `totalPages`.
+- Query parameters: unknown ones are ignored; every known parameter is applied and validated (an invalid value of a
+  known parameter is a `400` even when unknown ones are present).
 - Ingestion: `POST /api/v1/ingestion/junit?provider=&runId=&runAttempt=[&pipeline=&branch=&commit=]` with the
   JUnit XML as `application/xml` body (one request per complete report). `201` creates the run, `200` is an idempotent
   replay (nothing re-processed).

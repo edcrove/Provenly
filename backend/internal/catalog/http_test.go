@@ -20,6 +20,7 @@ import (
 type stubAPI struct {
 	err       error
 	gotStatus *Status
+	gotPage   pagination.Page
 	gotUpdate UpdateInput
 	gotStep   CreateStepInput
 	gotOrder  []int64
@@ -38,6 +39,7 @@ func (s *stubAPI) Create(_ context.Context, in CreateInput) (TestCase, error) {
 func (s *stubAPI) Get(context.Context, int64) (TestCase, error) { return sample, s.err }
 func (s *stubAPI) List(_ context.Context, st *Status, p pagination.Page) (pagination.Result[TestCase], error) {
 	s.gotStatus = st
+	s.gotPage = p
 	return pagination.Result[TestCase]{Items: []TestCase{sample}, Page: p, Total: 1}, s.err
 }
 func (s *stubAPI) Update(_ context.Context, _ int64, in UpdateInput) (TestCase, error) {
@@ -113,6 +115,21 @@ func TestHandlerPassesInputs(t *testing.T) {
 
 	serve(api, "PUT", "/api/v1/test-cases/1/steps/order", `{"stepIds":[3,1,2]}`)
 	assert.Equal(t, []int64{3, 1, 2}, api.gotOrder)
+}
+
+// Unknown query parameters are ignored; every known parameter still applies and
+// is still validated.
+func TestHandlerIgnoresUnknownQueryParameters(t *testing.T) {
+	api := &stubAPI{}
+	rec := serve(api, "GET", "/api/v1/test-cases?status=deprecated&page=2&pageSize=5&automated=true&limit=1&foo=bar", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, api.gotStatus)
+	assert.Equal(t, StatusDeprecated, *api.gotStatus)
+	assert.Equal(t, pagination.Page{Number: 2, Size: 5}, api.gotPage)
+
+	rec = serve(api, "GET", "/api/v1/test-cases?pageSize=0&foo=bar", "")
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"field":"pageSize"`)
 }
 
 func TestHandlerErrors(t *testing.T) {

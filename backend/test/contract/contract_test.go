@@ -74,6 +74,11 @@ func TestTestCases(t *testing.T) {
 	e.GET("/api/v1/test-cases").WithQuery("status", "active").WithQuery("pageSize", 5).Expect().Status(http.StatusOK).
 		JSON().Object().HasValue("totalItems", 1)
 	e.GET("/api/v1/test-cases").WithQuery("page", 0).Expect().Status(http.StatusBadRequest)
+	// Unknown parameters are ignored; the known ones still filter and paginate.
+	e.GET("/api/v1/test-cases").WithQuery("status", "deprecated").WithQuery("pageSize", 5).
+		WithQuery("automated", "true").WithQuery("limit", 1).Expect().Status(http.StatusOK).
+		JSON().Object().HasValue("totalItems", 0).HasValue("pageSize", 5)
+	e.GET("/api/v1/test-cases").WithQuery("pageSize", 0).WithQuery("foo", "bar").Expect().Status(http.StatusBadRequest)
 
 	path := "/api/v1/test-cases/" + strconv.FormatInt(id, 10)
 	e.GET(path).Expect().Status(http.StatusOK)

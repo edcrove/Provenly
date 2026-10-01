@@ -14,6 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageTitle } from '@/components/PageTitle'
 import { formatDateTime } from '@/lib/format'
 import { positiveInt } from '@/lib/status'
 
@@ -34,6 +35,7 @@ function Definition({ tc }: { tc: TestCase }) {
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
+          <PageTitle title={`${tc.key} · ${tc.title}`} />
           <h1 className="text-2xl font-semibold">
             <span className="font-mono">{tc.key}</span> · {tc.title}
           </h1>
@@ -94,7 +96,7 @@ function Definition({ tc }: { tc: TestCase }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Current definition</CardTitle>
+          <CardTitle as="h2">Current definition</CardTitle>
           <CardDescription>
             What this test case says today. Past results were recorded against the TC-ID, not against this
             exact wording: editing content never creates a version or changes how old results are read.
@@ -132,7 +134,7 @@ function Definition({ tc }: { tc: TestCase }) {
             </dl>
           )}
           <div className="grid gap-2">
-            <h2 className="font-medium">Steps</h2>
+            <h3 className="font-medium">Steps</h3>
             <StepsEditor testCaseId={tc.id} />
           </div>
         </CardContent>
@@ -140,7 +142,7 @@ function Definition({ tc }: { tc: TestCase }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Execution history</CardTitle>
+          <CardTitle as="h2">Execution history</CardTitle>
           <CardDescription>
             Observed at execution time: test name, run, branch, commit and date as reported by CI.
           </CardDescription>

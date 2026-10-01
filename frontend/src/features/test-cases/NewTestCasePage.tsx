@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router'
 
 import { useCreateTestCase } from '@/api/queries'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageTitle } from '@/components/PageTitle'
 
 import { TestCaseForm } from './TestCaseForm'
 
@@ -11,7 +12,10 @@ export function NewTestCasePage() {
   return (
     <Card className="max-w-2xl">
       <CardHeader>
-        <CardTitle className="text-xl">New test case</CardTitle>
+        <PageTitle title="New test case" />
+        <CardTitle as="h1" className="text-xl">
+          New test case
+        </CardTitle>
         <CardDescription>The TC-ID is assigned by Provenly and never changes or gets reused.</CardDescription>
       </CardHeader>
       <CardContent>

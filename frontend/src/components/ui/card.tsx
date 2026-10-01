@@ -19,8 +19,14 @@ function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
   return <div data-slot="card-header" className={cn('flex flex-col gap-1.5 px-5', className)} {...props} />
 }
 
-function CardTitle({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="card-title" className={cn('leading-none font-semibold', className)} {...props} />
+// `as` renders the title as a real heading (h1 for a page, h2 for a section) so
+// the page outline is navigable by assistive technologies; the look is unchanged.
+function CardTitle({
+  as: Comp = 'div',
+  className,
+  ...props
+}: React.ComponentProps<'div'> & { as?: 'div' | 'h1' | 'h2' | 'h3' }) {
+  return <Comp data-slot="card-title" className={cn('leading-none font-semibold', className)} {...props} />
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<'div'>) {

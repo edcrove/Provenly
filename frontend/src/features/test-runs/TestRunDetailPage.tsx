@@ -6,6 +6,7 @@ import { QueryState } from '@/components/QueryState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageTitle } from '@/components/PageTitle'
 import { formatDateTime } from '@/lib/format'
 import { isInterruptedRun, positiveInt, runStatusVariant } from '@/lib/status'
 
@@ -50,6 +51,7 @@ export function TestRunDetailPage() {
       {(r) => (
         <div className="grid gap-4">
           <div className="flex items-center gap-3">
+            <PageTitle title={`Test run #${r.id}`} />
             <h1 className="text-2xl font-semibold">Test run #{r.id}</h1>
             <Badge variant={runStatusVariant(r.status)}>{r.status}</Badge>
           </div>
@@ -63,7 +65,7 @@ export function TestRunDetailPage() {
           ) : null}
           <Card>
             <CardHeader>
-              <CardTitle>Run metadata</CardTitle>
+              <CardTitle as="h2">Run metadata</CardTitle>
             </CardHeader>
             <CardContent>
               <Metadata run={r} />
@@ -74,7 +76,7 @@ export function TestRunDetailPage() {
               <>
                 <Card>
                   <CardHeader>
-                    <CardTitle>Summary</CardTitle>
+                    <CardTitle as="h2">Summary</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <RunSummary summary={s} />
@@ -82,7 +84,7 @@ export function TestRunDetailPage() {
                 </Card>
                 <Card>
                   <CardHeader>
-                    <CardTitle>TC-ID diagnostics</CardTitle>
+                    <CardTitle as="h2">TC-ID diagnostics</CardTitle>
                     <CardDescription>Excluded from the universe and the percentages.</CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -95,7 +97,7 @@ export function TestRunDetailPage() {
           <RunParseErrors testRunId={r.id} />
           <Card>
             <CardHeader>
-              <CardTitle>Results</CardTitle>
+              <CardTitle as="h2">Results</CardTitle>
               <CardDescription>Every individual result as ingested (e.g. one per browser).</CardDescription>
             </CardHeader>
             <CardContent>

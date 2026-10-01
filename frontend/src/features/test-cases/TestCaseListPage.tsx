@@ -7,6 +7,7 @@ import { QueryState } from '@/components/QueryState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageTitle } from '@/components/PageTitle'
 import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { pickEnum, positiveInt } from '@/lib/status'
@@ -31,7 +32,10 @@ export function TestCaseListPage() {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between">
-        <CardTitle className="text-xl">Test Cases</CardTitle>
+        <PageTitle title="Test Cases" />
+        <CardTitle as="h1" className="text-xl">
+          Test Cases
+        </CardTitle>
         <div className="flex items-center gap-2">
           <NativeSelect
             aria-label="Filter by status"

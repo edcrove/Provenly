@@ -51,3 +51,6 @@ targets:
   - id: FE-INT-016
     description: runs whose CI execution failed or was cancelled are flagged as possibly incomplete
     surfaces: [src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/TestRunListPage.tsx]
+  - id: FE-INT-017
+    description: every page has a single h1, real section headings (h2) and its own browser tab title
+    surfaces: [src/components/PageTitle.tsx, src/components/ui/card.tsx]

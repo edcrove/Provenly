@@ -15,7 +15,7 @@ export function RunParseErrors({ testRunId }: { testRunId: number }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Report parse errors</CardTitle>
+        <CardTitle as="h2">Report parse errors</CardTitle>
         <CardDescription>
           Testcases of the JUnit report that could not be fully read. Kept results are listed below with an
           unknown duration; discarded ones are not in the results.

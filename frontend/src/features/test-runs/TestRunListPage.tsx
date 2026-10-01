@@ -5,6 +5,7 @@ import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageTitle } from '@/components/PageTitle'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime, plural, shortCommit } from '@/lib/format'
 import { positiveInt, runStatusVariant } from '@/lib/status'
@@ -16,7 +17,10 @@ export function TestRunListPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl">Test Runs</CardTitle>
+        <PageTitle title="Test Runs" />
+        <CardTitle as="h1" className="text-xl">
+          Test Runs
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <QueryState query={query}>

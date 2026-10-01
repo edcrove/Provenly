@@ -33,11 +33,29 @@ func NewServices(pool *pgxpool.Pool, now func() time.Time) Services {
 // NewHandler builds the REST API handler.
 func NewHandler(s Services, maxIngestBytes int64) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+	register(mux, s, maxIngestBytes)
+	return httpx.Recover(httpx.AccessLog(httpx.Routes(mux)))
+}
+
+// RoutePatterns lists every route the API registers ("METHOD /path"), so tests
+// can check the router against the OpenAPI contract.
+func RoutePatterns() []string {
+	var rec patternRecorder
+	register(&rec, Services{}, 0)
+	return rec
+}
+
+func register(r httpx.Router, s Services, maxIngestBytes int64) {
+	r.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
-	catalog.NewHandler(s.Catalog).Register(mux)
-	execution.NewHandler(s.Execution, s.Catalog).Register(mux)
-	ingestion.NewHandler(s.Ingestion, maxIngestBytes).Register(mux)
-	return httpx.Recover(httpx.AccessLog(httpx.Routes(mux)))
+	catalog.NewHandler(s.Catalog).Register(r)
+	execution.NewHandler(s.Execution, s.Catalog).Register(r)
+	ingestion.NewHandler(s.Ingestion, maxIngestBytes).Register(r)
+}
+
+type patternRecorder []string
+
+func (p *patternRecorder) HandleFunc(pattern string, _ func(http.ResponseWriter, *http.Request)) {
+	*p = append(*p, pattern)
 }

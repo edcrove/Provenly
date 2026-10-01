@@ -102,7 +102,7 @@ type Handler struct {
 func NewHandler(api API) *Handler { return &Handler{api: api} }
 
 // Register mounts the catalog routes.
-func (h *Handler) Register(mux *http.ServeMux) {
+func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/test-cases", h.list)
 	mux.HandleFunc("POST /api/v1/test-cases", h.create)
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}", h.get)

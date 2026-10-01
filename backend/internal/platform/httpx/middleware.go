@@ -39,6 +39,11 @@ func AccessLog(next http.Handler) http.Handler {
 	})
 }
 
+// Router is where modules register their routes; *http.ServeMux implements it.
+type Router interface {
+	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+}
+
 // Routes serves mux and answers requests it cannot route with a Problem: 405
 // (with the Allow header) when the path exists for other methods, 404 otherwise.
 func Routes(mux *http.ServeMux) http.Handler {

@@ -174,7 +174,7 @@ func NewHandler(api API, catalog TestCaseChecker) *Handler {
 }
 
 // Register mounts the execution routes.
-func (h *Handler) Register(mux *http.ServeMux) {
+func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/test-runs", h.listRuns)
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}", h.getRun)
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/results", h.listResults)

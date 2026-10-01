@@ -43,3 +43,11 @@ func TestHandlerWiring(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/ingestion/junit", nil))
 	assert.Equal(t, http.StatusUnsupportedMediaType, rec.Code)
 }
+
+func TestRoutePatterns(t *testing.T) {
+	patterns := RoutePatterns()
+	assert.Len(t, patterns, 19)
+	assert.Contains(t, patterns, "GET /healthz")
+	assert.Contains(t, patterns, "POST /api/v1/ingestion/junit")
+	assert.Contains(t, patterns, "GET /api/v1/test-cases/{testCaseId}/results")
+}

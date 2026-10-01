@@ -27,7 +27,8 @@ commit seeds with real data. Details: [`docs/environments.md`](docs/environments
 
 `api/openapi.yaml` is the contract and lives next to the code. A change to a public operation updates, in the same
 change: the spec, the backend handler, the generated client, and both Contract suites (a new response status is a new
-contract target automatically).
+contract target automatically). The backend Contract suite also fails when the router and the spec disagree
+(`TestRoutesMatchContract`): every registered route must be an operation of the contract, and vice versa.
 
 ## Tests: a feature updates every layer it touches, on both sides
 

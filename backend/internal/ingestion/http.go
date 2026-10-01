@@ -44,7 +44,7 @@ type Handler struct {
 func NewHandler(api API, maxBytes int64) *Handler { return &Handler{api: api, maxBytes: maxBytes} }
 
 // Register mounts the ingestion routes.
-func (h *Handler) Register(mux *http.ServeMux) {
+func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("POST /api/v1/ingestion/junit", h.ingestJUnit)
 }
 

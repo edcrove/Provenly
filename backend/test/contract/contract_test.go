@@ -35,6 +35,19 @@ func ingest(e *httpexpect.Expect, runID string, attempt int, body string) *httpe
 		WithHeader("Content-Type", xmlType).WithText(body)
 }
 
+// TestRoutesMatchContract keeps the contract the authoritative inventory: every
+// route the API registers is an operation of the spec, and vice versa.
+func TestRoutesMatchContract(t *testing.T) {
+	var spec []string
+	for path, item := range doc.Paths.Map() {
+		for method := range item.Operations() {
+			spec = append(spec, method+" "+path)
+		}
+	}
+	require.ElementsMatch(t, spec, app.RoutePatterns(),
+		"router and api/openapi.yaml disagree: add the missing operations to the contract or remove the extra routes")
+}
+
 func TestSystem(t *testing.T) {
 	e := api(t, fresh(t), 1<<20)
 	e.GET("/healthz").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "ok")

@@ -6,6 +6,8 @@ package apperr
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"unicode/utf8"
 )
 
 // Kind classifies an application error.
@@ -70,6 +72,12 @@ func (v *Validator) Check(ok bool, field, message string) {
 	if !ok {
 		v.fields = append(v.fields, FieldError{Field: field, Message: message})
 	}
+}
+
+// CheckText records a field error when s cannot be stored as text: it must be
+// valid UTF-8 and contain no NUL character (PostgreSQL rejects both).
+func (v *Validator) CheckText(field, s string) {
+	v.Check(utf8.ValidString(s) && !strings.ContainsRune(s, 0), field, "must be valid UTF-8 text without NUL characters")
 }
 
 // Err returns a validation error when any check failed, otherwise nil.

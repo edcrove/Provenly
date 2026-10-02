@@ -172,6 +172,9 @@ func TestValidateMeta(t *testing.T) {
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Pipeline: strings.Repeat("p", 201)},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Branch: strings.Repeat("b", 256)},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Commit: strings.Repeat("c", 65)},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Pipeline: "p\x00"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Branch: "\xff"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Commit: "c\x00"},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Status: execution.RunStatus("running")},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Status: execution.RunStatus("failed")},
 	}

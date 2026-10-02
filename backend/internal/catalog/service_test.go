@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,6 +54,9 @@ func TestCreateValidation(t *testing.T) {
 		{Title: strings.Repeat("t", 201)},
 		{Title: "ok", Description: long},
 		{Title: "ok", ExpectedResult: long},
+		{Title: "a\x00b"},
+		{Title: "ok", Description: "\x00"},
+		{Title: "ok", ExpectedResult: "\xff"},
 	} {
 		_, err := svc.Create(ctx, in)
 		assert.Equal(t, apperr.KindValidation, kindOf(t, err))
@@ -127,6 +131,9 @@ func TestUpdateValidation(t *testing.T) {
 		{Title: ptr(strings.Repeat("t", 201))},
 		{Description: ptr(long)},
 		{ExpectedResult: ptr(long)},
+		{Title: ptr("a\x00")},
+		{Description: ptr("\x00")},
+		{ExpectedResult: ptr("\x00")},
 	} {
 		_, err := svc.Update(ctx, 1, in)
 		assert.Equal(t, apperr.KindValidation, kindOf(t, err))
@@ -235,6 +242,8 @@ func TestStepValidationAndNotFound(t *testing.T) {
 		{Action: strings.Repeat("a", 2001)},
 		{Action: "a", ExpectedResult: strings.Repeat("e", 2001)},
 		{Action: "a", Position: ptr(int32(0))},
+		{Action: "a\x00"},
+		{Action: "a", ExpectedResult: "\x00"},
 	} {
 		_, err := svc.CreateStep(ctx, tc.ID, in)
 		assert.Equal(t, apperr.KindValidation, kindOf(t, err))
@@ -340,3 +349,22 @@ func (f *failSecondListRepo) ListAllTestSteps(ctx context.Context, tcID int64) (
 }
 
 func (f *failSecondListRepo) InTx(_ context.Context, fn func(Repository) error) error { return fn(f) }
+
+// FuzzCreateText: any title/description either fails validation or is stored as
+// valid UTF-8 without NUL characters (text PostgreSQL can always store).
+func FuzzCreateText(f *testing.F) {
+	for _, s := range []string{"Login", "a\x00b", "\xff", "ñandú 😀", "   ", ""} {
+		f.Add(s, s)
+	}
+	f.Fuzz(func(t *testing.T, title, description string) {
+		svc, _, ctx := setup(t)
+		tc, err := svc.Create(ctx, CreateInput{Title: title, Description: description})
+		if err != nil {
+			require.Equal(t, apperr.KindValidation, kindOf(t, err))
+			return
+		}
+		for _, s := range []string{tc.Title, tc.Description} {
+			require.True(t, utf8.ValidString(s) && !strings.ContainsRune(s, 0), "%q", s)
+		}
+	})
+}

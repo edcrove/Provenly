@@ -126,10 +126,11 @@ test-backend-unit: $(OUT) ## Backend Unit (testing+testify), raw coverage in GOC
 	cd backend && go tool covdata textfmt -i=$(GOCOV)/unit -o=$(OUT)/backend-unit.out
 
 FUZZTIME ?= 10s
-fuzz: ## Backend fuzzing (request parameters and JUnit parser), FUZZTIME each
+fuzz: ## Backend fuzzing (request parameters, JUnit parser, catalog text), FUZZTIME each
 	cd backend && go test -run '^$$' -fuzz '^FuzzParsePage$$' -fuzztime $(FUZZTIME) ./internal/platform/httpx/
 	cd backend && go test -run '^$$' -fuzz '^FuzzPathID$$' -fuzztime $(FUZZTIME) ./internal/platform/httpx/
 	cd backend && go test -run '^$$' -fuzz '^FuzzParse$$' -fuzztime $(FUZZTIME) ./internal/ingestion/junit/
+	cd backend && go test -run '^$$' -fuzz '^FuzzCreateText$$' -fuzztime $(FUZZTIME) ./internal/catalog/
 
 test-backend-integration: $(OUT) ## Backend Integration (testcontainers-go, real Postgres; needs Docker)
 	rm -rf $(GOCOV)/integration && mkdir -p $(GOCOV)/integration

@@ -302,6 +302,20 @@ func TestRobustness(t *testing.T) {
 		e.Request(op.method, op.path).WithHeader("Content-Type", "text/plain").WithText(op.body).Expect().
 			Status(http.StatusUnsupportedMediaType).JSON(problemOpts).Object().HasValue("code", "unsupported_media_type")
 	}
+	// Text that PostgreSQL cannot store (NUL, invalid UTF-8) is a 400, never a 500.
+	unstorable := func(r *httpexpect.Request) {
+		r.Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().
+			HasValue("code", "validation_error").HasValue("detail", "request validation failed")
+	}
+	unstorable(e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "a\x00b"}))
+	unstorable(e.PATCH("/api/v1/test-cases/" + id).WithJSON(map[string]any{"description": "\x00"}))
+	unstorable(e.POST(steps).WithJSON(map[string]any{"action": "a\x00"}))
+	unstorable(e.PATCH(stepPath).WithJSON(map[string]any{"expectedResult": "\x00"}))
+	for _, q := range [][2]string{{"branch", "ma\x00in"}, {"pipeline", "\xff"}, {"commit", "c\x00"}} {
+		unstorable(e.POST("/api/v1/ingestion/junit").WithQuery("provider", "github").WithQuery("runId", "nul").
+			WithQuery("runAttempt", 1).WithQuery(q[0], q[1]).WithHeader("Content-Type", xmlType).WithText(report(1)))
+	}
+
 	// Duplicate JSON keys: the last value wins.
 	e.POST("/api/v1/test-cases").WithHeader("Content-Type", "application/json").WithBytes([]byte(`{"title":"a","title":"b"}`)).
 		Expect().Status(http.StatusCreated).JSON().Object().HasValue("title", "b")

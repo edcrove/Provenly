@@ -46,6 +46,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (TestCase, error) 
 	v.Check(validLen(in.Title, maxTitle), "title", fmt.Sprintf("must be at most %d characters", maxTitle))
 	v.Check(validLen(in.Description, maxLongText), "description", fmt.Sprintf("must be at most %d characters", maxLongText))
 	v.Check(validLen(in.ExpectedResult, maxLongText), "expectedResult", fmt.Sprintf("must be at most %d characters", maxLongText))
+	v.CheckText("title", in.Title)
+	v.CheckText("description", in.Description)
+	v.CheckText("expectedResult", in.ExpectedResult)
 	if err := v.Err(); err != nil {
 		return TestCase{}, err
 	}
@@ -86,12 +89,15 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) (TestCas
 		in.Title = &t
 		v.Check(t != "", "title", "must not be empty")
 		v.Check(validLen(t, maxTitle), "title", fmt.Sprintf("must be at most %d characters", maxTitle))
+		v.CheckText("title", t)
 	}
 	if in.Description != nil {
 		v.Check(validLen(*in.Description, maxLongText), "description", fmt.Sprintf("must be at most %d characters", maxLongText))
+		v.CheckText("description", *in.Description)
 	}
 	if in.ExpectedResult != nil {
 		v.Check(validLen(*in.ExpectedResult, maxLongText), "expectedResult", fmt.Sprintf("must be at most %d characters", maxLongText))
+		v.CheckText("expectedResult", *in.ExpectedResult)
 	}
 	if err := v.Err(); err != nil {
 		return TestCase{}, err
@@ -148,9 +154,11 @@ func validateStepText(v *apperr.Validator, action, expected *string) {
 	if action != nil {
 		v.Check(strings.TrimSpace(*action) != "", "action", "must not be empty")
 		v.Check(validLen(*action, maxStepText), "action", fmt.Sprintf("must be at most %d characters", maxStepText))
+		v.CheckText("action", *action)
 	}
 	if expected != nil {
 		v.Check(validLen(*expected, maxStepText), "expectedResult", fmt.Sprintf("must be at most %d characters", maxStepText))
+		v.CheckText("expectedResult", *expected)
 	}
 }
 

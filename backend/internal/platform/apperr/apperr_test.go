@@ -39,3 +39,18 @@ func TestValidator(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, []FieldError{{Field: "b", Message: "is wrong"}}, e.Fields)
 }
+
+func TestCheckTextRejectsUnstorableText(t *testing.T) {
+	for _, ok := range []string{"", "plain", "ñandú ✓ 😀", "tab\tand\nnewline"} {
+		var v Validator
+		v.CheckText("f", ok)
+		assert.NoError(t, v.Err(), "%q", ok)
+	}
+	for _, bad := range []string{"a\x00b", "\x00", "bad \xff utf8", "\xc3"} {
+		var v Validator
+		v.CheckText("f", bad)
+		e, ok := As(v.Err())
+		require.True(t, ok, "%q", bad)
+		assert.Equal(t, []FieldError{{Field: "f", Message: "must be valid UTF-8 text without NUL characters"}}, e.Fields)
+	}
+}

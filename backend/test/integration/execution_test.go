@@ -80,6 +80,12 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Equal(t, 50.0, sum.ExecutionPercent)
 		assert.Equal(t, execution.DiagnosticCounts{Missing: 1, Malformed: 1, Unknown: 1, Deprecated: 1, Total: 4}, sum.Diagnostics)
 		assert.Equal(t, []execution.TestCaseOutcome{{TestCaseID: login.ID, Status: "failed", ResultCount: 3}, {TestCaseID: logout.ID, Status: execution.Untested}}, sum.TestCases)
+		// The run carries the same outcome as its summary, from the store's batch read.
+		want := execution.RunOutcome{Verdict: execution.VerdictFailed, Executed: 1, Failed: 1, Untested: 1}
+		assert.Equal(t, want, out.Run.Outcome)
+		got, err := s.Execution.GetRun(ctx, out.Run.ID)
+		require.NoError(t, err)
+		assert.Equal(t, want, got.Outcome)
 
 		var count int
 		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM test_cases`).Scan(&count))
@@ -133,19 +139,19 @@ func TestExecutionPersistence(t *testing.T) {
 	t.Run("BE-INT-019_ci_reported_run_status_is_stored_and_not_changed_by_replays", func(t *testing.T) {
 		s, ctx := fresh(t)
 		m := meta("950", 1)
-		m.Status = execution.RunFailed
+		m.Status = execution.RunInterrupted
 		out, err := s.Ingestion.IngestJUnit(ctx, m, strings.NewReader(junitFor()))
 		require.NoError(t, err)
-		assert.Equal(t, execution.RunFailed, out.Run.Status)
+		assert.Equal(t, execution.RunInterrupted, out.Run.Status)
 		run, err := s.Execution.GetRun(ctx, out.Run.ID)
 		require.NoError(t, err)
-		assert.Equal(t, execution.RunFailed, run.Status)
+		assert.Equal(t, execution.RunInterrupted, run.Status)
 
 		replay, err := s.Ingestion.IngestJUnit(ctx, meta("950", 1), strings.NewReader(junitFor()))
 		require.NoError(t, err)
-		assert.Equal(t, execution.RunFailed, replay.Run.Status, "a replay never changes the recorded status")
+		assert.Equal(t, execution.RunInterrupted, replay.Run.Status, "a replay never changes the recorded status")
 		require.Len(t, replay.Warnings, 1)
-		assert.Contains(t, replay.Warnings[0], `status "completed" differs from "failed"`)
+		assert.Contains(t, replay.Warnings[0], `status "completed" differs from "interrupted"`)
 	})
 
 	t.Run("BE-INT-008_duplicate_ingestion_is_idempotent_even_when_concurrent", func(t *testing.T) {
@@ -257,13 +263,15 @@ func TestExecutionPersistence(t *testing.T) {
 
 		// The full lifecycle is supported by the model even though the POC only
 		// records final statuses (created/running arrive with live streaming).
-		for i, status := range []string{"created", "running", "completed", "failed", "cancelled"} {
+		for i, status := range []string{"created", "running", "completed", "interrupted", "cancelled"} {
 			_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ($1, 'github', 'life', $2, $3)`,
 				"github:life:"+itoa(int64(i+1)), i+1, status)
 			assert.NoError(t, err, status)
 		}
 		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ('github:life:9', 'github', 'life', 9, 'paused')`)
 		assert.Error(t, err, "unknown run statuses are rejected")
+		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ('github:life:10', 'github', 'life', 10, 'failed')`)
+		assert.Error(t, err, "failed was renamed interrupted (migration 00007)")
 	})
 
 	t.Run("BE-INT-013_run_results_filters_and_pagination", func(t *testing.T) {

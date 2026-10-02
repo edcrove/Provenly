@@ -76,6 +76,13 @@ Project rename (OpenTestHub → Provenly): DEC-39.
    (a replay never changes it and warns if it differs); the UI badges it and flags failed/cancelled runs as possibly
    incomplete ("untested may simply not have run"). Test outcomes stay in the summary. Live streaming (Core MVP) will
    improve this with created/running and reconciliation.
+   **Status: Changed by Ed (2026-10-02) — decisions E1–E5, implemented.** The run separates two things:
+   `executionStatus` (how the CI execution ended: `completed`, `interrupted` — formerly `failed` — or `cancelled`;
+   migration 00007) and a derived `outcome` (`verdict`, counts and `passRate`, the % of executed TC-IDs that passed).
+   Verdict precedence: `no_tests` (empty universe) > `failed` (any failed/error) > `incomplete` (any untested/skipped)
+   > `passed`. `created`/`running` remain valid in the database for the live lifecycle but are not in the API until
+   live streaming. The run list shows verdict, pass rate and breakdown, and the execution status only when it is
+   not `completed`.
 8. **Steps.** At most 100 steps per test case (so one page of the paginated steps listing always holds them all);
    reorder is `PUT /steps/order` with the full permutation of step ids.
    **Status: Accepted by Ed (2026-09-28).**

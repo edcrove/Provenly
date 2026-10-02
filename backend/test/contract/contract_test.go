@@ -155,18 +155,23 @@ func TestRunsAndIngestion(t *testing.T) {
 
 	ingest(e, "1", 0, report(id)).Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "validation_error")
 	ingest(e, "3", 1, report(id)).WithQuery("status", "cancelled").Expect().Status(http.StatusCreated).
-		JSON().Object().Value("testRun").Object().HasValue("status", "cancelled")
+		JSON().Object().Value("testRun").Object().HasValue("executionStatus", "cancelled")
+	ingest(e, "5", 1, report(id)).WithQuery("status", "interrupted").Expect().Status(http.StatusCreated).
+		JSON().Object().Value("testRun").Object().HasValue("executionStatus", "interrupted")
 	ingest(e, "4", 1, report(id)).WithQuery("status", "running").Expect().Status(http.StatusBadRequest)
+	ingest(e, "4", 1, report(id)).WithQuery("status", "failed").Expect().Status(http.StatusBadRequest)
 	ingest(e, "1", 1, "<not-xml").Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "invalid_junit")
 	e.POST("/api/v1/ingestion/junit").WithQuery("provider", "github").WithQuery("runId", "1").WithQuery("runAttempt", 1).
 		WithJSON(map[string]any{}).Expect().Status(http.StatusUnsupportedMediaType)
 	small := api(t, app.NewServices(db.Pool, time.Now), 64)
 	ingest(small, "9", 1, report(id)).Expect().Status(http.StatusRequestEntityTooLarge).JSON(problemOpts).Object().HasValue("code", "payload_too_large")
 
-	e.GET("/api/v1/test-runs").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 3)
+	e.GET("/api/v1/test-runs").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 4)
 	e.GET("/api/v1/test-runs").WithQuery("pageSize", 0).Expect().Status(http.StatusBadRequest)
 
-	e.GET("/api/v1/test-runs/"+runID).Expect().Status(http.StatusOK).JSON().Object().HasValue("externalRunId", "github:1:1")
+	run := e.GET("/api/v1/test-runs/" + runID).Expect().Status(http.StatusOK).JSON().Object()
+	run.HasValue("externalRunId", "github:1:1").HasValue("executionStatus", "completed")
+	run.Value("outcome").Object().HasValue("verdict", "failed").HasValue("executed", 1).HasValue("failed", 1).HasValue("passRate", 0)
 	e.GET("/api/v1/test-runs/x").Expect().Status(http.StatusBadRequest)
 	e.GET("/api/v1/test-runs/987654").Expect().Status(http.StatusNotFound)
 
@@ -187,7 +192,7 @@ func TestRunsAndIngestion(t *testing.T) {
 	e.GET("/api/v1/test-runs/987654/summary").Expect().Status(http.StatusNotFound)
 
 	e.GET("/api/v1/test-cases/"+strconv.FormatInt(id, 10)+"/results").Expect().Status(http.StatusOK).
-		JSON().Object().HasValue("totalItems", 4)
+		JSON().Object().HasValue("totalItems", 6)
 }
 
 // TestInternalErrors covers the 500 variant of every operation that declares

@@ -4,6 +4,7 @@ import {
   formatDateTime,
   formatDuration,
   formatPercent,
+  outcomeBreakdown,
   plural,
   shortCommit,
   sumPercents,
@@ -11,6 +12,18 @@ import {
 } from './format'
 
 describe('format', () => {
+  it('lists the non-zero counts of a run outcome', () => {
+    expect(outcomeBreakdown({ passed: 2, failed: 1, error: 0, skipped: 0, untested: 1 })).toBe(
+      '2 passed · 1 failed · 1 untested',
+    )
+    expect(outcomeBreakdown({ passed: 0, failed: 0, error: 1, skipped: 2, untested: 0 })).toBe(
+      '1 error · 2 skipped',
+    )
+    expect(outcomeBreakdown({ passed: 0, failed: 0, error: 0, skipped: 0, untested: 0 })).toBe(
+      'no test cases',
+    )
+  })
+
   it('formats TC keys', () => {
     expect(tcKey(153)).toBe('TC-153')
   })

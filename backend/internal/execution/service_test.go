@@ -62,10 +62,10 @@ func TestRecordRunIsIdempotentPerAttempt(t *testing.T) {
 func TestRecordRunStoresTheReportedStatus(t *testing.T) {
 	svc, _, ctx := setup()
 	r := run(1)
-	r.Status = RunFailed
+	r.Status = RunInterrupted
 	got, _, err := svc.RecordRun(ctx, r, nil, nil, nil)
 	require.NoError(t, err)
-	assert.Equal(t, RunFailed, got.Status)
+	assert.Equal(t, RunInterrupted, got.Status)
 }
 
 func TestRecordRunErrors(t *testing.T) {
@@ -147,7 +147,7 @@ func TestSummaryUsesSnapshot(t *testing.T) {
 
 	_, err = svc.Summary(ctx, 99)
 	assert.Error(t, err)
-	for _, m := range []string{"ListDiagnostics", "ListValidResults", "ListExpectedCaseIDs"} {
+	for _, m := range []string{"ListDiagnostics", "ListSummaryInputs"} {
 		repo.errs[m] = errBoom
 		_, err = svc.Summary(ctx, r.ID)
 		assert.ErrorIs(t, err, errBoom, m)
@@ -194,5 +194,31 @@ func TestParseErrors(t *testing.T) {
 	assert.ErrorIs(t, err, errBoom)
 	repo.errs["ListParseErrors"] = errBoom
 	_, err = svc.ListParseErrors(ctx, r.ID, pagination.Default())
+	assert.ErrorIs(t, err, errBoom)
+}
+
+func TestRunsCarryTheirOutcome(t *testing.T) {
+	svc, repo, ctx := setup()
+	r, _, err := svc.RecordRun(ctx, run(1), []int64{1, 2}, []NewResult{valid(1, Passed, "a"), valid(2, Failed, "b")}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, RunOutcome{Verdict: VerdictFailed, Executed: 2, Passed: 1, Failed: 1, PassRate: 50}, r.Outcome)
+	got, err := svc.GetRun(ctx, r.ID)
+	require.NoError(t, err)
+	assert.Equal(t, r.Outcome, got.Outcome)
+	list, err := svc.ListRuns(ctx, pagination.Page{Number: 1, Size: 10})
+	require.NoError(t, err)
+	assert.Equal(t, r.Outcome, list.Items[0].Outcome)
+	hist, err := svc.History(ctx, 1, pagination.Page{Number: 1, Size: 10})
+	require.NoError(t, err)
+	assert.Equal(t, r.Outcome, hist.Items[0].Run.Outcome)
+
+	repo.errs["ListSummaryInputs"] = errBoom
+	_, _, err = svc.RecordRun(ctx, run(2), nil, nil, nil)
+	assert.ErrorIs(t, err, errBoom)
+	_, err = svc.GetRun(ctx, r.ID)
+	assert.ErrorIs(t, err, errBoom)
+	_, err = svc.ListRuns(ctx, pagination.Page{Number: 1, Size: 10})
+	assert.ErrorIs(t, err, errBoom)
+	_, err = svc.History(ctx, 1, pagination.Page{Number: 1, Size: 10})
 	assert.ErrorIs(t, err, errBoom)
 }

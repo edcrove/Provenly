@@ -56,6 +56,46 @@ type TestCaseOutcome struct {
 	ResultCount int32
 }
 
+// Verdict is the test outcome of a run, derived from its summary.
+type Verdict string
+
+// Verdicts, by precedence: no_tests when the expected universe is empty,
+// failed when any TC-ID failed or errored, incomplete when any is untested or
+// skipped, passed otherwise.
+const (
+	VerdictPassed     Verdict = "passed"
+	VerdictFailed     Verdict = "failed"
+	VerdictIncomplete Verdict = "incomplete"
+	VerdictNoTests    Verdict = "no_tests"
+)
+
+// RunOutcome is the test outcome of a run: its verdict, the counts behind it
+// and the pass rate over executed TC-IDs.
+type RunOutcome struct {
+	Verdict                                            Verdict
+	Executed, Passed, Failed, Error, Skipped, Untested int32
+	PassRate                                           float64
+}
+
+// Outcome derives the run outcome from the summary.
+func (s Summary) Outcome() RunOutcome {
+	o := RunOutcome{
+		Executed: s.ExecutedTotal, Passed: s.Counts.Passed, Failed: s.Counts.Failed, Error: s.Counts.Error,
+		Skipped: s.Counts.Skipped, Untested: s.Counts.Untested, PassRate: s.PercentOfExecuted.Passed,
+	}
+	switch {
+	case s.ExpectedTotal == 0:
+		o.Verdict = VerdictNoTests
+	case o.Failed+o.Error > 0:
+		o.Verdict = VerdictFailed
+	case o.Untested+o.Skipped > 0:
+		o.Verdict = VerdictIncomplete
+	default:
+		o.Verdict = VerdictPassed
+	}
+	return o
+}
+
 // Summary is the snapshot-based summary of a run.
 type Summary struct {
 	TestRunID         int64

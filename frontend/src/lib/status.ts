@@ -3,7 +3,8 @@ import type { components } from '@/api/schema'
 export type ResultStatus = components['schemas']['ResultStatus']
 export type SummaryStatus = components['schemas']['SummaryStatus']
 export type Correlation = components['schemas']['Correlation']
-export type RunStatus = components['schemas']['TestRunStatus']
+export type ExecutionStatus = components['schemas']['ExecutionStatus']
+export type Verdict = components['schemas']['RunVerdict']
 export type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'outline'
 
 export const resultStatuses: ResultStatus[] = ['passed', 'failed', 'error', 'skipped']
@@ -55,19 +56,35 @@ export function positiveInt(value: string | null | undefined, fallback: number):
   return Number.isInteger(n) && n >= 1 ? n : fallback
 }
 
-const runStatusVariants: Record<RunStatus, BadgeVariant> = {
+const executionVariants: Record<ExecutionStatus, BadgeVariant> = {
   completed: 'secondary',
-  running: 'outline',
-  created: 'outline',
-  failed: 'destructive',
+  interrupted: 'destructive',
   cancelled: 'warning',
 }
 
-export function runStatusVariant(status: RunStatus): BadgeVariant {
-  return runStatusVariants[status]
+/** Badge of how the CI execution ended (not the test outcome). */
+export function executionVariant(status: ExecutionStatus): BadgeVariant {
+  return executionVariants[status]
 }
 
 /** True when CI reported that the execution broke or was stopped (the report may be incomplete). */
-export function isInterruptedRun(status: RunStatus): boolean {
-  return status === 'failed' || status === 'cancelled'
+export function isInterruptedRun(status: ExecutionStatus): boolean {
+  return status !== 'completed'
+}
+
+const verdictVariants: Record<Verdict, BadgeVariant> = {
+  passed: 'success',
+  failed: 'destructive',
+  incomplete: 'warning',
+  no_tests: 'outline',
+}
+
+/** Badge of the run verdict (the test outcome). */
+export function verdictVariant(verdict: Verdict): BadgeVariant {
+  return verdictVariants[verdict]
+}
+
+/** Display label of a verdict ("no tests" instead of the wire value). */
+export function verdictLabel(verdict: Verdict): string {
+  return verdict.replace('_', ' ')
 }

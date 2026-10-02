@@ -65,7 +65,7 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 		Status: execution.RunStatus(q.Get("status")),
 	}
 	if q.Has("status") && meta.Status == "" {
-		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "status", Message: "must be one of completed, failed, cancelled"}))
+		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "status", Message: "must be one of completed, interrupted, cancelled"}))
 		return
 	}
 	attempt, err := strconv.ParseInt(q.Get("runAttempt"), 10, 32)

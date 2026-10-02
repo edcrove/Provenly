@@ -42,6 +42,20 @@ export function shortCommit(commit: string): string {
   return commit.length > 10 ? commit.slice(0, 10) : commit || '—'
 }
 
+/** Counts of a run outcome, e.g. "2 passed · 1 failed · 1 untested": only the non-zero ones. */
+export function outcomeBreakdown(o: {
+  passed: number
+  failed: number
+  error: number
+  skipped: number
+  untested: number
+}): string {
+  const parts = (['passed', 'failed', 'error', 'skipped', 'untested'] as const)
+    .filter((k) => o[k] > 0)
+    .map((k) => `${o[k]} ${k}`)
+  return parts.length ? parts.join(' · ') : 'no test cases'
+}
+
 /** "1 result", "2 results": count plus the singular or plural noun. */
 export function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : pluralForm}`

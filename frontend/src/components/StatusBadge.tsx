@@ -1,5 +1,15 @@
 import { Badge } from '@/components/ui/badge'
-import { correlationVariant, statusVariant, type Correlation, type SummaryStatus } from '@/lib/status'
+import {
+  correlationVariant,
+  executionVariant,
+  statusVariant,
+  verdictLabel,
+  verdictVariant,
+  type Correlation,
+  type ExecutionStatus,
+  type SummaryStatus,
+  type Verdict,
+} from '@/lib/status'
 
 export function StatusBadge({ status }: { status: SummaryStatus }) {
   return (
@@ -11,4 +21,22 @@ export function StatusBadge({ status }: { status: SummaryStatus }) {
 
 export function CorrelationBadge({ correlation }: { correlation: Correlation }) {
   return <Badge variant={correlationVariant(correlation)}>{correlation}</Badge>
+}
+
+/** Test outcome of a run: passed, failed, incomplete or no tests. */
+export function VerdictBadge({ verdict }: { verdict: Verdict }) {
+  return (
+    <Badge variant={verdictVariant(verdict)} data-testid="verdict-badge">
+      {verdictLabel(verdict)}
+    </Badge>
+  )
+}
+
+/** How the CI execution ended: completed, interrupted or cancelled. */
+export function ExecutionBadge({ status }: { status: ExecutionStatus }) {
+  return (
+    <Badge variant={executionVariant(status)} data-testid="execution-badge">
+      {status}
+    </Badge>
+  )
 }

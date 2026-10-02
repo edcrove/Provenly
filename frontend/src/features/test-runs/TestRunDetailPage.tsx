@@ -5,11 +5,11 @@ import { useTestRun, useTestRunSummary } from '@/api/queries'
 import { NotFoundPage } from '@/app/NotFoundPage'
 import { QueryState } from '@/components/QueryState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
+import { ExecutionBadge, VerdictBadge } from '@/components/StatusBadge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
-import { formatDateTime } from '@/lib/format'
-import { isInterruptedRun, positiveInt, runStatusVariant } from '@/lib/status'
+import { formatDateTime, formatPercent } from '@/lib/format'
+import { isInterruptedRun, positiveInt } from '@/lib/status'
 
 import { RunDiagnostics } from './RunDiagnostics'
 import { RunParseErrors } from './RunParseErrors'
@@ -25,7 +25,7 @@ function Metadata({ run }: { run: TestRun }) {
     ['Pipeline', run.pipeline || '—'],
     ['Branch', run.branch || '—'],
     ['Commit', run.commit || '—'],
-    ['Status', run.status],
+    ['Execution status', run.executionStatus],
     ['Created', formatDateTime(run.createdAt)],
     ['Started', formatDateTime(run.startedAt)],
     ['Completed', formatDateTime(run.completedAt)],
@@ -52,14 +52,22 @@ export function TestRunDetailPage() {
     <QueryState page query={run}>
       {(r) => (
         <div className="grid gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <PageTitle title={`Test run #${r.id}`} />
             <h1 className="text-2xl font-semibold">Test run #{r.id}</h1>
-            <Badge variant={runStatusVariant(r.status)}>{r.status}</Badge>
+            <VerdictBadge verdict={r.outcome.verdict} />
+            {isInterruptedRun(r.executionStatus) ? <ExecutionBadge status={r.executionStatus} /> : null}
+            <span className="text-muted-foreground text-sm" data-testid="run-pass-rate">
+              {r.outcome.executed > 0
+                ? `${formatPercent(r.outcome.passRate)} of executed passed`
+                : 'No test case executed'}
+            </span>
           </div>
-          {isInterruptedRun(r.status) ? (
+          {isInterruptedRun(r.executionStatus) ? (
             <Alert variant="destructive" data-testid="interrupted-run">
-              <AlertTitle>The CI execution {r.status === 'failed' ? 'failed' : 'was cancelled'}</AlertTitle>
+              <AlertTitle>
+                The CI execution {r.executionStatus === 'interrupted' ? 'was interrupted' : 'was cancelled'}
+              </AlertTitle>
               <AlertDescription>
                 The report may be incomplete: untested test cases may simply not have run.
               </AlertDescription>

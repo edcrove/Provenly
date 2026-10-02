@@ -25,10 +25,10 @@ targets:
     description: execution history of a TC-ID across runs with observed metadata and pagination
     surfaces: [src/features/test-cases/TestCaseHistory.tsx]
   - id: FE-INT-008
-    description: test run list with metadata, empty state and pagination
+    description: test run list with verdict, pass rate, outcome breakdown, execution status, metadata, empty state and pagination
     surfaces: [src/features/test-runs/TestRunListPage.tsx]
   - id: FE-INT-009
-    description: test run detail with metadata and summary (counts and the three percentages, untested links)
+    description: test run detail with verdict, pass rate, metadata and summary (counts, the three percentages, pass rate, untested links)
     surfaces: [src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/RunSummary.tsx, src/components/StatusBadge.tsx]
   - id: FE-INT-010
     description: TC-ID diagnostics (missing/malformed/unknown/deprecated) and outside-universe test cases with "mark as automated"
@@ -49,7 +49,7 @@ targets:
     description: report parse errors (kept/discarded) on the run detail and unknown vs sub-millisecond durations
     surfaces: [src/features/test-runs/RunParseErrors.tsx]
   - id: FE-INT-016
-    description: runs whose CI execution failed or was cancelled are flagged as possibly incomplete
+    description: runs whose CI execution was interrupted or cancelled are flagged as possibly incomplete
     surfaces: [src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/TestRunListPage.tsx]
   - id: FE-INT-017
     description: every page has a single h1, real section headings (h2) and its own browser tab title

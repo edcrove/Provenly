@@ -5,13 +5,15 @@ import {
   correlations,
   correlationVariant,
   invalidCorrelations,
+  executionVariant,
   isInterruptedRun,
-  runStatusVariant,
   pickEnum,
   positiveInt,
   resultStatuses,
   statusVariant,
   summaryStatuses,
+  verdictLabel,
+  verdictVariant,
 } from './status'
 
 describe('status helpers', () => {
@@ -34,14 +36,22 @@ describe('status helpers', () => {
     expect(correlationVariant('unknown')).toBe('warning')
   })
 
-  it('maps run statuses and detects interrupted runs', () => {
-    expect(runStatusVariant('completed')).toBe('secondary')
-    expect(runStatusVariant('failed')).toBe('destructive')
-    expect(runStatusVariant('cancelled')).toBe('warning')
-    expect(runStatusVariant('running')).toBe('outline')
-    expect(isInterruptedRun('failed')).toBe(true)
+  it('maps execution statuses and detects interrupted runs', () => {
+    expect(executionVariant('completed')).toBe('secondary')
+    expect(executionVariant('interrupted')).toBe('destructive')
+    expect(executionVariant('cancelled')).toBe('warning')
+    expect(isInterruptedRun('interrupted')).toBe(true)
     expect(isInterruptedRun('cancelled')).toBe(true)
     expect(isInterruptedRun('completed')).toBe(false)
+  })
+
+  it('maps verdicts to badges and labels', () => {
+    expect(verdictVariant('passed')).toBe('success')
+    expect(verdictVariant('failed')).toBe('destructive')
+    expect(verdictVariant('incomplete')).toBe('warning')
+    expect(verdictVariant('no_tests')).toBe('outline')
+    expect(verdictLabel('no_tests')).toBe('no tests')
+    expect(verdictLabel('passed')).toBe('passed')
   })
 
   it('explains every correlation', () => {

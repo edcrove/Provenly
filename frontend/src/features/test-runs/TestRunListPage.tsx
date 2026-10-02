@@ -3,12 +3,12 @@ import { Link, useSearchParams } from 'react-router'
 import { useTestRuns } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
-import { Badge } from '@/components/ui/badge'
+import { ExecutionBadge, VerdictBadge } from '@/components/StatusBadge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatDateTime, plural, shortCommit } from '@/lib/format'
-import { positiveInt, runStatusVariant } from '@/lib/status'
+import { formatDateTime, formatPercent, outcomeBreakdown, shortCommit } from '@/lib/format'
+import { positiveInt } from '@/lib/status'
 
 export function TestRunListPage() {
   const [params, setParams] = useSearchParams()
@@ -30,19 +30,21 @@ export function TestRunListPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Run</TableHead>
-                    <TableHead>External run id</TableHead>
-                    <TableHead>Pipeline</TableHead>
+                    <TableHead>Verdict</TableHead>
+                    <TableHead>Pass rate</TableHead>
+                    <TableHead>Test cases</TableHead>
+                    <TableHead>Execution</TableHead>
                     <TableHead>Branch</TableHead>
                     <TableHead>Commit</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Results</TableHead>
+                    <TableHead>Pipeline</TableHead>
+                    <TableHead>External run id</TableHead>
                     <TableHead>Created</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.items.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-muted-foreground">
+                      <TableCell colSpan={10} className="text-muted-foreground">
                         No test runs yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.
                       </TableCell>
                     </TableRow>
@@ -54,17 +56,28 @@ export function TestRunListPage() {
                           #{run.id}
                         </Link>
                       </TableCell>
-                      <TableCell className="font-mono">{run.externalRunId}</TableCell>
-                      <TableCell>{run.pipeline || '—'}</TableCell>
+                      <TableCell>
+                        <VerdictBadge verdict={run.outcome.verdict} />
+                      </TableCell>
+                      <TableCell className="tabular-nums" data-testid="pass-rate">
+                        {run.outcome.executed > 0 ? formatPercent(run.outcome.passRate) : '—'}
+                      </TableCell>
+                      <TableCell data-testid="outcome-breakdown">
+                        {outcomeBreakdown(run.outcome)}
+                        <span className="text-muted-foreground"> · {run.expectedCount} expected</span>
+                      </TableCell>
+                      <TableCell>
+                        {run.executionStatus === 'completed' ? (
+                          <span className="text-muted-foreground">completed</span>
+                        ) : (
+                          <ExecutionBadge status={run.executionStatus} />
+                        )}
+                      </TableCell>
                       <TableCell>{run.branch || '—'}</TableCell>
                       <TableCell className="font-mono">{shortCommit(run.commit)}</TableCell>
-                      <TableCell>
-                        <Badge variant={runStatusVariant(run.status)}>{run.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        {plural(run.resultCount, 'result')} · {run.expectedCount} expected
-                      </TableCell>
-                      <TableCell>{formatDateTime(run.createdAt)}</TableCell>
+                      <TableCell>{run.pipeline || '—'}</TableCell>
+                      <TableCell className="font-mono">{run.externalRunId}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatDateTime(run.createdAt)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

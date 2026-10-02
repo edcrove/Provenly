@@ -436,8 +436,46 @@ export interface components {
         ReorderTestStepsRequest: {
             stepIds: number[];
         };
-        /** @enum {string} */
-        TestRunStatus: "created" | "running" | "completed" | "failed" | "cancelled";
+        /**
+         * @description How the CI execution ended, as reported by CI: `completed`, `interrupted` (the pipeline
+         *     broke) or `cancelled` (it was stopped). It says nothing about test outcomes: see
+         *     `TestRun.outcome.verdict`.
+         * @default completed
+         * @enum {string}
+         */
+        ExecutionStatus: "completed" | "interrupted" | "cancelled";
+        /**
+         * @description Derived from the run's summary (snapshot TC-IDs with their aggregated status):
+         *     `no_tests` when the expected universe is empty; otherwise `failed` when any TC-ID
+         *     failed or errored; otherwise `incomplete` when any is untested or skipped;
+         *     otherwise `passed`.
+         * @enum {string}
+         */
+        RunVerdict: "passed" | "failed" | "incomplete" | "no_tests";
+        /** @description Test outcome of a run, from the same computation as its summary. */
+        RunOutcome: {
+            verdict: components["schemas"]["RunVerdict"];
+            /**
+             * Format: int32
+             * @description Expected TC-IDs with at least one result
+             */
+            executed: number;
+            /** Format: int32 */
+            passed: number;
+            /** Format: int32 */
+            failed: number;
+            /** Format: int32 */
+            error: number;
+            /** Format: int32 */
+            skipped: number;
+            /** Format: int32 */
+            untested: number;
+            /**
+             * Format: double
+             * @description Percentage of executed TC-IDs that passed (0 when none was executed)
+             */
+            passRate: number;
+        };
         TestRun: {
             /** Format: int64 */
             id: number;
@@ -450,7 +488,8 @@ export interface components {
             pipeline: string;
             branch: string;
             commit: string;
-            status: components["schemas"]["TestRunStatus"];
+            executionStatus: components["schemas"]["ExecutionStatus"];
+            outcome: components["schemas"]["RunOutcome"];
             /**
              * Format: int32
              * @description Size of the immutable expected-universe snapshot
@@ -1237,11 +1276,11 @@ export interface operations {
                 branch?: string;
                 commit?: string;
                 /**
-                 * @description How the CI execution ended. `failed` or `cancelled` mark a run whose
-                 *     pipeline broke or was stopped, so its report may be incomplete and its
-                 *     untested test cases may simply not have run.
+                 * @description How the CI execution ended (the run's `executionStatus`). `interrupted` or
+                 *     `cancelled` mark a run whose pipeline broke or was stopped, so its report may
+                 *     be incomplete and its untested test cases may simply not have run.
                  */
-                status?: "completed" | "failed" | "cancelled";
+                status?: components["schemas"]["ExecutionStatus"];
             };
             header?: never;
             path?: never;

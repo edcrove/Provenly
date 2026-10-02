@@ -160,22 +160,19 @@ func (f *fakeRepo) CountRunResults(_ context.Context, runID int64, flt ResultFil
 	return int64(n), nil
 }
 
-func (f *fakeRepo) ListExpectedCaseIDs(_ context.Context, runID int64) ([]int64, error) {
-	if err := f.errs["ListExpectedCaseIDs"]; err != nil {
+func (f *fakeRepo) ListSummaryInputs(_ context.Context, runIDs []int64) (map[int64]SummaryInputs, error) {
+	if err := f.errs["ListSummaryInputs"]; err != nil {
 		return nil, err
 	}
-	return f.expected[runID], nil
-}
-
-func (f *fakeRepo) ListValidResults(_ context.Context, runID int64) ([]ValidResult, error) {
-	if err := f.errs["ListValidResults"]; err != nil {
-		return nil, err
-	}
-	var out []ValidResult
-	for _, r := range f.results[runID] {
-		if r.Correlation == CorrelationValid {
-			out = append(out, ValidResult{TestCaseID: *r.TestCaseID, Status: r.Status})
+	out := map[int64]SummaryInputs{}
+	for _, id := range runIDs {
+		in := SummaryInputs{Expected: f.expected[id]}
+		for _, r := range f.results[id] {
+			if r.Correlation == CorrelationValid {
+				in.Valid = append(in.Valid, ValidResult{TestCaseID: *r.TestCaseID, Status: r.Status})
+			}
 		}
+		out[id] = in
 	}
 	return out, nil
 }

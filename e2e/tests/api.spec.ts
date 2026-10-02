@@ -80,6 +80,10 @@ test.describe('Backend API journeys', () => {
       'deprecated',
     ])
 
+    expect(body.testRun).toMatchObject({
+      executionStatus: 'completed',
+      outcome: { verdict: 'failed', executed: 1, passed: 0, failed: 1, untested: 1, passRate: 0 },
+    })
     const runId = body.testRun.id
     const summary = await (await request.get(`${apiURL}/api/v1/test-runs/${runId}/summary`)).json()
     expect(summary).toMatchObject({

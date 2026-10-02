@@ -28,13 +28,14 @@ Layers: **U** = unit, **I** = integration (backend: testcontainers; frontend: Te
 | 10 | Test Case UI | At 375 px the list header overflowed and TC-IDs wrapped. | The header wraps; TC-IDs do not break. | Manual (Chromium 375 px) |
 | 11 | Test Case UI | Invalid ids (`/test-cases/abc`) called the API and read "Something went wrong"; error/loading pages kept the generic tab title; a filter without matches read "No test cases yet." | Invalid ids render *Page not found* without a request; tab titles "Loading…", "Not found", "Error"; "No deprecated test cases." | I FE-INT-018 |
 | 12 | Test Case UI | At 375 px a detail page with a history table grew to 780 px wide (page-level horizontal scroll). | Cards shrink below their content (`min-w-0`); wide tables scroll inside their card. | Screenshots 31–34 (`flows.spec.ts` asserts no page overflow at 375 px) |
+| 13 | TestRun Data Model & Lifecycle, Basic TestRun Summary, TestRun Detail UI | A run's `status` mixed how the CI execution ended with test outcomes: a run with failing tests read grey `completed`, a broken pipeline read red `failed`; `created`/`running` were in the API but never produced; the list had no verdict. | Decisions E1–E5 (2026-10-02): `executionStatus` = completed / interrupted / cancelled (migration 00007 renames `failed`); derived `outcome` with `verdict` (no_tests > failed > incomplete > passed), counts and `passRate` (% of executed that passed) on every run; list and detail show verdict, pass rate and breakdown, execution only when not completed. | U `TestOutcomeVerdict`, `TestRunsCarryTheirOutcome`; I BE-INT-011, FE-INT-008/009/016; C `TestRunsAndIngestion`; E FE-E2E-007, BE-E2E-004 |
 
 ## Acceptance criteria that lacked an explicit test (added)
 
 | Card | AC | Added test |
 |---|---|---|
 | TestRun Data Model & Lifecycle | A replay does not recompute the snapshot (only unit-tested with a fake) | I BE-INT-008: the catalog changes before the replay and the snapshot stays at 1 |
-| TestRun Data Model & Lifecycle | Supports the created/running/completed/failed/cancelled lifecycle | I BE-INT-011: the DB accepts all 5 statuses and rejects others |
+| TestRun Data Model & Lifecycle | Supports the created/running/completed/interrupted/cancelled lifecycle | I BE-INT-011: the DB accepts all 5 statuses and rejects others (including the old `failed`) |
 | Test Steps Management | Editing steps does not change the identity or the historical results | I BE-INT-021 (new): edit, reorder and delete steps, then compare the history |
 | End-to-End POC Demo Flow | Editing TC-153's content does not change how its earlier results read (UI) | E FE-E2E-002 step 5: edit the TC and the history is unchanged |
 
@@ -96,7 +97,7 @@ Layers: **U** = unit, **I** = integration (backend: testcontainers; frontend: Te
 | TestRun Data Model & Lifecycle | Unique externalRunId `{provider}:{run_id}:{run_attempt}` | U `TestExternalRunID`; I BE-INT-011 (DB format) |
 | | Pipeline/branch/commit/timestamps | I BE-INT-012; U `TestParseSuiteTimestampFormats` |
 | | Immutable expected-universe snapshot | I BE-INT-010 |
-| | Lifecycle created/running/completed/failed/cancelled | I BE-INT-011, BE-INT-019 |
+| | Lifecycle created/running/completed/interrupted/cancelled (API: completed/interrupted/cancelled) | I BE-INT-011, BE-INT-019 |
 | | A replay creates no duplicate and does not recompute the snapshot | U `TestRecordRunIsIdempotentPerAttempt`; I BE-INT-008 |
 | | A rerun (new attempt) creates a new run and keeps history | I BE-INT-009; E BE-E2E-005, FE-E2E-003 |
 | Test Result Persistence | Linked to run and TC; no AutomationTest | I BE-INT-012 |

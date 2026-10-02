@@ -60,14 +60,44 @@ func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, r
 				return err
 			}
 		}
-		out, err = r.GetTestRun(ctx, id)
-		return err
+		if out, err = r.GetTestRun(ctx, id); err != nil {
+			return err
+		}
+		return attachOutcomes(ctx, r, []TestRun{out}, func(_ int, o RunOutcome) { out.Outcome = o })
 	})
 	return out, created, err
 }
 
-// GetRun returns a run.
+// attachOutcomes computes the outcome of each run (one batch read) and hands
+// it to set with the run's index.
+func attachOutcomes(ctx context.Context, repo Repository, runs []TestRun, set func(int, RunOutcome)) error {
+	ids := make([]int64, len(runs))
+	for i, r := range runs {
+		ids[i] = r.ID
+	}
+	inputs, err := repo.ListSummaryInputs(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for i, r := range runs {
+		in := inputs[r.ID]
+		set(i, ComputeSummary(r.ID, in.Expected, in.Valid, nil).Outcome())
+	}
+	return nil
+}
+
+// GetRun returns a run with its outcome.
 func (s *Service) GetRun(ctx context.Context, id int64) (TestRun, error) {
+	run, err := s.getRun(ctx, id)
+	if err != nil {
+		return TestRun{}, err
+	}
+	err = attachOutcomes(ctx, s.repo, []TestRun{run}, func(_ int, o RunOutcome) { run.Outcome = o })
+	return run, err
+}
+
+// getRun returns a run without its outcome (existence checks).
+func (s *Service) getRun(ctx context.Context, id int64) (TestRun, error) {
 	run, err := s.repo.GetTestRun(ctx, id)
 	if errors.Is(err, ErrNotFound) {
 		return TestRun{}, runNotFound(id)
@@ -75,10 +105,13 @@ func (s *Service) GetRun(ctx context.Context, id int64) (TestRun, error) {
 	return run, err
 }
 
-// ListRuns returns a page of runs, newest first.
+// ListRuns returns a page of runs with their outcomes, newest first.
 func (s *Service) ListRuns(ctx context.Context, page pagination.Page) (pagination.Result[TestRun], error) {
 	items, err := s.repo.ListTestRuns(ctx, page.Limit(), page.Offset())
 	if err != nil {
+		return pagination.Result[TestRun]{}, err
+	}
+	if err := attachOutcomes(ctx, s.repo, items, func(i int, o RunOutcome) { items[i].Outcome = o }); err != nil {
 		return pagination.Result[TestRun]{}, err
 	}
 	total, err := s.repo.CountTestRuns(ctx)
@@ -90,7 +123,7 @@ func (s *Service) ListRuns(ctx context.Context, page pagination.Page) (paginatio
 
 // ListRunResults returns a page of the individual results of a run.
 func (s *Service) ListRunResults(ctx context.Context, runID int64, f ResultFilter, page pagination.Page) (pagination.Result[TestResult], error) {
-	if _, err := s.GetRun(ctx, runID); err != nil {
+	if _, err := s.getRun(ctx, runID); err != nil {
 		return pagination.Result[TestResult]{}, err
 	}
 	items, err := s.repo.ListRunResults(ctx, runID, f, page.Limit(), page.Offset())
@@ -116,7 +149,7 @@ func (s *Service) ParseErrors(ctx context.Context, runID int64) ([]ParseError, e
 
 // ListParseErrors returns a page of the stored parse errors of a run.
 func (s *Service) ListParseErrors(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[ParseError], error) {
-	if _, err := s.GetRun(ctx, runID); err != nil {
+	if _, err := s.getRun(ctx, runID); err != nil {
 		return pagination.Result[ParseError]{}, err
 	}
 	items, err := s.repo.ListParseErrors(ctx, runID, page.Limit(), page.Offset())
@@ -132,14 +165,10 @@ func (s *Service) ListParseErrors(ctx context.Context, runID int64, page paginat
 
 // Summary computes the summary of a run against its immutable snapshot.
 func (s *Service) Summary(ctx context.Context, runID int64) (Summary, error) {
-	if _, err := s.GetRun(ctx, runID); err != nil {
+	if _, err := s.getRun(ctx, runID); err != nil {
 		return Summary{}, err
 	}
-	expected, err := s.repo.ListExpectedCaseIDs(ctx, runID)
-	if err != nil {
-		return Summary{}, err
-	}
-	valid, err := s.repo.ListValidResults(ctx, runID)
+	inputs, err := s.repo.ListSummaryInputs(ctx, []int64{runID})
 	if err != nil {
 		return Summary{}, err
 	}
@@ -147,13 +176,21 @@ func (s *Service) Summary(ctx context.Context, runID int64) (Summary, error) {
 	if err != nil {
 		return Summary{}, err
 	}
-	return ComputeSummary(runID, expected, valid, diagnostics), nil
+	in := inputs[runID]
+	return ComputeSummary(runID, in.Expected, in.Valid, diagnostics), nil
 }
 
 // History returns the results of a TC-ID across runs, newest first.
 func (s *Service) History(ctx context.Context, testCaseID int64, page pagination.Page) (pagination.Result[HistoryEntry], error) {
 	items, err := s.repo.ListResultsForTestCase(ctx, testCaseID, page.Limit(), page.Offset())
 	if err != nil {
+		return pagination.Result[HistoryEntry]{}, err
+	}
+	runs := make([]TestRun, len(items))
+	for i, h := range items {
+		runs[i] = h.Run
+	}
+	if err := attachOutcomes(ctx, s.repo, runs, func(i int, o RunOutcome) { items[i].Run.Outcome = o }); err != nil {
 		return pagination.Result[HistoryEntry]{}, err
 	}
 	total, err := s.repo.CountResultsForTestCase(ctx, testCaseID)

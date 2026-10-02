@@ -108,7 +108,7 @@ test('UI flows', async ({ page, request }) => {
   await shot(page, 'test-cases-list')
 
   // Runs whose pipeline broke or was cancelled.
-  const failedRun = await ingest(request, '1002', junit(tc('login [chromium]', login)), 'failed', 'feature/checkout')
+  const failedRun = await ingest(request, '1002', junit(tc('login [chromium]', login)), 'interrupted', 'feature/checkout')
   await ingest(request, '1003', junit(tc('logout', logout)), 'cancelled', 'feature/search')
 
   // Deprecate in the UI, then a later run still reports the deprecated TC.

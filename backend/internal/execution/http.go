@@ -35,7 +35,8 @@ type TestRunDTO struct {
 	Pipeline      string     `json:"pipeline"`
 	Branch        string     `json:"branch"`
 	Commit        string     `json:"commit"`
-	Status        RunStatus  `json:"status"`
+	Status        RunStatus  `json:"executionStatus"`
+	Outcome       outcomeDTO `json:"outcome"`
 	ExpectedCount int32      `json:"expectedCount"`
 	ResultCount   int32      `json:"resultCount"`
 	CreatedAt     time.Time  `json:"createdAt"`
@@ -43,11 +44,23 @@ type TestRunDTO struct {
 	CompletedAt   *time.Time `json:"completedAt"`
 }
 
+type outcomeDTO struct {
+	Verdict  Verdict `json:"verdict"`
+	Executed int32   `json:"executed"`
+	Passed   int32   `json:"passed"`
+	Failed   int32   `json:"failed"`
+	Error    int32   `json:"error"`
+	Skipped  int32   `json:"skipped"`
+	Untested int32   `json:"untested"`
+	PassRate float64 `json:"passRate"`
+}
+
 // RunDTO converts a TestRun to its wire form.
 func RunDTO(r TestRun) TestRunDTO {
 	return TestRunDTO{
 		ID: r.ID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.Commit, Status: r.Status,
+		Outcome:       outcomeDTO(r.Outcome),
 		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, CreatedAt: r.CreatedAt,
 		StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,
 	}

@@ -15,11 +15,11 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 08 | Deprecation confirmation | `08-test-case-deprecate-confirm.png` |
 | 09 | Deprecated TC, history with a result "after deprecation" | `09-test-case-deprecated-with-history.png` |
 | 10 | List filtered by deprecated | `10-test-cases-filter-deprecated.png` |
-| 11 | Test run list (completed / failed / cancelled) | `11-test-runs-list.png` |
-| 12 | Run detail: metadata, summary + Total, diagnostics, outside universe, parse errors (error/warning), results | `12-test-run-detail.png` |
+| 11 | Test run list: verdict, pass rate, breakdown and execution status (interrupted / cancelled) | `11-test-runs-list.png` |
+| 12 | Run detail: verdict and pass rate, metadata, summary + Total, diagnostics, outside universe, parse errors (error/warning), results | `12-test-run-detail.png` |
 | 13 | Results filtered by status | `13-test-run-results-filter-failed.png` |
 | 14 | Results filtered by correlation | `14-test-run-results-filter-unknown.png` |
-| 15 | Run whose CI pipeline failed (possibly incomplete) | `15-test-run-failed-pipeline.png` |
+| 15 | Run whose CI pipeline was interrupted (possibly incomplete) | `15-test-run-failed-pipeline.png` |
 | 16 | Rounding: 3 × 33.33% with Total 100% | `16-test-run-rounding-total.png` |
 | 17 | 0 of 0 test cases executed | `17-test-run-zero-of-zero.png` |
 | 18 | Manual TC receiving automated results (warning) | `18-test-case-manual-with-results.png` |

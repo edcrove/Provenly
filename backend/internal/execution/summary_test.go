@@ -77,3 +77,36 @@ func TestComputeSummaryRoundingAndEmpty(t *testing.T) {
 func TestExternalRunID(t *testing.T) {
 	assert.Equal(t, "github:123:2", ExternalRunID("github", "123", 2))
 }
+
+func TestOutcomeVerdict(t *testing.T) {
+	p, f, e, s := Passed, Failed, Error, Skipped
+	cases := []struct {
+		name     string
+		expected []int64
+		results  []ResultStatus // one per expected TC-ID, in order; "" leaves it untested
+		verdict  Verdict
+		passRate float64
+	}{
+		{"no tests", nil, nil, VerdictNoTests, 0},
+		{"all passed", []int64{1, 2}, []ResultStatus{p, p}, VerdictPassed, 100},
+		{"a failure wins over untested", []int64{1, 2, 3}, []ResultStatus{p, f, ""}, VerdictFailed, 50},
+		{"an error is a failure", []int64{1, 2}, []ResultStatus{p, e}, VerdictFailed, 50},
+		{"untested is incomplete", []int64{1, 2}, []ResultStatus{p, ""}, VerdictIncomplete, 100},
+		{"skipped is incomplete", []int64{1, 2}, []ResultStatus{p, s}, VerdictIncomplete, 50},
+		{"nothing executed", []int64{1}, []ResultStatus{""}, VerdictIncomplete, 0},
+	}
+	for _, c := range cases {
+		var valid []ValidResult
+		for i, st := range c.results {
+			if st != "" {
+				valid = append(valid, ValidResult{TestCaseID: c.expected[i], Status: st})
+			}
+		}
+		o := ComputeSummary(1, c.expected, valid, nil).Outcome()
+		assert.Equal(t, c.verdict, o.Verdict, c.name)
+		assert.Equal(t, c.passRate, o.PassRate, c.name)
+	}
+	o := ComputeSummary(1, []int64{1, 2, 3, 4, 5}, []ValidResult{{1, Passed}, {2, Failed}, {3, Error}, {4, Skipped}, {9, Failed}}, nil).Outcome()
+	assert.Equal(t, RunOutcome{Verdict: VerdictFailed, Executed: 4, Passed: 1, Failed: 1, Error: 1, Skipped: 1, Untested: 1, PassRate: 25}, o,
+		"results outside the snapshot do not count")
+}

@@ -11,7 +11,7 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
   const untested = summary.testCases.filter((c) => c.status === 'untested')
   return (
     <div className="grid gap-4">
-      <div className="grid grid-cols-3 gap-3 text-sm">
+      <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
         <div className="rounded-md border p-3">
           <div className="text-muted-foreground">Expected (snapshot)</div>
           <div className="text-2xl font-semibold" data-testid="expected-total">
@@ -31,6 +31,15 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
           </div>
           <div className="text-muted-foreground text-xs" data-testid="execution-counts">
             {summary.executedTotal} of {plural(summary.expectedTotal, 'test case')} executed
+          </div>
+        </div>
+        <div className="rounded-md border p-3">
+          <div className="text-muted-foreground">Pass rate</div>
+          <div className="text-2xl font-semibold" data-testid="pass-rate">
+            {summary.executedTotal > 0 ? formatPercent(summary.percentOfExecuted.passed) : '—'}
+          </div>
+          <div className="text-muted-foreground text-xs" data-testid="pass-counts">
+            {summary.counts.passed} of {summary.executedTotal} executed passed
           </div>
         </div>
       </div>

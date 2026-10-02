@@ -511,13 +511,11 @@ paths:
           in: query
           required: false
           description: |
-            How the CI execution ended. `failed` or `cancelled` mark a run whose
-            pipeline broke or was stopped, so its report may be incomplete and its
-            untested test cases may simply not have run.
+            How the CI execution ended (the run's `executionStatus`). `interrupted` or
+            `cancelled` mark a run whose pipeline broke or was stopped, so its report may
+            be incomplete and its untested test cases may simply not have run.
           schema:
-            type: string
-            enum: [completed, failed, cancelled]
-            default: completed
+            $ref: "#/components/schemas/ExecutionStatus"
       requestBody:
         required: true
         content:
@@ -881,9 +879,57 @@ components:
             type: integer
             format: int64
 
-    TestRunStatus:
+    ExecutionStatus:
       type: string
-      enum: [created, running, completed, failed, cancelled]
+      description: |
+        How the CI execution ended, as reported by CI: `completed`, `interrupted` (the pipeline
+        broke) or `cancelled` (it was stopped). It says nothing about test outcomes: see
+        `TestRun.outcome.verdict`.
+      enum: [completed, interrupted, cancelled]
+      default: completed
+
+    RunVerdict:
+      type: string
+      description: |
+        Derived from the run's summary (snapshot TC-IDs with their aggregated status):
+        `no_tests` when the expected universe is empty; otherwise `failed` when any TC-ID
+        failed or errored; otherwise `incomplete` when any is untested or skipped;
+        otherwise `passed`.
+      enum: [passed, failed, incomplete, no_tests]
+
+    RunOutcome:
+      type: object
+      additionalProperties: false
+      description: Test outcome of a run, from the same computation as its summary.
+      required: [verdict, executed, passed, failed, error, skipped, untested, passRate]
+      properties:
+        verdict:
+          $ref: "#/components/schemas/RunVerdict"
+        executed:
+          type: integer
+          format: int32
+          description: Expected TC-IDs with at least one result
+        passed:
+          type: integer
+          format: int32
+        failed:
+          type: integer
+          format: int32
+        error:
+          type: integer
+          format: int32
+        skipped:
+          type: integer
+          format: int32
+        untested:
+          type: integer
+          format: int32
+        passRate:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+          description: Percentage of executed TC-IDs that passed (0 when none was executed)
 
     TestRun:
       type: object
@@ -897,7 +943,8 @@ components:
         - pipeline
         - branch
         - commit
-        - status
+        - executionStatus
+        - outcome
         - expectedCount
         - resultCount
         - createdAt
@@ -921,8 +968,10 @@ components:
           type: string
         commit:
           type: string
-        status:
-          $ref: "#/components/schemas/TestRunStatus"
+        executionStatus:
+          $ref: "#/components/schemas/ExecutionStatus"
+        outcome:
+          $ref: "#/components/schemas/RunOutcome"
         expectedCount:
           type: integer
           format: int32

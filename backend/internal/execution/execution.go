@@ -11,18 +11,17 @@ import (
 	"time"
 )
 
-// RunStatus is the lifecycle status of a test run.
+// RunStatus is how the CI execution of a run ended, as reported by CI. It
+// says nothing about test outcomes: see RunOutcome.Verdict.
 type RunStatus string
 
-// Run lifecycle statuses. The POC creates runs synchronously on ingestion of
-// the final report: completed by default, or failed/cancelled when CI reports
-// that the execution broke or was stopped (the report may be incomplete).
+// Execution statuses. The POC creates runs synchronously on ingestion of the
+// final report: completed by default, or interrupted/cancelled when CI reports
+// that the pipeline broke or was stopped (the report may be incomplete).
 const (
-	RunCreated   RunStatus = "created"
-	RunRunning   RunStatus = "running"
-	RunCompleted RunStatus = "completed"
-	RunFailed    RunStatus = "failed"
-	RunCancelled RunStatus = "cancelled"
+	RunCompleted   RunStatus = "completed"
+	RunInterrupted RunStatus = "interrupted"
+	RunCancelled   RunStatus = "cancelled"
 )
 
 // ResultStatus is the observed outcome of one result. "untested" is never a
@@ -74,6 +73,7 @@ type TestRun struct {
 	Branch        string
 	Commit        string
 	Status        RunStatus
+	Outcome       RunOutcome
 	ExpectedCount int32
 	ResultCount   int32
 	CreatedAt     time.Time
@@ -117,8 +117,8 @@ type NewRun struct {
 	Status RunStatus
 }
 
-// FinalStatuses are the statuses CI may report with a final report.
-var FinalStatuses = []RunStatus{RunCompleted, RunFailed, RunCancelled}
+// ExecutionStatuses are the statuses CI may report with a final report.
+var ExecutionStatuses = []RunStatus{RunCompleted, RunInterrupted, RunCancelled}
 
 // NewResult is a result to persist within a new run.
 type NewResult struct {
@@ -164,6 +164,13 @@ type ValidResult struct {
 	Status     ResultStatus
 }
 
+// SummaryInputs are the immutable inputs of a run's summary: its snapshot
+// TC-IDs (ascending) and its valid results.
+type SummaryInputs struct {
+	Expected []int64
+	Valid    []ValidResult
+}
+
 // HistoryEntry is a historical result of a TC-ID plus the run it was observed in.
 type HistoryEntry struct {
 	Result TestResult
@@ -193,8 +200,8 @@ type Repository interface {
 	CountTestRuns(ctx context.Context) (int64, error)
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, limit, offset int32) ([]TestResult, error)
 	CountRunResults(ctx context.Context, runID int64, f ResultFilter) (int64, error)
-	ListExpectedCaseIDs(ctx context.Context, runID int64) ([]int64, error)
-	ListValidResults(ctx context.Context, runID int64) ([]ValidResult, error)
+	// ListSummaryInputs returns the snapshot TC-IDs and valid results of each given run.
+	ListSummaryInputs(ctx context.Context, runIDs []int64) (map[int64]SummaryInputs, error)
 	ListDiagnostics(ctx context.Context, runID int64) ([]Diagnostic, error)
 	ListResultsForTestCase(ctx context.Context, testCaseID int64, limit, offset int32) ([]HistoryEntry, error)
 	CountResultsForTestCase(ctx context.Context, testCaseID int64) (int64, error)

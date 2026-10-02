@@ -19,15 +19,56 @@ describe('FE-INT-008 test run list', () => {
         branch: '',
         commit: '',
         resultCount: 1,
+        executionStatus: 'interrupted',
+        outcome: {
+          verdict: 'passed',
+          executed: 2,
+          passed: 2,
+          failed: 0,
+          error: 0,
+          skipped: 0,
+          untested: 0,
+          passRate: 100,
+        },
+      }),
+      testRun({
+        id: 9,
+        expectedCount: 0,
+        executionStatus: 'cancelled',
+        outcome: {
+          verdict: 'no_tests',
+          executed: 0,
+          passed: 0,
+          failed: 0,
+          error: 0,
+          skipped: 0,
+          untested: 0,
+          passRate: 0,
+        },
       }),
     ]
     renderRoute('/test-runs')
     const rows = (await screen.findAllByRole('row')).slice(1)
-    expect(within(rows[0]).getByText('github:9876:2')).toBeInTheDocument()
-    expect(within(rows[0]).getAllByText('—')).toHaveLength(3)
-    expect(within(rows[0]).getByText('1 result · 2 expected')).toBeInTheDocument()
-    expect(within(rows[1]).getByText('3 results · 2 expected')).toBeInTheDocument()
-    expect(within(rows[1]).getByRole('link', { name: '#7' })).toHaveAttribute('href', '/test-runs/7')
+    expect(within(rows[0]).getByTestId('verdict-badge')).toHaveTextContent('no tests')
+    expect(within(rows[0]).getByTestId('pass-rate')).toHaveTextContent('—')
+    expect(within(rows[0]).getByTestId('outcome-breakdown')).toHaveTextContent('no test cases · 0 expected')
+    expect(within(rows[0]).getByTestId('execution-badge')).toHaveTextContent('cancelled')
+
+    expect(within(rows[1]).getByText('github:9876:2')).toBeInTheDocument()
+    expect(within(rows[1]).getAllByText('—')).toHaveLength(3)
+    expect(within(rows[1]).getByTestId('verdict-badge')).toHaveTextContent('passed')
+    expect(within(rows[1]).getByTestId('pass-rate')).toHaveTextContent('100%')
+    expect(within(rows[1]).getByTestId('outcome-breakdown')).toHaveTextContent('2 passed · 2 expected')
+    expect(within(rows[1]).getByTestId('execution-badge')).toHaveTextContent('interrupted')
+
+    expect(within(rows[2]).getByTestId('verdict-badge')).toHaveTextContent('failed')
+    expect(within(rows[2]).getByTestId('pass-rate')).toHaveTextContent('0%')
+    expect(within(rows[2]).getByTestId('outcome-breakdown')).toHaveTextContent(
+      '1 failed · 1 untested · 2 expected',
+    )
+    expect(within(rows[2]).queryByTestId('execution-badge')).not.toBeInTheDocument()
+    expect(within(rows[2]).getByText('completed')).toBeInTheDocument()
+    expect(within(rows[2]).getByRole('link', { name: '#7' })).toHaveAttribute('href', '/test-runs/7')
   })
 
   it('FE-INT-008 shows the empty state and paginates', async () => {
@@ -74,6 +115,10 @@ describe('FE-INT-009 test run detail and summary', () => {
         .map((c) => c.textContent),
     ).toEqual(['Total', '2', '100%', '100%'])
     expect(screen.getByTestId('execution-counts')).toHaveTextContent('1 of 2 test cases executed')
+    expect(screen.getByTestId('pass-rate')).toHaveTextContent('0%')
+    expect(screen.getByTestId('pass-counts')).toHaveTextContent('0 of 1 executed passed')
+    expect(screen.getByTestId('verdict-badge')).toHaveTextContent('failed')
+    expect(screen.getByTestId('run-pass-rate')).toHaveTextContent('0% of executed passed')
   })
 
   it('FE-INT-009 an empty universe reads 0% with its counts (0 of 0)', async () => {
@@ -86,9 +131,27 @@ describe('FE-INT-009 test run detail and summary', () => {
       executionPercent: 0,
       testCases: [],
     })
+    db.runs = [
+      testRun({
+        expectedCount: 0,
+        outcome: {
+          verdict: 'no_tests',
+          executed: 0,
+          passed: 0,
+          failed: 0,
+          error: 0,
+          skipped: 0,
+          untested: 0,
+          passRate: 0,
+        },
+      }),
+    ]
     renderRoute('/test-runs/7')
     expect(await screen.findByTestId('execution-percent')).toHaveTextContent('0%')
     expect(screen.getByTestId('execution-counts')).toHaveTextContent('0 of 0 test cases executed')
+    expect(screen.getByTestId('pass-rate')).toHaveTextContent('—')
+    expect(screen.getByTestId('run-pass-rate')).toHaveTextContent('No test case executed')
+    expect(screen.getByTestId('verdict-badge')).toHaveTextContent('no tests')
   })
 
   it('FE-INT-009 rounds only for display so thirds add up to a 100% total', async () => {
@@ -129,12 +192,13 @@ describe('FE-INT-009 test run detail and summary', () => {
     expect(screen.queryByText('Untested:')).not.toBeInTheDocument()
   })
 
-  it('FE-INT-016 flags runs whose CI execution failed or was cancelled', async () => {
-    db.runs = [testRun({ status: 'failed' })]
+  it('FE-INT-016 flags runs whose CI execution was interrupted or cancelled', async () => {
+    db.runs = [testRun({ executionStatus: 'interrupted' })]
     const first = renderRoute('/test-runs/7')
-    expect(await screen.findByTestId('interrupted-run')).toHaveTextContent('The CI execution failed')
+    expect(await screen.findByTestId('interrupted-run')).toHaveTextContent('The CI execution was interrupted')
+    expect(screen.getByTestId('execution-badge')).toHaveTextContent('interrupted')
     first.unmount()
-    db.runs = [testRun({ status: 'cancelled' })]
+    db.runs = [testRun({ executionStatus: 'cancelled' })]
     renderRoute('/test-runs/7')
     expect(await screen.findByTestId('interrupted-run')).toHaveTextContent('was cancelled')
   })
@@ -143,6 +207,7 @@ describe('FE-INT-009 test run detail and summary', () => {
     renderRoute('/test-runs/7')
     await screen.findByTestId('expected-total')
     expect(screen.queryByTestId('interrupted-run')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('execution-badge')).not.toBeInTheDocument()
   })
 
   it('FE-INT-012 shows errors for unknown runs', async () => {

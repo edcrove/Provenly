@@ -22,12 +22,12 @@ type Querier interface {
 	InsertTestResults(ctx context.Context, arg []InsertTestResultsParams) (int64, error)
 	InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error)
 	ListDiagnosticResults(ctx context.Context, testRunID int64) ([]ListDiagnosticResultsRow, error)
-	ListExpectedCaseIDs(ctx context.Context, testRunID int64) ([]int64, error)
 	ListParseErrors(ctx context.Context, arg ListParseErrorsParams) ([]ListParseErrorsRow, error)
 	ListResultsForTestCase(ctx context.Context, arg ListResultsForTestCaseParams) ([]ListResultsForTestCaseRow, error)
 	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]TestResult, error)
+	// Snapshot TC-IDs (status NULL) and valid results of the given runs, in one read.
+	ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]ListSummaryInputsRow, error)
 	ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]ListTestRunsRow, error)
-	ListValidResultStatuses(ctx context.Context, testRunID int64) ([]ListValidResultStatusesRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -247,20 +247,21 @@ func (s *Store) CountRunResults(ctx context.Context, runID int64, f execution.Re
 	})
 }
 
-// ListExpectedCaseIDs implements execution.Repository.
-func (s *Store) ListExpectedCaseIDs(ctx context.Context, runID int64) ([]int64, error) {
-	return s.q.ListExpectedCaseIDs(ctx, runID)
-}
-
-// ListValidResults implements execution.Repository.
-func (s *Store) ListValidResults(ctx context.Context, runID int64) ([]execution.ValidResult, error) {
-	rows, err := s.q.ListValidResultStatuses(ctx, runID)
+// ListSummaryInputs implements execution.Repository.
+func (s *Store) ListSummaryInputs(ctx context.Context, runIDs []int64) (map[int64]execution.SummaryInputs, error) {
+	rows, err := s.q.ListSummaryInputs(ctx, runIDs)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]execution.ValidResult, len(rows))
-	for i, r := range rows {
-		out[i] = execution.ValidResult{TestCaseID: r.TestCaseID, Status: execution.ResultStatus(r.Status)}
+	out := make(map[int64]execution.SummaryInputs, len(runIDs))
+	for _, r := range rows {
+		in := out[r.TestRunID]
+		if r.Status.Valid {
+			in.Valid = append(in.Valid, execution.ValidResult{TestCaseID: r.TestCaseID, Status: execution.ResultStatus(r.Status.String)})
+		} else {
+			in.Expected = append(in.Expected, r.TestCaseID)
+		}
+		out[r.TestRunID] = in
 	}
 	return out, nil
 }

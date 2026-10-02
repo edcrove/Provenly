@@ -233,30 +233,6 @@ func (q *Queries) ListDiagnosticResults(ctx context.Context, testRunID int64) ([
 	return items, nil
 }
 
-const listExpectedCaseIDs = `-- name: ListExpectedCaseIDs :many
-SELECT test_case_id FROM test_run_expected_cases WHERE test_run_id = $1 ORDER BY test_case_id
-`
-
-func (q *Queries) ListExpectedCaseIDs(ctx context.Context, testRunID int64) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listExpectedCaseIDs, testRunID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []int64
-	for rows.Next() {
-		var test_case_id int64
-		if err := rows.Scan(&test_case_id); err != nil {
-			return nil, err
-		}
-		items = append(items, test_case_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listParseErrors = `-- name: ListParseErrors :many
 SELECT case_index, test_name, message, persisted, severity FROM test_run_parse_errors
 WHERE test_run_id = $1
@@ -444,6 +420,42 @@ func (q *Queries) ListRunResults(ctx context.Context, arg ListRunResultsParams) 
 	return items, nil
 }
 
+const listSummaryInputs = `-- name: ListSummaryInputs :many
+SELECT test_run_id, test_case_id, NULL::text AS status FROM test_run_expected_cases
+WHERE test_run_id = ANY($1::bigint[])
+UNION ALL
+SELECT test_run_id, test_case_id::bigint, status FROM test_results
+WHERE test_run_id = ANY($1::bigint[]) AND correlation = 'valid'
+ORDER BY 1, 2
+`
+
+type ListSummaryInputsRow struct {
+	TestRunID  int64
+	TestCaseID int64
+	Status     pgtype.Text
+}
+
+// Snapshot TC-IDs (status NULL) and valid results of the given runs, in one read.
+func (q *Queries) ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]ListSummaryInputsRow, error) {
+	rows, err := q.db.Query(ctx, listSummaryInputs, testRunIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSummaryInputsRow
+	for rows.Next() {
+		var i ListSummaryInputsRow
+		if err := rows.Scan(&i.TestRunID, &i.TestCaseID, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTestRuns = `-- name: ListTestRuns :many
 SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
@@ -502,37 +514,6 @@ func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]L
 			&i.ExpectedCount,
 			&i.ResultCount,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listValidResultStatuses = `-- name: ListValidResultStatuses :many
-SELECT test_case_id::bigint AS test_case_id, status FROM test_results
-WHERE test_run_id = $1 AND correlation = 'valid'
-ORDER BY id
-`
-
-type ListValidResultStatusesRow struct {
-	TestCaseID int64
-	Status     string
-}
-
-func (q *Queries) ListValidResultStatuses(ctx context.Context, testRunID int64) ([]ListValidResultStatusesRow, error) {
-	rows, err := q.db.Query(ctx, listValidResultStatuses, testRunID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListValidResultStatusesRow
-	for rows.Next() {
-		var i ListValidResultStatusesRow
-		if err := rows.Scan(&i.TestCaseID, &i.Status); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

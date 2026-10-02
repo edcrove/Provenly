@@ -46,13 +46,14 @@ WHERE test_run_id = @test_run_id
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
   AND (sqlc.narg('correlation')::text IS NULL OR correlation = sqlc.narg('correlation')::text);
 
--- name: ListExpectedCaseIDs :many
-SELECT test_case_id FROM test_run_expected_cases WHERE test_run_id = @test_run_id ORDER BY test_case_id;
-
--- name: ListValidResultStatuses :many
-SELECT test_case_id::bigint AS test_case_id, status FROM test_results
-WHERE test_run_id = @test_run_id AND correlation = 'valid'
-ORDER BY id;
+-- name: ListSummaryInputs :many
+-- Snapshot TC-IDs (status NULL) and valid results of the given runs, in one read.
+SELECT test_run_id, test_case_id, NULL::text AS status FROM test_run_expected_cases
+WHERE test_run_id = ANY(@test_run_ids::bigint[])
+UNION ALL
+SELECT test_run_id, test_case_id::bigint, status FROM test_results
+WHERE test_run_id = ANY(@test_run_ids::bigint[]) AND correlation = 'valid'
+ORDER BY 1, 2;
 
 -- name: ListDiagnosticResults :many
 SELECT test_name, correlation, requested_test_case_id FROM test_results

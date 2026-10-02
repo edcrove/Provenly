@@ -145,10 +145,10 @@ func TestIngestReplayAndEmptyParseErrors(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{ReportDiffersWarning}, out.Warnings)
 
-	rec.storedDigest, rec.storedStatus = "", execution.RunFailed
+	rec.storedDigest, rec.storedStatus = "", execution.RunInterrupted
 	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
 	require.NoError(t, err)
-	assert.Equal(t, []string{`status "completed" differs from "failed", recorded for this attempt; it was not applied`}, out.Warnings)
+	assert.Equal(t, []string{`status "completed" differs from "interrupted", recorded for this attempt; it was not applied`}, out.Warnings)
 }
 
 func TestIngestPassesTheReportedRunStatus(t *testing.T) {
@@ -172,7 +172,8 @@ func TestValidateMeta(t *testing.T) {
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Pipeline: strings.Repeat("p", 201)},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Branch: strings.Repeat("b", 256)},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Commit: strings.Repeat("c", 65)},
-		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Status: execution.RunRunning},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Status: execution.RunStatus("running")},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Status: execution.RunStatus("failed")},
 	}
 	for _, m := range bad {
 		e, ok := apperr.As(ValidateMeta(m))

@@ -99,7 +99,7 @@ func ValidateMeta(m RunMeta) error {
 	v.Check(utf8.RuneCountInString(m.Pipeline) <= 200, "pipeline", "must be at most 200 characters")
 	v.Check(utf8.RuneCountInString(m.Branch) <= 255, "branch", "must be at most 255 characters")
 	v.Check(utf8.RuneCountInString(m.Commit) <= 64, "commit", "must be at most 64 characters")
-	v.Check(m.Status == "" || slices.Contains(execution.FinalStatuses, m.Status), "status", "must be one of completed, failed, cancelled")
+	v.Check(m.Status == "" || slices.Contains(execution.ExecutionStatuses, m.Status), "status", "must be one of completed, interrupted, cancelled")
 	return v.Err()
 }
 

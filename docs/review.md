@@ -27,6 +27,7 @@ Layers: **U** = unit, **I** = integration (backend: testcontainers; frontend: Te
 | 9 | Test Case UI | `?page=999` showed "No test cases yet." with items present. | A page past the end moves to the last page (history replace). | I FE-INT-018 |
 | 10 | Test Case UI | At 375 px the list header overflowed and TC-IDs wrapped. | The header wraps; TC-IDs do not break. | Manual (Chromium 375 px) |
 | 11 | Test Case UI | Invalid ids (`/test-cases/abc`) called the API and read "Something went wrong"; error/loading pages kept the generic tab title; a filter without matches read "No test cases yet." | Invalid ids render *Page not found* without a request; tab titles "Loading…", "Not found", "Error"; "No deprecated test cases." | I FE-INT-018 |
+| 12 | Test Case UI | At 375 px a detail page with a history table grew to 780 px wide (page-level horizontal scroll). | Cards shrink below their content (`min-w-0`); wide tables scroll inside their card. | Screenshots 31–34 (`flows.spec.ts` asserts no page overflow at 375 px) |
 
 ## Acceptance criteria that lacked an explicit test (added)
 

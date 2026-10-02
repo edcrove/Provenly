@@ -194,4 +194,42 @@ test('UI flows', async ({ page, request }) => {
   await page.getByRole('button', { name: 'Next' }).click()
   await expect(page.getByText('Page 2 of 2')).toBeVisible()
   await shot(page, 'test-cases-pagination')
+
+  // Validation fixes (Test Case UI card review, 2026-10-01).
+  await page.goto('/test-cases?page=99')
+  await expect(page).toHaveURL(/page=2$/)
+  await expect(page.getByText('Page 2 of 2')).toBeVisible()
+  await shot(page, 'test-cases-page-past-end')
+  await page.goto('/test-cases?status=deprecated')
+  await expect(page.getByText('No deprecated test cases.')).toBeVisible()
+  await shot(page, 'test-cases-filter-no-matches')
+  await page.goto('/test-cases/abc')
+  await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+  await shot(page, 'test-case-invalid-id')
+  await page.goto(`/test-cases/${login}`)
+  await page.getByRole('button', { name: 'Edit' }).click()
+  await page.getByLabel('Title').fill('   ')
+  await page.getByRole('button', { name: 'Save changes' }).click()
+  await expect(page.getByLabel('Title')).toHaveAttribute('aria-invalid', 'true')
+  await shot(page, 'test-case-edit-validation-error')
+
+  // Phone width (375 px).
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto('/test-cases')
+  await expect(page.getByText('Page 1 of 2')).toBeVisible()
+  await shot(page, 'mobile-test-cases-list')
+  await page.goto(`/test-cases/${login}`)
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('User can log in')
+  await shot(page, 'mobile-test-case-detail')
+  await page.goto('/test-cases/new')
+  await shot(page, 'mobile-test-case-new-form')
+  await page.goto(`/test-runs/${mainRun}`)
+  await expect(page.getByTestId('expected-total')).toBeVisible()
+  await shot(page, 'mobile-test-run-detail')
+  // No page-level horizontal scroll at phone width: wide tables scroll inside their card.
+  for (const url of ['/test-cases', `/test-cases/${login}`, '/test-runs', `/test-runs/${mainRun}`]) {
+    await page.goto(url)
+    await page.waitForLoadState('networkidle')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), url).toBeLessThanOrEqual(375)
+  }
 })

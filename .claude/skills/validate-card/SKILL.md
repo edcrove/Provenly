@@ -24,7 +24,7 @@ Ed validates cards one by one. Claude does the hands-on review; only Ed approves
   - HTTP: wrong/missing Content-Type, unknown/duplicate/empty params and JSON keys, cross-resource ids (a child of another parent)
   - concurrency: double click / double submit, N parallel requests (limits and ordering must hold)
   - UI: page past the end, filters with no matches, not-found and error states, tab titles, keyboard, 375 px width (no page-level horizontal scroll)
-- Any 500 is a finding.
+- Run the `edge-case-probe` skill against the same stack. Any 500 is a finding.
 
 ## 3. Report, then fix
 - Report to Ed concisely: which criteria pass (with the evidence), and the findings with a proposed fix each.
@@ -37,4 +37,4 @@ Ed validates cards one by one. Claude does the hands-on review; only Ed approves
 ## 4. Close
 - Ask Ed: "¿Paso <card> a Hecho?". Only after his explicit OK: add an evidence comment (criteria verified, fixes
   with commit hashes, test ids, gates, CI) and move the card to **Hecho**.
-- If Ed asks to see the flows, regenerate `make screenshots` and publish/update the visual gallery artifact.
+- If Ed asks to see the flows, use the `ui-gallery` skill.

@@ -56,7 +56,14 @@ make fuzz            # Go fuzzers (FUZZTIME=10s each)
 make coverage        # every layer + the 10 gates (needs Docker); prints "Overall: PASS"
 make screenshots     # docs/screenshots on an ephemeral DB
 make dev-backend / make dev-frontend   # non-docker dev (reads .env.local, not .env)
+scripts/doctor.sh [--fix]              # environment check (pinned tools, packages, docker, chromium, ports)
+scripts/probe/edge_cases.py --base URL # edge-case sweep; any 5xx or unexpected status fails (disposable DB)
+scripts/gallery/build.py --out DIR     # click-through gallery of docs/screenshots, publishable as an Artifact
 ```
+
+Project skills (`.claude/skills/`): `implement-card`, `validate-card`, `record-decision`, `steward`,
+`project-status` (live status, never from memory), `ui-gallery`, `edge-case-probe`, `notion-safe-edit`,
+`parity-analysis`, `close-milestone`, `env-doctor`.
 
 Environment gotchas (web sessions; `.claude/hooks/session-start.sh` prepares most of this):
 

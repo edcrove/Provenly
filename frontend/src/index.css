@@ -54,5 +54,11 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* User text (titles, steps, CI names) can be one long unbroken token: wrap it instead of widening the page. */
+    overflow-wrap: anywhere;
+  }
+  /* Tables keep their columns readable and scroll inside their card instead. */
+  table {
+    overflow-wrap: normal;
   }
 }

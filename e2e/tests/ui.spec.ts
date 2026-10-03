@@ -211,4 +211,22 @@ test.describe('Frontend UI journeys', () => {
     await expect(page.getByTestId('run-pass-rate')).toHaveText('100% of executed passed')
     await expect(page.getByTestId('summary-untested').getByRole('cell').nth(1)).toHaveText('1')
   })
+
+  test('[FE-E2E-008] long unbroken text wraps at phone width and a rejected step keeps what was typed', async ({ page, provenly }) => {
+    const tc = await provenly.createTestCase({ title: 'T'.repeat(200), description: 'D'.repeat(500) })
+    await page.setViewportSize({ width: 375, height: 812 })
+    await page.goto(`/test-cases/${tc.id}`)
+    const add = page.getByRole('form', { name: 'Add step' })
+    await add.getByLabel('Step action').fill('x'.repeat(300))
+    await add.getByLabel('Step expected result').fill('y'.repeat(300))
+    await add.getByRole('button', { name: 'Add step' }).click()
+    await expect(page.getByRole('list', { name: 'Steps' }).getByRole('listitem')).toHaveCount(1)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
+
+    await add.getByLabel('Step action').fill('   ')
+    await add.getByLabel('Step expected result').fill('kept')
+    await add.getByRole('button', { name: 'Add step' }).click()
+    await expect(page.getByRole('alert')).toContainText('must not be empty')
+    await expect(add.getByLabel('Step expected result')).toHaveValue('kept')
+  })
 })

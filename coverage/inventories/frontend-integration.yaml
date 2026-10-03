@@ -69,3 +69,8 @@ targets:
         src/features/test-runs/TestRunDetailPage.tsx,
         src/features/test-runs/RunResults.tsx,
       ]
+  - id: FE-INT-019
+    description: >-
+      step editor feedback: a rejected step keeps what was typed, only the latest action's error is shown (a later
+      success clears it), and a failed step action refetches the possibly stale list
+    surfaces: [src/features/test-cases/StepsEditor.tsx]

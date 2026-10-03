@@ -21,14 +21,14 @@ function StepForm({
 }: {
   initial: StepFields
   submitLabel: string
-  onSubmit: (fields: StepFields) => void
+  /** `clear` empties the form; call it once the server accepted the step, so a rejected one keeps what was typed. */
+  onSubmit: (fields: StepFields, clear: () => void) => void
   onCancel?: () => void
 }) {
   const [fields, setFields] = useState(initial)
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    onSubmit(fields)
-    if (!onCancel) setFields({ action: '', expectedResult: '' })
+    onSubmit(fields, () => setFields({ action: '', expectedResult: '' }))
   }
   return (
     <form onSubmit={submit} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]" aria-label={submitLabel}>
@@ -64,9 +64,16 @@ export function StepsEditor({ testCaseId }: { testCaseId: number }) {
   const query = useTestSteps(testCaseId)
   const m = useStepMutations(testCaseId)
   const [editing, setEditing] = useState<number | null>(null)
-  const error = m.create.error ?? m.update.error ?? m.remove.error ?? m.reorder.error
+  // Only the outcome of the latest action is shown: an older failure must not hide (or outlive) a newer one.
+  const [last, setLast] = useState<keyof typeof m | null>(null)
+  const error = last ? m[last].error : null
+  const track = (key: keyof typeof m) => {
+    m[key].reset()
+    setLast(key)
+  }
 
-  const move = (steps: TestStep[], index: number, delta: -1 | 1) =>
+  const move = (steps: TestStep[], index: number, delta: -1 | 1) => {
+    track('reorder')
     m.reorder.mutate(
       moveId(
         steps.map((s) => s.id),
@@ -74,6 +81,7 @@ export function StepsEditor({ testCaseId }: { testCaseId: number }) {
         delta,
       ),
     )
+  }
 
   return (
     <div className="grid gap-3">
@@ -91,13 +99,14 @@ export function StepsEditor({ testCaseId }: { testCaseId: number }) {
                       initial={{ action: step.action, expectedResult: step.expectedResult }}
                       submitLabel="Save step"
                       onCancel={() => setEditing(null)}
-                      onSubmit={(fields) =>
+                      onSubmit={(fields) => {
+                        track('update')
                         m.update.mutate({ stepId: step.id, ...fields }, { onSuccess: () => setEditing(null) })
-                      }
+                      }}
                     />
                   ) : (
                     <div className="flex items-start justify-between gap-2">
-                      <div>
+                      <div className="min-w-0">
                         <span className="font-medium">
                           {step.position}. {step.action}
                         </span>
@@ -136,7 +145,10 @@ export function StepsEditor({ testCaseId }: { testCaseId: number }) {
                           size="icon"
                           variant="ghost"
                           aria-label={`Delete step ${step.position}`}
-                          onClick={() => m.remove.mutate(step.id)}
+                          onClick={() => {
+                            track('remove')
+                            m.remove.mutate(step.id)
+                          }}
                         >
                           <Trash2 />
                         </Button>
@@ -152,7 +164,10 @@ export function StepsEditor({ testCaseId }: { testCaseId: number }) {
       <StepForm
         initial={{ action: '', expectedResult: '' }}
         submitLabel="Add step"
-        onSubmit={(f) => m.create.mutate(f)}
+        onSubmit={(f, clear) => {
+          track('create')
+          m.create.mutate(f, { onSuccess: clear })
+        }}
       />
     </div>
   )

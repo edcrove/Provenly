@@ -14,3 +14,5 @@ targets:
     description: a manual TC receiving automated results is flagged; marking it automated includes it in the next run only
   - id: FE-E2E-007
     description: a run whose CI pipeline broke (status=interrupted) is flagged as possibly incomplete, with its verdict and pass rate shown apart
+  - id: FE-E2E-008
+    description: long unbroken text (title, description, steps) wraps at 375 px without page overflow; a step rejected by the API keeps what was typed

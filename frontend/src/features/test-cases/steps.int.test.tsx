@@ -81,3 +81,37 @@ describe('FE-INT-006 steps management', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('too many steps')
   })
 })
+
+const problem = (detail: string) =>
+  HttpResponse.json(
+    { type: 'about:blank', title: 'Bad Request', status: 400, code: 'validation_error', detail },
+    { status: 400, headers: { 'Content-Type': 'application/problem+json' } },
+  )
+
+describe('FE-INT-019 step editor feedback', () => {
+  it('FE-INT-019 a rejected step keeps what was typed; only the latest error shows; failures refetch the list', async () => {
+    const { user } = renderRoute('/test-cases/153')
+    await screen.findByRole('list', { name: 'Steps' })
+    server.use(http.post('*/api/v1/test-cases/:id/steps', () => problem('too many steps'), { once: true }))
+    const add = screen.getByRole('form', { name: 'Add step' })
+    await user.type(within(add).getByLabelText('Step action'), 'keep me')
+    await user.type(within(add).getByLabelText('Step expected result'), 'and me')
+    await user.click(within(add).getByRole('button', { name: 'Add step' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('too many steps')
+    expect(within(add).getByLabelText('Step action')).toHaveValue('keep me')
+    expect(within(add).getByLabelText('Step expected result')).toHaveValue('and me')
+
+    // The list on screen goes stale (step 1 deleted elsewhere): the reorder fails, its error replaces the
+    // older one, and the list is refetched.
+    db.steps = db.steps.filter((st) => st.id !== 1)
+    await user.click(screen.getByRole('button', { name: 'Move step 1 down' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('must list every step'))
+    expect(screen.getByRole('alert')).not.toHaveTextContent('too many steps')
+    await waitFor(() => expect(stepTexts()).toEqual(['2. Submit credentials']))
+
+    // A later success clears the error and the form.
+    await user.click(within(add).getByRole('button', { name: 'Add step' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(within(add).getByLabelText('Step action')).toHaveValue('')
+  })
+})

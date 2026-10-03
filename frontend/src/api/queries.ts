@@ -120,13 +120,14 @@ export function useTestSteps(id: number) {
 
 export function useStepMutations(id: number) {
   const qc = useQueryClient()
-  const onSuccess = () => qc.invalidateQueries({ queryKey: keys.steps(id) })
+  // Refetch after failures too: a 400/404 usually means the list on screen is stale (changed elsewhere).
+  const onSettled = () => qc.invalidateQueries({ queryKey: keys.steps(id) })
   const path = { testCaseId: id }
   return {
     create: useExclusiveMutation({
       mutationFn: async (body: { action: string; expectedResult: string }) =>
         unwrap(await api.POST('/api/v1/test-cases/{testCaseId}/steps', { params: { path }, body })),
-      onSuccess,
+      onSettled,
     }),
     update: useExclusiveMutation({
       mutationFn: async ({ stepId, ...body }: { stepId: number; action: string; expectedResult: string }) =>
@@ -136,7 +137,7 @@ export function useStepMutations(id: number) {
             body,
           }),
         ),
-      onSuccess,
+      onSettled,
     }),
     remove: useExclusiveMutation({
       mutationFn: async (stepId: number) =>
@@ -145,7 +146,7 @@ export function useStepMutations(id: number) {
             params: { path: { ...path, stepId } },
           }),
         ),
-      onSuccess,
+      onSettled,
     }),
     reorder: useExclusiveMutation({
       mutationFn: async (stepIds: number[]) =>
@@ -155,7 +156,7 @@ export function useStepMutations(id: number) {
             body: { stepIds },
           }),
         ),
-      onSuccess,
+      onSettled,
     }),
   }
 }

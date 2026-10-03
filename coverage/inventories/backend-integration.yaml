@@ -48,3 +48,5 @@ targets:
     description: readiness reflects database reachability (200 with a live pool, 503 Problem once the pool is closed)
   - id: BE-INT-023
     description: database enforces step integrity (owning test case exists and never changes, non-blank action, expected result at most 2000 characters)
+  - id: BE-INT-024
+    description: database protects run identity (external id, provider, run id, attempt, report digest), forbids deleting runs and adding TC-IDs to an existing snapshot, and keeps startedAt <= completedAt; replays warn about differing metadata

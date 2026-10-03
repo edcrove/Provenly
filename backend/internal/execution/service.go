@@ -33,13 +33,17 @@ func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, r
 	if status == "" {
 		status = RunCompleted
 	}
+	now := s.now()
+	if run.StartedAt != nil && run.StartedAt.After(now) {
+		run.StartedAt = nil // a run cannot start after it is recorded: clock skew or a local time without a zone
+	}
 	var (
 		out     TestRun
 		created bool
 	)
 	err := s.repo.InTx(ctx, func(r Repository) error {
 		id, ok, err := r.InsertTestRun(ctx, InsertRunParams{
-			NewRun: run, ExternalRunID: externalID, Status: status, CompletedAt: s.now(),
+			NewRun: run, ExternalRunID: externalID, Status: status, CompletedAt: now,
 		})
 		if err != nil {
 			return err

@@ -24,7 +24,8 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 | TC-ID numeric, server-assigned, immutable, never reused | `GENERATED ALWAYS AS IDENTITY (NO CYCLE)`; trigger forbids `DELETE` and id changes; API rejects unknown fields (e.g. `id`) |
 | Content does not version identity | `PATCH` only edits content columns; results reference the TC-ID only |
 | Idempotent TestRun per `{provider}:{run_id}:{run_attempt}` | `UNIQUE(external_run_id)` + `INSERT … ON CONFLICT DO NOTHING` in one transaction with snapshot and results |
-| Expected-universe snapshot is immutable | written once at run creation; trigger forbids `UPDATE`/`DELETE` |
+| Expected-universe snapshot is immutable | written once at run creation; triggers forbid `UPDATE`/`DELETE` and any `INSERT` outside the run's creating transaction (migration 00009) |
+| A run's identity and history are permanent | trigger forbids deleting runs and changing `external_run_id`, provider, run id, attempt, report digest or `created_at` (status and timestamps stay open for the live lifecycle); `CHECK started_at <= completed_at`; a suite timestamp later than the ingestion leaves `startedAt` unknown with a warning |
 | Steps belong to one test case, ordered 1..n without gaps, at most 100 | FK to `test_cases`; `UNIQUE(test_case_id, position) DEFERRABLE` + `CHECK (position >= 1)`; the service locks the test case row to shift/renumber and to enforce the 100 limit; trigger forbids moving a step to another test case |
 | Step text: action 1..2000 non-blank characters, expected result ≤ 2000 | service validation (400) backed by `CHECK`s (`test_steps_action_not_blank`, `test_steps_expected_result_length`, migration 00008) |
 | `untested` is never persisted | `CHECK` on `test_results.status`; derived in `execution.ComputeSummary` |

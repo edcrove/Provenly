@@ -68,6 +68,21 @@ func TestRecordRunStoresTheReportedStatus(t *testing.T) {
 	assert.Equal(t, RunInterrupted, got.Status)
 }
 
+func TestRecordRunLeavesAFutureStartUnknown(t *testing.T) {
+	svc, _, ctx := setup()
+	r := run(1)
+	r.StartedAt = ptr(fixedNow.Add(time.Second))
+	got, _, err := svc.RecordRun(ctx, r, nil, nil, nil)
+	require.NoError(t, err)
+	assert.Nil(t, got.StartedAt, "a run cannot start after it was recorded")
+
+	r = run(2)
+	r.StartedAt = ptr(fixedNow)
+	got, _, err = svc.RecordRun(ctx, r, nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, fixedNow, *got.StartedAt)
+}
+
 func TestRecordRunErrors(t *testing.T) {
 	for _, m := range []string{"InTx", "InsertTestRun", "InsertExpectedCases", "InsertTestResults", "InsertParseErrors", "GetTestRun"} {
 		svc, repo, ctx := setup()

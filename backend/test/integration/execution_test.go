@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -244,6 +245,44 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.ErrorContains(t, err, "immutable")
 		_, err = db.Pool.Exec(ctx, `UPDATE test_run_expected_cases SET test_case_id = 1 WHERE test_run_id = $1`, out.Run.ID)
 		assert.ErrorContains(t, err, "immutable")
+	})
+
+	t.Run("BE-INT-024_database_protects_run_identity_and_snapshot", func(t *testing.T) {
+		s, ctx := fresh(t)
+		a, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Automated: true})
+		out, err := s.Ingestion.IngestJUnit(ctx, meta("500", 1), strings.NewReader(junitFor(tcProp("a", itoa(a.ID), ""))))
+		require.NoError(t, err)
+		late, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "late", Automated: true})
+
+		_, err = db.Pool.Exec(ctx, `INSERT INTO test_run_expected_cases (test_run_id, test_case_id) VALUES ($1, $2)`, out.Run.ID, late.ID)
+		assert.ErrorContains(t, err, "the expected-universe snapshot of a test run is immutable", "no TC-ID joins an existing snapshot")
+		_, err = db.Pool.Exec(ctx, `UPDATE test_runs SET external_run_id = 'x:y:1', provider = 'x', provider_run_id = 'y' WHERE id = $1`, out.Run.ID)
+		assert.ErrorContains(t, err, "identity of a test run is immutable")
+		_, err = db.Pool.Exec(ctx, `UPDATE test_runs SET report_sha256 = 'other' WHERE id = $1`, out.Run.ID)
+		assert.ErrorContains(t, err, "identity of a test run is immutable")
+		_, err = db.Pool.Exec(ctx, `DELETE FROM test_runs WHERE id = $1`, out.Run.ID)
+		assert.ErrorContains(t, err, "test runs cannot be deleted")
+		_, err = db.Pool.Exec(ctx, `UPDATE test_runs SET status = 'running' WHERE id = $1`, out.Run.ID)
+		assert.NoError(t, err, "the lifecycle status may still change")
+		_, err = db.Pool.Exec(ctx, `UPDATE test_runs SET started_at = completed_at + interval '1 second' WHERE id = $1`, out.Run.ID)
+		assert.ErrorContains(t, err, "test_runs_started_before_completed")
+
+		future, err := s.Ingestion.IngestJUnit(ctx, meta("501", 1),
+			strings.NewReader(`<testsuite name="s" timestamp="2099-01-01T00:00:00Z"><testcase name="t"/></testsuite>`))
+		require.NoError(t, err)
+		assert.Nil(t, future.Run.StartedAt)
+		assert.Equal(t, []string{fmt.Sprintf(ingestion.FutureStartWarning, "2099-01-01T00:00:00Z")}, future.Warnings)
+
+		m := meta("500", 1)
+		m.Branch, m.Commit = "release", "def456"
+		replay, err := s.Ingestion.IngestJUnit(ctx, m, strings.NewReader(junitFor(tcProp("a", itoa(a.ID), ""))))
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			`status "completed" differs from "running", recorded for this attempt; it was not applied`,
+			`branch "release" differs from "main", recorded for this attempt; it was not applied`,
+			`commit "def456" differs from "abc123", recorded for this attempt; it was not applied`,
+		}, replay.Warnings)
+		assert.Equal(t, "main", replay.Run.Branch, "a replay never changes the recorded metadata")
 	})
 
 	t.Run("BE-INT-011_database_enforces_result_and_run_invariants", func(t *testing.T) {

@@ -675,7 +675,10 @@ export interface components {
             /**
              * @description Non-blocking notices. On an idempotent replay whose report differs
              *     (SHA-256) from the one that created the run, it says the new report
-             *     was not applied; send a new runAttempt to record it.
+             *     was not applied (send a new runAttempt to record it); likewise when
+             *     the replay reports another status, pipeline, branch or commit. On a
+             *     new run, it says when the report's suite timestamp is later than the
+             *     ingestion (startedAt is then left unknown).
              */
             warnings: string[];
         };

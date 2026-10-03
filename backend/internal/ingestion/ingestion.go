@@ -14,6 +14,7 @@ import (
 	"io"
 	"regexp"
 	"slices"
+	"time"
 	"unicode/utf8"
 
 	"github.com/edcrove/provenly/backend/internal/catalog"
@@ -71,6 +72,14 @@ type Outcome struct {
 // StatusDiffersWarning is returned when a replay reports another final status
 // than the one recorded for the attempt; it is never applied.
 const StatusDiffersWarning = "status %q differs from %q, recorded for this attempt; it was not applied"
+
+// MetadataDiffersWarning is returned when a replay reports another pipeline,
+// branch or commit than the ones recorded for the attempt; they are never applied.
+const MetadataDiffersWarning = "%s %q differs from %q, recorded for this attempt; it was not applied"
+
+// FutureStartWarning is returned when the report's suite timestamp is later than
+// the ingestion, so the run's start is left unknown.
+const FutureStartWarning = "the report's suite timestamp %s is later than the ingestion; startedAt is left unknown (clock skew, or a local time written without a zone)"
 
 // ReportDiffersWarning is returned when a replay of an attempt carries a report
 // different from the one that created the run; it is never applied.
@@ -165,6 +174,16 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	}
 	if requested := cmp.Or(meta.Status, execution.RunCompleted); !created && run.Status != requested {
 		out.Warnings = append(out.Warnings, fmt.Sprintf(StatusDiffersWarning, requested, run.Status))
+	}
+	if !created {
+		for _, f := range [][3]string{{"pipeline", meta.Pipeline, run.Pipeline}, {"branch", meta.Branch, run.Branch}, {"commit", meta.Commit, run.Commit}} {
+			if f[1] != f[2] {
+				out.Warnings = append(out.Warnings, fmt.Sprintf(MetadataDiffersWarning, f[0], f[1], f[2]))
+			}
+		}
+	}
+	if created && report.StartedAt != nil && run.StartedAt == nil {
+		out.Warnings = append(out.Warnings, fmt.Sprintf(FutureStartWarning, report.StartedAt.Format(time.RFC3339)))
 	}
 	return out, nil
 }

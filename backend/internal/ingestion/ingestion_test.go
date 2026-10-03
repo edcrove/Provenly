@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,6 +51,10 @@ type fakeRecorder struct {
 	storedDigest string
 	// storedStatus simulates the status recorded for an existing run.
 	storedStatus execution.RunStatus
+	// storedMeta simulates the pipeline, branch and commit recorded for an existing run.
+	storedMeta *[3]string
+	// storedStart simulates the startedAt the execution module kept.
+	storedStart *time.Time
 }
 
 func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []int64, rs []execution.NewResult, pe []execution.ParseError) (execution.TestRun, bool, error) {
@@ -59,7 +64,12 @@ func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []
 		digest = f.storedDigest
 	}
 	status := cmp.Or(f.storedStatus, run.Status, execution.RunCompleted)
+	recorded := [3]string{run.Pipeline, run.Branch, run.Commit}
+	if f.storedMeta != nil {
+		recorded = *f.storedMeta
+	}
 	return execution.TestRun{ID: 1, ExternalRunID: execution.ExternalRunID(run.Provider, run.ProviderRunID, run.RunAttempt),
+		Pipeline: recorded[0], Branch: recorded[1], Commit: recorded[2], StartedAt: f.storedStart,
 		ResultCount: int32(len(rs)), ReportSHA256: digest, Status: status}, f.created, f.recordErr
 }
 
@@ -149,6 +159,36 @@ func TestIngestReplayAndEmptyParseErrors(t *testing.T) {
 	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
 	require.NoError(t, err)
 	assert.Equal(t, []string{`status "completed" differs from "interrupted", recorded for this attempt; it was not applied`}, out.Warnings)
+}
+
+func TestIngestWarnsWhenAReplayCarriesOtherMetadata(t *testing.T) {
+	rec := &fakeRecorder{created: false, storedMeta: &[3]string{"ci", "release", "def"}}
+	out, err := NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		`branch "main" differs from "release", recorded for this attempt; it was not applied`,
+		`commit "abc" differs from "def", recorded for this attempt; it was not applied`,
+	}, out.Warnings)
+
+	rec.created = true
+	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
+	require.NoError(t, err)
+	assert.Empty(t, out.Warnings, "a new run records the metadata it was sent")
+}
+
+func TestIngestWarnsWhenTheSuiteTimestampIsLaterThanIngestion(t *testing.T) {
+	rec := &fakeRecorder{created: true} // the execution module left startedAt unknown
+	out, err := NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta,
+		strings.NewReader(`<testsuite name="s" timestamp="2099-01-01T00:00:00Z"/>`))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"the report's suite timestamp 2099-01-01T00:00:00Z is later than the ingestion; startedAt is left unknown (clock skew, or a local time written without a zone)"}, out.Warnings)
+
+	kept := time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC)
+	rec.storedStart = &kept
+	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta,
+		strings.NewReader(`<testsuite name="s" timestamp="2026-09-28T10:00:00Z"/>`))
+	require.NoError(t, err)
+	assert.Empty(t, out.Warnings)
 }
 
 func TestIngestPassesTheReportedRunStatus(t *testing.T) {

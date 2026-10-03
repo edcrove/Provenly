@@ -30,3 +30,6 @@ node_modules/
 # Environments: real credentials and local backups never go to git
 /envs/prod.env
 /backups/
+
+# Claude Code personal overrides
+.claude/settings.local.json

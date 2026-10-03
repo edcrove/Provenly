@@ -57,3 +57,9 @@ Small, focused commits with imperative subjects. Nothing merges with red CI.
 
 Provenly is licensed under the [Apache License 2.0](LICENSE). Unless you state otherwise, any contribution you submit
 is licensed under the same terms (section 5 of the license); no separate CLA is required.
+
+## Working with Claude Code
+
+Agent rules, workflows and guardrails live in [`CLAUDE.md`](CLAUDE.md) and `.claude/` (settings with permission
+rules and hooks, project skills `implement-card`, `validate-card`, `record-decision`, `steward`). The SessionStart
+hook prepares the pinned toolchain in Claude Code on the web.

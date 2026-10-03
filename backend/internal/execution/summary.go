@@ -56,6 +56,46 @@ type TestCaseOutcome struct {
 	ResultCount int32
 }
 
+// Verdict is the test outcome of a run, derived from its summary.
+type Verdict string
+
+// Verdicts, by precedence: no_tests when the expected universe is empty,
+// failed when any TC-ID failed or errored, incomplete when any is untested or
+// skipped, passed otherwise.
+const (
+	VerdictPassed     Verdict = "passed"
+	VerdictFailed     Verdict = "failed"
+	VerdictIncomplete Verdict = "incomplete"
+	VerdictNoTests    Verdict = "no_tests"
+)
+
+// RunOutcome is the test outcome of a run: its verdict, the counts behind it
+// and the pass rate over executed TC-IDs.
+type RunOutcome struct {
+	Verdict                                            Verdict
+	Executed, Passed, Failed, Error, Skipped, Untested int32
+	PassRate                                           float64
+}
+
+// Outcome derives the run outcome from the summary.
+func (s Summary) Outcome() RunOutcome {
+	o := RunOutcome{
+		Executed: s.ExecutedTotal, Passed: s.Counts.Passed, Failed: s.Counts.Failed, Error: s.Counts.Error,
+		Skipped: s.Counts.Skipped, Untested: s.Counts.Untested, PassRate: s.PercentOfExecuted.Passed,
+	}
+	switch {
+	case s.ExpectedTotal == 0:
+		o.Verdict = VerdictNoTests
+	case o.Failed+o.Error > 0:
+		o.Verdict = VerdictFailed
+	case o.Untested+o.Skipped > 0:
+		o.Verdict = VerdictIncomplete
+	default:
+		o.Verdict = VerdictPassed
+	}
+	return o
+}
+
 // Summary is the snapshot-based summary of a run.
 type Summary struct {
 	TestRunID         int64
@@ -67,14 +107,20 @@ type Summary struct {
 	ExecutionPercent  float64
 	Diagnostics       DiagnosticCounts
 	OutsideUniverse   int32
-	TestCases         []TestCaseOutcome
+	// OutsideUniverseIDs are the distinct TC-IDs behind OutsideUniverse, ascending.
+	OutsideUniverseIDs []int64
+	TestCases          []TestCaseOutcome
 }
+
+// percentPrecision keeps 6 decimals: clients sum the precise values and round
+// only for display, so e.g. 3 x 33.333333 is shown as a 100% total.
+const percentPrecision = 1e6
 
 func percent(part, total int32) float64 {
 	if total == 0 {
 		return 0
 	}
-	return math.Round(float64(part)*10000/float64(total)) / 100
+	return math.Round(float64(part)*100*percentPrecision/float64(total)) / percentPrecision
 }
 
 // ComputeSummary derives the summary of a run from its immutable snapshot
@@ -85,14 +131,20 @@ func ComputeSummary(runID int64, expected []int64, valid []ValidResult, diagnost
 	for _, id := range expected {
 		byCase[id] = nil
 	}
-	s := Summary{TestRunID: runID, ExpectedTotal: int32(len(expected))}
+	s := Summary{TestRunID: runID, ExpectedTotal: int32(len(expected)), OutsideUniverseIDs: []int64{}}
+	outside := map[int64]bool{}
 	for _, r := range valid {
 		if _, ok := byCase[r.TestCaseID]; !ok {
 			s.OutsideUniverse++
+			if !outside[r.TestCaseID] {
+				outside[r.TestCaseID] = true
+				s.OutsideUniverseIDs = append(s.OutsideUniverseIDs, r.TestCaseID)
+			}
 			continue
 		}
 		byCase[r.TestCaseID] = append(byCase[r.TestCaseID], r.Status)
 	}
+	sort.Slice(s.OutsideUniverseIDs, func(i, j int) bool { return s.OutsideUniverseIDs[i] < s.OutsideUniverseIDs[j] })
 	ids := append([]int64(nil), expected...)
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	s.TestCases = make([]TestCaseOutcome, 0, len(ids))

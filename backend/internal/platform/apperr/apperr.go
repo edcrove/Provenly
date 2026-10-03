@@ -6,6 +6,8 @@ package apperr
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"unicode/utf8"
 )
 
 // Kind classifies an application error.
@@ -34,6 +36,9 @@ type Error struct {
 }
 
 func (e *Error) Error() string { return e.Message }
+
+// ValidationFailed is the detail of every request validation error that lists field errors.
+const ValidationFailed = "request validation failed"
 
 // Validation builds a KindValidation error.
 func Validation(message string, fields ...FieldError) error {
@@ -69,10 +74,16 @@ func (v *Validator) Check(ok bool, field, message string) {
 	}
 }
 
+// CheckText records a field error when s cannot be stored as text: it must be
+// valid UTF-8 and contain no NUL character (PostgreSQL rejects both).
+func (v *Validator) CheckText(field, s string) {
+	v.Check(utf8.ValidString(s) && !strings.ContainsRune(s, 0), field, "must be valid UTF-8 text without NUL characters")
+}
+
 // Err returns a validation error when any check failed, otherwise nil.
 func (v *Validator) Err() error {
 	if len(v.fields) == 0 {
 		return nil
 	}
-	return Validation("request validation failed", v.fields...)
+	return Validation(ValidationFailed, v.fields...)
 }

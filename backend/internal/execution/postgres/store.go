@@ -92,6 +92,7 @@ func toRun(r runRow) execution.TestRun {
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.CommitSha,
 		Status: execution.RunStatus(r.Status), ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount,
 		CreatedAt: r.CreatedAt.Time, StartedAt: timePtr(r.StartedAt), CompletedAt: timePtr(r.CompletedAt),
+		ReportSHA256: r.ReportSha256,
 	}
 }
 
@@ -99,7 +100,7 @@ func toResult(r executiondb.TestResult) execution.TestResult {
 	return execution.TestResult{
 		ID: r.ID, TestRunID: r.TestRunID, TestCaseID: int8Ptr(r.TestCaseID), RequestedTestCaseID: textPtr(r.RequestedTestCaseID),
 		Correlation: execution.Correlation(r.Correlation), TestName: r.TestName, ClassName: r.ClassName, SuiteName: r.SuiteName,
-		Status: execution.ResultStatus(r.Status), DurationMs: r.DurationMs, ErrorMessage: r.ErrorMessage,
+		Status: execution.ResultStatus(r.Status), DurationMs: int8Ptr(r.DurationMs), ErrorMessage: r.ErrorMessage,
 		ErrorDetails: r.ErrorDetails, CreatedAt: r.CreatedAt.Time,
 	}
 }
@@ -109,7 +110,7 @@ func (s *Store) InsertTestRun(ctx context.Context, p execution.InsertRunParams) 
 	id, err := s.q.InsertTestRun(ctx, executiondb.InsertTestRunParams{
 		ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID, RunAttempt: p.RunAttempt,
 		Pipeline: p.Pipeline, Branch: p.Branch, CommitSha: p.Commit, Status: string(p.Status),
-		StartedAt: timestamptz(p.StartedAt), CompletedAt: timestamptz(&p.CompletedAt),
+		StartedAt: timestamptz(p.StartedAt), CompletedAt: timestamptz(&p.CompletedAt), ReportSha256: p.ReportSHA256,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
@@ -137,7 +138,7 @@ func (s *Store) InsertTestResults(ctx context.Context, runID int64, results []ex
 	for i, r := range results {
 		row := executiondb.InsertTestResultsParams{
 			TestRunID: runID, Correlation: string(r.Correlation), TestName: r.TestName, ClassName: r.ClassName,
-			SuiteName: r.SuiteName, Status: string(r.Status), DurationMs: r.DurationMs,
+			SuiteName: r.SuiteName, Status: string(r.Status),
 			ErrorMessage: r.ErrorMessage, ErrorDetails: r.ErrorDetails,
 		}
 		if r.TestCaseID != nil {
@@ -146,10 +147,41 @@ func (s *Store) InsertTestResults(ctx context.Context, runID int64, results []ex
 		if r.RequestedTestCaseID != nil {
 			row.RequestedTestCaseID = pgtype.Text{String: *r.RequestedTestCaseID, Valid: true}
 		}
+		if r.DurationMs != nil {
+			row.DurationMs = pgtype.Int8{Int64: *r.DurationMs, Valid: true}
+		}
 		rows[i] = row
 	}
 	_, err := s.q.InsertTestResults(ctx, rows)
 	return err
+}
+
+// InsertParseErrors implements execution.Repository.
+func (s *Store) InsertParseErrors(ctx context.Context, runID int64, errs []execution.ParseError) error {
+	rows := make([]executiondb.InsertParseErrorsParams, len(errs))
+	for i, e := range errs {
+		rows[i] = executiondb.InsertParseErrorsParams{TestRunID: runID, CaseIndex: e.Index, TestName: e.TestName, Message: e.Message, Persisted: e.Persisted, Severity: e.Severity}
+	}
+	_, err := s.q.InsertParseErrors(ctx, rows)
+	return err
+}
+
+// ListParseErrors implements execution.Repository.
+func (s *Store) ListParseErrors(ctx context.Context, runID int64, limit, offset int32) ([]execution.ParseError, error) {
+	rows, err := s.q.ListParseErrors(ctx, executiondb.ListParseErrorsParams{TestRunID: runID, PageLimit: limit, PageOffset: offset})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]execution.ParseError, len(rows))
+	for i, r := range rows {
+		out[i] = execution.ParseError{Index: r.CaseIndex, TestName: r.TestName, Message: r.Message, Persisted: r.Persisted, Severity: r.Severity}
+	}
+	return out, nil
+}
+
+// CountParseErrors implements execution.Repository.
+func (s *Store) CountParseErrors(ctx context.Context, runID int64) (int64, error) {
+	return s.q.CountParseErrors(ctx, runID)
 }
 
 // GetTestRun implements execution.Repository.
@@ -162,7 +194,7 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 		TestRun: executiondb.TestRun{
 			ID: r.ID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 			RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
-			CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,
+			CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, ReportSha256: r.ReportSha256,
 		},
 		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount,
 	}), nil
@@ -215,20 +247,21 @@ func (s *Store) CountRunResults(ctx context.Context, runID int64, f execution.Re
 	})
 }
 
-// ListExpectedCaseIDs implements execution.Repository.
-func (s *Store) ListExpectedCaseIDs(ctx context.Context, runID int64) ([]int64, error) {
-	return s.q.ListExpectedCaseIDs(ctx, runID)
-}
-
-// ListValidResults implements execution.Repository.
-func (s *Store) ListValidResults(ctx context.Context, runID int64) ([]execution.ValidResult, error) {
-	rows, err := s.q.ListValidResultStatuses(ctx, runID)
+// ListSummaryInputs implements execution.Repository.
+func (s *Store) ListSummaryInputs(ctx context.Context, runIDs []int64) (map[int64]execution.SummaryInputs, error) {
+	rows, err := s.q.ListSummaryInputs(ctx, runIDs)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]execution.ValidResult, len(rows))
-	for i, r := range rows {
-		out[i] = execution.ValidResult{TestCaseID: r.TestCaseID, Status: execution.ResultStatus(r.Status)}
+	out := make(map[int64]execution.SummaryInputs, len(runIDs))
+	for _, r := range rows {
+		in := out[r.TestRunID]
+		if r.Status.Valid {
+			in.Valid = append(in.Valid, execution.ValidResult{TestCaseID: r.TestCaseID, Status: execution.ResultStatus(r.Status.String)})
+		} else {
+			in.Expected = append(in.Expected, r.TestCaseID)
+		}
+		out[r.TestRunID] = in
 	}
 	return out, nil
 }

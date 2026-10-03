@@ -11,17 +11,17 @@ import (
 	"time"
 )
 
-// RunStatus is the lifecycle status of a test run.
+// RunStatus is how the CI execution of a run ended, as reported by CI. It
+// says nothing about test outcomes: see RunOutcome.Verdict.
 type RunStatus string
 
-// Run lifecycle statuses. The POC creates runs synchronously on ingestion of
-// the final report, so they are stored as completed.
+// Execution statuses. The POC creates runs synchronously on ingestion of the
+// final report: completed by default, or interrupted/cancelled when CI reports
+// that the pipeline broke or was stopped (the report may be incomplete).
 const (
-	RunCreated   RunStatus = "created"
-	RunRunning   RunStatus = "running"
-	RunCompleted RunStatus = "completed"
-	RunFailed    RunStatus = "failed"
-	RunCancelled RunStatus = "cancelled"
+	RunCompleted   RunStatus = "completed"
+	RunInterrupted RunStatus = "interrupted"
+	RunCancelled   RunStatus = "cancelled"
 )
 
 // ResultStatus is the observed outcome of one result. "untested" is never a
@@ -73,15 +73,19 @@ type TestRun struct {
 	Branch        string
 	Commit        string
 	Status        RunStatus
+	Outcome       RunOutcome
 	ExpectedCount int32
 	ResultCount   int32
 	CreatedAt     time.Time
 	StartedAt     *time.Time
 	CompletedAt   *time.Time
+	// ReportSHA256 is the digest of the report that created the run (internal; not exposed).
+	ReportSHA256 string
 }
 
-// TestResult is one persisted result. TestCaseID is set only when the
-// correlation is valid; RequestedTestCaseID keeps the raw declared reference.
+// TestResult is one persisted result. TestCaseID is set when the correlation
+// is valid or deprecated (so the result belongs to the test case's history);
+// RequestedTestCaseID keeps the raw declared reference.
 type TestResult struct {
 	ID                  int64
 	TestRunID           int64
@@ -92,7 +96,7 @@ type TestResult struct {
 	ClassName           string
 	SuiteName           string
 	Status              ResultStatus
-	DurationMs          int64
+	DurationMs          *int64
 	ErrorMessage        string
 	ErrorDetails        string
 	CreatedAt           time.Time
@@ -107,7 +111,14 @@ type NewRun struct {
 	Branch        string
 	Commit        string
 	StartedAt     *time.Time
+	// ReportSHA256 is the digest of the ingested report.
+	ReportSHA256 string
+	// Status is how the execution ended; empty means completed.
+	Status RunStatus
 }
+
+// ExecutionStatuses are the statuses CI may report with a final report.
+var ExecutionStatuses = []RunStatus{RunCompleted, RunInterrupted, RunCancelled}
 
 // NewResult is a result to persist within a new run.
 type NewResult struct {
@@ -118,9 +129,20 @@ type NewResult struct {
 	ClassName           string
 	SuiteName           string
 	Status              ResultStatus
-	DurationMs          int64
+	DurationMs          *int64
 	ErrorMessage        string
 	ErrorDetails        string
+}
+
+// ParseError is a testcase of the ingested report that could not be fully
+// normalized or looks suspicious, stored with its run. Persisted tells whether
+// its result was kept; Severity is "error" or "warning".
+type ParseError struct {
+	Index     int32
+	TestName  string
+	Message   string
+	Persisted bool
+	Severity  string
 }
 
 // Diagnostic is a stored result whose TC-ID is not valid.
@@ -140,6 +162,13 @@ type ResultFilter struct {
 type ValidResult struct {
 	TestCaseID int64
 	Status     ResultStatus
+}
+
+// SummaryInputs are the immutable inputs of a run's summary: its snapshot
+// TC-IDs (ascending) and its valid results.
+type SummaryInputs struct {
+	Expected []int64
+	Valid    []ValidResult
 }
 
 // HistoryEntry is a historical result of a TC-ID plus the run it was observed in.
@@ -163,13 +192,16 @@ type Repository interface {
 	GetTestRunIDByExternalID(ctx context.Context, externalRunID string) (int64, error)
 	InsertExpectedCases(ctx context.Context, runID int64, testCaseIDs []int64) error
 	InsertTestResults(ctx context.Context, runID int64, results []NewResult) error
+	InsertParseErrors(ctx context.Context, runID int64, errs []ParseError) error
+	ListParseErrors(ctx context.Context, runID int64, limit, offset int32) ([]ParseError, error)
+	CountParseErrors(ctx context.Context, runID int64) (int64, error)
 	GetTestRun(ctx context.Context, id int64) (TestRun, error)
 	ListTestRuns(ctx context.Context, limit, offset int32) ([]TestRun, error)
 	CountTestRuns(ctx context.Context) (int64, error)
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, limit, offset int32) ([]TestResult, error)
 	CountRunResults(ctx context.Context, runID int64, f ResultFilter) (int64, error)
-	ListExpectedCaseIDs(ctx context.Context, runID int64) ([]int64, error)
-	ListValidResults(ctx context.Context, runID int64) ([]ValidResult, error)
+	// ListSummaryInputs returns the snapshot TC-IDs and valid results of each given run.
+	ListSummaryInputs(ctx context.Context, runIDs []int64) (map[int64]SummaryInputs, error)
 	ListDiagnostics(ctx context.Context, runID int64) ([]Diagnostic, error)
 	ListResultsForTestCase(ctx context.Context, testCaseID int64, limit, offset int32) ([]HistoryEntry, error)
 	CountResultsForTestCase(ctx context.Context, testCaseID int64) (int64, error)

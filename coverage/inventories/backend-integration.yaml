@@ -1,0 +1,64 @@
+# Backend Integration inventory: interactions across application, persistence
+# and infrastructure, verified against real PostgreSQL (testcontainers-go).
+# Every sqlc query is ALSO a target automatically (BE-INT-Q:<module>.<Query>),
+# derived from backend/queries/*.sql — adding a query adds a target.
+# A target is covered when a passing test (subtest) name contains its id.
+targets:
+  - id: BE-INT-001
+    description: goose migrations apply, roll back and re-apply reproducibly
+  - id: BE-INT-002
+    description: TC-IDs are assigned by the database (identity), increasing and never reused
+  - id: BE-INT-003
+    description: database forbids deleting test cases and changing a TC-ID, naming the TC-ID in the error
+  - id: BE-INT-004
+    description: test case CRUD round-trip through the catalog service on Postgres (idempotent deprecation)
+  - id: BE-INT-005
+    description: expected universe query returns exactly active AND automated test cases
+  - id: BE-INT-006
+    description: steps keep a persistent contiguous order (insert/shift, reorder under deferrable unique constraint, delete/renumber)
+  - id: BE-INT-007
+    description: concurrent step creation is serialized per test case (row lock)
+  - id: BE-INT-008
+    description: duplicate ingestion of the same externalRunId is idempotent, also under concurrency; a different report is not applied and warned
+  - id: BE-INT-009
+    description: a rerun attempt creates a new run and preserves the previous attempt's history
+  - id: BE-INT-010
+    description: the expected-universe snapshot is immutable and isolated from later catalog changes
+  - id: BE-INT-011
+    description: database enforces result/run invariants (TC-ID link only for valid/deprecated, no untested rows, externalRunId format)
+  - id: BE-INT-012
+    description: JUnit ingestion persists run, results and TC-ID diagnostics end to end on Postgres (deprecated results stay in history)
+  - id: BE-INT-013
+    description: run results filters (status, correlation) and pagination
+  - id: BE-INT-014
+    description: result history of a TC-ID across runs with observed execution metadata
+  - id: BE-INT-015
+    description: CLI migrates and serves against Postgres, and reports connection failures
+  - id: BE-INT-016
+    description: failed transactions roll back every write
+  - id: BE-INT-017
+    description: valid results outside the run snapshot are persisted, excluded from the summary and their TC-IDs listed
+  - id: BE-INT-018
+    description: parse errors and unknown durations are stored with the run, listed and replayed
+  - id: BE-INT-019
+    description: the run execution status reported by CI (completed/interrupted/cancelled) is stored and never changed by replays
+  - id: BE-INT-021
+    description: editing test case content and steps (edit, reorder, delete) keeps the TC-ID and leaves the result history unchanged
+  - id: BE-INT-022
+    description: readiness reflects database reachability (200 with a live pool, 503 Problem once the pool is closed)
+  - id: BE-INT-023
+    description: database enforces step integrity (owning test case exists and never changes, non-blank action, expected result at most 2000 characters)
+  - id: BE-INT-024
+    description: database protects run identity (external id, provider, run id, attempt, report digest), forbids deleting runs and adding TC-IDs to an existing snapshot, and keeps startedAt <= completedAt; replays warn about differing metadata
+  - id: BE-INT-025
+    description: ingested results and parse errors are immutable (no insert after the run is created, no update, no delete), so the verdict always reflects the report
+  - id: BE-INT-026
+    description: database enforces test case integrity (non-blank title, description and expected result at most 10000 characters, deprecated_at set exactly when deprecated, updated_at not before created_at)
+  - id: BE-INT-027
+    description: the run snapshot and the result correlations come from one catalog read, so they agree when a test case is deprecated during an ingestion
+  - id: BE-INT-028
+    description: concurrent partial edits of different test case fields all persist (a PATCH writes only the fields it sends)
+  - id: BE-INT-029
+    description: deep history and run-list pages cost no more than the first (20k results for one TC)
+  - id: BE-INT-030
+    description: the summary of a mixed run (precedence, untested, outside universe, diagnostics, three percentages) matches hand-computed numbers and survives later catalog changes; a run with nothing executed is 100% untested

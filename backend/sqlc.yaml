@@ -13,7 +13,12 @@ sql:
         emit_interface: true
         emit_json_tags: false
   - engine: postgresql
-    schema: migrations/00002_execution.sql
+    schema:
+      - migrations/00002_execution.sql
+      - migrations/00003_deprecated_results_link.sql
+      - migrations/00004_parse_errors_and_nullable_duration.sql
+      - migrations/00005_parse_error_severity.sql
+      - migrations/00006_run_report_digest.sql
     queries: queries/execution.sql
     gen:
       go:

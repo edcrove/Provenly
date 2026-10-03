@@ -1,0 +1,200 @@
+# Coverage exception registry (versioned). An exception removes elements from a
+# gate's REQUIRED denominator; they stay counted in reachableTotal and listed in
+# every report. covgate rejects exceptions with missing fields, unknown
+# categories, a status other than "approved", a past reviewBy date, or a target
+# that matches nothing (stale).
+#
+# Fields: id, gate (= side-layer), layer, side, target (glob over file paths or
+# target ids), reason, category, evidence (where it IS verified), owner,
+# createdAt, reviewBy (expiry), link (issue/decision), status.
+#
+# Categories: generated-code | other-layer | vendored-ui | entrypoint |
+#             not-reachable | tooling-limitation | test-support
+#
+# Exceptions only absorb uncovered elements. Everything excepted from a Unit
+# gate must then be executed by another layer: the backend/frontend-consolidated
+# gates require 100% of all code on the coverage of all layers merged.
+
+exceptions:
+  # ---------------------------------------------------------------- backend-unit
+  - id: EXC-BE-UNIT-001
+    gate: backend-unit
+    layer: unit
+    side: backend
+    target: internal/catalog/catalogdb/**
+    reason: sqlc-generated query code; it has no logic of its own and only runs against a real database.
+    category: generated-code
+    evidence: backend-integration gate targets BE-INT-Q:catalog.* (every query executed against Postgres).
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-BE-UNIT-002
+    gate: backend-unit
+    layer: unit
+    side: backend
+    target: internal/execution/executiondb/**
+    reason: sqlc-generated query code; it has no logic of its own and only runs against a real database.
+    category: generated-code
+    evidence: backend-integration gate targets BE-INT-Q:execution.*.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-BE-UNIT-003
+    gate: backend-unit
+    layer: unit
+    side: backend
+    target: internal/{catalog,execution}/postgres/**
+    reason: PostgreSQL repository adapters (thin mapping over sqlc); their behavior is persistence, verified against real Postgres.
+    category: other-layer
+    evidence: backend-integration gate (BE-INT-002..017) plus integration code-coverage evidence.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-BE-UNIT-004
+    gate: backend-unit
+    layer: unit
+    side: backend
+    target: internal/platform/postgres/**
+    reason: Opens the pgx pool and runs goose migrations; needs a real database.
+    category: other-layer
+    evidence: backend-integration targets BE-INT-001 (migrations) and BE-INT-015 (cli against Postgres).
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-BE-UNIT-005
+    gate: backend-unit
+    layer: unit
+    side: backend
+    target: cmd/provenly/main.go:14
+    reason: The single os.Exit(run(...)) statement of main; os.Exit terminates the test binary. run() itself is unit tested.
+    category: entrypoint
+    evidence: E2E runs the coverage-instrumented binary (go build -cover); main is executed in every E2E run.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+
+  # --------------------------------------------------------------- frontend-unit
+  - id: EXC-FE-UNIT-001
+    gate: frontend-unit
+    layer: unit
+    side: frontend
+    target: src/components/ui/**
+    reason: shadcn/ui primitives vendored as source (styling wrappers without product logic).
+    category: vendored-ui
+    evidence: rendered by every frontend-integration target; integration code-coverage evidence.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-FE-UNIT-002
+    gate: frontend-unit
+    layer: unit
+    side: frontend
+    target: src/main.tsx
+    reason: "Browser entrypoint that mounts <App/> into the #root element."
+    category: entrypoint
+    evidence: frontend-e2e journeys load the istanbul-instrumented bundle.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-FE-UNIT-003
+    gate: frontend-unit
+    layer: unit
+    side: frontend
+    target: src/{app,features}/**
+    reason: Pages, layout and routes are components rendered against the API; they are Integration surfaces by the POC testing strategy.
+    category: other-layer
+    evidence: frontend-integration gate (every surface must be inventoried) and E2E journeys.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/WNVrzewZ/26-poc-testing-pyramid-foundation
+    status: approved
+  - id: EXC-FE-UNIT-004
+    gate: frontend-unit
+    layer: unit
+    side: frontend
+    target: src/components/*.tsx
+    reason: Shared product components (badges, pagination, query states) verified rendered, as Integration surfaces.
+    category: other-layer
+    evidence: frontend-integration targets FE-INT-002, FE-INT-009, FE-INT-011, FE-INT-012.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/WNVrzewZ/26-poc-testing-pyramid-foundation
+    status: approved
+  - id: EXC-FE-UNIT-005
+    gate: frontend-unit
+    layer: unit
+    side: frontend
+    target: src/api/queries.ts
+    reason: TanStack Query hooks around the generated client; their value is the HTTP interaction, verified against MSW.
+    category: other-layer
+    evidence: frontend-integration (all hooks rendered) and frontend-contract (every consumed operation variant).
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/WNVrzewZ/26-poc-testing-pyramid-foundation
+    status: approved
+
+  # ----------------------------------------------- backend-consolidated
+  # Every statement must be executed by some layer (all layers merged), which
+  # includes everything excepted from backend-unit. These are the ones no layer
+  # can reach, plus test infrastructure compiled into the merged profile.
+  - id: EXC-BE-CONS-001
+    gate: backend-consolidated
+    layer: consolidated
+    side: backend
+    target: internal/{catalog,execution}/{catalog,execution}db/*.sql.go
+    reason: >-
+      rows.Scan / rows.Err error branches of sqlc-generated :many queries. They only run when the database fails in
+      the middle of streaming a result set after the query itself succeeded, which cannot be reproduced
+      deterministically. Every uncovered line absorbed here is listed in the report.
+    category: not-reachable
+    evidence: >-
+      Every query runs against Postgres (backend-integration BE-INT-Q:* targets) and every Query-error branch is
+      executed with a closed pool (BE-INT-020).
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-BE-CONS-002
+    gate: backend-consolidated
+    layer: consolidated
+    side: backend
+    target: internal/platform/postgres/postgres.go:35
+    reason: goose.SetDialect("postgres") error branch; the dialect is a constant that goose always supports.
+    category: not-reachable
+    evidence: Migrations run in BE-INT-001, BE-INT-015 and every E2E run.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
+  - id: EXC-BE-CONS-003
+    gate: backend-consolidated
+    layer: consolidated
+    side: backend
+    target: test/**
+    reason: Test infrastructure (testcontainers bootstrap) compiled into the merged profile by -coverpkg=./...; not product code. Its uncovered lines are container start-up failure paths.
+    category: test-support
+    evidence: Executed by every integration and contract run; failures there fail those suites.
+    owner: edcrove
+    createdAt: "2026-09-28"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved

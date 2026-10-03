@@ -1,0 +1,22 @@
+# Ephemeral database for automated suites (E2E journeys, screenshots): data lives
+# in memory (tmpfs) and the project is destroyed after every run, so automation
+# never touches the demo, qa or prod environments. Integration and Contract
+# suites use their own throwaway Postgres through testcontainers-go.
+name: provenly-e2e
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: provenly
+      POSTGRES_PASSWORD: provenly
+      POSTGRES_DB: provenly_e2e
+    ports:
+      - "127.0.0.1:${E2E_DB_PORT:-5439}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U provenly -d provenly_e2e"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(make *)",
+      "Bash(go build *)",
+      "Bash(go test *)",
+      "Bash(go vet *)",
+      "Bash(go run *)",
+      "Bash(go mod *)",
+      "Bash(gofmt *)",
+      "Bash(golangci-lint *)",
+      "Bash(sqlc *)",
+      "Bash(npm run *)",
+      "Bash(npm install*)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npx prettier *)",
+      "Bash(npx vitest *)",
+      "Bash(npx playwright *)",
+      "Bash(docker ps*)",
+      "Bash(docker info*)",
+      "Bash(docker logs *)",
+      "Bash(docker compose *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git fetch*)",
+      "Bash(curl -s localhost*)",
+      "Bash(curl -sf localhost*)"
+    ],
+    "deny": [
+      "Read(./envs/prod.env)",
+      "Read(./backups/**)",
+      "Edit(./envs/prod.env)",
+      "Edit(./backups/**)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh",
+            "timeout": 600,
+            "statusMessage": "Preparing Provenly toolchain"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

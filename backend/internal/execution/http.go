@@ -15,6 +15,7 @@ type API interface {
 	ListRuns(ctx context.Context, page pagination.Page) (pagination.Result[TestRun], error)
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, page pagination.Page) (pagination.Result[TestResult], error)
 	Summary(ctx context.Context, runID int64) (Summary, error)
+	ListParseErrors(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[ParseError], error)
 	History(ctx context.Context, testCaseID int64, page pagination.Page) (pagination.Result[HistoryEntry], error)
 }
 
@@ -34,7 +35,8 @@ type TestRunDTO struct {
 	Pipeline      string     `json:"pipeline"`
 	Branch        string     `json:"branch"`
 	Commit        string     `json:"commit"`
-	Status        RunStatus  `json:"status"`
+	Status        RunStatus  `json:"executionStatus"`
+	Outcome       outcomeDTO `json:"outcome"`
 	ExpectedCount int32      `json:"expectedCount"`
 	ResultCount   int32      `json:"resultCount"`
 	CreatedAt     time.Time  `json:"createdAt"`
@@ -42,8 +44,27 @@ type TestRunDTO struct {
 	CompletedAt   *time.Time `json:"completedAt"`
 }
 
+type outcomeDTO struct {
+	Verdict  Verdict `json:"verdict"`
+	Executed int32   `json:"executed"`
+	Passed   int32   `json:"passed"`
+	Failed   int32   `json:"failed"`
+	Error    int32   `json:"error"`
+	Skipped  int32   `json:"skipped"`
+	Untested int32   `json:"untested"`
+	PassRate float64 `json:"passRate"`
+}
+
 // RunDTO converts a TestRun to its wire form.
-func RunDTO(r TestRun) TestRunDTO { return TestRunDTO(r) }
+func RunDTO(r TestRun) TestRunDTO {
+	return TestRunDTO{
+		ID: r.ID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
+		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.Commit, Status: r.Status,
+		Outcome:       outcomeDTO(r.Outcome),
+		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, CreatedAt: r.CreatedAt,
+		StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,
+	}
+}
 
 // TestResultDTO is the wire form of TestResult.
 type TestResultDTO struct {
@@ -56,13 +77,25 @@ type TestResultDTO struct {
 	ClassName           string       `json:"className"`
 	SuiteName           string       `json:"suiteName"`
 	Status              ResultStatus `json:"status"`
-	DurationMs          int64        `json:"durationMs"`
+	DurationMs          *int64       `json:"durationMs"`
 	ErrorMessage        string       `json:"errorMessage"`
 	ErrorDetails        string       `json:"errorDetails"`
 	CreatedAt           time.Time    `json:"createdAt"`
 }
 
 func resultDTO(r TestResult) TestResultDTO { return TestResultDTO(r) }
+
+// ParseErrorDTO is the wire form of ParseError.
+type ParseErrorDTO struct {
+	Index     int32  `json:"index"`
+	TestName  string `json:"testName"`
+	Message   string `json:"message"`
+	Persisted bool   `json:"persisted"`
+	Severity  string `json:"severity"`
+}
+
+// ToParseErrorDTO converts a ParseError to its wire form.
+func ToParseErrorDTO(p ParseError) ParseErrorDTO { return ParseErrorDTO(p) }
 
 type historyDTO struct {
 	Result TestResultDTO `json:"result"`
@@ -111,16 +144,17 @@ type testCaseOutcomeDTO struct {
 }
 
 type summaryDTO struct {
-	TestRunID         int64                  `json:"testRunId"`
-	ExpectedTotal     int32                  `json:"expectedTotal"`
-	ExecutedTotal     int32                  `json:"executedTotal"`
-	Counts            statusCountsDTO        `json:"counts"`
-	PercentOfExpected statusPercentagesDTO   `json:"percentOfExpected"`
-	PercentOfExecuted executedPercentagesDTO `json:"percentOfExecuted"`
-	ExecutionPercent  float64                `json:"executionPercent"`
-	Diagnostics       diagnosticCountsDTO    `json:"diagnostics"`
-	OutsideUniverse   int32                  `json:"outsideUniverse"`
-	TestCases         []testCaseOutcomeDTO   `json:"testCases"`
+	TestRunID          int64                  `json:"testRunId"`
+	ExpectedTotal      int32                  `json:"expectedTotal"`
+	ExecutedTotal      int32                  `json:"executedTotal"`
+	Counts             statusCountsDTO        `json:"counts"`
+	PercentOfExpected  statusPercentagesDTO   `json:"percentOfExpected"`
+	PercentOfExecuted  executedPercentagesDTO `json:"percentOfExecuted"`
+	ExecutionPercent   float64                `json:"executionPercent"`
+	Diagnostics        diagnosticCountsDTO    `json:"diagnostics"`
+	OutsideUniverse    int32                  `json:"outsideUniverse"`
+	OutsideUniverseIDs []int64                `json:"outsideUniverseTestCaseIds"`
+	TestCases          []testCaseOutcomeDTO   `json:"testCases"`
 }
 
 func toSummaryDTO(s Summary) summaryDTO {
@@ -130,13 +164,14 @@ func toSummaryDTO(s Summary) summaryDTO {
 	}
 	return summaryDTO{
 		TestRunID: s.TestRunID, ExpectedTotal: s.ExpectedTotal, ExecutedTotal: s.ExecutedTotal,
-		Counts:            statusCountsDTO(s.Counts),
-		PercentOfExpected: statusPercentagesDTO(s.PercentOfExpected),
-		PercentOfExecuted: executedPercentagesDTO(s.PercentOfExecuted),
-		ExecutionPercent:  s.ExecutionPercent,
-		Diagnostics:       diagnosticCountsDTO(s.Diagnostics),
-		OutsideUniverse:   s.OutsideUniverse,
-		TestCases:         cases,
+		Counts:             statusCountsDTO(s.Counts),
+		PercentOfExpected:  statusPercentagesDTO(s.PercentOfExpected),
+		PercentOfExecuted:  executedPercentagesDTO(s.PercentOfExecuted),
+		ExecutionPercent:   s.ExecutionPercent,
+		Diagnostics:        diagnosticCountsDTO(s.Diagnostics),
+		OutsideUniverse:    s.OutsideUniverse,
+		OutsideUniverseIDs: s.OutsideUniverseIDs,
+		TestCases:          cases,
 	}
 }
 
@@ -152,11 +187,12 @@ func NewHandler(api API, catalog TestCaseChecker) *Handler {
 }
 
 // Register mounts the execution routes.
-func (h *Handler) Register(mux *http.ServeMux) {
+func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/test-runs", h.listRuns)
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}", h.getRun)
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/results", h.listResults)
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/summary", h.summary)
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/parse-errors", h.parseErrors)
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}/results", h.history)
 }
 
@@ -253,6 +289,25 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toSummaryDTO(s))
+}
+
+func (h *Handler) parseErrors(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.PathID(r, "testRunId")
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	res, err := h.api.ListParseErrors(r.Context(), id, page)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, ToParseErrorDTO))
 }
 
 func (h *Handler) history(w http.ResponseWriter, r *http.Request) {

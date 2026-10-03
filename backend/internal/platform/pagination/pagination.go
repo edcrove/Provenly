@@ -6,6 +6,8 @@ const (
 	DefaultSize = 20
 	// MaxSize is the largest page size a client may request.
 	MaxSize = 100
+	// MaxOffset is the largest SQL OFFSET a page may reach (it must fit the int32 query parameter).
+	MaxOffset = 1<<31 - 1
 )
 
 // Page is a validated 1-based page request.

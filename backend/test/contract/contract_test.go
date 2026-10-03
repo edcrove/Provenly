@@ -316,6 +316,13 @@ func TestRobustness(t *testing.T) {
 			WithQuery("runAttempt", 1).WithQuery(q[0], q[1]).WithHeader("Content-Type", xmlType).WithText(report(1)))
 	}
 
+	// A JUnit duration too large to store or read is kept as unknown with a parse error (it used to be a 500);
+	// a second root element is rejected instead of silently dropped.
+	ingest(e, "huge-time", 1, `<testsuite name="s"><testcase name="t" time="1e300"/></testsuite>`).Expect().
+		Status(http.StatusCreated).JSON().Object().Value("parseErrors").Array().Length().IsEqual(1)
+	ingest(e, "two-roots", 1, `<testsuite name="a"/><testsuite name="b"/>`).Expect().
+		Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "invalid_junit")
+
 	// Duplicate JSON keys: the last value wins.
 	e.POST("/api/v1/test-cases").WithHeader("Content-Type", "application/json").WithBytes([]byte(`{"title":"a","title":"b"}`)).
 		Expect().Status(http.StatusCreated).JSON().Object().HasValue("title", "b")

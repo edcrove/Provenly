@@ -56,4 +56,6 @@ Outcomes: `valid`, `missing` (none declared; only uppercase `TC-` counts), `malf
 integer — leading zeros are accepted, `TC-0153` = `TC-153` — or several different ids in one `<testcase>`),
 `unknown` (no such TC), `deprecated`. Problems with individual testcases never stop the batch: a testcase without a
 name is discarded, an invalid `time` keeps the result with an unknown (`null`) duration; both are stored as run parse
-errors (`GET /api/v1/test-runs/{id}/parse-errors`). An unreadable document is a `400 invalid_junit`.
+errors (`GET /api/v1/test-runs/{id}/parse-errors`). An unreadable document — not well-formed, an unsupported
+encoding (UTF-8, US-ASCII, ISO-8859-1, windows-1252 and UTF-16 are read) or content after the root element — is a
+`400 invalid_junit`. `time` accepts locale decimal commas and digit grouping (implementation decision #5).

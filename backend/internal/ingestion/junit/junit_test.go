@@ -2,6 +2,7 @@ package junit
 
 import (
 	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +110,106 @@ func TestParseInvalidCasesDoNotStopParsing(t *testing.T) {
 
 func ms(v int64) *int64 { return &v }
 
+func TestParseDurationFormats(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want *int64
+	}{
+		{"1.5", ms(1500)}, {"+2", ms(2000)}, {".25", ms(250)}, {"1e-3", ms(1)}, {"1.5E2", ms(150000)},
+		{"1,000.5", ms(1000500)}, {"1,234,567", ms(1234567000)}, // grouping commas (en-US)
+		{"0,123", ms(123)}, {"1,5", ms(1500)}, {"1.234,5", ms(1234500)}, {"1.234.567", ms(1234567000)}, // decimal comma (es/de locales)
+		{"9007199254740", ms(9007199254740000)}, // just under the largest duration a JSON client reads exactly
+	}
+	for _, c := range cases {
+		got, err := parseDuration(c.raw)
+		require.NoError(t, err, c.raw)
+		assert.Equal(t, c.want, got, c.raw)
+	}
+	for _, raw := range []string{"9007199254741", "1e300", "1e400", "9300000000000000", "0x1p3", "NaN", "Inf", "-1", "1,2,3.4,5", "1.2.3,4.5", "soon", "1 000"} {
+		got, err := parseDuration(raw)
+		assert.Error(t, err, raw)
+		assert.Nil(t, got, raw)
+	}
+}
+
+func TestParseDeclaredEncodings(t *testing.T) {
+	body := `<testsuite name="s"><testcase name="café € TC-1" time="1"/></testsuite>`
+	latin1 := append([]byte(`<?xml version="1.0" encoding="ISO-8859-1"?><testsuite name="s"><testcase name="caf`), 0xE9)
+	latin1 = append(latin1, []byte(` TC-1" time="1"/></testsuite>`)...)
+	cp1252 := append([]byte(`<?xml version="1.0" encoding="windows-1252"?><testsuite name="s"><testcase name="caf`), 0xE9, ' ', 0x80)
+	cp1252 = append(cp1252, []byte(` TC-1" time="1"/></testsuite>`)...)
+	utf16 := func(bigEndian, bom bool) []byte {
+		doc := `<?xml version="1.0" encoding="UTF-16"?>` + body
+		var out []byte
+		if bom {
+			if bigEndian {
+				out = append(out, 0xFE, 0xFF)
+			} else {
+				out = append(out, 0xFF, 0xFE)
+			}
+		}
+		for _, u := range utf16Encode(doc) {
+			if bigEndian {
+				out = append(out, byte(u>>8), byte(u))
+			} else {
+				out = append(out, byte(u), byte(u>>8))
+			}
+		}
+		return out
+	}
+	for name, c := range map[string]struct {
+		doc  []byte
+		want string
+	}{
+		"utf-8":        {[]byte(`<?xml version="1.0" encoding="utf-8"?>` + body), "caf\u00e9 \u20ac TC-1"},
+		"us-ascii":     {[]byte(`<?xml version="1.0" encoding="US-ASCII"?><testsuite name="s"><testcase name="plain TC-1"/></testsuite>`), "plain TC-1"},
+		"iso-8859-1":   {latin1, "caf\u00e9 TC-1"},
+		"windows-1252": {cp1252, "caf\u00e9 \u20ac TC-1"},
+		"utf-16le bom": {utf16(false, true), "caf\u00e9 \u20ac TC-1"},
+		"utf-16be bom": {utf16(true, true), "caf\u00e9 \u20ac TC-1"},
+		"utf-16le":     {utf16(false, false), "caf\u00e9 \u20ac TC-1"},
+		"utf-16be":     {utf16(true, false), "caf\u00e9 \u20ac TC-1"},
+	} {
+		rep, err := Parse(strings.NewReader(string(c.doc)))
+		require.NoError(t, err, name)
+		require.Len(t, rep.Results, 1, name)
+		assert.Equal(t, c.want, rep.Results[0].TestName, name)
+		assert.Equal(t, int64(1), rep.Results[0].Ref.ID, name)
+	}
+	_, err := Parse(strings.NewReader(`<?xml version="1.0" encoding="Shift_JIS"?><testsuite/>`))
+	assert.ErrorContains(t, err, `unsupported encoding "Shift_JIS"`)
+	_, err = Parse(strings.NewReader(string([]byte{0xFF, 0xFE, '<'})))
+	assert.ErrorContains(t, err, "invalid JUnit XML", "odd-length UTF-16")
+}
+
+func utf16Encode(s string) []uint16 {
+	var out []uint16
+	for _, r := range s {
+		if r >= 0x10000 {
+			r -= 0x10000
+			out = append(out, uint16(0xD800+(r>>10)), uint16(0xDC00+(r&0x3FF)))
+			continue
+		}
+		out = append(out, uint16(r))
+	}
+	return out
+}
+
+func TestParseRejectsContentAfterTheRoot(t *testing.T) {
+	for _, doc := range []string{
+		`<testsuite name="a"><testcase name="r1"/></testsuite><testsuite name="b"><testcase name="r2"/></testsuite>`,
+		`<testsuite name="a"><testcase name="r1"/></testsuite>trailing text`,
+		`<testsuite name="a"><testcase name="r1"/></testsuite><junk`,
+	} {
+		_, err := Parse(strings.NewReader(doc))
+		require.Error(t, err, doc)
+		assert.Contains(t, err.Error(), "invalid JUnit XML", doc)
+	}
+	rep, err := Parse(strings.NewReader("<testsuite name=\"a\"><testcase name=\"r1\"/></testsuite>\n<!-- generated -->\n<?pi x?>\n"))
+	require.NoError(t, err, "whitespace, comments and processing instructions may follow the root")
+	assert.Len(t, rep.Results, 1)
+}
+
 func TestParseDocumentErrors(t *testing.T) {
 	for _, doc := range []string{"", "not xml", "<html></html>", "<testsuites><testsuite>"} {
 		_, err := Parse(strings.NewReader(doc))
@@ -118,6 +219,10 @@ func TestParseDocumentErrors(t *testing.T) {
 	readErr := errors.New("read failed")
 	_, err := Parse(failingReader{readErr})
 	assert.ErrorIs(t, err, readErr)
+	_, err = Parse(io.MultiReader(strings.NewReader("\xff\xfe<\x00"), failingReader{readErr}))
+	assert.ErrorIs(t, err, readErr, "read failure while transcoding UTF-16")
+	_, err = charsetReader("ISO-8859-1", failingReader{readErr})
+	assert.ErrorIs(t, err, readErr, "read failure while transcoding Latin-1")
 }
 
 type failingReader struct{ err error }
@@ -195,6 +300,9 @@ func FuzzParse(f *testing.F) {
 		`<testsuite><testcase name="b"><properties><property name="tc-id" value="007"/></properties><failure/></testcase></testsuite>`,
 		`<testsuite><testcase name="c" time="abc"><skipped/></testcase><testcase/></testsuite>`,
 		`<testsuites><testsuite><testsuite><testcase name="TC-99999999999999999999"/></testsuite></testsuite></testsuites>`,
+		`<testsuite><testcase name="d" time="1e300"/><testcase name="e" time="1.234,5"/></testsuite>`,
+		`<?xml version="1.0" encoding="ISO-8859-1"?><testsuite><testcase name="f"/></testsuite>`,
+		`<testsuite/><testsuite/>`,
 		`<html/>`, ``, `<`,
 	} {
 		f.Add(s)
@@ -211,6 +319,7 @@ func FuzzParse(f *testing.F) {
 			}
 			if r.DurationMs != nil {
 				require.GreaterOrEqual(t, *r.DurationMs, int64(0))
+				require.LessOrEqual(t, *r.DurationMs, maxDurationMs)
 			}
 		}
 	})

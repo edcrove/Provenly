@@ -63,6 +63,13 @@ Project rename (OpenTestHub → Provenly): DEC-39.
    Parse errors have a `severity` (migration 00005): `error` (no name → discarded; invalid time → kept without
    duration) or `warning` — for now a **passed or failed** result with a 0 ms duration is kept and flagged for
    review (skipped/error results with 0 ms are not flagged).
+   **Addendum (validation of JUnit Result Parser, 2026-10-03, technical):** `time` is a plain decimal number of
+   seconds (optional `+`, exponent allowed; no hex, NaN or Inf). Locale formatting is undone: with both `,` and `.`
+   the last one is the decimal point (`1,234.5`, `1.234,5`), a single `,` is a decimal comma (`0,123` = 123 ms) and a
+   separator repeated alone is digit grouping (`1,234,567`). A duration above 2^53−1 ms (what a JSON client reads
+   exactly) is invalid: kept without duration, parse error. Documents may declare UTF-8, US-ASCII, ISO-8859-1,
+   windows-1252 or UTF-16 (BOM or `<?` detection); other encodings and anything after the root element (e.g. two
+   concatenated reports) are a `400 invalid_junit` instead of being misread or silently dropped.
 6. **Replay response.** An idempotent replay returns `200` with the existing run and the diagnostics stored at
    creation; nothing is re-parsed into the database.
    **Status: Changed by Ed (2026-09-28) — option B, implemented.** The run stores the SHA-256 of the report that

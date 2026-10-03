@@ -5,7 +5,10 @@
 package junit
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -13,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // Status is the normalized outcome of a testcase.
@@ -143,16 +148,113 @@ var (
 // An unreadable document is an error; an invalid testcase is reported in
 // Report.Errors and the rest of the document is still parsed.
 func Parse(r io.Reader) (Report, error) {
+	r, err := fromUTF16(r)
+	if err != nil {
+		return Report{}, fmt.Errorf("invalid JUnit XML: %w", err)
+	}
+	dec := xml.NewDecoder(r)
+	dec.CharsetReader = charsetReader
 	var root xmlSuite
-	if err := xml.NewDecoder(r).Decode(&root); err != nil {
+	if err := dec.Decode(&root); err != nil {
 		return Report{}, fmt.Errorf("invalid JUnit XML: %w", err)
 	}
 	if root.XMLName.Local != "testsuites" && root.XMLName.Local != "testsuite" {
 		return Report{}, fmt.Errorf("invalid JUnit XML: unsupported root element <%s>", root.XMLName.Local)
 	}
+	if err := checkNothingAfterRoot(dec); err != nil {
+		return Report{}, fmt.Errorf("invalid JUnit XML: %w", err)
+	}
 	var rep Report
 	walk(&rep, root, "")
 	return rep, nil
+}
+
+// checkNothingAfterRoot rejects a second root (e.g. two concatenated reports) or
+// stray text instead of silently ignoring it; whitespace, comments and processing
+// instructions may follow the root.
+func checkNothingAfterRoot(dec *xml.Decoder) error {
+	for {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		switch t := tok.(type) {
+		case xml.Comment, xml.ProcInst, xml.Directive:
+		case xml.CharData:
+			if len(bytes.TrimSpace(t)) > 0 {
+				return errors.New("text after the root element")
+			}
+		default:
+			return errors.New("content after the root element (a report has a single <testsuites> or <testsuite> root)")
+		}
+	}
+}
+
+// fromUTF16 transcodes a UTF-16 document (detected by its byte order mark or by
+// "<?" encoded in UTF-16, per the XML spec) to UTF-8; any other input is returned as is.
+func fromUTF16(r io.Reader) (io.Reader, error) {
+	br := bufio.NewReader(r)
+	head, _ := br.Peek(4)
+	var bigEndian bool
+	switch {
+	case bytes.HasPrefix(head, []byte{0xFE, 0xFF}), bytes.HasPrefix(head, []byte{0, '<', 0, '?'}):
+		bigEndian = true
+	case bytes.HasPrefix(head, []byte{0xFF, 0xFE}), bytes.HasPrefix(head, []byte{'<', 0, '?', 0}):
+	default:
+		return br, nil
+	}
+	raw, err := io.ReadAll(br)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw)%2 != 0 {
+		return nil, errors.New("truncated UTF-16 document")
+	}
+	units := make([]uint16, len(raw)/2)
+	for i := range units {
+		hi, lo := raw[2*i], raw[2*i+1]
+		if !bigEndian {
+			hi, lo = lo, hi
+		}
+		units[i] = uint16(hi)<<8 | uint16(lo)
+	}
+	if len(units) > 0 && units[0] == 0xFEFF {
+		units = units[1:]
+	}
+	return strings.NewReader(string(utf16.Decode(units))), nil
+}
+
+// windows1252 maps the bytes 0x80-0x9F that differ from ISO-8859-1 (undefined ones map to themselves).
+var windows1252 = [32]rune{
+	0x20AC, 0x81, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x8D, 0x017D, 0x8F,
+	0x90, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x9D, 0x017E, 0x0178,
+}
+
+// charsetReader supports the non-UTF-8 encodings reporters declare in practice.
+func charsetReader(label string, input io.Reader) (io.Reader, error) {
+	switch strings.ToLower(label) {
+	case "us-ascii", "ascii", "utf-16", "utf-16le", "utf-16be": // ASCII is UTF-8; UTF-16 was already transcoded
+		return input, nil
+	case "iso-8859-1", "iso8859-1", "latin1", "latin-1", "l1", "windows-1252", "cp1252":
+		raw, err := io.ReadAll(input)
+		if err != nil {
+			return nil, err
+		}
+		cp1252 := strings.Contains(strings.ToLower(label), "1252")
+		out := make([]byte, 0, len(raw))
+		for _, b := range raw {
+			r := rune(b)
+			if cp1252 && b >= 0x80 && b <= 0x9F {
+				r = windows1252[b-0x80]
+			}
+			out = utf8.AppendRune(out, r)
+		}
+		return bytes.NewReader(out), nil
+	}
+	return nil, fmt.Errorf("unsupported encoding %q (use UTF-8)", label)
 }
 
 func walk(rep *Report, s xmlSuite, parent string) {
@@ -241,19 +343,48 @@ func outcomeText(o *xmlOutcome) (string, string) {
 	return msg, strings.TrimSpace(o.Text)
 }
 
+// maxDurationMs is the largest duration a JSON client reads exactly (2^53-1 ms, ~285,000 years);
+// anything larger is a broken reporter, not a real duration.
+const maxDurationMs int64 = 1<<53 - 1
+
+var decimalSeconds = regexp.MustCompile(`^\+?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?$`)
+
 // parseDuration converts the JUnit `time` (seconds) to rounded milliseconds;
 // nil when the attribute is absent or invalid.
 func parseDuration(raw string) (*int64, error) {
-	raw = strings.ReplaceAll(strings.TrimSpace(raw), ",", "")
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, nil
 	}
-	secs, err := strconv.ParseFloat(raw, 64)
-	if err != nil || secs < 0 || math.IsInf(secs, 0) || math.IsNaN(secs) {
+	plain := plainDecimal(raw)
+	if !decimalSeconds.MatchString(plain) {
 		return nil, fmt.Errorf("invalid time attribute %q", raw)
 	}
-	ms := int64(math.Round(secs * 1000))
-	return &ms, nil
+	secs, err := strconv.ParseFloat(plain, 64)
+	ms := math.Round(secs * 1000)
+	if err != nil || ms > float64(maxDurationMs) {
+		return nil, fmt.Errorf("invalid time attribute %q", raw)
+	}
+	v := int64(ms)
+	return &v, nil
+}
+
+// plainDecimal undoes locale formatting of the seconds: with both separators the
+// last one is the decimal point ("1,234.5", "1.234,5"); a single comma is a decimal
+// comma ("0,123"); a separator repeated alone is digit grouping ("1,234,567").
+func plainDecimal(s string) string {
+	commas, dots := strings.Count(s, ","), strings.Count(s, ".")
+	switch {
+	case commas > 0 && dots > 0 && strings.LastIndex(s, ",") > strings.LastIndex(s, "."):
+		return strings.Replace(strings.ReplaceAll(s, ".", ""), ",", ".", 1)
+	case commas > 0 && dots > 0, commas > 1:
+		return strings.ReplaceAll(s, ",", "")
+	case commas == 1:
+		return strings.Replace(s, ",", ".", 1)
+	case dots > 1:
+		return strings.ReplaceAll(s, ".", "")
+	}
+	return s
 }
 
 // extractRef resolves the TC-ID reference of a testcase: the tc-id property

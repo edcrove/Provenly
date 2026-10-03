@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -339,6 +340,30 @@ func TestExecutionPersistence(t *testing.T) {
 			valid := res.Items[0].Correlation == execution.CorrelationValid
 			assert.Equal(t, inSnapshot, valid, "iteration %d: a TC in the snapshot is valid, one deprecated before the read is in neither", i)
 		}
+	})
+
+	t.Run("BE-INT-029_deep_pages_cost_no_more_than_the_first", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "busy", Automated: true})
+		cases := make([]string, 20000)
+		for i := range cases {
+			cases[i] = tcProp("c"+itoa(int64(i)), itoa(tc.ID), "")
+		}
+		_, err := s.Ingestion.IngestJUnit(ctx, meta("900", 1), strings.NewReader(junitFor(cases...)))
+		require.NoError(t, err)
+		timed := func(page int32) time.Duration {
+			start := time.Now()
+			_, err := s.Execution.History(ctx, tc.ID, pagination.Page{Number: page, Size: 20})
+			require.NoError(t, err)
+			_, err = s.Execution.ListRuns(ctx, pagination.Page{Number: page, Size: 20})
+			require.NoError(t, err)
+			return time.Since(start)
+		}
+		first := timed(1)
+		last := timed(1000)
+		// Before the fix the per-run counts ran for every row skipped by OFFSET, so the
+		// last page took orders of magnitude longer than the first.
+		assert.Less(t, last, 3*first+500*time.Millisecond, "first page %v, last page %v", first, last)
 	})
 
 	t.Run("BE-INT-011_database_enforces_result_and_run_invariants", func(t *testing.T) {

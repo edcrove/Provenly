@@ -147,6 +147,15 @@ func api(t *testing.T, s app.Services, maxIngest int64) *httpexpect.Expect {
 	})
 }
 
+// offContract serves the same API without the contract validation, to check
+// requests the contract does not define (e.g. that no method can edit a run).
+func offContract(t *testing.T, s app.Services) *httpexpect.Expect {
+	t.Helper()
+	srv := httptest.NewServer(app.NewHandler(s, 1<<20))
+	t.Cleanup(srv.Close)
+	return httpexpect.WithConfig(httpexpect.Config{BaseURL: srv.URL, Reporter: httpexpect.NewRequireReporter(t)})
+}
+
 func fresh(t *testing.T) app.Services {
 	t.Helper()
 	if err := db.Reset(context.Background()); err != nil {

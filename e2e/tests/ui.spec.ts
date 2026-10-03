@@ -223,6 +223,13 @@ test.describe('Frontend UI journeys', () => {
     await expect(page.getByRole('list', { name: 'Steps' }).getByRole('listitem')).toHaveCount(1)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
 
+    // HTML and emoji in user text render literally (escaped), never as markup.
+    await add.getByLabel('Step action').fill('<script>window.pwned = 1</script> <b>bold</b> 🚀 ñandú')
+    await add.getByRole('button', { name: 'Add step' }).click()
+    await expect(page.getByText('<script>window.pwned = 1</script> <b>bold</b> 🚀 ñandú')).toBeVisible()
+    expect(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned)).toBeUndefined()
+    await expect(page.locator('ol[aria-label="Steps"] b')).toHaveCount(0)
+
     await add.getByLabel('Step action').fill('   ')
     await add.getByLabel('Step expected result').fill('kept')
     await add.getByRole('button', { name: 'Add step' }).click()

@@ -8,6 +8,8 @@ description: Implement a Provenly Trello card end to end following the project's
 1. **Start**: read the card, its comments and the related Notion decisions. If an acceptance criterion depends on an
    undecided product question, ask Ed before coding (one concise question with a recommendation). Move the card to
    **En progreso**.
+1b. Every scenario you try by hand while building (curl, browser, psql) becomes an automated test in its layer
+   before the card goes to Validation (CLAUDE.md, Card workflow 4).
 2. **Contract first**: change `api/openapi.yaml`, then `cd frontend && npm run gen:api`. Problem+json for errors.
 3. **Schema**: a new goose migration in `backend/migrations` (never edit a committed one); test it up *and* down,
    also against `seeds/demo.sql`. Queries in `backend/queries/*.sql`, then `make generate`.

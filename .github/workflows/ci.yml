@@ -263,6 +263,8 @@ jobs:
         run: |
           $COMPOSE up -d --wait
           ./scripts/smoke.sh http://localhost:3100
+      - name: Edge-case probe against the qa environment (through nginx)
+        run: python3 scripts/probe/edge_cases.py --base http://localhost:3100
       - name: demo-reset brings demo back to its snapshot
         run: |
           make demo-reset

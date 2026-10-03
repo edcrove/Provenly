@@ -323,7 +323,57 @@ func TestRobustness(t *testing.T) {
 	ingest(e, "two-roots", 1, `<testsuite name="a"/><testsuite name="b"/>`).Expect().
 		Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "invalid_junit")
 
+	// JSON values out of range or of the wrong type are a 400, never a 500.
+	for _, body := range []string{
+		`{"action":"x","position":2147483648}`, `{"action":"x","position":-5}`, `{"action":"x","position":0}`,
+		`{"action":"x","position":1.5}`, `{"action":"x","position":1e400}`,
+	} {
+		e.POST(steps).WithHeader("Content-Type", "application/json").WithBytes([]byte(body)).Expect().Status(http.StatusBadRequest)
+	}
+	for _, body := range []string{`{"title":12345}`, `{"title":"x","automated":"yes"}`,
+		`{"title":"x","description":` + strings.Repeat("[", 100000) + strings.Repeat("]", 100000) + `}`} {
+		e.POST("/api/v1/test-cases").WithHeader("Content-Type", "application/json").WithBytes([]byte(body)).Expect().Status(http.StatusBadRequest)
+	}
+	// runAttempt is a 32-bit integer.
+	ingest(e, "attempt-max", 2147483647, report(1)).Expect().Status(http.StatusCreated)
+	e.POST("/api/v1/ingestion/junit").WithQuery("provider", "github").WithQuery("runId", "attempt-over").
+		WithQuery("runAttempt", "2147483648").WithHeader("Content-Type", xmlType).WithText(report(1)).
+		Expect().Status(http.StatusBadRequest)
+
 	// Duplicate JSON keys: the last value wins.
 	e.POST("/api/v1/test-cases").WithHeader("Content-Type", "application/json").WithBytes([]byte(`{"title":"a","title":"b"}`)).
 		Expect().Status(http.StatusCreated).JSON().Object().HasValue("title", "b")
+}
+
+// TestLargeFailureOutputIsKeptWhole: a megabyte-sized failure message and
+// multi-megabyte details (stack traces, logs) are stored and returned unabridged.
+func TestLargeFailureOutputIsKeptWhole(t *testing.T) {
+	e := api(t, fresh(t), 16<<20)
+	msg, details := strings.Repeat("m", 1<<20), strings.Repeat("d", 5<<20)
+	run := ingest(e, "large", 1, `<testsuite name="s"><testcase name="big"><failure message="`+msg+`">`+details+`</failure></testcase></testsuite>`).
+		Expect().Status(http.StatusCreated).JSON().Object().Value("testRun").Object()
+	runID := strconv.FormatInt(int64(run.Value("id").Number().Raw()), 10)
+	r := e.GET("/api/v1/test-runs/" + runID + "/results").Expect().Status(http.StatusOK).JSON().Object().Value("items").Array().Value(0).Object()
+	r.Value("errorMessage").String().Length().IsEqual(len(msg))
+	r.Value("errorDetails").String().Length().IsEqual(len(details))
+}
+
+// TestRunsAndResultsAreReadOnly: ingested runs and results cannot be edited or
+// deleted through the API (e.g. a failure turned into a skip); the contract
+// defines no such operation and the router rejects every write method.
+func TestRunsAndResultsAreReadOnly(t *testing.T) {
+	raw := offContract(t, fresh(t))
+	run := ingest(raw, "ro", 1, report(1)).Expect().Status(http.StatusCreated).JSON().Object().Value("testRun").Object()
+	runID := strconv.FormatInt(int64(run.Value("id").Number().Raw()), 10)
+	for _, method := range []string{"PUT", "PATCH", "DELETE", "POST"} {
+		for _, path := range []string{"/api/v1/test-runs/" + runID, "/api/v1/test-runs/" + runID + "/results",
+			"/api/v1/test-runs/" + runID + "/summary", "/api/v1/test-runs/" + runID + "/parse-errors",
+			"/api/v1/test-cases/1/results"} {
+			raw.Request(method, path).WithJSON(map[string]any{"status": "skipped"}).Expect().Status(http.StatusMethodNotAllowed)
+		}
+		raw.Request(method, "/api/v1/test-runs/"+runID+"/results/1").WithJSON(map[string]any{"status": "skipped"}).
+			Expect().Status(http.StatusNotFound) // there is no single-result resource at all
+	}
+	raw.GET("/api/v1/test-runs/"+runID+"/results").WithQuery("status", "failed").Expect().Status(http.StatusOK).
+		JSON().Object().HasValue("totalItems", 1) // the failure is still a failure
 }

@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
+import { testStep } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { renderRoute } from '@/test/render'
 import { server } from '@/test/server'
@@ -113,5 +114,26 @@ describe('FE-INT-019 step editor feedback', () => {
     await user.click(within(add).getByRole('button', { name: 'Add step' }))
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
     expect(within(add).getByLabelText('Step action')).toHaveValue('')
+  })
+})
+
+describe('FE-INT-020 step editor at the limits', () => {
+  it('FE-INT-020 renders all 100 steps, moves the last one up and clears an expected result by editing', async () => {
+    db.steps = Array.from({ length: 100 }, (_, i) =>
+      testStep({ id: i + 1, position: i + 1, action: `s${i + 1}`, expectedResult: i === 0 ? 'shown' : '' }),
+    )
+    const { user } = renderRoute('/test-cases/153')
+    await screen.findByRole('list', { name: 'Steps' })
+    expect(stepTexts()).toHaveLength(100)
+    expect(screen.getByRole('button', { name: 'Move step 100 down' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Move step 100 up' }))
+    await waitFor(() => expect(stepTexts().slice(98)).toEqual(['99. s100', '100. s99']))
+
+    await user.click(screen.getByRole('button', { name: 'Edit step 1' }))
+    const form = screen.getByRole('form', { name: 'Save step' })
+    await user.clear(within(form).getByLabelText('Step expected result'))
+    await user.click(within(form).getByRole('button', { name: 'Save step' }))
+    await waitFor(() => expect(screen.queryByText('Expected: shown')).not.toBeInTheDocument())
+    expect(db.steps.find((st) => st.id === 1)?.expectedResult).toBe('')
   })
 })

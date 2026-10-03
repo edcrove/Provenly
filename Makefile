@@ -21,7 +21,7 @@ LOCAL_DB    := postgres://provenly:provenly@localhost:5433/provenly?sslmode=disa
 LOAD_DOTENV := set -a; [ ! -f $(ROOT)/.env.local ] || . $(ROOT)/.env.local; set +a; \
 	export PROVENLY_DATABASE_URL="$${PROVENLY_DATABASE_URL:-$(LOCAL_DB)}";
 
-.PHONY: help setup up dev down ps logs infra db-dump db-reset db-restore demo-reset seed-snapshot seed-rebuild-demo \
+.PHONY: help probe setup up dev down ps logs infra db-dump db-reset db-restore demo-reset seed-snapshot seed-rebuild-demo \
 	check-env guard-prod migrate dev-backend dev-frontend generate check-generated lint screenshots \
 	test-backend-unit test-backend-integration test-backend-contract fuzz \
 	test-frontend-unit test-frontend-integration test-frontend-contract test-e2e \
@@ -126,6 +126,9 @@ test-backend-unit: $(OUT) ## Backend Unit (testing+testify), raw coverage in GOC
 	cd backend && go tool covdata textfmt -i=$(GOCOV)/unit -o=$(OUT)/backend-unit.out
 
 FUZZTIME ?= 10s
+probe: ## Edge-case sweep against a running API (BASE=http://localhost:8080; writes "probe-" data: use a disposable DB)
+	python3 scripts/probe/edge_cases.py --base $(or $(BASE),http://localhost:8080)
+
 fuzz: ## Backend fuzzing (request parameters, JUnit parser, catalog text), FUZZTIME each
 	cd backend && go test -run '^$$' -fuzz '^FuzzParsePage$$' -fuzztime $(FUZZTIME) ./internal/platform/httpx/
 	cd backend && go test -run '^$$' -fuzz '^FuzzPathID$$' -fuzztime $(FUZZTIME) ./internal/platform/httpx/

@@ -74,3 +74,6 @@ targets:
       step editor feedback: a rejected step keeps what was typed, only the latest action's error is shown (a later
       success clears it), and a failed step action refetches the possibly stale list
     surfaces: [src/features/test-cases/StepsEditor.tsx]
+  - id: FE-INT-020
+    description: the step editor at its limits - 100 steps rendered, the last one moved up, an expected result cleared by editing
+    surfaces: [src/features/test-cases/StepsEditor.tsx]

@@ -56,3 +56,7 @@ targets:
     description: database enforces test case integrity (non-blank title, description and expected result at most 10000 characters, deprecated_at set exactly when deprecated, updated_at not before created_at)
   - id: BE-INT-027
     description: the run snapshot and the result correlations come from one catalog read, so they agree when a test case is deprecated during an ingestion
+  - id: BE-INT-028
+    description: concurrent partial edits of different test case fields all persist (a PATCH writes only the fields it sends)
+  - id: BE-INT-029
+    description: deep history and run-list pages cost no more than the first (20k results for one TC)

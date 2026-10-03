@@ -76,6 +76,12 @@ func TestRecordRunLeavesAFutureStartUnknown(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, got.StartedAt, "a run cannot start after it was recorded")
 
+	r = run(3)
+	r.StartedAt = ptr(time.Unix(0, 0).UTC())
+	got, _, err = svc.RecordRun(ctx, r, nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, time.Unix(0, 0).UTC(), *got.StartedAt, "an old timestamp is kept as reported")
+
 	r = run(2)
 	r.StartedAt = ptr(fixedNow)
 	got, _, err = svc.RecordRun(ctx, r, nil, nil, nil)

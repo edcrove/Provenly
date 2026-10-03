@@ -63,6 +63,20 @@ func TestCreateValidation(t *testing.T) {
 	}
 }
 
+// Unicode whitespace (tab, NBSP, ideographic space, line separator, ...) is blank too:
+// the API rejects it before the database CHECK would (found validating Test Steps Management).
+func TestUnicodeWhitespaceIsBlank(t *testing.T) {
+	svc, _, ctx := setup(t)
+	tc, err := svc.Create(ctx, CreateInput{Title: "ok"})
+	require.NoError(t, err)
+	for _, ws := range []string{"\t\n", "\u00a0", "\u3000", "\u2028", "\u2003\u2009", "\u0085"} {
+		_, err := svc.Create(ctx, CreateInput{Title: ws})
+		assert.Equal(t, apperr.KindValidation, kindOf(t, err), "title %q", ws)
+		_, err = svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: ws})
+		assert.Equal(t, apperr.KindValidation, kindOf(t, err), "action %q", ws)
+	}
+}
+
 func TestCreateRepoError(t *testing.T) {
 	svc, repo, ctx := setup(t)
 	repo.errs["CreateTestCase"] = errBoom

@@ -224,7 +224,12 @@ func TestValidateMeta(t *testing.T) {
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Commit: "c\x00"},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Status: execution.RunStatus("running")},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, Status: execution.RunStatus("failed")},
+		{Provider: "GitHub", ProviderRunID: "1", RunAttempt: 1},
+		{Provider: strings.Repeat("p", 51), ProviderRunID: "1", RunAttempt: 1},
+		{Provider: "github", ProviderRunID: strings.Repeat("9", 101), RunAttempt: 1},
 	}
+	require.NoError(t, ValidateMeta(RunMeta{Provider: strings.Repeat("p", 50), ProviderRunID: strings.Repeat("9", 100), RunAttempt: 1}),
+		"the limits themselves are valid")
 	for _, m := range bad {
 		e, ok := apperr.As(ValidateMeta(m))
 		require.True(t, ok, "%+v", m)

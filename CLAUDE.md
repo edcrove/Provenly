@@ -37,12 +37,19 @@ changing code; this file holds the working rules that are not obvious from the c
    **Standing authorization (Ed, 2026-10-03): fix what you find** during validation, re-test, commit and push,
    then report. Product/scope questions still go to Ed.
 3. **Only Ed approves Hecho.** After his OK, Claude moves the card with an evidence comment.
+4. **Validation produces regression tests (Ed, 2026-10-03).** Every check exercised by hand during a validation —
+   passing or failing — ends up as an automated test in the layer it belongs to: unit for parsing, validation and pure logic; integration for database invariants, queries, concurrency and
+  performance (relative bounds, never wall-clock thresholds alone); contract for HTTP statuses, shapes and limits
+  (`offContract` for routes outside the spec); frontend integration/E2E for UI behavior; `scripts/probe/edge_cases.py`
+  for API sweeps (it runs in CI). Prove a new test
+   fails without its fix. A card is not ready for Ed's OK while a manual check has no automated counterpart; the
+   evidence comment maps each manual check to its test id.
 
 ## Definition of Done (every card)
 
 OpenAPI first (`npm run gen:api` after spec changes); new goose migration for schema changes (never edit a committed
 migration); tests in **every layer touched, both sides** (unit, integration, contract, E2E; new test ids in
-`coverage/inventories/*.yaml`); `make lint` clean; `make coverage` **PASS** (8 gates + 2 consolidated, all at 100%);
+`coverage/inventories/*.yaml`; every manual validation check automated, see Card workflow 4); `make lint` clean; `make coverage` **PASS** (8 gates + 2 consolidated, all at 100%);
 docs updated (`docs/architecture.md`, `docs/review.md`, decisions); `make screenshots` regenerated for UI changes
 (`docs/screenshots/README.md` lists them); manual validation done.
 
@@ -57,7 +64,7 @@ make coverage        # every layer + the 10 gates (needs Docker); prints "Overal
 make screenshots     # docs/screenshots on an ephemeral DB
 make dev-backend / make dev-frontend   # non-docker dev (reads .env.local, not .env)
 scripts/doctor.sh [--fix]              # environment check (pinned tools, packages, docker, chromium, ports)
-scripts/probe/edge_cases.py --base URL # edge-case sweep; any 5xx or unexpected status fails (disposable DB)
+make probe [BASE=URL]                  # edge-case sweep (scripts/probe/edge_cases.py); also runs in CI (docker job)
 scripts/gallery/build.py --out DIR     # click-through gallery of docs/screenshots, publishable as an Artifact
 ```
 

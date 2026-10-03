@@ -74,6 +74,25 @@ func TestCatalogPersistence(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("BE-INT-028_concurrent_partial_edits_of_different_fields_all_persist", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "orig", Description: "orig"})
+		var wg sync.WaitGroup
+		edits := []catalog.UpdateInput{{Title: ptr("new title")}, {Description: ptr("new description")},
+			{ExpectedResult: ptr("new expected")}, {Automated: ptr(true)}}
+		for _, in := range edits {
+			wg.Add(1)
+			go func() { defer wg.Done(); _, err := s.Catalog.Update(ctx, tc.ID, in); assert.NoError(t, err) }()
+		}
+		wg.Wait()
+		got, err := s.Catalog.Get(ctx, tc.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "new title", got.Title)
+		assert.Equal(t, "new description", got.Description)
+		assert.Equal(t, "new expected", got.ExpectedResult)
+		assert.True(t, got.Automated, "a PATCH only writes the fields it sends, so concurrent edits of different fields never undo each other")
+	})
+
 	t.Run("BE-INT-023_database_enforces_step_integrity", func(t *testing.T) {
 		s, ctx := fresh(t)
 		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a"})

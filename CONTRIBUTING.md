@@ -64,5 +64,13 @@ Agent rules, workflows and guardrails live in [`CLAUDE.md`](CLAUDE.md) and `.cla
 rules and hooks, project skills `implement-card`, `validate-card`, `record-decision`, `steward`, `project-status`,
 `ui-gallery`, `edge-case-probe`, `notion-safe-edit`, `parity-analysis`, `close-milestone`, `env-doctor`). The
 SessionStart hook prepares the pinned toolchain in Claude Code on the web. Helper scripts usable without Claude:
-`scripts/doctor.sh [--fix]` (environment check), `scripts/probe/edge_cases.py --base URL` (edge-case sweep against a
-disposable API) and `scripts/gallery/build.py --out DIR` (click-through gallery of `docs/screenshots`).
+`scripts/doctor.sh [--fix]` (environment check), `make probe [BASE=URL]` (edge-case sweep against a
+disposable API; also runs in CI) and `scripts/gallery/build.py --out DIR` (click-through gallery of `docs/screenshots`).
+
+### Validation produces regression tests
+
+Every check exercised by hand while building or validating a card, passing or failing, becomes an automated test in
+the layer it belongs to: unit (parsing, validation, pure logic), integration (database invariants, queries,
+concurrency, performance with relative bounds), contract (HTTP statuses, shapes, limits), frontend integration / E2E
+(UI behavior) or the edge-case probe (API sweeps, run in CI). A card is not ready for approval while a manual check has
+no automated counterpart.

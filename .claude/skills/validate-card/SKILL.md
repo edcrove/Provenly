@@ -25,6 +25,8 @@ Ed validates cards one by one. Claude does the hands-on review; only Ed approves
   - concurrency: double click / double submit, N parallel requests (limits and ordering must hold)
   - UI: page past the end, filters with no matches, not-found and error states, tab titles, keyboard, 375 px width (no page-level horizontal scroll)
 - Run the `edge-case-probe` skill against the same stack. Any 500 is a finding.
+- Keep a list of every check you run by hand (input → expected → observed). Each one becomes a regression test in
+  step 3, whether it passed or failed.
 
 ## 3. Report, then fix
 - Report to Ed concisely: which criteria pass (with the evidence), and the findings with a proposed fix each.
@@ -33,8 +35,13 @@ Ed validates cards one by one. Claude does the hands-on review; only Ed approves
 - Every fix: a test that fails without it (prove it by disabling the fix once), every layer touched, `make lint`,
   `make coverage` PASS, re-run the manual probe against the real system, add a row to the findings table in
   `docs/review.md`, regenerate screenshots if the UI changed. Commit, push, wait for CI green.
+- **Automate every manual check (rule, Ed 2026-10-03)**, not only the ones that failed: unit for parsing, validation and pure logic; integration for database invariants, queries, concurrency and
+  performance (relative bounds, never wall-clock thresholds alone); contract for HTTP statuses, shapes and limits
+  (`offContract` for routes outside the spec); frontend integration/E2E for UI behavior; `scripts/probe/edge_cases.py`
+  for API sweeps (it runs in CI).
+  Before asking for Hecho, walk the list from step 2 and confirm each check has a test id; add what is missing.
 
 ## 4. Close
 - Ask Ed: "¿Paso <card> a Hecho?". Only after his explicit OK: add an evidence comment (criteria verified, fixes
-  with commit hashes, test ids, gates, CI) and move the card to **Hecho**.
+  with commit hashes, the manual check → test id mapping, gates, CI) and move the card to **Hecho**.
 - If Ed asks to see the flows, use the `ui-gallery` skill.

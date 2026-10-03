@@ -15,5 +15,7 @@ description: Sweep a running Provenly API with every input class that has broken
 3. For each FAIL decide: probe bug (fix the probe) or API defect. **Any 500 is a finding.** API defects follow the
    validate-card fix rules: failing test first in every layer touched, fix, `make lint`, `make coverage`, a row in
    `docs/review.md`, re-run the probe until it passes.
-4. New endpoint, parameter or text field → add its cases to the probe in the same change (expected statuses come
+4. Every case you try by hand against the API goes into the probe (or a contract/integration test) before the card
+   is closed: the probe runs in CI (`docker` job, qa environment through nginx), so it is regression, not a one-off.
+5. New endpoint, parameter or text field → add its cases to the probe in the same change (expected statuses come
    from the rules in `CLAUDE.md` / `docs/architecture.md`, not from what the API happens to return).

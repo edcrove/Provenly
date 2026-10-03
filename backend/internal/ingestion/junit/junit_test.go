@@ -110,6 +110,63 @@ func TestParseInvalidCasesDoNotStopParsing(t *testing.T) {
 
 func ms(v int64) *int64 { return &v }
 
+// Report variants seen during validation (docs/review.md findings 17 and 20).
+func TestParseRealWorldVariants(t *testing.T) {
+	one := func(t *testing.T, doc string) Result {
+		t.Helper()
+		rep, err := Parse(strings.NewReader(doc))
+		require.NoError(t, err)
+		require.Len(t, rep.Results, 1)
+		return rep.Results[0]
+	}
+	t.Run("utf-8 BOM", func(t *testing.T) {
+		assert.Equal(t, "bom TC-1", one(t, "\xef\xbb\xbf"+`<?xml version="1.0" encoding="UTF-8"?><testsuite name="s"><testcase name="bom TC-1"/></testsuite>`).TestName)
+	})
+	t.Run("entities and CDATA", func(t *testing.T) {
+		r := one(t, `<testsuite name="s"><testcase name="a &amp; &lt;b&gt; TC-1"><failure><![CDATA[line1
+<b>]]></failure></testcase></testsuite>`)
+		assert.Equal(t, "a & <b> TC-1", r.TestName)
+		assert.Equal(t, "line1\n<b>", r.ErrorDetails)
+	})
+	t.Run("namespaced root", func(t *testing.T) {
+		assert.Equal(t, "ns TC-1", one(t, `<j:testsuite xmlns:j="urn:x" name="s"><j:testcase name="ns TC-1"/></j:testsuite>`).TestName)
+	})
+	t.Run("surefire flaky and rerun", func(t *testing.T) {
+		assert.Equal(t, Passed, one(t, `<testsuite name="s"><testcase name="f"><flakyFailure message="first try"/></testcase></testsuite>`).Status,
+			"a pass after failures is a pass (decision D1)")
+		r := one(t, `<testsuite name="s"><testcase name="r"><rerunFailure message="r1"/><failure message="final"/></testcase></testsuite>`)
+		assert.Equal(t, Failed, r.Status)
+		assert.Equal(t, "final", r.ErrorMessage)
+	})
+	t.Run("TC-ID only in classname is missing", func(t *testing.T) {
+		assert.Equal(t, RefMissing, one(t, `<testsuite name="s"><testcase classname="TC-1Suite" name="no id"/></testsuite>`).Ref.Kind)
+	})
+	t.Run("zero-width characters", func(t *testing.T) {
+		assert.Equal(t, RefMalformed, one(t, "<testsuite name=\"s\"><testcase name=\"zw TC-\u200b1\"/></testsuite>").Ref.Kind)
+		assert.Equal(t, TCRef{Kind: RefFound, Source: SourceName, Raw: "TC-1", ID: 1}, one(t, "<testsuite name=\"s\"><testcase name=\"zw TC-1\u200b\"/></testsuite>").Ref)
+		r := one(t, "<testsuite name=\"s\"><testcase name=\"p\"><properties><property name=\"tc-id\" value=\"\u200b1\"/></properties></testcase></testsuite>")
+		assert.Equal(t, TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "\u200b1"}, r.Ref)
+	})
+	t.Run("very long name is kept whole", func(t *testing.T) {
+		name := strings.Repeat("n", 200000) + " TC-1"
+		assert.Equal(t, name, one(t, `<testsuite name="s"><testcase name="`+name+`"/></testsuite>`).TestName)
+	})
+	t.Run("empty report", func(t *testing.T) {
+		rep, err := Parse(strings.NewReader(`<testsuites/>`))
+		require.NoError(t, err)
+		assert.Zero(t, rep.Received)
+	})
+	t.Run("DTD entities are not expanded", func(t *testing.T) {
+		_, err := Parse(strings.NewReader(`<?xml version="1.0"?><!DOCTYPE l [<!ENTITY lol "lol">]><testsuite name="s"><testcase name="&lol;"/></testsuite>`))
+		assert.ErrorContains(t, err, "invalid JUnit XML")
+	})
+	t.Run("absurd nesting is rejected", func(t *testing.T) {
+		doc := strings.Repeat("<testsuite>", 20000) + `<testcase name="deep"/>` + strings.Repeat("</testsuite>", 20000)
+		_, err := Parse(strings.NewReader(doc))
+		assert.ErrorContains(t, err, "invalid JUnit XML")
+	})
+}
+
 func TestParseKeepsEveryFailureOfATestcase(t *testing.T) {
 	rep, err := Parse(strings.NewReader(`<testsuite name="s">
 <testcase name="two failures"><failure message="first">d1</failure><failure message="second">d2</failure></testcase>

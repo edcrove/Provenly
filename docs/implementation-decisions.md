@@ -145,3 +145,7 @@ Project rename (OpenTestHub → Provenly): DEC-39.
 15. **License.** Provenly is open source under the **Apache License 2.0** (`LICENSE`, `NOTICE`).
     **Decided by Ed (2026-10-01).** Chosen over MIT for the explicit patent grant and trademark clause; contributions
     are inbound = outbound (section 5), no CLA. Closes Planning Backlog #2; unblocks the Public Readiness Gate.
+
+16. **Compressed reports.** The POC ingests uncompressed JUnit only: any `Content-Encoding` other than `identity` is
+    a `415 unsupported_media_type` with a clear message (validation of CI/CD Result Ingestion API).
+    **Status: Decided by Ed (2026-10-03) — gzip support goes to the MVP** (`docs/mvp-plan.md` D6, card 3.4).

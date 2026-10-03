@@ -77,6 +77,7 @@ change ingestion.
 | 3.1 | **Retries & Logical Result** (new card) | M | — (D1 accepted) |
 | 3.2 | Live Test Run Streaming & Reconciliation (incl. Execution Session protocol #9, shards) | L | 2.2, 3.1 |
 | 3.3 | **Playwright Reporter (first native reporter)** (new card) | L | 3.2 |
+| 3.4 | **Compressed report ingestion (gzip)** (new card; Ed, 2026-10-03) | S | — |
 
 ### Phase 4 — Ship it
 
@@ -103,6 +104,7 @@ All five are in the Notion Decision Register ("MVP D1"…"MVP D5").
 | D3 | **Manual testing in the MVP** (Notion #4) | **Deferred to after the MVP.** The MVP keeps the manual catalog (test cases with steps) but no manual execution; an in-depth analysis is tracked in Incubator (*Pending design — Manual testing*). |
 | D4 | **Secrets at rest** | **Accepted.** Envelope encryption with a KEK from the environment (`PROVENLY_SECRET_KEY`), rotation by re-encrypting; external KMS/Vault later behind the same port. |
 | D5 | **Repository name and visibility** | **Accepted.** Stays `edcrove/Provenly` (personal project). It is already public; the Public Readiness Gate keeps the readiness checks, including secrets in history. |
+| D6 | **Compressed JUnit reports** (2026-10-03, validation of CI/CD Result Ingestion API) | **MVP.** Accept `Content-Encoding: gzip` on ingestion with the size limit applied to the decompressed body; the POC answers any encoding other than identity with a clear 415. Card 3.4. |
 
 ## 5. Risks
 

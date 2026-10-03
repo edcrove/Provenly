@@ -110,6 +110,63 @@ func TestParseInvalidCasesDoNotStopParsing(t *testing.T) {
 
 func ms(v int64) *int64 { return &v }
 
+func TestParseKeepsEveryFailureOfATestcase(t *testing.T) {
+	rep, err := Parse(strings.NewReader(`<testsuite name="s">
+<testcase name="two failures"><failure message="first">d1</failure><failure message="second">d2</failure></testcase>
+<testcase name="failure and error"><failure message="F" type="AssertionError">trace</failure><error message="E">npe</error></testcase>
+<testcase name="one failure"><failure message="only">trace</failure></testcase>
+</testsuite>`))
+	require.NoError(t, err)
+	require.Len(t, rep.Results, 3)
+	assert.Equal(t, Failed, rep.Results[0].Status)
+	assert.Equal(t, "first", rep.Results[0].ErrorMessage)
+	assert.Equal(t, "failure: first\nd1\n\nfailure: second\nd2", rep.Results[0].ErrorDetails)
+	assert.Equal(t, Failed, rep.Results[1].Status, "failure wins over error")
+	assert.Equal(t, "F", rep.Results[1].ErrorMessage)
+	assert.Equal(t, "failure: F\ntrace\n\nerror: E\nnpe", rep.Results[1].ErrorDetails)
+	assert.Equal(t, "trace", rep.Results[2].ErrorDetails, "a single outcome keeps its text as is")
+	assert.Empty(t, rep.Errors)
+}
+
+func TestParseWarnsAboutIgnoredStructure(t *testing.T) {
+	rep, err := Parse(strings.NewReader(`<testsuites>
+<testsuite name="declared on suite"><properties><property name="tc-id" value="7"/></properties>
+  <testcase name="inherits nothing"/>
+  <testcase name="own id"><properties><property name="tc-id" value="8"/></properties></testcase>
+</testsuite>
+<testsuite name="nested"><testcase name="outer TC-9"><testsuite name="in"><testcase name="inner TC-9"/></testsuite></testcase></testsuite>
+</testsuites>`))
+	require.NoError(t, err)
+	assert.Equal(t, 3, rep.Received)
+	assert.Equal(t, []CaseError{
+		{Index: 0, TestName: "inherits nothing", Persisted: true, Severity: SeverityWarning,
+			Message: `testsuite "declared on suite" declares a tc-id property, which is ignored: declare it on each testcase`},
+		{Index: 2, TestName: "outer TC-9", Persisted: true, Severity: SeverityWarning,
+			Message: "testcase contains nested <testsuite>/<testcase> elements, which are not read"},
+	}, rep.Errors)
+}
+
+func TestParseSuiteTimestampNotices(t *testing.T) {
+	for _, c := range []struct{ raw, want string }{
+		{"2026-10-03T10:00:00+0530", "2026-10-03T04:30:00Z"},
+		{"2026-10-03 10:00:00", "2026-10-03T10:00:00Z"},
+		{"2026-10-03 10:00:00.5-03:00", "2026-10-03T13:00:00.5Z"},
+	} {
+		rep, err := Parse(strings.NewReader(`<testsuite name="s" timestamp="` + c.raw + `"><testcase name="t"/></testsuite>`))
+		require.NoError(t, err)
+		require.NotNil(t, rep.StartedAt, c.raw)
+		assert.Equal(t, c.want, rep.StartedAt.Format(time.RFC3339Nano), c.raw)
+		assert.Empty(t, rep.Notices, c.raw)
+	}
+	rep, err := Parse(strings.NewReader(`<testsuites><testsuite name="a" timestamp="2026-02-30T10:00:00"/><testsuite name="b" timestamp="soon"/><testsuite name="c" timestamp="soon"/><testsuite name="d" timestamp=""/></testsuites>`))
+	require.NoError(t, err)
+	assert.Nil(t, rep.StartedAt)
+	assert.Equal(t, []string{
+		`suite timestamp "2026-02-30T10:00:00" could not be read; it does not set startedAt`,
+		`suite timestamp "soon" could not be read; it does not set startedAt`,
+	}, rep.Notices, "each unreadable value once; an absent timestamp is not reported")
+}
+
 func TestParseDurationFormats(t *testing.T) {
 	cases := []struct {
 		raw  string
@@ -273,6 +330,10 @@ func TestExtractRef(t *testing.T) {
 		{"TC-0153 and TC-153 are the same id", nil, TCRef{Kind: RefFound, Source: SourceName, Raw: "TC-0153,TC-153", ID: 153}},
 		{"tc-153 lowercase is not a reference", nil, TCRef{Kind: RefMissing, Source: SourceNone}},
 		{"TC- empty", nil, TCRef{Kind: RefMalformed, Source: SourceName, Raw: "TC-"}},
+		{"TC-\uff11\uff15\uff13 full-width digits", nil, TCRef{Kind: RefMalformed, Source: SourceName, Raw: "TC-\uff11\uff15\uff13"}},
+		{"TC-\u0661\u0665 arabic-indic digits", nil, TCRef{Kind: RefMalformed, Source: SourceName, Raw: "TC-\u0661\u0665"}},
+		{"TC-12\u00f1 accented letter", nil, TCRef{Kind: RefMalformed, Source: SourceName, Raw: "TC-12\u00f1"}},
+		{"TC-153-login dash ends the id", nil, TCRef{Kind: RefFound, Source: SourceName, Raw: "TC-153", ID: 153}},
 		{"TC-9 in name ignored", prop("153"), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "153", ID: 153}},
 		{"x", prop(" TC-42 "), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "TC-42", ID: 42}},
 		{"x", []xmlProperty{{Name: "TC-ID", Value: "5"}}, TCRef{Kind: RefFound, Source: SourceProperty, Raw: "5", ID: 5}},

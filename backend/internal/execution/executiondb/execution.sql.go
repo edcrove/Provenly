@@ -281,16 +281,25 @@ func (q *Queries) ListParseErrors(ctx context.Context, arg ListParseErrorsParams
 }
 
 const listResultsForTestCase = `-- name: ListResultsForTestCase :many
+WITH page AS (
+    SELECT p.id FROM test_results p WHERE p.test_case_id = $1
+    ORDER BY p.id DESC LIMIT $3 OFFSET $2
+), counts AS (
+    SELECT r.id,
+        (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
+        (SELECT count(*) FROM test_results x WHERE x.test_run_id = r.id)::int AS result_count
+    FROM test_runs r
+    WHERE r.id IN (SELECT q.test_run_id FROM test_results q WHERE q.id IN (SELECT id FROM page))
+)
 SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at,
     r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
-    (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS run_expected_count,
-    (SELECT count(*) FROM test_results x WHERE x.test_run_id = r.id)::int AS run_result_count
+    c.expected_count AS run_expected_count, c.result_count AS run_result_count
 FROM test_results t
 JOIN test_runs r ON r.id = t.test_run_id
-WHERE t.test_case_id = $1
+JOIN counts c ON c.id = r.id
+WHERE t.id IN (SELECT id FROM page)
 ORDER BY t.id DESC
-LIMIT $3 OFFSET $2
 `
 
 type ListResultsForTestCaseParams struct {
@@ -316,6 +325,8 @@ type ListResultsForTestCaseRow struct {
 	RunResultCount   int32
 }
 
+// The page is chosen first (index on test_case_id, id DESC) and each run's counts
+// are computed once, not for every row skipped by OFFSET or repeated per result.
 func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsForTestCaseParams) ([]ListResultsForTestCaseRow, error) {
 	rows, err := q.db.Query(ctx, listResultsForTestCase, arg.TestCaseID, arg.PageOffset, arg.PageLimit)
 	if err != nil {
@@ -461,8 +472,8 @@ SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count
 FROM test_runs r
+WHERE r.id IN (SELECT p.id FROM test_runs p ORDER BY p.id DESC LIMIT $2 OFFSET $1)
 ORDER BY r.id DESC
-LIMIT $2 OFFSET $1
 `
 
 type ListTestRunsParams struct {
@@ -488,6 +499,8 @@ type ListTestRunsRow struct {
 	ResultCount   int32
 }
 
+// The page is chosen first: the per-run counts are only computed for its rows,
+// not for every row skipped by OFFSET.
 func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]ListTestRunsRow, error) {
 	rows, err := q.db.Query(ctx, listTestRuns, arg.PageOffset, arg.PageLimit)
 	if err != nil {

@@ -22,12 +22,14 @@ FROM test_runs r WHERE r.id = @id;
 SELECT id FROM test_runs WHERE external_run_id = @external_run_id;
 
 -- name: ListTestRuns :many
+-- The page is chosen first: the per-run counts are only computed for its rows,
+-- not for every row skipped by OFFSET.
 SELECT r.*,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count
 FROM test_runs r
-ORDER BY r.id DESC
-LIMIT @page_limit OFFSET @page_offset;
+WHERE r.id IN (SELECT p.id FROM test_runs p ORDER BY p.id DESC LIMIT @page_limit OFFSET @page_offset)
+ORDER BY r.id DESC;
 
 -- name: CountTestRuns :one
 SELECT count(*) FROM test_runs;
@@ -61,16 +63,27 @@ WHERE test_run_id = @test_run_id AND correlation <> 'valid'
 ORDER BY id;
 
 -- name: ListResultsForTestCase :many
+-- The page is chosen first (index on test_case_id, id DESC) and each run's counts
+-- are computed once, not for every row skipped by OFFSET or repeated per result.
+WITH page AS (
+    SELECT p.id FROM test_results p WHERE p.test_case_id = @test_case_id
+    ORDER BY p.id DESC LIMIT @page_limit OFFSET @page_offset
+), counts AS (
+    SELECT r.id,
+        (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
+        (SELECT count(*) FROM test_results x WHERE x.test_run_id = r.id)::int AS result_count
+    FROM test_runs r
+    WHERE r.id IN (SELECT q.test_run_id FROM test_results q WHERE q.id IN (SELECT id FROM page))
+)
 SELECT sqlc.embed(t),
     r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
-    (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS run_expected_count,
-    (SELECT count(*) FROM test_results x WHERE x.test_run_id = r.id)::int AS run_result_count
+    c.expected_count AS run_expected_count, c.result_count AS run_result_count
 FROM test_results t
 JOIN test_runs r ON r.id = t.test_run_id
-WHERE t.test_case_id = @test_case_id
-ORDER BY t.id DESC
-LIMIT @page_limit OFFSET @page_offset;
+JOIN counts c ON c.id = r.id
+WHERE t.id IN (SELECT id FROM page)
+ORDER BY t.id DESC;
 
 -- name: CountResultsForTestCase :one
 SELECT count(*) FROM test_results WHERE test_case_id = @test_case_id;

@@ -9,7 +9,7 @@ Usage: scripts/probe/edge_cases.py [--base http://localhost:8080]
 Exit 1 when any request returns 5xx or a status other than the expected one.
 It creates its own data (test cases prefixed "probe-"), so point it at a disposable DB.
 """
-import argparse, json, sys, threading, urllib.error, urllib.parse, urllib.request
+import argparse, json, sys, threading, time, urllib.error, urllib.parse, urllib.request
 
 results = []
 
@@ -48,7 +48,7 @@ def main():
     sa = call(base, "POST", f"/test-cases/{a}/steps", {"action": "s1"})[1]["id"]
     sb = call(base, "POST", f"/test-cases/{b}/steps", {"action": "b1"})[1]["id"]
     xml = b'<testsuite name="probe"><testcase name="ok" time="1"/></testsuite>'
-    q = "provider=github&runId=probe{}&runAttempt=1"
+    q = f"provider=github&runId=probe{int(time.time())}x{{}}&runAttempt=1"  # unique per sweep: re-runs are not replays
     run_id = call(base, "POST", "/ingestion/junit?" + q.format(1), raw=xml, ctype="application/xml")[1]["testRun"]["id"]
 
     lists = ["/test-cases", "/test-runs", f"/test-cases/{a}/steps", f"/test-cases/{a}/results",
@@ -94,6 +94,18 @@ def main():
     check("ingest NUL in XML", call(base, "POST", "/ingestion/junit?" + q.format(3), raw=b'<testsuite><testcase name="a&#0;"/></testsuite>', ctype="application/xml")[0], 400)
     check("ingest not XML", call(base, "POST", "/ingestion/junit?" + q.format(3), raw=b"<nope", ctype="application/xml")[0], 400)
     check("ingest JSON body", call(base, "POST", "/ingestion/junit?" + q.format(3), body={})[0], 415)
+    # Reports that used to be misread or silently truncated (docs/review.md findings 17, 20).
+    two_roots = b'<testsuite name="a"><testcase name="r1"/></testsuite><testsuite name="b"><testcase name="r2"/></testsuite>'
+    check("ingest two root elements", call(base, "POST", "/ingestion/junit?" + q.format(4), raw=two_roots, ctype="application/xml")[0], 400)
+    st, body = call(base, "POST", "/ingestion/junit?" + q.format(5), raw=b'<testsuite name="s"><testcase name="t" time="1e300"/></testsuite>', ctype="application/xml")
+    check("ingest absurd duration", st, 201)
+    check("absurd duration is a parse error", len(body["parseErrors"]) if isinstance(body, dict) else -1, 1)
+    multi = f'<testsuite name="s"><testcase name="m TC-{a}"><failure message="first">d1</failure><failure message="second">d2</failure></testcase></testsuite>'
+    st, body = call(base, "POST", "/ingestion/junit?" + q.format(6), raw=multi.encode(), ctype="application/xml")
+    details = call(base, "GET", f"/test-runs/{body['testRun']['id']}/results")[1]["items"][0]["errorDetails"] if st == 201 else ""
+    check("every failure of a testcase is kept", int("first" in details and "second" in details), 1)
+    latin1 = '<?xml version="1.0" encoding="ISO-8859-1"?><testsuite name="s"><testcase name="caf\xe9"/></testsuite>'.encode("latin-1")
+    check("ingest ISO-8859-1 report", call(base, "POST", "/ingestion/junit?" + q.format(7), raw=latin1, ctype="application/xml")[0], 201)
 
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]

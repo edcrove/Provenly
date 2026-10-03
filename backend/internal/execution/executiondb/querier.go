@@ -23,10 +23,14 @@ type Querier interface {
 	InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error)
 	ListDiagnosticResults(ctx context.Context, testRunID int64) ([]ListDiagnosticResultsRow, error)
 	ListParseErrors(ctx context.Context, arg ListParseErrorsParams) ([]ListParseErrorsRow, error)
+	// The page is chosen first (index on test_case_id, id DESC) and each run's counts
+	// are computed once, not for every row skipped by OFFSET or repeated per result.
 	ListResultsForTestCase(ctx context.Context, arg ListResultsForTestCaseParams) ([]ListResultsForTestCaseRow, error)
 	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]TestResult, error)
 	// Snapshot TC-IDs (status NULL) and valid results of the given runs, in one read.
 	ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]ListSummaryInputsRow, error)
+	// The page is chosen first: the per-run counts are only computed for its rows,
+	// not for every row skipped by OFFSET.
 	ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]ListTestRunsRow, error)
 }
 

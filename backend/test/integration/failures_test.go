@@ -31,22 +31,21 @@ func TestPersistenceFailures(t *testing.T) {
 		status := catalog.StatusActive
 
 		calls := map[string]func() error{
-			"catalog.InTx":                 func() error { return cat.InTx(ctx, func(catalog.Repository) error { return nil }) },
-			"catalog.CreateTestCase":       func() error { _, err := cat.CreateTestCase(ctx, catalog.CreateInput{Title: "x"}); return err },
-			"catalog.GetTestCase":          func() error { _, err := cat.GetTestCase(ctx, 1); return err },
-			"catalog.LockTestCase":         func() error { return cat.LockTestCase(ctx, 1) },
-			"catalog.ListTestCases":        func() error { _, err := cat.ListTestCases(ctx, &status, 10, 0); return err },
-			"catalog.CountTestCases":       func() error { _, err := cat.CountTestCases(ctx, nil); return err },
-			"catalog.UpdateTestCase":       func() error { _, err := cat.UpdateTestCase(ctx, 1, catalog.UpdateInput{Title: str("x")}); return err },
-			"catalog.DeprecateTestCase":    func() error { _, err := cat.DeprecateTestCase(ctx, 1); return err },
-			"catalog.ReactivateTestCase":   func() error { _, err := cat.ReactivateTestCase(ctx, 1); return err },
-			"catalog.ListExpectedUniverse": func() error { _, err := cat.ListExpectedUniverse(ctx); return err },
-			"catalog.ListTestCaseStatuses": func() error { _, err := cat.ListTestCaseStatuses(ctx, []int64{1}); return err },
-			"catalog.ListTestSteps":        func() error { _, err := cat.ListTestSteps(ctx, 1, 10, 0); return err },
-			"catalog.ListAllTestSteps":     func() error { _, err := cat.ListAllTestSteps(ctx, 1); return err },
-			"catalog.CountTestSteps":       func() error { _, err := cat.CountTestSteps(ctx, 1); return err },
-			"catalog.ShiftTestStepsDown":   func() error { return cat.ShiftTestStepsDown(ctx, 1, 1) },
-			"catalog.CreateTestStep":       func() error { _, err := cat.CreateTestStep(ctx, 1, 1, "a", ""); return err },
+			"catalog.InTx":               func() error { return cat.InTx(ctx, func(catalog.Repository) error { return nil }) },
+			"catalog.CreateTestCase":     func() error { _, err := cat.CreateTestCase(ctx, catalog.CreateInput{Title: "x"}); return err },
+			"catalog.GetTestCase":        func() error { _, err := cat.GetTestCase(ctx, 1); return err },
+			"catalog.LockTestCase":       func() error { return cat.LockTestCase(ctx, 1) },
+			"catalog.ListTestCases":      func() error { _, err := cat.ListTestCases(ctx, &status, 10, 0); return err },
+			"catalog.CountTestCases":     func() error { _, err := cat.CountTestCases(ctx, nil); return err },
+			"catalog.UpdateTestCase":     func() error { _, err := cat.UpdateTestCase(ctx, 1, catalog.UpdateInput{Title: str("x")}); return err },
+			"catalog.DeprecateTestCase":  func() error { _, err := cat.DeprecateTestCase(ctx, 1); return err },
+			"catalog.ReactivateTestCase": func() error { _, err := cat.ReactivateTestCase(ctx, 1); return err },
+			"catalog.ListIngestionView":  func() error { _, err := cat.ListIngestionView(ctx, []int64{1}); return err },
+			"catalog.ListTestSteps":      func() error { _, err := cat.ListTestSteps(ctx, 1, 10, 0); return err },
+			"catalog.ListAllTestSteps":   func() error { _, err := cat.ListAllTestSteps(ctx, 1); return err },
+			"catalog.CountTestSteps":     func() error { _, err := cat.CountTestSteps(ctx, 1); return err },
+			"catalog.ShiftTestStepsDown": func() error { return cat.ShiftTestStepsDown(ctx, 1, 1) },
+			"catalog.CreateTestStep":     func() error { _, err := cat.CreateTestStep(ctx, 1, 1, "a", ""); return err },
 			"catalog.UpdateTestStep": func() error {
 				_, err := cat.UpdateTestStep(ctx, 1, 1, catalog.UpdateStepInput{Action: str("a")})
 				return err

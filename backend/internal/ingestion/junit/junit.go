@@ -13,6 +13,7 @@ import (
 	"io"
 	"math"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -104,6 +105,8 @@ type Report struct {
 	Received int
 	// StartedAt is the earliest parseable suite timestamp, if any.
 	StartedAt *time.Time
+	// Notices are document-level remarks (e.g. an unreadable suite timestamp), each once.
+	Notices []string
 }
 
 // PropertyName is the testcase property that declares the TC-ID.
@@ -125,23 +128,29 @@ type xmlCase struct {
 	ClassName  string        `xml:"classname,attr"`
 	Time       string        `xml:"time,attr"`
 	Properties []xmlProperty `xml:"properties>property"`
-	Failure    *xmlOutcome   `xml:"failure"`
-	Error      *xmlOutcome   `xml:"error"`
+	Failures   []xmlOutcome  `xml:"failure"`
+	Errors     []xmlOutcome  `xml:"error"`
 	Skipped    *xmlOutcome   `xml:"skipped"`
+	// Nested elements are not valid JUnit: they are reported, not read.
+	NestedSuites []struct{} `xml:"testsuite"`
+	NestedCases  []struct{} `xml:"testcase"`
 }
 
 type xmlSuite struct {
-	XMLName   xml.Name
-	Name      string     `xml:"name,attr"`
-	Timestamp string     `xml:"timestamp,attr"`
-	Suites    []xmlSuite `xml:"testsuite"`
-	Cases     []xmlCase  `xml:"testcase"`
+	XMLName    xml.Name
+	Name       string        `xml:"name,attr"`
+	Timestamp  string        `xml:"timestamp,attr"`
+	Properties []xmlProperty `xml:"properties>property"`
+	Suites     []xmlSuite    `xml:"testsuite"`
+	Cases      []xmlCase     `xml:"testcase"`
 }
 
 var (
 	propertyValue = regexp.MustCompile(`^(?:TC-)?([0-9]+)$`)
-	nameRef       = regexp.MustCompile(`\bTC-([0-9A-Za-z_]*)`)
-	numericID     = regexp.MustCompile(`^0*([1-9][0-9]{0,17})$`)
+	// Any letters or digits after TC- are captured, so a non-ASCII id (TC-１５３)
+	// is reported as declared (malformed) instead of being cut.
+	nameRef   = regexp.MustCompile(`\bTC-([\p{L}\p{N}_]*)`)
+	numericID = regexp.MustCompile(`^0*([1-9][0-9]{0,17})$`)
 )
 
 // Parse reads a JUnit XML document with a <testsuites> or <testsuite> root.
@@ -265,19 +274,24 @@ func walk(rep *Report, s xmlSuite, parent string) {
 			if rep.StartedAt == nil || ts.Before(*rep.StartedAt) {
 				rep.StartedAt = &ts
 			}
+		} else if strings.TrimSpace(s.Timestamp) != "" {
+			rep.notice(fmt.Sprintf("suite timestamp %q could not be read; it does not set startedAt", s.Timestamp))
 		}
 	}
+	suiteDeclaresID := len(propertyValues(s.Properties)) > 0
 	for _, c := range s.Cases {
 		index := rep.Received
 		rep.Received++
-		res, issue, err := normalize(c, suite, index)
+		res, issues, err := normalize(c, suite, index)
 		if err != nil {
 			rep.Errors = append(rep.Errors, CaseError{Index: index, TestName: c.Name, Message: err.Error(), Severity: SeverityError})
 			continue
 		}
-		if issue != nil {
-			rep.Errors = append(rep.Errors, *issue)
+		if suiteDeclaresID && res.Ref.Kind == RefMissing {
+			issues = append(issues, warning(index, res.TestName,
+				fmt.Sprintf("testsuite %q declares a tc-id property, which is ignored: declare it on each testcase", s.Name)))
 		}
+		rep.Errors = append(rep.Errors, issues...)
 		rep.Results = append(rep.Results, res)
 	}
 	for _, child := range s.Suites {
@@ -285,10 +299,24 @@ func walk(rep *Report, s xmlSuite, parent string) {
 	}
 }
 
+func (rep *Report) notice(msg string) {
+	if !slices.Contains(rep.Notices, msg) {
+		rep.Notices = append(rep.Notices, msg)
+	}
+}
+
+func warning(index int, name, msg string) CaseError {
+	return CaseError{Index: index, TestName: name, Message: msg, Persisted: true, Severity: SeverityWarning}
+}
+
 // timestampLayouts are the suite timestamp forms reporters emit: ISO 8601 with
-// an offset or Z (e.g. Playwright's toISOString(), with milliseconds) or without
-// a zone (Maven Surefire, pytest), read as UTC.
-var timestampLayouts = []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999"}
+// an offset or Z (e.g. Playwright's toISOString(), with milliseconds), an offset
+// without colon (+0530), a space instead of T, or no zone (Maven Surefire,
+// pytest), read as UTC.
+var timestampLayouts = []string{
+	time.RFC3339Nano, "2006-01-02T15:04:05.999999999-0700", "2006-01-02T15:04:05.999999999",
+	"2006-01-02 15:04:05.999999999Z07:00", "2006-01-02 15:04:05.999999999-0700", "2006-01-02 15:04:05.999999999",
+}
 
 // parseTimestamp reads a suite timestamp and normalizes it to UTC.
 func parseTimestamp(raw string) (time.Time, bool) {
@@ -301,46 +329,77 @@ func parseTimestamp(raw string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// normalize returns the result plus an optional issue on a kept result, or an
-// error when the testcase cannot be kept at all.
-func normalize(c xmlCase, suite string, index int) (Result, *CaseError, error) {
+// normalize returns the result plus the issues on a kept result, or an error
+// when the testcase cannot be kept at all.
+func normalize(c xmlCase, suite string, index int) (Result, []CaseError, error) {
 	name := strings.TrimSpace(c.Name)
 	if name == "" {
 		return Result{}, nil, fmt.Errorf("testcase has no name; result discarded")
 	}
-	var issue *CaseError
+	var issues []CaseError
 	duration, err := parseDuration(c.Time)
 	if err != nil {
-		issue = &CaseError{Index: index, TestName: name, Message: err.Error() + "; result kept without duration", Persisted: true, Severity: SeverityError}
+		issues = append(issues, CaseError{Index: index, TestName: name, Message: err.Error() + "; result kept without duration", Persisted: true, Severity: SeverityError})
 	}
 	res := Result{
 		Index: index, TestName: name, ClassName: c.ClassName, SuiteName: suite,
 		Status: Passed, DurationMs: duration, Ref: extractRef(name, c.Properties),
 	}
 	switch {
-	case c.Failure != nil:
+	case len(c.Failures) > 0:
 		res.Status = Failed
-		res.ErrorMessage, res.ErrorDetails = outcomeText(c.Failure)
-	case c.Error != nil:
+	case len(c.Errors) > 0:
 		res.Status = Error
-		res.ErrorMessage, res.ErrorDetails = outcomeText(c.Error)
 	case c.Skipped != nil:
 		res.Status = Skipped
-		res.ErrorMessage, res.ErrorDetails = outcomeText(c.Skipped)
+		res.ErrorMessage, res.ErrorDetails = outcomeText(*c.Skipped)
+	}
+	if res.Status == Failed || res.Status == Error {
+		res.ErrorMessage, res.ErrorDetails = outcomesText(c.Failures, c.Errors)
 	}
 	if duration != nil && *duration == 0 && (res.Status == Passed || res.Status == Failed) {
-		issue = &CaseError{Index: index, TestName: name, Persisted: true, Severity: SeverityWarning,
-			Message: fmt.Sprintf("%s test reported a 0 ms duration (0 or under 0.5 ms); review the reporter", res.Status)}
+		issues = append(issues, warning(index, name,
+			fmt.Sprintf("%s test reported a 0 ms duration (0 or under 0.5 ms); review the reporter", res.Status)))
 	}
-	return res, issue, nil
+	if len(c.NestedSuites)+len(c.NestedCases) > 0 {
+		issues = append(issues, warning(index, name, "testcase contains nested <testsuite>/<testcase> elements, which are not read"))
+	}
+	return res, issues, nil
 }
 
-func outcomeText(o *xmlOutcome) (string, string) {
+func outcomeText(o xmlOutcome) (string, string) {
 	msg := o.Message
 	if msg == "" {
 		msg = o.Type
 	}
 	return msg, strings.TrimSpace(o.Text)
+}
+
+// outcomesText keeps every <failure> and <error> of a testcase: the message is
+// the first one's (failures first, as failure decides the status), and with more
+// than one outcome the details list each of them, so none is lost.
+func outcomesText(failures, errs []xmlOutcome) (string, string) {
+	type labeled struct {
+		kind string
+		o    xmlOutcome
+	}
+	var all []labeled
+	for _, f := range failures {
+		all = append(all, labeled{"failure", f})
+	}
+	for _, e := range errs {
+		all = append(all, labeled{"error", e})
+	}
+	msg, details := outcomeText(all[0].o)
+	if len(all) == 1 {
+		return msg, details
+	}
+	parts := make([]string, len(all))
+	for i, l := range all {
+		m, d := outcomeText(l.o)
+		parts[i] = strings.TrimSpace(l.kind + ": " + m + "\n" + d)
+	}
+	return msg, strings.Join(parts, "\n\n")
 }
 
 // maxDurationMs is the largest duration a JSON client reads exactly (2^53-1 ms, ~285,000 years);
@@ -390,16 +449,21 @@ func plainDecimal(s string) string {
 // extractRef resolves the TC-ID reference of a testcase: the tc-id property
 // wins; otherwise the TC-<id> pattern in the name is used.
 func extractRef(name string, props []xmlProperty) TCRef {
+	if values := propertyValues(props); len(values) > 0 {
+		return fromProperty(values)
+	}
+	return fromName(name)
+}
+
+// propertyValues returns the trimmed values of the tc-id properties.
+func propertyValues(props []xmlProperty) []string {
 	var values []string
 	for _, p := range props {
 		if strings.EqualFold(strings.TrimSpace(p.Name), PropertyName) {
 			values = append(values, strings.TrimSpace(p.Value))
 		}
 	}
-	if len(values) > 0 {
-		return fromProperty(values)
-	}
-	return fromName(name)
+	return values
 }
 
 // parseID accepts a positive id of up to 18 significant digits; leading zeros are ignored (TC-0153 == TC-153).

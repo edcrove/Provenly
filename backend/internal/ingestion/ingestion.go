@@ -25,8 +25,7 @@ import (
 
 // Catalog is what ingestion needs from the catalog module.
 type Catalog interface {
-	ExpectedUniverse(ctx context.Context) ([]int64, error)
-	Statuses(ctx context.Context, ids []int64) (map[int64]catalog.Status, error)
+	IngestionView(ctx context.Context, ids []int64) (catalog.IngestionView, error)
 }
 
 // Recorder is what ingestion needs from the execution module.
@@ -130,14 +129,20 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	if err != nil {
 		return Outcome{}, apperr.InvalidDocument("%s", err.Error())
 	}
-	results, err := s.correlate(ctx, report.Results)
+	var ids []int64
+	for _, r := range report.Results {
+		if r.Ref.Kind == junit.RefFound {
+			ids = append(ids, r.Ref.ID)
+		}
+	}
+	// One catalog read: the snapshot and the correlation agree even if a test
+	// case is deprecated while the report is being ingested.
+	view, err := s.catalog.IngestionView(ctx, ids)
 	if err != nil {
 		return Outcome{}, err
 	}
-	expected, err := s.catalog.ExpectedUniverse(ctx)
-	if err != nil {
-		return Outcome{}, err
-	}
+	results := correlate(report.Results, view.Statuses)
+	expected := view.Expected
 	parseErrors := make([]execution.ParseError, len(report.Errors))
 	for i, e := range report.Errors {
 		parseErrors[i] = execution.ParseError{Index: int32(e.Index), TestName: e.TestName, Message: e.Message, Persisted: e.Persisted, Severity: string(e.Severity)}
@@ -182,23 +187,16 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 			}
 		}
 	}
+	if created {
+		out.Warnings = append(out.Warnings, report.Notices...)
+	}
 	if created && report.StartedAt != nil && run.StartedAt == nil {
 		out.Warnings = append(out.Warnings, fmt.Sprintf(FutureStartWarning, report.StartedAt.Format(time.RFC3339)))
 	}
 	return out, nil
 }
 
-func (s *Service) correlate(ctx context.Context, parsed []junit.Result) ([]execution.NewResult, error) {
-	var ids []int64
-	for _, r := range parsed {
-		if r.Ref.Kind == junit.RefFound {
-			ids = append(ids, r.Ref.ID)
-		}
-	}
-	statuses, err := s.catalog.Statuses(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
+func correlate(parsed []junit.Result, statuses map[int64]catalog.Status) []execution.NewResult {
 	out := make([]execution.NewResult, len(parsed))
 	for i, r := range parsed {
 		nr := execution.NewResult{
@@ -232,7 +230,7 @@ func (s *Service) correlate(ctx context.Context, parsed []junit.Result) ([]execu
 		}
 		out[i] = nr
 	}
-	return out, nil
+	return out
 }
 
 func diagnosticMessage(d execution.Diagnostic) string {

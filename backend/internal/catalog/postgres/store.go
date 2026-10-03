@@ -156,29 +156,22 @@ func (s *Store) ReactivateTestCase(ctx context.Context, id int64) (catalog.TestC
 	return toTestCase(r), nil
 }
 
-// ListExpectedUniverse implements catalog.Repository.
-func (s *Store) ListExpectedUniverse(ctx context.Context) ([]int64, error) {
-	ids, err := s.q.ListExpectedUniverse(ctx)
+// ListIngestionView implements catalog.Repository.
+func (s *Store) ListIngestionView(ctx context.Context, ids []int64) (catalog.IngestionView, error) {
+	rows, err := s.q.ListIngestionView(ctx, ids)
 	if err != nil {
-		return nil, err
+		return catalog.IngestionView{}, err
 	}
-	if ids == nil {
-		ids = []int64{}
-	}
-	return ids, nil
-}
-
-// ListTestCaseStatuses implements catalog.Repository.
-func (s *Store) ListTestCaseStatuses(ctx context.Context, ids []int64) (map[int64]catalog.Status, error) {
-	rows, err := s.q.ListTestCaseStatuses(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[int64]catalog.Status, len(rows))
+	view := catalog.IngestionView{Expected: []int64{}, Statuses: make(map[int64]catalog.Status, len(ids))}
 	for _, r := range rows {
-		out[r.ID] = catalog.Status(r.Status)
+		if r.Expected {
+			view.Expected = append(view.Expected, r.ID)
+		}
+		if r.Referenced {
+			view.Statuses[r.ID] = catalog.Status(r.Status)
+		}
 	}
-	return out, nil
+	return view, nil
 }
 
 // ListTestSteps implements catalog.Repository.

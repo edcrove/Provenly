@@ -52,3 +52,7 @@ targets:
     description: database protects run identity (external id, provider, run id, attempt, report digest), forbids deleting runs and adding TC-IDs to an existing snapshot, and keeps startedAt <= completedAt; replays warn about differing metadata
   - id: BE-INT-025
     description: ingested results and parse errors are immutable (no insert after the run is created, no update, no delete), so the verdict always reflects the report
+  - id: BE-INT-026
+    description: database enforces test case integrity (non-blank title, description and expected result at most 10000 characters, deprecated_at set exactly when deprecated, updated_at not before created_at)
+  - id: BE-INT-027
+    description: the run snapshot and the result correlations come from one catalog read, so they agree when a test case is deprecated during an ingestion

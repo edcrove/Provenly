@@ -678,7 +678,7 @@ export interface components {
              *     was not applied (send a new runAttempt to record it); likewise when
              *     the replay reports another status, pipeline, branch or commit. On a
              *     new run, it says when the report's suite timestamp is later than the
-             *     ingestion (startedAt is then left unknown).
+             *     ingestion or cannot be read (startedAt is then left unknown).
              */
             warnings: string[];
         };

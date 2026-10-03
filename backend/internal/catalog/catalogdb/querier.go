@@ -20,8 +20,10 @@ type Querier interface {
 	DeprecateTestCase(ctx context.Context, id int64) (TestCase, error)
 	GetTestCase(ctx context.Context, id int64) (TestCase, error)
 	ListAllTestSteps(ctx context.Context, testCaseID int64) ([]TestStep, error)
-	ListExpectedUniverse(ctx context.Context) ([]int64, error)
-	ListTestCaseStatuses(ctx context.Context, ids []int64) ([]ListTestCaseStatusesRow, error)
+	// One statement, so the expected universe (active AND automated) and the status
+	// of the referenced TC-IDs come from the same snapshot: a deprecation committed
+	// during an ingestion cannot put a TC in one and not the other.
+	ListIngestionView(ctx context.Context, ids []int64) ([]ListIngestionViewRow, error)
 	ListTestCases(ctx context.Context, arg ListTestCasesParams) ([]TestCase, error)
 	ListTestSteps(ctx context.Context, arg ListTestStepsParams) ([]TestStep, error)
 	LockTestCase(ctx context.Context, id int64) (int64, error)

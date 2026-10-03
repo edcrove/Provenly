@@ -75,17 +75,26 @@ func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, r
 // attachOutcomes computes the outcome of each run (one batch read) and hands
 // it to set with the run's index.
 func attachOutcomes(ctx context.Context, repo Repository, runs []TestRun, set func(int, RunOutcome)) error {
-	ids := make([]int64, len(runs))
-	for i, r := range runs {
-		ids[i] = r.ID
+	// A history page often repeats a run (one row per result): each run's outcome
+	// is read and computed once.
+	outcomes := make(map[int64]RunOutcome, len(runs))
+	var ids []int64
+	for _, r := range runs {
+		if _, seen := outcomes[r.ID]; !seen {
+			outcomes[r.ID] = RunOutcome{}
+			ids = append(ids, r.ID)
+		}
 	}
 	inputs, err := repo.ListSummaryInputs(ctx, ids)
 	if err != nil {
 		return err
 	}
+	for _, id := range ids {
+		in := inputs[id]
+		outcomes[id] = ComputeSummary(id, in.Expected, in.Valid, nil).Outcome()
+	}
 	for i, r := range runs {
-		in := inputs[r.ID]
-		set(i, ComputeSummary(r.ID, in.Expected, in.Valid, nil).Outcome())
+		set(i, outcomes[r.ID])
 	}
 	return nil
 }

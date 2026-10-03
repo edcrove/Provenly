@@ -314,6 +314,33 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Equal(t, execution.VerdictFailed, run.Outcome.Verdict, "the ingested failure still decides the verdict")
 	})
 
+	t.Run("BE-INT-027_snapshot_and_correlation_agree_under_concurrent_deprecation", func(t *testing.T) {
+		s, ctx := fresh(t)
+		for i := 0; i < 30; i++ {
+			tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "racy", Automated: true})
+			var (
+				wg  sync.WaitGroup
+				out ingestion.Outcome
+				err error
+			)
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				out, err = s.Ingestion.IngestJUnit(ctx, meta("race"+itoa(int64(i)), 1), strings.NewReader(junitFor(tcProp("t", itoa(tc.ID), ""))))
+			}()
+			go func() { defer wg.Done(); _, _ = s.Catalog.Deprecate(ctx, tc.ID) }()
+			wg.Wait()
+			require.NoError(t, err)
+			sum, err := s.Execution.Summary(ctx, out.Run.ID)
+			require.NoError(t, err)
+			res, err := s.Execution.ListRunResults(ctx, out.Run.ID, execution.ResultFilter{}, pagination.Default())
+			require.NoError(t, err)
+			inSnapshot := sum.ExpectedTotal == 1
+			valid := res.Items[0].Correlation == execution.CorrelationValid
+			assert.Equal(t, inSnapshot, valid, "iteration %d: a TC in the snapshot is valid, one deprecated before the read is in neither", i)
+		}
+	})
+
 	t.Run("BE-INT-011_database_enforces_result_and_run_invariants", func(t *testing.T) {
 		_, ctx := fresh(t)
 		// Results can only be written by the transaction that creates their run, so
@@ -402,6 +429,34 @@ func TestExecutionPersistence(t *testing.T) {
 		page, err := s.Execution.History(ctx, tc.ID, pagination.Page{Number: 2, Size: 1})
 		require.NoError(t, err)
 		assert.Equal(t, "github:700:1", page.Items[0].Run.ExternalRunID)
+
+		// A run with many results for the TC: pages are chosen before the per-run
+		// counts are computed, and each row still carries its run's counts.
+		cases := make([]string, 250)
+		for i := range cases {
+			cases[i] = tcProp("browser "+itoa(int64(i)), itoa(tc.ID), "")
+		}
+		big, err := s.Ingestion.IngestJUnit(ctx, meta("702", 1), strings.NewReader(junitFor(cases...)))
+		require.NoError(t, err)
+		deep, err := s.Execution.History(ctx, tc.ID, pagination.Page{Number: 26, Size: 10})
+		require.NoError(t, err)
+		assert.Equal(t, int64(252), deep.Total)
+		require.Len(t, deep.Items, 2)
+		assert.Equal(t, "github:701:1", deep.Items[0].Run.ExternalRunID)
+		assert.Equal(t, "github:700:1", deep.Items[1].Run.ExternalRunID)
+		first, err := s.Execution.History(ctx, tc.ID, pagination.Page{Number: 1, Size: 10})
+		require.NoError(t, err)
+		for _, it := range first.Items {
+			assert.Equal(t, big.Run.ID, it.Run.ID)
+			assert.Equal(t, int32(250), it.Run.ResultCount)
+			assert.Equal(t, int32(1), it.Run.ExpectedCount)
+		}
+		assert.Equal(t, "browser 249", first.Items[0].Result.TestName, "newest first")
+		runs, err := s.Execution.ListRuns(ctx, pagination.Page{Number: 2, Size: 2})
+		require.NoError(t, err)
+		require.Len(t, runs.Items, 1)
+		assert.Equal(t, "github:700:1", runs.Items[0].ExternalRunID)
+		assert.Equal(t, int32(1), runs.Items[0].ResultCount)
 	})
 
 	t.Run("BE-INT-017_outside_universe_results_are_valid_but_excluded", func(t *testing.T) {

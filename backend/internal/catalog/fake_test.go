@@ -137,30 +137,22 @@ func (f *fakeRepo) ReactivateTestCase(_ context.Context, id int64) (TestCase, er
 	return tc, nil
 }
 
-func (f *fakeRepo) ListExpectedUniverse(context.Context) ([]int64, error) {
-	if err := f.fail("ListExpectedUniverse"); err != nil {
-		return nil, err
+func (f *fakeRepo) ListIngestionView(_ context.Context, ids []int64) (IngestionView, error) {
+	if err := f.fail("ListIngestionView"); err != nil {
+		return IngestionView{}, err
 	}
-	var ids []int64
+	view := IngestionView{Statuses: map[int64]Status{}}
 	for _, tc := range f.filtered(nil) {
 		if tc.Status == StatusActive && tc.Automated {
-			ids = append(ids, tc.ID)
+			view.Expected = append(view.Expected, tc.ID)
 		}
 	}
-	return ids, nil
-}
-
-func (f *fakeRepo) ListTestCaseStatuses(_ context.Context, ids []int64) (map[int64]Status, error) {
-	if err := f.fail("ListTestCaseStatuses"); err != nil {
-		return nil, err
-	}
-	out := map[int64]Status{}
 	for _, id := range ids {
 		if tc, ok := f.cases[id]; ok {
-			out[id] = tc.Status
+			view.Statuses[id] = tc.Status
 		}
 	}
-	return out, nil
+	return view, nil
 }
 
 func (f *fakeRepo) sorted(tcID int64) []TestStep {

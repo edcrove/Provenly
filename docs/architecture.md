@@ -22,7 +22,9 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 | Invariant | Enforcement |
 |---|---|
 | TC-ID numeric, server-assigned, immutable, never reused | `GENERATED ALWAYS AS IDENTITY (NO CYCLE)`; trigger forbids `DELETE` and id changes; API rejects unknown fields (e.g. `id`) |
+| Test case content rules hold in the database too | `CHECK`s: non-blank title (1..200), description and expected result at most 10000 characters, `deprecated_at` set exactly while deprecated, `updated_at >= created_at` (migration 00011) |
 | Content does not version identity | `PATCH` only edits content columns; results reference the TC-ID only |
+| Snapshot and correlations agree | the expected universe and the statuses of the referenced TC-IDs come from one catalog statement (`ListIngestionView`) |
 | Idempotent TestRun per `{provider}:{run_id}:{run_attempt}` | `UNIQUE(external_run_id)` + `INSERT … ON CONFLICT DO NOTHING` in one transaction with snapshot and results |
 | Expected-universe snapshot is immutable | written once at run creation; triggers forbid `UPDATE`/`DELETE` and any `INSERT` outside the run's creating transaction (migration 00009) |
 | A run's identity and history are permanent | trigger forbids deleting runs and changing `external_run_id`, provider, run id, attempt, report digest or `created_at` (status and timestamps stay open for the live lifecycle); `CHECK started_at <= completed_at`; a suite timestamp later than the ingestion leaves `startedAt` unknown with a warning |

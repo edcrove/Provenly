@@ -213,49 +213,38 @@ func (q *Queries) ListAllTestSteps(ctx context.Context, testCaseID int64) ([]Tes
 	return items, nil
 }
 
-const listExpectedUniverse = `-- name: ListExpectedUniverse :many
-SELECT id FROM test_cases WHERE status = 'active' AND automated ORDER BY id
+const listIngestionView = `-- name: ListIngestionView :many
+SELECT id, status, (status = 'active' AND automated)::boolean AS expected, coalesce(id = ANY($1::bigint[]), false)::boolean AS referenced
+FROM test_cases
+WHERE (status = 'active' AND automated) OR id = ANY($1::bigint[])
+ORDER BY id
 `
 
-func (q *Queries) ListExpectedUniverse(ctx context.Context) ([]int64, error) {
-	rows, err := q.db.Query(ctx, listExpectedUniverse)
+type ListIngestionViewRow struct {
+	ID         int64
+	Status     string
+	Expected   bool
+	Referenced bool
+}
+
+// One statement, so the expected universe (active AND automated) and the status
+// of the referenced TC-IDs come from the same snapshot: a deprecation committed
+// during an ingestion cannot put a TC in one and not the other.
+func (q *Queries) ListIngestionView(ctx context.Context, ids []int64) ([]ListIngestionViewRow, error) {
+	rows, err := q.db.Query(ctx, listIngestionView, ids)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []int64
+	var items []ListIngestionViewRow
 	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listTestCaseStatuses = `-- name: ListTestCaseStatuses :many
-SELECT id, status FROM test_cases WHERE id = ANY($1::bigint[])
-`
-
-type ListTestCaseStatusesRow struct {
-	ID     int64
-	Status string
-}
-
-func (q *Queries) ListTestCaseStatuses(ctx context.Context, ids []int64) ([]ListTestCaseStatusesRow, error) {
-	rows, err := q.db.Query(ctx, listTestCaseStatuses, ids)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListTestCaseStatusesRow
-	for rows.Next() {
-		var i ListTestCaseStatusesRow
-		if err := rows.Scan(&i.ID, &i.Status); err != nil {
+		var i ListIngestionViewRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.Expected,
+			&i.Referenced,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

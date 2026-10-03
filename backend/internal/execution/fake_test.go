@@ -15,6 +15,8 @@ type fakeRepo struct {
 	nextRun  int64
 	nextRes  int64
 	errs     map[string]error
+	// summaryReads records the run ids of every ListSummaryInputs call.
+	summaryReads [][]int64
 }
 
 func newFakeRepo() *fakeRepo {
@@ -164,6 +166,7 @@ func (f *fakeRepo) ListSummaryInputs(_ context.Context, runIDs []int64) (map[int
 	if err := f.errs["ListSummaryInputs"]; err != nil {
 		return nil, err
 	}
+	f.summaryReads = append(f.summaryReads, runIDs)
 	out := map[int64]SummaryInputs{}
 	for _, id := range runIDs {
 		in := SummaryInputs{Expected: f.expected[id]}

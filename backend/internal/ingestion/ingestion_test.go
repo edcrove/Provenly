@@ -21,19 +21,15 @@ import (
 var errBoom = errors.New("boom")
 
 type fakeCatalog struct {
-	universe    []int64
-	statuses    map[int64]catalog.Status
-	universeErr error
-	statusErr   error
-	askedIDs    []int64
+	universe []int64
+	statuses map[int64]catalog.Status
+	viewErr  error
+	askedIDs []int64
 }
 
-func (f *fakeCatalog) ExpectedUniverse(context.Context) ([]int64, error) {
-	return f.universe, f.universeErr
-}
-func (f *fakeCatalog) Statuses(_ context.Context, ids []int64) (map[int64]catalog.Status, error) {
+func (f *fakeCatalog) IngestionView(_ context.Context, ids []int64) (catalog.IngestionView, error) {
 	f.askedIDs = ids
-	return f.statuses, f.statusErr
+	return catalog.IngestionView{Expected: f.universe, Statuses: f.statuses}, f.viewErr
 }
 
 type fakeRecorder struct {
@@ -183,6 +179,17 @@ func TestIngestWarnsWhenTheSuiteTimestampIsLaterThanIngestion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"the report's suite timestamp 2099-01-01T00:00:00Z is later than the ingestion; startedAt is left unknown (clock skew, or a local time written without a zone)"}, out.Warnings)
 
+	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta,
+		strings.NewReader(`<testsuite name="s" timestamp="2026-02-30T10:00:00"/>`))
+	require.NoError(t, err)
+	assert.Equal(t, []string{`suite timestamp "2026-02-30T10:00:00" could not be read; it does not set startedAt`}, out.Warnings)
+	rec.created = false
+	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta,
+		strings.NewReader(`<testsuite name="s" timestamp="2026-02-30T10:00:00"/>`))
+	require.NoError(t, err)
+	assert.Empty(t, out.Warnings, "a replay is not applied, so its report raises no notices")
+	rec.created = true
+
 	kept := time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC)
 	rec.storedStart = &kept
 	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta,
@@ -239,9 +246,7 @@ func TestIngestErrors(t *testing.T) {
 	_, err = NewService(&fakeCatalog{}, &fakeRecorder{}).IngestJUnit(ctx, meta, errReader{tooLarge})
 	assert.ErrorAs(t, err, &tooLarge, "read errors (e.g. body too large) are returned as is")
 
-	_, err = NewService(&fakeCatalog{statusErr: errBoom}, &fakeRecorder{}).IngestJUnit(ctx, meta, strings.NewReader(report))
-	assert.ErrorIs(t, err, errBoom)
-	_, err = NewService(&fakeCatalog{universeErr: errBoom}, &fakeRecorder{}).IngestJUnit(ctx, meta, strings.NewReader(report))
+	_, err = NewService(&fakeCatalog{viewErr: errBoom}, &fakeRecorder{}).IngestJUnit(ctx, meta, strings.NewReader(report))
 	assert.ErrorIs(t, err, errBoom)
 	_, err = NewService(&fakeCatalog{}, &fakeRecorder{recordErr: errBoom}).IngestJUnit(ctx, meta, strings.NewReader(report))
 	assert.ErrorIs(t, err, errBoom)

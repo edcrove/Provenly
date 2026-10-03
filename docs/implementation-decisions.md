@@ -70,6 +70,12 @@ Project rename (OpenTestHub → Provenly): DEC-39.
    exactly) is invalid: kept without duration, parse error. Documents may declare UTF-8, US-ASCII, ISO-8859-1,
    windows-1252 or UTF-16 (BOM or `<?` detection); other encodings and anything after the root element (e.g. two
    concatenated reports) are a `400 invalid_junit` instead of being misread or silently dropped.
+   **Addendum (sweep, 2026-10-03, technical):** every `<failure>`/`<error>` of a testcase is kept: the status follows
+   the existing precedence, `errorMessage` is the first outcome's, and with more than one outcome `errorDetails`
+   lists each (`failure: <message>` + text). A `tc-id` on a `<testsuite>` and testcases nested in a `<testcase>` are
+   not read but reported as warning parse errors. Suite timestamps also accept `+hhmm` offsets and a space instead of
+   `T`; an unreadable one is reported in `warnings` (startedAt stays unknown). A TC-ID in the name captures any letters
+   or digits after `TC-`, so a non-ASCII id is reported as declared (malformed).
 6. **Replay response.** An idempotent replay returns `200` with the existing run and the diagnostics stored at
    creation; nothing is re-parsed into the database.
    **Status: Changed by Ed (2026-09-28) — option B, implemented.** The run stores the SHA-256 of the report that

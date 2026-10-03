@@ -158,8 +158,8 @@ func TestReactivate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, tc.ID, back.ID, "same TC-ID")
 	assert.Equal(t, StatusActive, back.Status)
-	ids, _ := svc.ExpectedUniverse(ctx)
-	assert.Equal(t, []int64{tc.ID}, ids, "future runs include it again")
+	view, _ := svc.IngestionView(ctx, nil)
+	assert.Equal(t, []int64{tc.ID}, view.Expected, "future runs include it again")
 	_, err = svc.Reactivate(ctx, 99)
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 }
@@ -171,17 +171,14 @@ func TestExpectedUniverseAndStatuses(t *testing.T) {
 	_, _ = svc.Create(ctx, CreateInput{Title: "auto-deprecated", Automated: true})
 	_, _ = svc.Deprecate(ctx, 3)
 
-	ids, err := svc.ExpectedUniverse(ctx)
+	view, err := svc.IngestionView(ctx, []int64{1, 3, 42})
 	require.NoError(t, err)
-	assert.Equal(t, []int64{1}, ids)
+	assert.Equal(t, []int64{1}, view.Expected)
+	assert.Equal(t, map[int64]Status{1: StatusActive, 3: StatusDeprecated}, view.Statuses)
 
-	st, err := svc.Statuses(ctx, []int64{1, 3, 42})
+	view, err = svc.IngestionView(ctx, nil)
 	require.NoError(t, err)
-	assert.Equal(t, map[int64]Status{1: StatusActive, 3: StatusDeprecated}, st)
-
-	st, err = svc.Statuses(ctx, nil)
-	require.NoError(t, err)
-	assert.Empty(t, st)
+	assert.Empty(t, view.Statuses)
 }
 
 func TestStepsLifecycle(t *testing.T) {

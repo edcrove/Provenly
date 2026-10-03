@@ -22,6 +22,14 @@ const (
 // MaxSteps bounds the number of steps per test case.
 const MaxSteps = 100
 
+// IngestionView is what an ingestion reads from the catalog, in one snapshot.
+type IngestionView struct {
+	// Expected are the TC-IDs that are active and automated right now, ascending.
+	Expected []int64
+	// Statuses holds the status of each existing TC-ID among the referenced ids; unknown ids are absent.
+	Statuses map[int64]Status
+}
+
 // ErrNotFound is returned by a Repository when a row does not exist.
 var ErrNotFound = errors.New("not found")
 
@@ -95,8 +103,7 @@ type Repository interface {
 	UpdateTestCase(ctx context.Context, id int64, in UpdateInput) (TestCase, error)
 	DeprecateTestCase(ctx context.Context, id int64) (TestCase, error)
 	ReactivateTestCase(ctx context.Context, id int64) (TestCase, error)
-	ListExpectedUniverse(ctx context.Context) ([]int64, error)
-	ListTestCaseStatuses(ctx context.Context, ids []int64) (map[int64]Status, error)
+	ListIngestionView(ctx context.Context, ids []int64) (IngestionView, error)
 
 	ListTestSteps(ctx context.Context, testCaseID int64, limit, offset int32) ([]TestStep, error)
 	ListAllTestSteps(ctx context.Context, testCaseID int64) ([]TestStep, error)

@@ -53,6 +53,27 @@ func TestCatalogPersistence(t *testing.T) {
 		assert.ErrorContains(t, err, "test case id is immutable (TC-"+itoa(tc.ID)+")")
 	})
 
+	t.Run("BE-INT-026_database_enforces_test_case_integrity", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, err := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Description: strings.Repeat("d", 10000), ExpectedResult: strings.Repeat("e", 10000)})
+		require.NoError(t, err, "10000 characters is the limit, not past it")
+		for _, c := range []struct{ stmt, constraint string }{
+			{`INSERT INTO test_cases (title) VALUES (' ' || chr(9) || ' ')`, "test_cases_title_not_blank"},
+			{`INSERT INTO test_cases (title, description) VALUES ('d', repeat('d', 10001))`, "test_cases_description_length"},
+			{`INSERT INTO test_cases (title, expected_result) VALUES ('e', repeat('é', 10001))`, "test_cases_expected_result_length"},
+			{`INSERT INTO test_cases (title, status) VALUES ('no date', 'deprecated')`, "test_cases_deprecated_at_matches_status"},
+			{`INSERT INTO test_cases (title, deprecated_at) VALUES ('active with date', now())`, "test_cases_deprecated_at_matches_status"},
+			{`INSERT INTO test_cases (title, created_at, updated_at) VALUES ('t', now(), now() - interval '1 second')`, "test_cases_updated_after_created"},
+		} {
+			_, err := db.Pool.Exec(ctx, c.stmt)
+			assert.ErrorContains(t, err, c.constraint, c.stmt)
+		}
+		_, err = s.Catalog.Deprecate(ctx, tc.ID)
+		require.NoError(t, err, "the service keeps status and deprecated_at in step")
+		_, err = s.Catalog.Reactivate(ctx, tc.ID)
+		require.NoError(t, err)
+	})
+
 	t.Run("BE-INT-023_database_enforces_step_integrity", func(t *testing.T) {
 		s, ctx := fresh(t)
 		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a"})
@@ -149,19 +170,17 @@ func TestCatalogPersistence(t *testing.T) {
 		_, _ = s.Catalog.Create(ctx, catalog.CreateInput{Title: "manual"})
 		gone, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "gone", Automated: true})
 		_, _ = s.Catalog.Deprecate(ctx, gone.ID)
-		ids, err := s.Catalog.ExpectedUniverse(ctx)
+		view, err := s.Catalog.IngestionView(ctx, []int64{auto.ID, gone.ID, 987654})
 		require.NoError(t, err)
-		assert.Equal(t, []int64{auto.ID}, ids)
-
-		st, err := s.Catalog.Statuses(ctx, []int64{auto.ID, gone.ID, 987654})
-		require.NoError(t, err)
-		assert.Equal(t, map[int64]catalog.Status{auto.ID: catalog.StatusActive, gone.ID: catalog.StatusDeprecated}, st)
+		assert.Equal(t, []int64{auto.ID}, view.Expected)
+		assert.Equal(t, map[int64]catalog.Status{auto.ID: catalog.StatusActive, gone.ID: catalog.StatusDeprecated}, view.Statuses,
+			"only referenced ids have a status; unknown ids are absent")
 
 		require.NoError(t, db.Reset(ctx))
-		ids, err = s.Catalog.ExpectedUniverse(ctx)
+		view, err = s.Catalog.IngestionView(ctx, nil)
 		require.NoError(t, err)
-		assert.NotNil(t, ids)
-		assert.Empty(t, ids)
+		assert.NotNil(t, view.Expected)
+		assert.Empty(t, view.Expected)
 	})
 
 	t.Run("BE-INT-006_steps_keep_a_persistent_contiguous_order", func(t *testing.T) {

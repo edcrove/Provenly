@@ -121,17 +121,10 @@ func (s *Service) Reactivate(ctx context.Context, id int64) (TestCase, error) {
 	return tc, mapNotFound(err, id)
 }
 
-// ExpectedUniverse returns the TC-IDs that are active and automated right now.
-func (s *Service) ExpectedUniverse(ctx context.Context) ([]int64, error) {
-	return s.repo.ListExpectedUniverse(ctx)
-}
-
-// Statuses returns the status of each existing TC-ID among ids; unknown ids are absent.
-func (s *Service) Statuses(ctx context.Context, ids []int64) (map[int64]Status, error) {
-	if len(ids) == 0 {
-		return map[int64]Status{}, nil
-	}
-	return s.repo.ListTestCaseStatuses(ctx, ids)
+// IngestionView returns, in one snapshot, the TC-IDs that are active and
+// automated right now and the status of each existing TC-ID among ids.
+func (s *Service) IngestionView(ctx context.Context, ids []int64) (IngestionView, error) {
+	return s.repo.ListIngestionView(ctx, ids)
 }
 
 // ListSteps returns a page of steps ordered by position.

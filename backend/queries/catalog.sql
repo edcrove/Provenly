@@ -45,11 +45,14 @@ UPDATE test_cases SET
 WHERE id = @id
 RETURNING *;
 
--- name: ListExpectedUniverse :many
-SELECT id FROM test_cases WHERE status = 'active' AND automated ORDER BY id;
-
--- name: ListTestCaseStatuses :many
-SELECT id, status FROM test_cases WHERE id = ANY(@ids::bigint[]);
+-- name: ListIngestionView :many
+-- One statement, so the expected universe (active AND automated) and the status
+-- of the referenced TC-IDs come from the same snapshot: a deprecation committed
+-- during an ingestion cannot put a TC in one and not the other.
+SELECT id, status, (status = 'active' AND automated)::boolean AS expected, coalesce(id = ANY(@ids::bigint[]), false)::boolean AS referenced
+FROM test_cases
+WHERE (status = 'active' AND automated) OR id = ANY(@ids::bigint[])
+ORDER BY id;
 
 -- name: ListTestSteps :many
 SELECT * FROM test_steps

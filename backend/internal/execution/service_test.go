@@ -179,6 +179,17 @@ func TestHistory(t *testing.T) {
 	assert.Equal(t, Failed, h.Items[0].Result.Status)
 	assert.Equal(t, "github:42:2", h.Items[0].Run.ExternalRunID)
 
+	// A run repeated on a history page (one row per result) is read and summarized once.
+	_, _, _ = svc.RecordRun(ctx, run(3), []int64{1}, []NewResult{valid(1, Passed, "chrome"), valid(1, Failed, "firefox"), valid(1, Passed, "safari")}, nil)
+	repo.summaryReads = nil
+	h, err = svc.History(ctx, 1, pagination.Page{Number: 1, Size: 3})
+	require.NoError(t, err)
+	require.Len(t, h.Items, 3)
+	assert.Equal(t, [][]int64{{h.Items[0].Run.ID}}, repo.summaryReads)
+	for _, it := range h.Items {
+		assert.Equal(t, RunOutcome{Verdict: VerdictFailed, Executed: 1, Failed: 1}, it.Run.Outcome)
+	}
+
 	repo.errs["CountResultsForTestCase"] = errBoom
 	_, err = svc.History(ctx, 1, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)

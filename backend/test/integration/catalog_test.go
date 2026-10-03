@@ -48,9 +48,32 @@ func TestCatalogPersistence(t *testing.T) {
 		tc, err := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a"})
 		require.NoError(t, err)
 		_, err = db.Pool.Exec(ctx, `DELETE FROM test_cases WHERE id = $1`, tc.ID)
-		assert.ErrorContains(t, err, "cannot be deleted")
+		assert.ErrorContains(t, err, "test cases cannot be deleted (TC-"+itoa(tc.ID)+"); deprecate instead")
 		_, err = db.Pool.Exec(ctx, `UPDATE test_cases SET id = DEFAULT WHERE id = $1`, tc.ID)
-		assert.ErrorContains(t, err, "immutable")
+		assert.ErrorContains(t, err, "test case id is immutable (TC-"+itoa(tc.ID)+")")
+	})
+
+	t.Run("BE-INT-023_database_enforces_step_integrity", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a"})
+		other, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "b"})
+		step, err := s.Catalog.CreateStep(ctx, tc.ID, catalog.CreateStepInput{Action: "a", ExpectedResult: strings.Repeat("e", 2000)})
+		require.NoError(t, err, "2000 characters is the limit, not past it")
+		pos := int32(1)
+		insert := func(action, expected string) error { // a fresh position each time, so only the CHECK under test can fail
+			pos++
+			_, err := db.Pool.Exec(ctx, `INSERT INTO test_steps (test_case_id, position, action, expected_result) VALUES ($1, $2, $3, $4)`, tc.ID, pos, action, expected)
+			return err
+		}
+		assert.ErrorContains(t, insert(" \t\n ", ""), "test_steps_action_not_blank")
+		assert.ErrorContains(t, insert("a", strings.Repeat("e", 2001)), "test_steps_expected_result_length")
+		assert.ErrorContains(t, insert("a", strings.Repeat("é", 2001)), "test_steps_expected_result_length", "the limit counts characters")
+		_, err = db.Pool.Exec(ctx, `INSERT INTO test_steps (test_case_id, position, action) VALUES ($1, 1, 'x')`, 987654)
+		assert.ErrorContains(t, err, "test_steps_test_case_id_fkey", "every step belongs to an existing test case")
+		_, err = db.Pool.Exec(ctx, `UPDATE test_steps SET test_case_id = $1 WHERE id = $2`, other.ID, step.ID)
+		assert.ErrorContains(t, err, "a test step cannot move to another test case")
+		_, err = db.Pool.Exec(ctx, `UPDATE test_steps SET action = 'edited' WHERE id = $1`, step.ID)
+		assert.NoError(t, err, "editing content is still allowed")
 	})
 
 	t.Run("BE-INT-004_test_case_crud_roundtrip", func(t *testing.T) {

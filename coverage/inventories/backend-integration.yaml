@@ -9,7 +9,7 @@ targets:
   - id: BE-INT-002
     description: TC-IDs are assigned by the database (identity), increasing and never reused
   - id: BE-INT-003
-    description: database forbids deleting test cases and changing a TC-ID
+    description: database forbids deleting test cases and changing a TC-ID, naming the TC-ID in the error
   - id: BE-INT-004
     description: test case CRUD round-trip through the catalog service on Postgres (idempotent deprecation)
   - id: BE-INT-005
@@ -41,8 +41,10 @@ targets:
   - id: BE-INT-018
     description: parse errors and unknown durations are stored with the run, listed and replayed
   - id: BE-INT-019
-    description: the run status reported by CI (completed/failed/cancelled) is stored and never changed by replays
+    description: the run execution status reported by CI (completed/interrupted/cancelled) is stored and never changed by replays
   - id: BE-INT-021
     description: editing test case content and steps (edit, reorder, delete) keeps the TC-ID and leaves the result history unchanged
   - id: BE-INT-022
     description: readiness reflects database reachability (200 with a live pool, 503 Problem once the pool is closed)
+  - id: BE-INT-023
+    description: database enforces step integrity (owning test case exists and never changes, non-blank action, expected result at most 2000 characters)

@@ -64,6 +64,14 @@ func TestExecutionPersistence(t *testing.T) {
 		require.NotNil(t, out.Run.StartedAt)
 		require.NotNil(t, out.Run.CompletedAt)
 
+		replay, err := s.Ingestion.IngestJUnit(ctx, meta("100", 1), strings.NewReader(doc))
+		require.NoError(t, err)
+		assert.False(t, replay.Created)
+		assert.Equal(t, out.Diagnostics, replay.Diagnostics, "a replay returns the diagnostics stored at creation")
+		assert.Equal(t, out.ParseErrors, replay.ParseErrors)
+		assert.Equal(t, out.Received, replay.Received)
+		assert.Equal(t, out.Persisted, replay.Persisted)
+
 		res, err := s.Execution.ListRunResults(ctx, out.Run.ID, execution.ResultFilter{}, pagination.Default())
 		require.NoError(t, err)
 		assert.Equal(t, int64(7), res.Total)

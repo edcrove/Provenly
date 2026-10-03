@@ -1289,9 +1289,17 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @description The JUnit XML document, uncompressed (a `Content-Encoding` other than
+         *     `identity` is a 415). `application/xml`, `text/xml` and any `+xml` media
+         *     type are accepted. A `charset` parameter overrides the document's XML
+         *     declaration (RFC 7303); UTF-8, US-ASCII, ISO-8859-1, windows-1252 and
+         *     UTF-16 are supported, any other charset is a 415.
+         */
         requestBody: {
             content: {
                 "application/xml": string;
+                "text/xml": string;
             };
         };
         responses: {

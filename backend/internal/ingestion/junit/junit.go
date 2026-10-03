@@ -157,12 +157,27 @@ var (
 // An unreadable document is an error; an invalid testcase is reported in
 // Report.Errors and the rest of the document is still parsed.
 func Parse(r io.Reader) (Report, error) {
-	r, err := fromUTF16(r)
-	if err != nil {
+	return ParseWithCharset(r, "")
+}
+
+// ParseWithCharset is Parse for a body whose charset was declared out of band
+// (the Content-Type charset parameter): it overrides the document's XML
+// declaration (RFC 7303). An empty charset defers to the document.
+func ParseWithCharset(r io.Reader, charset string) (Report, error) {
+	var err error
+	if charset != "" {
+		if r, err = charsetReader(charset, r); err != nil {
+			return Report{}, fmt.Errorf("invalid JUnit XML: %w", err)
+		}
+	} else if r, err = fromUTF16(r); err != nil {
 		return Report{}, fmt.Errorf("invalid JUnit XML: %w", err)
 	}
 	dec := xml.NewDecoder(r)
 	dec.CharsetReader = charsetReader
+	if charset != "" {
+		// Already UTF-8: the declared encoding must not transcode it again.
+		dec.CharsetReader = func(_ string, input io.Reader) (io.Reader, error) { return input, nil }
+	}
 	var root xmlSuite
 	if err := dec.Decode(&root); err != nil {
 		return Report{}, fmt.Errorf("invalid JUnit XML: %w", err)
@@ -242,11 +257,23 @@ var windows1252 = [32]rune{
 	0x90, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x9D, 0x017E, 0x0178,
 }
 
+// SupportedCharset reports whether a document or Content-Type charset can be read.
+func SupportedCharset(label string) bool {
+	switch strings.ToLower(label) {
+	case "utf-8", "utf8", "us-ascii", "ascii", "utf-16", "utf-16le", "utf-16be",
+		"iso-8859-1", "iso8859-1", "latin1", "latin-1", "l1", "windows-1252", "cp1252":
+		return true
+	}
+	return false
+}
+
 // charsetReader supports the non-UTF-8 encodings reporters declare in practice.
 func charsetReader(label string, input io.Reader) (io.Reader, error) {
 	switch strings.ToLower(label) {
-	case "us-ascii", "ascii", "utf-16", "utf-16le", "utf-16be": // ASCII is UTF-8; UTF-16 was already transcoded
+	case "utf-8", "utf8", "us-ascii", "ascii": // ASCII is UTF-8
 		return input, nil
+	case "utf-16", "utf-16le", "utf-16be": // transcoded from its byte order mark or "<?" pattern
+		return fromUTF16(input)
 	case "iso-8859-1", "iso8859-1", "latin1", "latin-1", "l1", "windows-1252", "cp1252":
 		raw, err := io.ReadAll(input)
 		if err != nil {

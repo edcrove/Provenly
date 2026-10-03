@@ -45,6 +45,8 @@ type RunMeta struct {
 	Commit        string
 	// Status is how the CI execution ended (completed when empty).
 	Status execution.RunStatus
+	// Charset is the Content-Type charset of the report, if any: it overrides the XML declaration.
+	Charset string
 }
 
 // Diagnostic explains why a result has no valid TC-ID.
@@ -125,7 +127,7 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	}
 	digest := sha256.Sum256(raw)
 	reportSHA := hex.EncodeToString(digest[:])
-	report, err := junit.Parse(bytes.NewReader(raw))
+	report, err := junit.ParseWithCharset(bytes.NewReader(raw), meta.Charset)
 	if err != nil {
 		return Outcome{}, apperr.InvalidDocument("%s", err.Error())
 	}

@@ -377,3 +377,36 @@ func TestRunsAndResultsAreReadOnly(t *testing.T) {
 	raw.GET("/api/v1/test-runs/"+runID+"/results").WithQuery("status", "failed").Expect().Status(http.StatusOK).
 		JSON().Object().HasValue("totalItems", 1) // the failure is still a failure
 }
+
+// TestIngestionMediaTypes: the charset parameter overrides the document, text/xml
+// and +xml types are XML, compressed bodies and unknown charsets are a 415, and
+// every query parameter error is reported at once (docs/review.md finding 24).
+func TestIngestionMediaTypes(t *testing.T) {
+	e := api(t, fresh(t), 1<<20)
+	send := func(runID, contentType string, body []byte) *httpexpect.Request {
+		return e.POST("/api/v1/ingestion/junit").WithQuery("provider", "github").WithQuery("runId", runID).
+			WithQuery("runAttempt", 1).WithHeader("Content-Type", contentType).WithBytes(body)
+	}
+	latin1 := []byte("<testsuite name=\"s\"><testcase name=\"caf\xe9\"/></testsuite>")
+	run := send("latin1", "application/xml; charset=ISO-8859-1", latin1).Expect().Status(http.StatusCreated).
+		JSON().Object().Value("testRun").Object()
+	runID := strconv.FormatInt(int64(run.Value("id").Number().Raw()), 10)
+	e.GET("/api/v1/test-runs/"+runID+"/results").Expect().Status(http.StatusOK).
+		JSON().Object().Value("items").Array().Value(0).Object().HasValue("testName", "caf\u00e9")
+	send("textxml", "text/xml", []byte(`<testsuite name="s"/>`)).Expect().Status(http.StatusCreated)
+	send("charset", "application/xml; charset=shift_jis", []byte(`<testsuite/>`)).Expect().
+		Status(http.StatusUnsupportedMediaType).JSON(problemOpts).Object().HasValue("code", "unsupported_media_type")
+	send("gzip", "application/xml", []byte{0x1f, 0x8b}).WithHeader("Content-Encoding", "gzip").Expect().
+		Status(http.StatusUnsupportedMediaType).JSON(problemOpts).Object().HasValue("code", "unsupported_media_type")
+
+	errs := e.POST("/api/v1/ingestion/junit").WithHeader("Content-Type", xmlType).WithText(`<testsuite/>`).Expect().
+		Status(http.StatusBadRequest).JSON(problemOpts).Object().Value("errors").Array()
+	errs.Length().IsEqual(3)
+
+	send("empty", xmlType, nil).Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "invalid_junit")
+
+	raw := offContract(t, fresh(t))
+	raw.POST("/api/v1/ingestion/junit").WithQuery("provider", "github").WithQuery("runId", "plusxml").WithQuery("runAttempt", 1).
+		WithHeader("Content-Type", "application/junit+xml").WithText(`<testsuite name="s"/>`).Expect().Status(http.StatusCreated)
+	raw.GET("/api/v1/ingestion/junit").Expect().Status(http.StatusMethodNotAllowed)
+}

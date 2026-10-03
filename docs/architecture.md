@@ -48,7 +48,8 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
   otherwise), since PostgreSQL cannot store them. Every validation error has the detail `request validation failed` and lists
   the offending fields in `errors`.
 - Ingestion: `POST /api/v1/ingestion/junit?provider=&runId=&runAttempt=[&pipeline=&branch=&commit=]` with the
-  JUnit XML as `application/xml` body (one request per complete report). `201` creates the run, `200` is an idempotent
+  JUnit XML as `application/xml` body (one request per complete report; `text/xml` and `*+xml` too; a Content-Type
+  `charset` overrides the XML declaration; compressed bodies are a 415; every parameter error is listed at once). `201` creates the run, `200` is an idempotent
   replay (nothing re-processed).
 
 ## JUnit → TC-ID extraction

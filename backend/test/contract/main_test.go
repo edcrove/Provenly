@@ -42,6 +42,7 @@ var (
 
 func TestMain(m *testing.M) {
 	openapi3filter.RegisterBodyDecoder("application/xml", openapi3filter.PlainBodyDecoder)
+	openapi3filter.RegisterBodyDecoder("text/xml", openapi3filter.PlainBodyDecoder)
 	loader := openapi3.NewLoader()
 	var err error
 	doc, err = loader.LoadFromFile(specPath)

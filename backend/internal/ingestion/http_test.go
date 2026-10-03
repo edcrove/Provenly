@@ -55,7 +55,7 @@ func TestIngestHandlerCreatedAndReplay(t *testing.T) {
 	}}
 	rec := post(api, 1024, q, "application/xml; charset=utf-8", "<testsuites/>")
 	assert.Equal(t, http.StatusCreated, rec.Code)
-	assert.Equal(t, RunMeta{Provider: "github", ProviderRunID: "7", RunAttempt: 2, Pipeline: "ci", Branch: "main", Commit: "abc", Status: execution.RunInterrupted}, api.gotMeta)
+	assert.Equal(t, RunMeta{Provider: "github", ProviderRunID: "7", RunAttempt: 2, Pipeline: "ci", Branch: "main", Commit: "abc", Status: execution.RunInterrupted, Charset: "utf-8"}, api.gotMeta)
 	assert.Equal(t, "<testsuites/>", api.gotBody)
 	body := rec.Body.String()
 	assert.Contains(t, body, `"created":true`)
@@ -90,4 +90,52 @@ func TestIngestHandlerErrors(t *testing.T) {
 	rec = post(&stubAPI{}, 4, q, "application/xml", "<testsuites/>")
 	require.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
 	assert.Contains(t, rec.Body.String(), "payload_too_large")
+}
+
+// Found validating CI/CD Result Ingestion API (docs/review.md finding 24).
+func TestIngestHandlerReportsEveryParameterError(t *testing.T) {
+	rec := post(&stubAPI{}, 1024, "", "application/xml", "<x/>")
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	for _, field := range []string{`"field":"provider"`, `"field":"runId"`, `"field":"runAttempt"`} {
+		assert.Contains(t, rec.Body.String(), field)
+	}
+	assert.Equal(t, 1, strings.Count(rec.Body.String(), `"field":"runAttempt"`), "runAttempt is reported once")
+	rec = post(&stubAPI{}, 1024, "provider=Bad&runId=7&runAttempt=x&status=", "application/xml", "<x/>")
+	for _, field := range []string{`"field":"provider"`, `"field":"runAttempt"`, `"field":"status"`} {
+		assert.Contains(t, rec.Body.String(), field)
+	}
+}
+
+func TestIngestHandlerMediaTypes(t *testing.T) {
+	for _, ct := range []string{"application/xml", "text/xml", "Application/XML; charset=utf-8", "application/junit+xml", "application/vnd.surefire+xml"} {
+		assert.Equal(t, http.StatusOK, post(&stubAPI{}, 1024, q, ct, "<x/>").Code, ct)
+	}
+	for _, ct := range []string{"application/json", "text/plain", "application/octet-stream", "application/xml; charset=shift_jis"} {
+		rec := post(&stubAPI{}, 1024, q, ct, "<x/>")
+		assert.Equal(t, http.StatusUnsupportedMediaType, rec.Code, ct)
+		assert.Contains(t, rec.Body.String(), "unsupported_media_type", ct)
+	}
+	api := &stubAPI{}
+	post(api, 1024, q, "application/xml; charset=ISO-8859-1", "<x/>")
+	assert.Equal(t, "ISO-8859-1", api.gotMeta.Charset, "the charset parameter is passed on: it overrides the XML declaration")
+}
+
+func TestIngestHandlerRejectsCompressedBodies(t *testing.T) {
+	mux := http.NewServeMux()
+	NewHandler(&stubAPI{}, 1024).Register(mux)
+	for _, enc := range []string{"gzip", "br", "deflate"} {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/ingestion/junit?"+q, strings.NewReader("\x1f\x8b"))
+		req.Header.Set("Content-Type", "application/xml")
+		req.Header.Set("Content-Encoding", enc)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusUnsupportedMediaType, rec.Code, enc)
+		assert.Contains(t, rec.Body.String(), "Content-Encoding", enc)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ingestion/junit?"+q, strings.NewReader("<x/>"))
+	req.Header.Set("Content-Type", "application/xml")
+	req.Header.Set("Content-Encoding", "identity")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code, "identity is no encoding")
 }

@@ -9,14 +9,14 @@ Usage: scripts/probe/edge_cases.py [--base http://localhost:8080]
 Exit 1 when any request returns 5xx or a status other than the expected one.
 It creates its own data (test cases prefixed "probe-"), so point it at a disposable DB.
 """
-import argparse, json, sys, threading, time, urllib.error, urllib.parse, urllib.request
+import argparse, json, subprocess, sys, tempfile, threading, time, urllib.error, urllib.parse, urllib.request
 
 results = []
 
 
-def call(base, method, path, body=None, raw=None, ctype="application/json"):
+def call(base, method, path, body=None, raw=None, ctype="application/json", headers=None):
     data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
-    headers = {"Content-Type": ctype} if data is not None and ctype else {}
+    headers = {**({"Content-Type": ctype} if data is not None and ctype else {}), **(headers or {})}
     req = urllib.request.Request(base + path, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
@@ -30,9 +30,24 @@ def call(base, method, path, body=None, raw=None, ctype="application/json"):
             return e.code, text
 
 
+def oversized(url, size):
+    """POST a body of size bytes with curl: a server that rejects it early closes the connection while
+    urllib is still sending, but curl reads the response (Expect: 100-continue)."""
+    with tempfile.NamedTemporaryFile(suffix=".xml") as f:
+        f.write(b"<testsuite>" + b" " * size + b"</testsuite>")
+        f.flush()
+        out = subprocess.run(["curl", "-s", "-w", "\n%{http_code}", "-X", "POST", "-H", "Content-Type: application/xml",
+                              "--data-binary", "@" + f.name, url], capture_output=True, text=True).stdout
+    text, _, code = out.rpartition("\n")
+    try:
+        return int(code), json.loads(text)
+    except ValueError:
+        return int(code or 0), text
+
+
 def check(name, got, expected):
     ok = got in (expected if isinstance(expected, tuple) else (expected,))
-    results.append((ok and got < 500, name, got, expected))
+    results.append((ok and not (isinstance(got, int) and got >= 500), name, got, expected))
 
 
 def main():
@@ -106,6 +121,18 @@ def main():
     check("every failure of a testcase is kept", int("first" in details and "second" in details), 1)
     latin1 = '<?xml version="1.0" encoding="ISO-8859-1"?><testsuite name="s"><testcase name="caf\xe9"/></testsuite>'.encode("latin-1")
     check("ingest ISO-8859-1 report", call(base, "POST", "/ingestion/junit?" + q.format(7), raw=latin1, ctype="application/xml")[0], 201)
+    # Ingestion media types and limits (finding 24): the charset parameter wins, compressed bodies and unknown
+    # charsets are a 415, every parameter error comes at once, and an oversized report gets problem+json
+    # whether the API or nginx (12 MB is past both limits) rejects it.
+    no_decl = '<testsuite name="s"><testcase name="caf\xe9"/></testsuite>'.encode("latin-1")
+    check("ingest charset=ISO-8859-1 header", call(base, "POST", "/ingestion/junit?" + q.format(8), raw=no_decl, ctype="application/xml; charset=ISO-8859-1")[0], 201)
+    check("ingest charset=shift_jis", call(base, "POST", "/ingestion/junit?" + q.format(9), raw=b"<testsuite/>", ctype="application/xml; charset=shift_jis")[0], 415)
+    check("ingest gzip body", call(base, "POST", "/ingestion/junit?" + q.format(9), raw=b"\x1f\x8b", ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 415)
+    st, body = call(base, "POST", "/ingestion/junit", raw=b"<testsuite/>", ctype="application/xml")
+    check("ingest without parameters lists every error", len(body.get("errors", [])) if isinstance(body, dict) else -1, 3)
+    st, body = oversized(base + "/ingestion/junit?" + q.format(10), 12 * 1024 * 1024)
+    check("ingest 12 MB report", st, 413)
+    check("oversized report answers problem+json", body.get("code") if isinstance(body, dict) else str(body)[:40], "payload_too_large")
 
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]

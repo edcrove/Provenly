@@ -110,6 +110,24 @@ func TestParseInvalidCasesDoNotStopParsing(t *testing.T) {
 
 func ms(v int64) *int64 { return &v }
 
+// The Content-Type charset overrides the XML declaration (RFC 7303).
+func TestParseWithCharsetOverridesTheDeclaration(t *testing.T) {
+	latin1 := "<testsuite name=\"s\"><testcase name=\"caf\xe9 TC-1\"/></testsuite>"
+	rep, err := ParseWithCharset(strings.NewReader(latin1), "ISO-8859-1")
+	require.NoError(t, err)
+	assert.Equal(t, "caf\u00e9 TC-1", rep.Results[0].TestName)
+
+	declared := "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><testsuite name=\"s\"><testcase name=\"caf\u00e9\"/></testsuite>"
+	rep, err = ParseWithCharset(strings.NewReader(declared), "utf-8")
+	require.NoError(t, err)
+	assert.Equal(t, "caf\u00e9", rep.Results[0].TestName, "a UTF-8 body is not transcoded again by its declaration")
+
+	_, err = ParseWithCharset(strings.NewReader("<testsuite/>"), "shift_jis")
+	assert.ErrorContains(t, err, `unsupported encoding "shift_jis"`)
+	assert.True(t, SupportedCharset("windows-1252"))
+	assert.False(t, SupportedCharset("shift_jis"))
+}
+
 // Report variants seen during validation (docs/review.md findings 17 and 20).
 func TestParseRealWorldVariants(t *testing.T) {
 	one := func(t *testing.T, doc string) Result {

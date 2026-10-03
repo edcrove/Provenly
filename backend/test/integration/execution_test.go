@@ -374,6 +374,70 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Less(t, last, 3*first+500*time.Millisecond, "first page %v, last page %v", first, last)
 	})
 
+	t.Run("BE-INT-030_summary_of_a_mixed_run_matches_the_hand_computed_numbers", func(t *testing.T) {
+		s, ctx := fresh(t)
+		auto := func(title string) int64 {
+			tc, err := s.Catalog.Create(ctx, catalog.CreateInput{Title: title, Automated: true})
+			require.NoError(t, err)
+			return tc.ID
+		}
+		a, b, c, e, f, g, l := auto("A"), auto("B"), auto("C"), auto("E"), auto("F"), auto("G"), auto("L")
+		manual, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "M"})
+		dep := auto("D")
+		_, _ = s.Catalog.Deprecate(ctx, dep)
+		tcase := func(name string, id int64, body string) string {
+			return `<testcase name="` + name + ` TC-` + itoa(id) + `">` + body + `</testcase>`
+		}
+		out, err := s.Ingestion.IngestJUnit(ctx, meta("1000", 1), strings.NewReader(junitFor(
+			tcase("chrome", a, ""), tcase("firefox", a, "<failure/>"), // failed > passed
+			tcase("b1", b, "<error/>"), tcase("b2", b, "<skipped/>"), // error > skipped
+			tcase("c1", c, "<skipped/>"), tcase("c2", c, ""), // skipped > passed
+			tcase("e", e, ""), tcase("g1", g, ""), tcase("g2", g, ""), tcase("l", l, "<failure/>"),
+			tcase("m", manual.ID, ""), tcase("d", dep, ""), // outside the universe / deprecated
+			`<testcase name="unknown TC-987654"/>`, `<testcase name="mal TC-x"/>`, `<testcase name="none"/>`,
+		)))
+		require.NoError(t, err)
+		sum, err := s.Execution.Summary(ctx, out.Run.ID)
+		require.NoError(t, err)
+		// Universe: A B C E F G L (7; M is manual, D deprecated). F has no result.
+		assert.Equal(t, int32(7), sum.ExpectedTotal)
+		assert.Equal(t, int32(6), sum.ExecutedTotal)
+		assert.Equal(t, execution.StatusCounts{Untested: 1, Passed: 2, Failed: 2, Error: 1, Skipped: 1}, sum.Counts)
+		assert.Equal(t, execution.StatusPercentages{Untested: 14.285714, Passed: 28.571429, Failed: 28.571429, Error: 14.285714, Skipped: 14.285714}, sum.PercentOfExpected)
+		assert.Equal(t, execution.ExecutedPercentages{Passed: 33.333333, Failed: 33.333333, Error: 16.666667, Skipped: 16.666667}, sum.PercentOfExecuted)
+		assert.Equal(t, 85.714286, sum.ExecutionPercent)
+		assert.Equal(t, execution.DiagnosticCounts{Missing: 1, Malformed: 1, Unknown: 1, Deprecated: 1, Total: 4}, sum.Diagnostics)
+		assert.Equal(t, int32(1), sum.OutsideUniverse)
+		assert.Equal(t, []int64{manual.ID}, sum.OutsideUniverseIDs)
+		statuses := map[int64]execution.SummaryStatus{}
+		for _, tc := range sum.TestCases {
+			statuses[tc.TestCaseID] = tc.Status
+		}
+		assert.Equal(t, map[int64]execution.SummaryStatus{a: "failed", b: "error", c: "skipped", e: "passed", f: "untested", g: "passed", l: "failed"}, statuses)
+		res, err := s.Execution.ListRunResults(ctx, out.Run.ID, execution.ResultFilter{}, pagination.Default())
+		require.NoError(t, err)
+		assert.Equal(t, int64(15), res.Total, "every individual result is still listed")
+
+		// Later catalog changes never touch the summary of an existing run.
+		_, _ = s.Catalog.Deprecate(ctx, l)
+		_, _ = s.Catalog.Deprecate(ctx, e)
+		_, _ = s.Catalog.Update(ctx, a, catalog.UpdateInput{Title: ptr("renamed"), Automated: ptr(false)})
+		auto("added later")
+		again, err := s.Execution.Summary(ctx, out.Run.ID)
+		require.NoError(t, err)
+		assert.Equal(t, sum, again)
+
+		// A run where nothing was executed: everything untested, 0% executed, no division by zero.
+		empty, err := s.Ingestion.IngestJUnit(ctx, meta("1001", 1), strings.NewReader(`<testsuite name="e"/>`))
+		require.NoError(t, err)
+		none, err := s.Execution.Summary(ctx, empty.Run.ID)
+		require.NoError(t, err)
+		assert.Equal(t, int32(5), none.ExpectedTotal, "B C F G + added later")
+		assert.Equal(t, float64(100), none.PercentOfExpected.Untested)
+		assert.Equal(t, execution.ExecutedPercentages{}, none.PercentOfExecuted)
+		assert.Zero(t, none.ExecutionPercent)
+	})
+
 	t.Run("BE-INT-011_database_enforces_result_and_run_invariants", func(t *testing.T) {
 		_, ctx := fresh(t)
 		// Results can only be written by the transaction that creates their run, so

@@ -60,3 +60,5 @@ targets:
     description: concurrent partial edits of different test case fields all persist (a PATCH writes only the fields it sends)
   - id: BE-INT-029
     description: deep history and run-list pages cost no more than the first (20k results for one TC)
+  - id: BE-INT-030
+    description: the summary of a mixed run (precedence, untested, outside universe, diagnostics, three percentages) matches hand-computed numbers and survives later catalog changes; a run with nothing executed is 100% untested

@@ -50,3 +50,5 @@ targets:
     description: database enforces step integrity (owning test case exists and never changes, non-blank action, expected result at most 2000 characters)
   - id: BE-INT-024
     description: database protects run identity (external id, provider, run id, attempt, report digest), forbids deleting runs and adding TC-IDs to an existing snapshot, and keeps startedAt <= completedAt; replays warn about differing metadata
+  - id: BE-INT-025
+    description: ingested results and parse errors are immutable (no insert after the run is created, no update, no delete), so the verdict always reflects the report

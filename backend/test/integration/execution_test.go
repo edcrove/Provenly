@@ -285,19 +285,58 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Equal(t, "main", replay.Run.Branch, "a replay never changes the recorded metadata")
 	})
 
-	t.Run("BE-INT-011_database_enforces_result_and_run_invariants", func(t *testing.T) {
+	t.Run("BE-INT-025_ingested_results_and_parse_errors_are_immutable", func(t *testing.T) {
 		s, ctx := fresh(t)
-		out, err := s.Ingestion.IngestJUnit(ctx, meta("500", 1), strings.NewReader(junitFor()))
+		a, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Automated: true})
+		out, err := s.Ingestion.IngestJUnit(ctx, meta("600", 1), strings.NewReader(junitFor(
+			tcProp("a", itoa(a.ID), `<failure message="boom"/>`), `<testcase name="bad time" time="soon"/>`)))
 		require.NoError(t, err)
-		_, err = db.Pool.Exec(ctx, `INSERT INTO test_results (test_run_id, correlation, test_name, status) VALUES ($1, 'valid', 'x', 'passed')`, out.Run.ID)
-		assert.ErrorContains(t, err, "test_results_linked_has_test_case")
-		_, err = db.Pool.Exec(ctx, `INSERT INTO test_results (test_run_id, test_case_id, correlation, test_name, status) VALUES ($1, 1, 'unknown', 'x', 'passed')`, out.Run.ID)
-		assert.ErrorContains(t, err, "test_results_linked_has_test_case")
-		_, err = db.Pool.Exec(ctx, `INSERT INTO test_results (test_run_id, correlation, test_name, status) VALUES ($1, 'deprecated', 'x', 'passed')`, out.Run.ID)
-		assert.ErrorContains(t, err, "test_results_linked_has_test_case", "deprecated results must keep the TC-ID link")
-		_, err = db.Pool.Exec(ctx, `INSERT INTO test_results (test_run_id, correlation, test_name, status) VALUES ($1, 'missing', 'x', 'untested')`, out.Run.ID)
-		assert.Error(t, err, "untested is never persisted")
-		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ('x:y:1', 'github', '1', 1, 'completed')`)
+		require.Len(t, out.ParseErrors, 1)
+
+		for _, stmt := range []string{
+			`INSERT INTO test_results (test_run_id, correlation, test_name, status) VALUES ($1, 'missing', 'late', 'passed')`,
+			`UPDATE test_results SET status = 'passed' WHERE test_run_id = $1`,
+			`DELETE FROM test_results WHERE test_run_id = $1`,
+		} {
+			_, err = db.Pool.Exec(ctx, stmt, out.Run.ID)
+			assert.ErrorContains(t, err, "ingested test results are immutable", stmt)
+		}
+		for _, stmt := range []string{
+			`INSERT INTO test_run_parse_errors (test_run_id, case_index, test_name, message, persisted) VALUES ($1, 9, 'late', 'x', false)`,
+			`UPDATE test_run_parse_errors SET message = 'edited' WHERE test_run_id = $1`,
+			`DELETE FROM test_run_parse_errors WHERE test_run_id = $1`,
+		} {
+			_, err = db.Pool.Exec(ctx, stmt, out.Run.ID)
+			assert.ErrorContains(t, err, "parse errors of a test run are immutable", stmt)
+		}
+		run, err := s.Execution.GetRun(ctx, out.Run.ID)
+		require.NoError(t, err)
+		assert.Equal(t, execution.VerdictFailed, run.Outcome.Verdict, "the ingested failure still decides the verdict")
+	})
+
+	t.Run("BE-INT-011_database_enforces_result_and_run_invariants", func(t *testing.T) {
+		_, ctx := fresh(t)
+		// Results can only be written by the transaction that creates their run, so
+		// each invalid row is tried in a fresh run's transaction (rolled back).
+		n := 0
+		insertResult := func(cols, values string) error {
+			n++
+			tx, err := db.Pool.Begin(ctx)
+			require.NoError(t, err)
+			defer func() { _ = tx.Rollback(ctx) }()
+			var runID int64
+			require.NoError(t, tx.QueryRow(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status)
+				VALUES ($1, 'github', 'inv', $2, 'completed') RETURNING id`, "github:inv:"+itoa(int64(n)), n).Scan(&runID))
+			_, err = tx.Exec(ctx, `INSERT INTO test_results (test_run_id, `+cols+`) VALUES ($1, `+values+`)`, runID)
+			return err
+		}
+		assert.ErrorContains(t, insertResult("correlation, test_name, status", "'valid', 'x', 'passed'"), "test_results_linked_has_test_case")
+		assert.ErrorContains(t, insertResult("test_case_id, correlation, test_name, status", "1, 'unknown', 'x', 'passed'"), "test_results_linked_has_test_case")
+		assert.ErrorContains(t, insertResult("correlation, test_name, status", "'deprecated', 'x', 'passed'"), "test_results_linked_has_test_case",
+			"deprecated results must keep the TC-ID link")
+		assert.Error(t, insertResult("correlation, test_name, status", "'missing', 'x', 'untested'"), "untested is never persisted")
+		assert.NoError(t, insertResult("correlation, test_name, status", "'missing', 'x', 'passed'"), "a valid row is accepted by its run's transaction")
+		_, err := db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ('x:y:1', 'github', '1', 1, 'completed')`)
 		assert.ErrorContains(t, err, "external_run_id_format")
 
 		// The full lifecycle is supported by the model even though the POC only

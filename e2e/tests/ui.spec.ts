@@ -243,8 +243,10 @@ test.describe('Frontend UI journeys', () => {
     page.on('response', (r) => { if (r.status() >= 400) problems.push(`${r.status()} ${r.url()}`) })
     const tc = await provenly.createTestCase({ title: 'Checkout totals', automated: true })
     const report = `<testsuite name="s"><testcase name="checkout TC-${tc.id}"><failure message="total mismatch">expected 10 got 9
-  at Cart.total (cart.ts:42)</failure><failure message="tax mismatch">expected 2 got 1</failure></testcase></testsuite>`
-    const run = await (await provenly.ingest(uniqueRunId(), 1, report)).json()
+  at Cart.total (cart.ts:42)</failure><failure message="tax mismatch">expected 2 got 1</failure></testcase>
+<testcase name="&lt;script&gt;window.pwned = 1&lt;/script&gt; 🚀 TC-${tc.id}"/></testsuite>`
+    const branch = 'feature/' + 'b'.repeat(200)
+    const run = await (await provenly.ingest(uniqueRunId(), 1, report, { branch })).json()
 
     await page.goto('/test-runs')
     await expect(page.getByRole('table').first()).toBeVisible()
@@ -254,6 +256,13 @@ test.describe('Frontend UI journeys', () => {
     await toggle.click()
     await expect(page.getByTestId('error-details')).toContainText('at Cart.total (cart.ts:42)')
     await expect(page.getByTestId('error-details')).toContainText('failure: tax mismatch')
+    // Test names render literally (escaped) and a very long branch wraps, even at phone width.
+    await expect(page.getByText('<script>window.pwned = 1</script> 🚀', { exact: false })).toBeVisible()
+    expect(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned)).toBeUndefined()
+    await page.setViewportSize({ width: 375, height: 812 })
+    await expect(page.getByText(branch)).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
+    await page.setViewportSize({ width: 1280, height: 800 })
     await page.getByRole('link', { name: `TC-${tc.id}` }).first().click()
     await expect(page.getByRole('heading', { name: 'Execution history' })).toBeVisible()
     expect(problems, 'no console errors or failed requests (e.g. a missing favicon)').toEqual([])

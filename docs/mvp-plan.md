@@ -41,14 +41,14 @@ sides, gates at 100%, docs and screenshots updated, manual validation by Claude,
 
 Sizes: S ≈ 1 day, M ≈ 2–4 days, L ≈ a week or more (Claude implementation time, before validation).
 
-### Phase 0 — Close the POC (now)
+### Phase 0 — Close the POC (done 2026-10-04)
 
 | # | Item | Owner | Depends on |
 |---|---|---|---|
-| 0.1 | Validate the remaining POC cards in *Validation* (13 left, one by one) | Ed + Claude | — |
+| 0.1 | ~~Validate the POC cards in *Validation*~~ — done 2026-10-04: all 22 in *Hecho* | Ed + Claude | — |
 | 0.2 | ~~`main` ruleset~~ — done: `main` is protected | Ed | — |
-| 0.3 | Merge PR #1, set `main` as default branch | Ed | 0.1, 0.2 |
-| 0.4 | Close POC in Notion (Control Center status, consolidated page) | Claude | 0.3 |
+| 0.3 | ~~Merge PR #1, set `main` as default branch~~ — done 2026-10-04 (merge commit 413e2f9) | Ed | 0.1, 0.2 |
+| 0.4 | ~~Close POC in Notion~~ — done 2026-10-04 (consolidated page, Decision Register) | Claude | 0.3 |
 
 ### Phase 1 — Foundations (parallel, low risk)
 

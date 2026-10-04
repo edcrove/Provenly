@@ -69,7 +69,7 @@ curl_ -o /dev/null -H 'Content-Type: application/json' -X POST http://localhost:
 before=$( (ls backups/prod-*.sql 2>/dev/null || true) | wc -l)
 make --no-print-directory db-reset ENV=prod CONFIRM=prod >/dev/null 2>&1
 [ "$(ls backups/prod-*.sql | wc -l)" -gt "$before" ] || fail "db-reset ENV=prod did not dump first"
-grep -q 'env-checks prod data $run' "$(ls -t backups/prod-*.sql | head -1)" || fail "the prod dump misses its data"
+grep -q "env-checks prod data $run" "$(ls -t backups/prod-*.sql | head -1)" || fail "the prod dump misses its data"
 [ "$(count http://localhost:8280 "env-checks prod data $run")" = 0 ] || fail "db-reset ENV=prod kept the data"
 make --no-print-directory down ENV=prod >/dev/null 2>&1
 ok "prod: empty start, dump before a confirmed reset"

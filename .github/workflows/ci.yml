@@ -252,6 +252,8 @@ jobs:
         run: docker compose up -d --build --wait
       - name: Demo starts from the demo snapshot
         run: curl -fsS localhost:8080/api/v1/test-runs | grep -q '"totalItems":5'
+      - name: README POC walkthrough runs verbatim on the fresh demo
+        run: ./scripts/readme-flow.sh http://localhost:8080
       - name: Smoke test through nginx
         run: ./scripts/smoke.sh http://localhost:3000
       - name: Data persists across down/up

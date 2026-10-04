@@ -1,6 +1,7 @@
 # Environments (Docker)
 
-`docker compose up -d` builds and starts the whole stack. Every environment is a separate compose project
+`docker compose up -d --build` builds and starts the whole stack (without `--build`, Compose reuses images already
+built, possibly from older code; `make up` always rebuilds). Every environment is a separate compose project
 (`provenly-<env>`) with its own PostgreSQL volume and ports, so environments run side by side and never share
 data.
 

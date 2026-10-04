@@ -36,10 +36,11 @@ TC-153 created ──► automated test declares TC-153 ──► CI posts JUnit
 
 ```bash
 git clone <this repo> provenly && cd provenly
-docker compose up -d          # demo environment: UI http://localhost:3000 · API http://localhost:8080
+docker compose up -d --build  # demo environment: UI http://localhost:3000 · API http://localhost:8080
 ```
 
-That single command builds the images and starts PostgreSQL, restores the demo snapshot into the empty database,
+That single command builds the images (`--build` rebuilds them after a `git pull`; without it Compose reuses
+images built from older code) and starts PostgreSQL, restores the demo snapshot into the empty database,
 applies migrations, then starts the API and the UI (nginx). Data persists across `docker compose down`/`up`.
 
 Three isolated environments can run side by side, each with its own data (details:

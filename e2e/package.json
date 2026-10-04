@@ -1,0 +1,19 @@
+{
+  "name": "provenly-e2e",
+  "scripts": {
+    "test": "playwright test",
+    "typecheck": "tsc -p ."
+  },
+  "private": "true",
+  "license": "Apache-2.0",
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/istanbul-lib-coverage": "^2.0.6",
+    "@types/istanbul-lib-source-maps": "^4.0.4",
+    "@types/node": "^26.6.3",
+    "istanbul-lib-coverage": "^3.2.2",
+    "istanbul-lib-source-maps": "^5.0.6",
+    "typescript": "~5.9"
+  }
+}

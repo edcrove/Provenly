@@ -46,6 +46,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (TestCase, error) 
 	v.Check(validLen(in.Title, maxTitle), "title", fmt.Sprintf("must be at most %d characters", maxTitle))
 	v.Check(validLen(in.Description, maxLongText), "description", fmt.Sprintf("must be at most %d characters", maxLongText))
 	v.Check(validLen(in.ExpectedResult, maxLongText), "expectedResult", fmt.Sprintf("must be at most %d characters", maxLongText))
+	v.CheckText("title", in.Title)
+	v.CheckText("description", in.Description)
+	v.CheckText("expectedResult", in.ExpectedResult)
 	if err := v.Err(); err != nil {
 		return TestCase{}, err
 	}
@@ -86,12 +89,15 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) (TestCas
 		in.Title = &t
 		v.Check(t != "", "title", "must not be empty")
 		v.Check(validLen(t, maxTitle), "title", fmt.Sprintf("must be at most %d characters", maxTitle))
+		v.CheckText("title", t)
 	}
 	if in.Description != nil {
 		v.Check(validLen(*in.Description, maxLongText), "description", fmt.Sprintf("must be at most %d characters", maxLongText))
+		v.CheckText("description", *in.Description)
 	}
 	if in.ExpectedResult != nil {
 		v.Check(validLen(*in.ExpectedResult, maxLongText), "expectedResult", fmt.Sprintf("must be at most %d characters", maxLongText))
+		v.CheckText("expectedResult", *in.ExpectedResult)
 	}
 	if err := v.Err(); err != nil {
 		return TestCase{}, err
@@ -107,17 +113,18 @@ func (s *Service) Deprecate(ctx context.Context, id int64) (TestCase, error) {
 	return tc, mapNotFound(err, id)
 }
 
-// ExpectedUniverse returns the TC-IDs that are active and automated right now.
-func (s *Service) ExpectedUniverse(ctx context.Context) ([]int64, error) {
-	return s.repo.ListExpectedUniverse(ctx)
+// Reactivate brings a deprecated test case back to active (idempotent), keeping
+// its TC-ID. Existing run snapshots are immutable; future runs include it again
+// when it is automated.
+func (s *Service) Reactivate(ctx context.Context, id int64) (TestCase, error) {
+	tc, err := s.repo.ReactivateTestCase(ctx, id)
+	return tc, mapNotFound(err, id)
 }
 
-// Statuses returns the status of each existing TC-ID among ids; unknown ids are absent.
-func (s *Service) Statuses(ctx context.Context, ids []int64) (map[int64]Status, error) {
-	if len(ids) == 0 {
-		return map[int64]Status{}, nil
-	}
-	return s.repo.ListTestCaseStatuses(ctx, ids)
+// IngestionView returns, in one snapshot, the TC-IDs that are active and
+// automated right now and the status of each existing TC-ID among ids.
+func (s *Service) IngestionView(ctx context.Context, ids []int64) (IngestionView, error) {
+	return s.repo.ListIngestionView(ctx, ids)
 }
 
 // ListSteps returns a page of steps ordered by position.
@@ -140,9 +147,11 @@ func validateStepText(v *apperr.Validator, action, expected *string) {
 	if action != nil {
 		v.Check(strings.TrimSpace(*action) != "", "action", "must not be empty")
 		v.Check(validLen(*action, maxStepText), "action", fmt.Sprintf("must be at most %d characters", maxStepText))
+		v.CheckText("action", *action)
 	}
 	if expected != nil {
 		v.Check(validLen(*expected, maxStepText), "expectedResult", fmt.Sprintf("must be at most %d characters", maxStepText))
+		v.CheckText("expectedResult", *expected)
 	}
 }
 

@@ -36,6 +36,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Health"
+  /readyz:
+    get:
+      tags: [system]
+      operationId: getReadiness
+      summary: Readiness check (the database is reachable)
+      responses:
+        "200":
+          description: Service can serve requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 
   /api/v1/test-cases:
     get:
@@ -80,6 +94,8 @@ paths:
                 $ref: "#/components/schemas/TestCase"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -122,6 +138,8 @@ paths:
                 $ref: "#/components/schemas/TestCase"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -137,6 +155,27 @@ paths:
       responses:
         "200":
           description: Deprecated test case
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestCase"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-cases/{testCaseId}/reactivate:
+    parameters:
+      - $ref: "#/components/parameters/TestCaseId"
+    post:
+      tags: [test-cases]
+      operationId: reactivateTestCase
+      summary: Reactivate a deprecated test case (idempotent). Same TC-ID; existing run snapshots are unchanged, future runs include it again if automated.
+      responses:
+        "200":
+          description: Active test case
           content:
             application/json:
               schema:
@@ -190,6 +229,8 @@ paths:
                 $ref: "#/components/schemas/TestStep"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -217,6 +258,8 @@ paths:
                 $ref: "#/components/schemas/TestStepList"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -245,6 +288,8 @@ paths:
                 $ref: "#/components/schemas/TestStep"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -383,6 +428,30 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/test-runs/{testRunId}/parse-errors:
+    parameters:
+      - $ref: "#/components/parameters/TestRunId"
+    get:
+      tags: [test-runs]
+      operationId: listTestRunParseErrors
+      summary: Testcases of the ingested report that could not be fully normalized, in document order
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of parse errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParseErrorPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/ingestion/junit:
     post:
       tags: [ingestion]
@@ -390,10 +459,13 @@ paths:
       summary: Ingest one complete JUnit XML report (batch) for a CI run attempt
       description: |
         `externalRunId` = `{provider}:{runId}:{runAttempt}`. Re-sending the same
-        attempt is idempotent (200, no duplicate run, no reprocessing); a new
+        attempt is idempotent (200, no duplicate run, no reprocessing; if the report
+        content differs from the original, a `warnings` entry says it was not
+        applied); a new
         attempt creates a new run (201). Individual invalid testcases never abort
-        the batch: they are persisted with a correlation diagnostic or reported in
-        `parseErrors`.
+        the batch: they are persisted with a correlation diagnostic, or reported in
+        `parseErrors` (stored with the run; `persisted` tells whether the result
+        was kept, e.g. with an unknown duration, or discarded, e.g. without name).
       parameters:
         - name: provider
           in: query
@@ -435,10 +507,29 @@ paths:
           schema:
             type: string
             maxLength: 64
+        - name: status
+          in: query
+          required: false
+          description: |
+            How the CI execution ended (the run's `executionStatus`). `interrupted` or
+            `cancelled` mark a run whose pipeline broke or was stopped, so its report may
+            be incomplete and its untested test cases may simply not have run.
+          schema:
+            $ref: "#/components/schemas/ExecutionStatus"
       requestBody:
         required: true
+        description: |
+          The JUnit XML document, uncompressed (a `Content-Encoding` other than
+          `identity` is a 415). `application/xml`, `text/xml` and any `+xml` media
+          type are accepted. A `charset` parameter overrides the document's XML
+          declaration (RFC 7303); UTF-8, US-ASCII, ISO-8859-1, windows-1252 and
+          UTF-16 are supported, any other charset is a 415.
         content:
           application/xml:
+            schema:
+              type: string
+              description: JUnit XML document (`<testsuites>` or `<testsuite>` root)
+          text/xml:
             schema:
               type: string
               description: JUnit XML document (`<testsuites>` or `<testsuite>` root)
@@ -536,6 +627,12 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    ServiceUnavailable:
+      description: A dependency (the database) is unreachable
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     InternalError:
       description: Unexpected server error
       content:
@@ -569,14 +666,18 @@ components:
           format: int32
         code:
           type: string
-          description: Stable machine-readable error code
+          description: >-
+            Stable machine-readable error code. Requests that match no operation get `not_found` (404), or
+            `method_not_allowed` (405, with an `Allow` header) when the path exists for other methods.
           enum:
             - bad_request
             - validation_error
             - invalid_junit
             - not_found
+            - method_not_allowed
             - payload_too_large
             - unsupported_media_type
+            - service_unavailable
             - internal_error
         detail:
           type: string
@@ -788,9 +889,57 @@ components:
             type: integer
             format: int64
 
-    TestRunStatus:
+    ExecutionStatus:
       type: string
-      enum: [created, running, completed, failed, cancelled]
+      description: |
+        How the CI execution ended, as reported by CI: `completed`, `interrupted` (the pipeline
+        broke) or `cancelled` (it was stopped). It says nothing about test outcomes: see
+        `TestRun.outcome.verdict`.
+      enum: [completed, interrupted, cancelled]
+      default: completed
+
+    RunVerdict:
+      type: string
+      description: |
+        Derived from the run's summary (snapshot TC-IDs with their aggregated status):
+        `no_tests` when the expected universe is empty; otherwise `failed` when any TC-ID
+        failed or errored; otherwise `incomplete` when any is untested or skipped;
+        otherwise `passed`.
+      enum: [passed, failed, incomplete, no_tests]
+
+    RunOutcome:
+      type: object
+      additionalProperties: false
+      description: Test outcome of a run, from the same computation as its summary.
+      required: [verdict, executed, passed, failed, error, skipped, untested, passRate]
+      properties:
+        verdict:
+          $ref: "#/components/schemas/RunVerdict"
+        executed:
+          type: integer
+          format: int32
+          description: Expected TC-IDs with at least one result
+        passed:
+          type: integer
+          format: int32
+        failed:
+          type: integer
+          format: int32
+        error:
+          type: integer
+          format: int32
+        skipped:
+          type: integer
+          format: int32
+        untested:
+          type: integer
+          format: int32
+        passRate:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+          description: Percentage of executed TC-IDs that passed (0 when none was executed)
 
     TestRun:
       type: object
@@ -804,7 +953,8 @@ components:
         - pipeline
         - branch
         - commit
-        - status
+        - executionStatus
+        - outcome
         - expectedCount
         - resultCount
         - createdAt
@@ -828,8 +978,10 @@ components:
           type: string
         commit:
           type: string
-        status:
-          $ref: "#/components/schemas/TestRunStatus"
+        executionStatus:
+          $ref: "#/components/schemas/ExecutionStatus"
+        outcome:
+          $ref: "#/components/schemas/RunOutcome"
         expectedCount:
           type: integer
           format: int32
@@ -897,7 +1049,7 @@ components:
           type: integer
           format: int64
           nullable: true
-          description: Set only when correlation is `valid`
+          description: Set when correlation is `valid` or `deprecated` (a result received after the test case was deprecated still belongs to its history)
         requestedTestCaseId:
           type: string
           nullable: true
@@ -915,6 +1067,10 @@ components:
         durationMs:
           type: integer
           format: int64
+          nullable: true
+          description: |
+            Milliseconds, rounded from the JUnit `time` attribute (seconds). 0 means
+            reported as 0 or under 0.5 ms; null means not reported or invalid.
         errorMessage:
           type: string
         errorDetails:
@@ -1051,7 +1207,8 @@ components:
       additionalProperties: false
       description: |
         Computed against the run's immutable expected-universe snapshot.
-        Percentages are 0..100 rounded to 2 decimals (0 when the denominator is 0).
+        Percentages are 0..100 with 6 decimals (0 when the denominator is 0);
+        clients round them for display and compute totals from these precise values.
         Results with an invalid TC-ID are excluded and reported in `diagnostics`.
         Valid results for test cases outside the snapshot (e.g. automated=false)
         are excluded and counted in `outsideUniverse`.
@@ -1065,6 +1222,7 @@ components:
         - executionPercent
         - diagnostics
         - outsideUniverse
+        - outsideUniverseTestCaseIds
         - testCases
       properties:
         testRunId:
@@ -1089,6 +1247,13 @@ components:
         outsideUniverse:
           type: integer
           format: int32
+          description: Valid results whose test case was not in the snapshot (e.g. automated=false at run creation)
+        outsideUniverseTestCaseIds:
+          type: array
+          description: Distinct TC-IDs behind `outsideUniverse`, so the UI can warn and offer to mark them automated
+          items:
+            type: integer
+            format: int64
         testCases:
           type: array
           description: Aggregated status per TC-ID of the snapshot (failed > error > skipped > passed; untested when no result)
@@ -1114,7 +1279,7 @@ components:
     ParseError:
       type: object
       additionalProperties: false
-      required: [index, testName, message]
+      required: [index, testName, message, persisted, severity]
       properties:
         index:
           type: integer
@@ -1124,11 +1289,31 @@ components:
           type: string
         message:
           type: string
+        persisted:
+          type: boolean
+          description: true when the result was still stored (e.g. invalid time), false when it was discarded
+        severity:
+          type: string
+          enum: [error, warning]
+          description: |
+            error = data was lost or is unknown (no name, invalid time);
+            warning = stored but worth reviewing (a passed/failed test with a 0 ms duration)
+
+    ParseErrorPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ParseError"
 
     IngestionResponse:
       type: object
       additionalProperties: false
-      required: [created, testRun, received, persisted, diagnostics, parseErrors]
+      required: [created, testRun, received, persisted, diagnostics, parseErrors, warnings]
       properties:
         created:
           type: boolean
@@ -1151,3 +1336,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ParseError"
+        warnings:
+          type: array
+          description: |
+            Non-blocking notices. On an idempotent replay whose report differs
+            (SHA-256) from the one that created the run, it says the new report
+            was not applied (send a new runAttempt to record it); likewise when
+            the replay reports another status, pipeline, branch or commit. On a
+            new run, it says when the report's suite timestamp is later than the
+            ingestion or cannot be read (startedAt is then left unknown).
+          items:
+            type: string

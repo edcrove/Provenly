@@ -1,0 +1,15 @@
+# Backend E2E inventory: functional journeys reachable from the public REST
+# interface, run by Playwright against the coverage-instrumented binary.
+targets:
+  - id: BE-E2E-001
+    description: health check responds through the public interface
+  - id: BE-E2E-002
+    description: test case lifecycle with server-assigned immutable TC-ID, edit, deprecate and reactivate
+  - id: BE-E2E-003
+    description: optional steps can be added, reordered, edited and deleted
+  - id: BE-E2E-004
+    description: CI ingestion with TC-ID extraction (property + name fallback), snapshot summary and diagnostics
+  - id: BE-E2E-005
+    description: resending an attempt is idempotent (a different report is warned, not applied) and a rerun creates a new run
+  - id: BE-E2E-006
+    description: result history across runs and snapshot stability after catalog changes

@@ -1,0 +1,108 @@
+package cli
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"net"
+	"net/http"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+var errBoom = errors.New("boom")
+
+type recorder struct {
+	migrations []string
+	served     bool
+}
+
+func testDeps(t *testing.T, env map[string]string, r *recorder) (Deps, *bytes.Buffer) {
+	t.Helper()
+	var stderr bytes.Buffer
+	return Deps{
+		Getenv: func(k string) string { return env[k] },
+		Stderr: &stderr,
+		OpenDB: pgxpool.New, // lazy: does not connect
+		Migrate: func(_ context.Context, _ *pgxpool.Pool, cmd string) error {
+			r.migrations = append(r.migrations, cmd)
+			return nil
+		},
+		Listen: func(string) (net.Listener, error) { return net.Listen("tcp", "127.0.0.1:0") },
+		Serve: func(_ context.Context, l net.Listener, h http.Handler) error {
+			r.served = h != nil
+			return l.Close()
+		},
+	}, &stderr
+}
+
+var baseEnv = map[string]string{"PROVENLY_DATABASE_URL": "postgres://u:p@127.0.0.1:1/db"}
+
+func TestServe(t *testing.T) {
+	r := &recorder{}
+	d, _ := testDeps(t, baseEnv, r)
+	assert.Equal(t, 0, Run(context.Background(), nil, d))
+	assert.True(t, r.served)
+	assert.Empty(t, r.migrations)
+}
+
+func TestServeWithAutoMigrate(t *testing.T) {
+	r := &recorder{}
+	env := map[string]string{"PROVENLY_DATABASE_URL": baseEnv["PROVENLY_DATABASE_URL"], "PROVENLY_AUTO_MIGRATE": "true"}
+	d, _ := testDeps(t, env, r)
+	assert.Equal(t, 0, Run(context.Background(), []string{"serve"}, d))
+	assert.Equal(t, []string{"up"}, r.migrations)
+}
+
+func TestMigrate(t *testing.T) {
+	r := &recorder{}
+	d, _ := testDeps(t, baseEnv, r)
+	assert.Equal(t, 0, Run(context.Background(), []string{"migrate", "status"}, d))
+	assert.Equal(t, []string{"status"}, r.migrations)
+	assert.False(t, r.served)
+}
+
+func TestErrors(t *testing.T) {
+	cases := map[string]struct {
+		args   []string
+		env    map[string]string
+		mutate func(*Deps)
+		want   string
+	}{
+		"usage":        {args: []string{"explode"}, env: baseEnv, want: "usage"},
+		"migrate args": {args: []string{"migrate"}, env: baseEnv, want: "usage"},
+		"config":       {env: map[string]string{}, want: "PROVENLY_DATABASE_URL"},
+		"open db": {env: baseEnv, mutate: func(d *Deps) {
+			d.OpenDB = func(context.Context, string) (*pgxpool.Pool, error) { return nil, errBoom }
+		}, want: "boom"},
+		"auto migrate": {env: map[string]string{"PROVENLY_DATABASE_URL": "postgres://x@127.0.0.1:1/db", "PROVENLY_AUTO_MIGRATE": "1"}, mutate: func(d *Deps) {
+			d.Migrate = func(context.Context, *pgxpool.Pool, string) error { return errBoom }
+		}, want: "boom"},
+		"listen": {env: baseEnv, mutate: func(d *Deps) {
+			d.Listen = func(string) (net.Listener, error) { return nil, errBoom }
+		}, want: "boom"},
+	}
+	for name, c := range cases {
+		d, stderr := testDeps(t, c.env, &recorder{})
+		if c.mutate != nil {
+			c.mutate(&d)
+		}
+		assert.Equal(t, 1, Run(context.Background(), c.args, d), name)
+		assert.Contains(t, stderr.String(), c.want, name)
+	}
+}
+
+func TestDefaultDeps(t *testing.T) {
+	var stderr bytes.Buffer
+	d := DefaultDeps(func(string) string { return "" }, &stderr)
+	require.NotNil(t, d.OpenDB)
+	require.NotNil(t, d.Migrate)
+	l, err := d.Listen("127.0.0.1:0")
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	assert.NoError(t, d.Serve(ctx, l, http.NotFoundHandler()))
+}

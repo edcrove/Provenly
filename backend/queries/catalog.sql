@@ -37,11 +37,22 @@ UPDATE test_cases SET
 WHERE id = @id
 RETURNING *;
 
--- name: ListExpectedUniverse :many
-SELECT id FROM test_cases WHERE status = 'active' AND automated ORDER BY id;
+-- name: ReactivateTestCase :one
+UPDATE test_cases SET
+    status        = 'active',
+    deprecated_at = NULL,
+    updated_at    = CASE WHEN status = 'active' THEN updated_at ELSE now() END
+WHERE id = @id
+RETURNING *;
 
--- name: ListTestCaseStatuses :many
-SELECT id, status FROM test_cases WHERE id = ANY(@ids::bigint[]);
+-- name: ListIngestionView :many
+-- One statement, so the expected universe (active AND automated) and the status
+-- of the referenced TC-IDs come from the same snapshot: a deprecation committed
+-- during an ingestion cannot put a TC in one and not the other.
+SELECT id, status, (status = 'active' AND automated)::boolean AS expected, coalesce(id = ANY(@ids::bigint[]), false)::boolean AS referenced
+FROM test_cases
+WHERE (status = 'active' AND automated) OR id = ANY(@ids::bigint[])
+ORDER BY id;
 
 -- name: ListTestSteps :many
 SELECT * FROM test_steps
@@ -63,9 +74,6 @@ WHERE test_case_id = @test_case_id AND position >= @from_position;
 INSERT INTO test_steps (test_case_id, position, action, expected_result)
 VALUES (@test_case_id, @position, @action, @expected_result)
 RETURNING *;
-
--- name: GetTestStep :one
-SELECT * FROM test_steps WHERE test_case_id = @test_case_id AND id = @id;
 
 -- name: UpdateTestStep :one
 UPDATE test_steps SET

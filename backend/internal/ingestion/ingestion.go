@@ -5,10 +5,16 @@
 package ingestion
 
 import (
+	"bytes"
+	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
+	"time"
 	"unicode/utf8"
 
 	"github.com/edcrove/provenly/backend/internal/catalog"
@@ -19,14 +25,14 @@ import (
 
 // Catalog is what ingestion needs from the catalog module.
 type Catalog interface {
-	ExpectedUniverse(ctx context.Context) ([]int64, error)
-	Statuses(ctx context.Context, ids []int64) (map[int64]catalog.Status, error)
+	IngestionView(ctx context.Context, ids []int64) (catalog.IngestionView, error)
 }
 
 // Recorder is what ingestion needs from the execution module.
 type Recorder interface {
-	RecordRun(ctx context.Context, run execution.NewRun, expected []int64, results []execution.NewResult) (execution.TestRun, bool, error)
+	RecordRun(ctx context.Context, run execution.NewRun, expected []int64, results []execution.NewResult, parseErrors []execution.ParseError) (execution.TestRun, bool, error)
 	Diagnostics(ctx context.Context, runID int64) ([]execution.Diagnostic, error)
+	ParseErrors(ctx context.Context, runID int64) ([]execution.ParseError, error)
 }
 
 // RunMeta is the CI metadata sent with a report.
@@ -37,6 +43,10 @@ type RunMeta struct {
 	Pipeline      string
 	Branch        string
 	Commit        string
+	// Status is how the CI execution ended (completed when empty).
+	Status execution.RunStatus
+	// Charset is the Content-Type charset of the report, if any: it overrides the XML declaration.
+	Charset string
 }
 
 // Diagnostic explains why a result has no valid TC-ID.
@@ -54,8 +64,27 @@ type Outcome struct {
 	Received    int
 	Persisted   int
 	Diagnostics []Diagnostic
-	ParseErrors []junit.CaseError
+	// ParseErrors are the ones stored with the run (on a replay: those of the original ingestion).
+	ParseErrors []execution.ParseError
+	// Warnings are non-blocking notices about the request (e.g. a replay with a different report).
+	Warnings []string
 }
+
+// StatusDiffersWarning is returned when a replay reports another final status
+// than the one recorded for the attempt; it is never applied.
+const StatusDiffersWarning = "status %q differs from %q, recorded for this attempt; it was not applied"
+
+// MetadataDiffersWarning is returned when a replay reports another pipeline,
+// branch or commit than the ones recorded for the attempt; they are never applied.
+const MetadataDiffersWarning = "%s %q differs from %q, recorded for this attempt; it was not applied"
+
+// FutureStartWarning is returned when the report's suite timestamp is later than
+// the ingestion, so the run's start is left unknown.
+const FutureStartWarning = "the report's suite timestamp %s is later than the ingestion; startedAt is left unknown (clock skew, or a local time written without a zone)"
+
+// ReportDiffersWarning is returned when a replay of an attempt carries a report
+// different from the one that created the run; it is never applied.
+const ReportDiffersWarning = "report differs from the one already ingested for this attempt; it was not applied (send a new runAttempt to record it)"
 
 var (
 	providerPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,49}$`)
@@ -80,6 +109,10 @@ func ValidateMeta(m RunMeta) error {
 	v.Check(utf8.RuneCountInString(m.Pipeline) <= 200, "pipeline", "must be at most 200 characters")
 	v.Check(utf8.RuneCountInString(m.Branch) <= 255, "branch", "must be at most 255 characters")
 	v.Check(utf8.RuneCountInString(m.Commit) <= 64, "commit", "must be at most 64 characters")
+	v.CheckText("pipeline", m.Pipeline)
+	v.CheckText("branch", m.Branch)
+	v.CheckText("commit", m.Commit)
+	v.Check(m.Status == "" || slices.Contains(execution.ExecutionStatuses, m.Status), "status", "must be one of completed, interrupted, cancelled")
 	return v.Err()
 }
 
@@ -88,25 +121,39 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	if err := ValidateMeta(meta); err != nil {
 		return Outcome{}, err
 	}
-	report, err := junit.Parse(body)
+	raw, err := io.ReadAll(body)
 	if err != nil {
-		if isBodyTooLarge(err) {
-			return Outcome{}, err
-		}
+		return Outcome{}, err
+	}
+	digest := sha256.Sum256(raw)
+	reportSHA := hex.EncodeToString(digest[:])
+	report, err := junit.ParseWithCharset(bytes.NewReader(raw), meta.Charset)
+	if err != nil {
 		return Outcome{}, apperr.InvalidDocument("%s", err.Error())
 	}
-	results, err := s.correlate(ctx, report.Results)
+	var ids []int64
+	for _, r := range report.Results {
+		if r.Ref.Kind == junit.RefFound {
+			ids = append(ids, r.Ref.ID)
+		}
+	}
+	// One catalog read: the snapshot and the correlation agree even if a test
+	// case is deprecated while the report is being ingested.
+	view, err := s.catalog.IngestionView(ctx, ids)
 	if err != nil {
 		return Outcome{}, err
 	}
-	expected, err := s.catalog.ExpectedUniverse(ctx)
-	if err != nil {
-		return Outcome{}, err
+	results := correlate(report.Results, view.Statuses)
+	expected := view.Expected
+	parseErrors := make([]execution.ParseError, len(report.Errors))
+	for i, e := range report.Errors {
+		parseErrors[i] = execution.ParseError{Index: int32(e.Index), TestName: e.TestName, Message: e.Message, Persisted: e.Persisted, Severity: string(e.Severity)}
 	}
 	run, created, err := s.recorder.RecordRun(ctx, execution.NewRun{
 		Provider: meta.Provider, ProviderRunID: meta.ProviderRunID, RunAttempt: meta.RunAttempt,
 		Pipeline: meta.Pipeline, Branch: meta.Branch, Commit: meta.Commit, StartedAt: report.StartedAt,
-	}, expected, results)
+		ReportSHA256: reportSHA, Status: meta.Status,
+	}, expected, results, parseErrors)
 	if err != nil {
 		return Outcome{}, err
 	}
@@ -114,30 +161,44 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	if err != nil {
 		return Outcome{}, err
 	}
+	storedParseErrors, err := s.recorder.ParseErrors(ctx, run.ID)
+	if err != nil {
+		return Outcome{}, err
+	}
 	out := Outcome{
 		Created: created, Run: run, Received: report.Received, Persisted: int(run.ResultCount),
-		Diagnostics: make([]Diagnostic, len(stored)), ParseErrors: report.Errors,
+		Diagnostics: make([]Diagnostic, len(stored)), ParseErrors: storedParseErrors,
 	}
 	for i, d := range stored {
 		out.Diagnostics[i] = Diagnostic{TestName: d.TestName, Correlation: d.Correlation, RequestedTestCaseID: d.RequestedTestCaseID, Message: diagnosticMessage(d)}
 	}
 	if out.ParseErrors == nil {
-		out.ParseErrors = []junit.CaseError{}
+		out.ParseErrors = []execution.ParseError{}
+	}
+	out.Warnings = []string{}
+	if !created && run.ReportSHA256 != reportSHA {
+		out.Warnings = append(out.Warnings, ReportDiffersWarning)
+	}
+	if requested := cmp.Or(meta.Status, execution.RunCompleted); !created && run.Status != requested {
+		out.Warnings = append(out.Warnings, fmt.Sprintf(StatusDiffersWarning, requested, run.Status))
+	}
+	if !created {
+		for _, f := range [][3]string{{"pipeline", meta.Pipeline, run.Pipeline}, {"branch", meta.Branch, run.Branch}, {"commit", meta.Commit, run.Commit}} {
+			if f[1] != f[2] {
+				out.Warnings = append(out.Warnings, fmt.Sprintf(MetadataDiffersWarning, f[0], f[1], f[2]))
+			}
+		}
+	}
+	if created {
+		out.Warnings = append(out.Warnings, report.Notices...)
+	}
+	if created && report.StartedAt != nil && run.StartedAt == nil {
+		out.Warnings = append(out.Warnings, fmt.Sprintf(FutureStartWarning, report.StartedAt.Format(time.RFC3339)))
 	}
 	return out, nil
 }
 
-func (s *Service) correlate(ctx context.Context, parsed []junit.Result) ([]execution.NewResult, error) {
-	var ids []int64
-	for _, r := range parsed {
-		if r.Ref.Kind == junit.RefFound {
-			ids = append(ids, r.Ref.ID)
-		}
-	}
-	statuses, err := s.catalog.Statuses(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
+func correlate(parsed []junit.Result, statuses map[int64]catalog.Status) []execution.NewResult {
 	out := make([]execution.NewResult, len(parsed))
 	for i, r := range parsed {
 		nr := execution.NewResult{
@@ -161,6 +222,9 @@ func (s *Service) correlate(ctx context.Context, parsed []junit.Result) ([]execu
 				nr.TestCaseID = &id
 				nr.Correlation = execution.CorrelationValid
 			case catalog.StatusDeprecated:
+				// Kept linked for history; excluded from summaries as a diagnostic.
+				id := r.Ref.ID
+				nr.TestCaseID = &id
 				nr.Correlation = execution.CorrelationDeprecated
 			default:
 				nr.Correlation = execution.CorrelationUnknown
@@ -168,7 +232,7 @@ func (s *Service) correlate(ctx context.Context, parsed []junit.Result) ([]execu
 		}
 		out[i] = nr
 	}
-	return out, nil
+	return out
 }
 
 func diagnosticMessage(d execution.Diagnostic) string {

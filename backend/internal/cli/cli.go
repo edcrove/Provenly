@@ -35,7 +35,9 @@ func DefaultDeps(getenv func(string) string, stderr io.Writer) Deps {
 		Getenv: getenv, Stderr: stderr,
 		OpenDB: postgres.Open, Migrate: postgres.Migrate,
 		Listen: func(addr string) (net.Listener, error) { return net.Listen("tcp", addr) },
-		Serve:  server.Run,
+		Serve: func(ctx context.Context, l net.Listener, h http.Handler) error {
+			return server.Run(ctx, l, h, server.ShutdownTimeout)
+		},
 	}
 }
 

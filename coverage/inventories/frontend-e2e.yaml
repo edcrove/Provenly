@@ -1,0 +1,20 @@
+# Frontend E2E inventory: UI journeys run by Playwright on the istanbul-instrumented bundle.
+targets:
+  - id: FE-E2E-001
+    description: manage a test case in the UI (create, edit, steps, deprecate, reactivate)
+  - id: FE-E2E-002
+    description: POC demo flow (TC declared by an automated test -> CI JUnit -> summary with 3 percentages -> detail -> history)
+  - id: FE-E2E-003
+    description: resend is idempotent and a rerun appears as a new run in the UI
+  - id: FE-E2E-004
+    description: editing/deprecating test cases later does not change an existing run summary
+  - id: FE-E2E-005
+    description: unknown pages and missing resources are reported
+  - id: FE-E2E-006
+    description: a manual TC receiving automated results is flagged; marking it automated includes it in the next run only
+  - id: FE-E2E-007
+    description: a run whose CI pipeline broke (status=interrupted) is flagged as possibly incomplete, with its verdict and pass rate shown apart
+  - id: FE-E2E-008
+    description: long unbroken text (title, description, steps) wraps at 375 px without page overflow; HTML and emoji render literally; a step rejected by the API keeps what was typed; list pages fit 375 px
+  - id: FE-E2E-009
+    description: run pages load without console errors or failed requests, and a result expands its full error details (every failure, stack trace)

@@ -93,6 +93,9 @@ Environment gotchas (web sessions; `.claude/hooks/session-start.sh` prepares mos
 - Security: the repo is **public**. Never commit secrets; `envs/prod.env` and `backups/` are gitignored and off-limits.
 - Git: work on the session's assigned branch; never force-push, never push to `main` (protected, PR only, Ed
   merges); no model identifiers in commits, PRs or code.
+- **Small PRs (Ed, 2026-10-04):** one PR per card (or per self-contained fix/decision), opened against `main` when the
+  work is ready for review, with a short readable description (what, why, how it was verified). After a merge, the
+  next work starts from the latest `main` on the same session branch name. Never pile several cards into one PR.
 
 ## Guardrails enforced by hooks (`.claude/settings.json`)
 

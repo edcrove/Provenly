@@ -22,6 +22,7 @@ description: Implement a Provenly Trello card end to end following the project's
 7. **Docs**: `docs/architecture.md` (conventions), `docs/implementation-decisions.md` (choices made),
    `docs/review.md` (criterion → tests), README if commands changed. UI change → `make screenshots` and update
    `docs/screenshots/README.md`.
-8. **Ship**: commit (clear message, no model ids), push to the session branch, wait for CI green.
+8. **Ship**: start the branch from the latest `main`, commit (clear message, no model ids), push, open **one small
+   PR for this card** (what, why, how verified; no other cards in it) and wait for CI green. Ed merges.
 9. **Hand off**: move the card to **Validation** with an evidence comment: what was done, how to verify, test ids,
    CI run, code paths, decisions to review. Then follow `validate-card`.

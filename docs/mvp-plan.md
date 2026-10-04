@@ -58,6 +58,7 @@ Sizes: S ≈ 1 day, M ≈ 2–4 days, L ≈ a week or more (Claude implementatio
 | 1.2 | OpenTelemetry Basic Instrumentation | M | 0.3 |
 | 1.3 | Snapshot Amendment per Run (DEC-42) | M | 0.3 |
 | 1.4 | ~~Decisions D1–D5 (§4)~~ — done 2026-10-02, in the Decision Register | Ed | — |
+| 1.5 | **Optimistic Locking for Test Case Edits (ETag / If-Match)** (new card; Ed, 2026-10-04, D7) | M | — |
 
 1.3 is the last POC follow-up (already decided); doing it early keeps the summary model stable before live runs
 change ingestion.
@@ -105,6 +106,7 @@ All five are in the Notion Decision Register ("MVP D1"…"MVP D5").
 | D4 | **Secrets at rest** | **Accepted.** Envelope encryption with a KEK from the environment (`PROVENLY_SECRET_KEY`), rotation by re-encrypting; external KMS/Vault later behind the same port. |
 | D5 | **Repository name and visibility** | **Accepted.** Stays `edcrove/Provenly` (personal project). It is already public; the Public Readiness Gate keeps the readiness checks, including secrets in history. |
 | D6 | **Compressed JUnit reports** (2026-10-03, validation of CI/CD Result Ingestion API) | **MVP.** Accept `Content-Encoding: gzip` on ingestion with the size limit applied to the decompressed body; the POC answers any encoding other than identity with a clear 415. Card 3.4. |
+| D7 | **Concurrent edits of a test case** (2026-10-04, after the POC validation) | **MVP, optimistic locking.** Test case and step reads return an `ETag`; `PATCH`/`PUT`/`DELETE` accept `If-Match` and answer **412** when it no longer matches (someone saved in between). `If-Match` is optional in the API (clients without it keep last-write-wins); the UI always sends it and shows a conflict notice with a reload. Today the API is last-write-wins: same-field edits are silently lost. Card 1.5. |
 
 ## 5. Risks
 

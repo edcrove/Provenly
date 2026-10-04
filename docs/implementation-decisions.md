@@ -156,3 +156,10 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     execution date. The run detail keeps `Created`, `Started` and `Completed`.
     **Status: Decided by Ed (2026-10-04)** (validation of End-to-End POC Demo Flow: a report from 2026-09-28
     ingested on 2026-10-04 read "Executed 2026-10-04"). FE-INT-007, FE-E2E-002.
+
+18. **Concurrent edits.** The catalog API is last-write-wins: `PATCH` is partial, so edits of different fields both
+    survive, but two edits of the same field keep the later one without warning (the UI sends every form field, so a
+    stale form also overwrites fields its user did not touch).
+    **Status: Decided by Ed (2026-10-04) — optimistic locking in the MVP** (`docs/mvp-plan.md` D7, card 1.5): reads
+    return an `ETag`, writes accept `If-Match` and answer 412 on a mismatch; `If-Match` stays optional in the API and
+    the UI always sends it.

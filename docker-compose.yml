@@ -20,6 +20,7 @@ x-api-build: &api-build
   context: ./backend
   target: runtime
   secrets: [extra_ca]
+  args: { EXTRA_CA_ID: "${EXTRA_CA_ID:-none}" }
 
 x-app-env: &app-env
   PROVENLY_ENV: ${PROVENLY_ENV:-demo}
@@ -86,6 +87,7 @@ services:
       context: ./frontend
       target: runtime
       secrets: [extra_ca]
+      args: { EXTRA_CA_ID: "${EXTRA_CA_ID:-none}" }
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-3000}:80"
     depends_on:

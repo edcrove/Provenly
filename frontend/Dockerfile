@@ -6,8 +6,11 @@ ARG NODE_VERSION=22
 
 FROM node:${NODE_VERSION}-alpine AS deps
 # Optional extra CA (corporate TLS-intercepting proxy): `--secret id=extra_ca,src=<pem>`.
+# Secrets are not part of the build cache key: EXTRA_CA_ID (the CA's hash, set by the Makefile) is, so adding or
+# changing the CA re-runs this layer instead of reusing one built without it.
+ARG EXTRA_CA_ID=none
 RUN --mount=type=secret,id=extra_ca,required=false \
-    if [ -s /run/secrets/extra_ca ]; then cat /run/secrets/extra_ca >> /etc/ssl/certs/ca-certificates.crt; fi
+    echo "extra CA: ${EXTRA_CA_ID}" && if [ -s /run/secrets/extra_ca ]; then cat /run/secrets/extra_ca >> /etc/ssl/certs/ca-certificates.crt; fi
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 WORKDIR /app
 COPY package.json package-lock.json ./

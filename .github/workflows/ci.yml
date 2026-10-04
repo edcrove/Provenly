@@ -267,6 +267,8 @@ jobs:
           ./scripts/smoke.sh http://localhost:3100
       - name: Edge-case probe against the qa environment (through nginx)
         run: python3 scripts/probe/edge_cases.py --base http://localhost:3100
+      - name: Environments - images, isolation, seeds, dump/restore, prod guards, CA cache key, hot reload
+        run: ./scripts/env-checks.sh
       - name: demo-reset brings demo back to its snapshot
         run: |
           make demo-reset
@@ -276,7 +278,7 @@ jobs:
         run: docker compose logs; $COMPOSE logs
       - name: Clean up
         if: always()
-        run: docker compose down -v; $COMPOSE down -v
+        run: docker compose down -v; $COMPOSE down -v; [ ! -f envs/prod.env ] || docker compose --env-file envs/prod.env down -v
 
   coverage-report:
     name: Coverage · 8 gates + consolidated

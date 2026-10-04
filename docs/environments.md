@@ -81,8 +81,20 @@ proxy's CA bundle (PEM). It is passed to the builds as a BuildKit secret and nev
 EXTRA_CA_CERT=/path/to/corporate-ca.pem make up ENV=qa
 ```
 
+Build secrets are not part of Docker's cache key, so the Makefile also passes the CA's hash as the `EXTRA_CA_ID` build
+arg: adding or changing the CA re-runs the layer that installs it instead of reusing one built without it. With plain
+`docker compose` set it yourself: `EXTRA_CA_ID=$(sha256sum ca.pem | cut -d' ' -f1)`.
+
 ## Data safety
 
 - `docker compose down -v` deletes an environment's volume. Prefer `make db-reset`, which guards `prod`.
 - Back up `prod` with `make db-dump ENV=prod` before upgrading; `migrate` applies new migrations automatically on
   the next `make up`.
+
+## Automated checks
+
+The CI docker job builds the images, starts demo and qa side by side and runs `scripts/smoke.sh`,
+`scripts/readme-flow.sh`, the edge-case probe and `scripts/env-checks.sh`: image facts, isolation between
+environments, a qa snapshot used as a seed, `demo-reset`, a qa `db-dump`/`db-restore` round trip, prod refusing every
+destructive target without `CONFIRM=prod`, prod starting empty and dumping before a confirmed reset, the CA build-cache
+key and hot reload. `env-checks.sh` only runs in CI (`CI=true`): it creates `envs/prod.env` and resets prod.

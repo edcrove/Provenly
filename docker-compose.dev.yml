@@ -9,6 +9,7 @@ services:
       context: ./backend
       target: dev
       secrets: [extra_ca]
+      args: { EXTRA_CA_ID: "${EXTRA_CA_ID:-none}" }
     volumes:
       - ./backend:/src
       - go-mod:/go/pkg/mod
@@ -26,6 +27,7 @@ services:
       context: ./frontend
       target: dev
       secrets: [extra_ca]
+      args: { EXTRA_CA_ID: "${EXTRA_CA_ID:-none}" }
     volumes:
       - ./frontend:/app
       - web-node-modules:/app/node_modules

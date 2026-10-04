@@ -435,8 +435,11 @@ describe('FE-INT-018 test run pages robustness', () => {
   it('FE-INT-018 run list and results move a page past the end to the last page', async () => {
     db.runs = Array.from({ length: 21 }, (_, i) => testRun({ id: i + 1, externalRunId: `github:${i + 1}:1` }))
     const list = renderRoute('/test-runs?page=5')
+    const pager = await screen.findByText('Page 2 of 2 · 21 items')
     await waitFor(() => expect(list.router.state.location.search).toBe('?page=2'))
-    expect(await screen.findByText('Page 2 of 2 · 21 items')).toBeInTheDocument()
+    // Page 2 (one run) replaces the rows in place: no loading state flashes in between.
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(2))
+    expect(pager).toBeInTheDocument()
     list.unmount()
 
     db.runs = [testRun()]

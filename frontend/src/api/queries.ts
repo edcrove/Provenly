@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query'
 import { useRef } from 'react'
 
+import { previousPage } from '@/lib/paging'
 import { unwrap } from '@/lib/problem'
 import type { Correlation, ResultStatus } from '@/lib/status'
 
@@ -49,7 +50,8 @@ function useExclusiveMutation<TData, TVariables = void>(
 
 export function useTestCases(page: number, status?: 'active' | 'deprecated') {
   return useQuery({
-    queryKey: [...keys.testCases, 'list', page, status],
+    queryKey: [...keys.testCases, 'list', status, page],
+    placeholderData: (prev, q) => previousPage([...keys.testCases, 'list', status, page], prev, q?.queryKey),
     queryFn: async () => unwrap(await api.GET('/api/v1/test-cases', { params: { query: { page, status } } })),
   })
 }
@@ -164,6 +166,7 @@ export function useStepMutations(id: number) {
 export function useTestCaseHistory(id: number, page: number) {
   return useQuery({
     queryKey: [...keys.history(id), page],
+    placeholderData: (prev, q) => previousPage([...keys.history(id), page], prev, q?.queryKey),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/test-cases/{testCaseId}/results', {
@@ -176,6 +179,7 @@ export function useTestCaseHistory(id: number, page: number) {
 export function useTestRuns(page: number) {
   return useQuery({
     queryKey: [...keys.testRuns, 'list', page],
+    placeholderData: (prev, q) => previousPage([...keys.testRuns, 'list', page], prev, q?.queryKey),
     queryFn: async () => unwrap(await api.GET('/api/v1/test-runs', { params: { query: { page } } })),
   })
 }
@@ -205,7 +209,9 @@ export function useTestRunResults(
   correlation?: Correlation,
 ) {
   return useQuery({
-    queryKey: [...keys.testRun(id), 'results', page, status, correlation],
+    queryKey: [...keys.testRun(id), 'results', status, correlation, page],
+    placeholderData: (prev, q) =>
+      previousPage([...keys.testRun(id), 'results', status, correlation, page], prev, q?.queryKey),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/test-runs/{testRunId}/results', {
@@ -218,6 +224,8 @@ export function useTestRunResults(
 export function useTestRunParseErrors(id: number, page: number) {
   return useQuery({
     queryKey: [...keys.testRun(id), 'parse-errors', page],
+    placeholderData: (prev, q) =>
+      previousPage([...keys.testRun(id), 'parse-errors', page], prev, q?.queryKey),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/test-runs/{testRunId}/parse-errors', {

@@ -235,6 +235,13 @@ test.describe('Frontend UI journeys', () => {
     await add.getByRole('button', { name: 'Add step' }).click()
     await expect(page.getByRole('alert')).toContainText('must not be empty')
     await expect(add.getByLabel('Step expected result')).toHaveValue('kept')
+
+    // The list pages fit a phone too (the screenshot spec checks this as well, but it does not run in CI).
+    for (const url of ['/test-cases', '/test-runs']) {
+      await page.goto(url)
+      await expect(page.getByRole('table').first()).toBeVisible()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth), url).toBeLessThanOrEqual(375)
+    }
   })
 
   test('[FE-E2E-009] run pages load cleanly and a result expands its full error details', async ({ page, provenly }) => {
@@ -262,8 +269,11 @@ test.describe('Frontend UI journeys', () => {
     await page.setViewportSize({ width: 375, height: 812 })
     await expect(page.getByText(branch)).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
-    await page.setViewportSize({ width: 1280, height: 800 })
+    // The test case page with its execution history (long branch included) fits a phone too.
     await page.getByRole('link', { name: `TC-${tc.id}` }).first().click()
+    await expect(page.getByRole('table', { name: 'Execution history' }).getByText(branch.slice(0, 20), { exact: false }).first()).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
+    await page.setViewportSize({ width: 1280, height: 800 })
     await expect(page.getByRole('heading', { name: 'Execution history' })).toBeVisible()
     expect(problems, 'no console errors or failed requests (e.g. a missing favicon)').toEqual([])
   })

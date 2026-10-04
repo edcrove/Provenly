@@ -121,6 +121,37 @@ describe('FE-INT-009 test run detail and summary', () => {
     expect(screen.getByTestId('run-pass-rate')).toHaveTextContent('0% of executed passed')
   })
 
+  it('FE-INT-009 shows every metadata field of the run', async () => {
+    db.runs[0] = {
+      ...db.runs[0],
+      provider: 'gitlab',
+      providerRunId: '4242',
+      runAttempt: 3,
+      externalRunId: 'gitlab:4242:3',
+      pipeline: 'nightly-e2e',
+      branch: 'release/2.0',
+      commit: 'cafe1234',
+      createdAt: '2026-10-03T12:00:00Z',
+      startedAt: '2026-10-03T11:00:00Z',
+      completedAt: '2026-10-03T11:30:00Z',
+    }
+    renderRoute('/test-runs/7')
+    await screen.findByRole('heading', { name: 'Test run #7' })
+    const value = (label: string) =>
+      screen.getByText(label, { selector: 'dt' }).nextElementSibling?.textContent
+    expect(value('External run id')).toBe('gitlab:4242:3')
+    expect(value('Provider')).toBe('gitlab')
+    expect(value('Run id')).toBe('4242')
+    expect(value('Attempt')).toBe('3')
+    expect(value('Pipeline')).toBe('nightly-e2e')
+    expect(value('Branch')).toBe('release/2.0')
+    expect(value('Commit')).toBe('cafe1234')
+    expect(value('Execution status')).toBe('completed')
+    expect(value('Created')).toBe('2026-10-03 12:00:00 UTC')
+    expect(value('Started')).toBe('2026-10-03 11:00:00 UTC')
+    expect(value('Completed')).toBe('2026-10-03 11:30:00 UTC')
+  })
+
   it('FE-INT-009 an empty universe reads 0% with its counts (0 of 0)', async () => {
     db.summaries[7] = summary({
       expectedTotal: 0,

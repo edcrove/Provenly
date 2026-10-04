@@ -39,3 +39,4 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 32 | Phone: test case detail | `32-mobile-test-case-detail.png` |
 | 33 | Phone: new test case form | `33-mobile-test-case-new-form.png` |
 | 34 | Phone: test run detail | `34-mobile-test-run-detail.png` |
+| 35 | Result error details expanded (full stack trace, every failure) | `35-test-run-error-details.png` |

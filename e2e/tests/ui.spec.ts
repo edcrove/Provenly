@@ -236,4 +236,26 @@ test.describe('Frontend UI journeys', () => {
     await expect(page.getByRole('alert')).toContainText('must not be empty')
     await expect(add.getByLabel('Step expected result')).toHaveValue('kept')
   })
+
+  test('[FE-E2E-009] run pages load cleanly and a result expands its full error details', async ({ page, provenly }) => {
+    const problems: string[] = []
+    page.on('console', (m) => { if (m.type() === 'error') problems.push(m.text()) })
+    page.on('response', (r) => { if (r.status() >= 400) problems.push(`${r.status()} ${r.url()}`) })
+    const tc = await provenly.createTestCase({ title: 'Checkout totals', automated: true })
+    const report = `<testsuite name="s"><testcase name="checkout TC-${tc.id}"><failure message="total mismatch">expected 10 got 9
+  at Cart.total (cart.ts:42)</failure><failure message="tax mismatch">expected 2 got 1</failure></testcase></testsuite>`
+    const run = await (await provenly.ingest(uniqueRunId(), 1, report)).json()
+
+    await page.goto('/test-runs')
+    await expect(page.getByRole('table').first()).toBeVisible()
+    await page.goto(`/test-runs/${run.testRun.id}`)
+    const toggle = page.getByRole('button', { name: 'Show error details of total mismatch' })
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await toggle.click()
+    await expect(page.getByTestId('error-details')).toContainText('at Cart.total (cart.ts:42)')
+    await expect(page.getByTestId('error-details')).toContainText('failure: tax mismatch')
+    await page.getByRole('link', { name: `TC-${tc.id}` }).first().click()
+    await expect(page.getByRole('heading', { name: 'Execution history' })).toBeVisible()
+    expect(problems, 'no console errors or failed requests (e.g. a missing favicon)').toEqual([])
+  })
 })

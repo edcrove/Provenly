@@ -232,4 +232,11 @@ test('UI flows', async ({ page, request }) => {
     await page.waitForLoadState('networkidle')
     expect(await page.evaluate(() => document.documentElement.scrollWidth), url).toBeLessThanOrEqual(375)
   }
+
+  // Error details of a result: the full stack trace opens on demand.
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto(`/test-runs/${mainRun}?status=failed`)
+  await page.getByRole('button', { name: /Show error details/ }).first().click()
+  await expect(page.getByTestId('error-details')).toBeVisible()
+  await shot(page, 'test-run-error-details')
 })

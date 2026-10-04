@@ -77,3 +77,6 @@ targets:
   - id: FE-INT-020
     description: the step editor at its limits - 100 steps rendered, the last one moved up, an expected result cleared by editing
     surfaces: [src/features/test-cases/StepsEditor.tsx]
+  - id: FE-INT-021
+    description: a result's full error details (stack trace, every failure of the testcase) expand on demand with an accessible toggle
+    surfaces: [src/features/test-runs/RunResults.tsx]

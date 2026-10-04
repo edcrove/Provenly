@@ -1,9 +1,12 @@
+import { ChevronDown, ChevronRight } from 'lucide-react'
+import { Fragment, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
 import { useTestRunResults } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
 import { CorrelationBadge, StatusBadge } from '@/components/StatusBadge'
+import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDuration, tcKey } from '@/lib/format'
@@ -16,6 +19,15 @@ export function RunResults({ testRunId }: { testRunId: number }) {
   const status = pickEnum(params.get('status'), resultStatuses)
   const correlation = pickEnum(params.get('correlation'), correlations)
   const query = useTestRunResults(testRunId, page, status, correlation)
+  // Error details (stack traces, every failure of a testcase) open on demand, one row at a time or several.
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const toggle = (id: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const update = (key: string, value: string, replace = false) => {
     const next = new URLSearchParams(params)
@@ -75,33 +87,64 @@ export function RunResults({ testRunId }: { testRunId: number }) {
                   </TableRow>
                 )}
                 {data.items.map((r) => (
-                  <TableRow key={r.id} data-testid="result-row">
-                    <TableCell>
-                      <span className="flex items-center gap-2" title={correlationExplanation(r.correlation)}>
-                        {r.testCaseId ? (
-                          <Link to={`/test-cases/${r.testCaseId}`} className="font-mono underline">
-                            {tcKey(r.testCaseId)}
-                          </Link>
-                        ) : null}
-                        {r.correlation !== 'valid' ? (
-                          <>
-                            <CorrelationBadge correlation={r.correlation} />
-                            {r.testCaseId ? null : (
-                              <span className="font-mono text-xs">{r.requestedTestCaseId ?? ''}</span>
-                            )}
-                          </>
-                        ) : null}
-                      </span>
-                    </TableCell>
-                    <TableCell>{r.testName}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={r.status} />
-                    </TableCell>
-                    <TableCell>{formatDuration(r.durationMs)}</TableCell>
-                    <TableCell className="max-w-xs truncate" title={r.errorDetails}>
-                      {r.errorMessage}
-                    </TableCell>
-                  </TableRow>
+                  <Fragment key={r.id}>
+                    <TableRow data-testid="result-row">
+                      <TableCell>
+                        <span
+                          className="flex items-center gap-2"
+                          title={correlationExplanation(r.correlation)}
+                        >
+                          {r.testCaseId ? (
+                            <Link to={`/test-cases/${r.testCaseId}`} className="font-mono underline">
+                              {tcKey(r.testCaseId)}
+                            </Link>
+                          ) : null}
+                          {r.correlation !== 'valid' ? (
+                            <>
+                              <CorrelationBadge correlation={r.correlation} />
+                              {r.testCaseId ? null : (
+                                <span className="font-mono text-xs">{r.requestedTestCaseId ?? ''}</span>
+                              )}
+                            </>
+                          ) : null}
+                        </span>
+                      </TableCell>
+                      <TableCell>{r.testName}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={r.status} />
+                      </TableCell>
+                      <TableCell>{formatDuration(r.durationMs)}</TableCell>
+                      <TableCell className="max-w-xs">
+                        <span className="flex items-start gap-1">
+                          {r.errorDetails ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="size-6 shrink-0"
+                              aria-expanded={expanded.has(r.id)}
+                              aria-label={`${expanded.has(r.id) ? 'Hide' : 'Show'} error details of ${r.errorMessage || r.testName}`}
+                              onClick={() => toggle(r.id)}
+                            >
+                              {expanded.has(r.id) ? <ChevronDown /> : <ChevronRight />}
+                            </Button>
+                          ) : null}
+                          <span className="line-clamp-2">{r.errorMessage}</span>
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                    {expanded.has(r.id) ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="bg-muted/40">
+                          <pre
+                            data-testid="error-details"
+                            className="max-h-96 overflow-auto font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]"
+                          >
+                            {r.errorDetails}
+                          </pre>
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </Fragment>
                 ))}
               </TableBody>
             </Table>

@@ -291,7 +291,8 @@ describe('FE-INT-011 run results', () => {
     const rows = await within(table).findAllByTestId('result-row')
     expect(rows).toHaveLength(3)
     expect(within(rows[0]).getByRole('link', { name: 'TC-153' })).toHaveAttribute('href', '/test-cases/153')
-    expect(within(rows[1]).getByText('boom')).toHaveAttribute('title', 'trace')
+    expect(within(rows[1]).getByText('boom')).toBeInTheDocument()
+    expect(within(rows[1]).getByRole('button', { name: 'Show error details of boom' })).toBeInTheDocument()
     expect(within(rows[2]).getByText('missing')).toBeInTheDocument()
     expect(within(rows[0]).getByText('1.20 s')).toBeInTheDocument()
   })
@@ -418,5 +419,35 @@ describe('FE-INT-018 test run pages robustness', () => {
     renderRoute('/test-runs/7')
     await waitFor(() => expect(document.title).toBe('Loading… · Provenly'))
     await waitFor(() => expect(document.title).toBe('Test run #7 · Provenly'))
+  })
+})
+
+describe('FE-INT-021 result error details', () => {
+  it('FE-INT-021 expands the full error details of a result (stack traces, every failure) on demand', async () => {
+    db.results = [
+      testResult({
+        id: 1,
+        status: 'failed',
+        errorMessage: 'total mismatch',
+        errorDetails: 'failure: total mismatch\nexpected 10 got 9\n\nfailure: tax mismatch\nexpected 2 got 1',
+      }),
+      testResult({ id: 2, testName: 'no details', status: 'failed', errorMessage: 'boom', errorDetails: '' }),
+    ]
+    const { user } = renderRoute('/test-runs/7')
+    const table = await screen.findByRole('table', { name: 'Results' })
+    await within(table).findByText('total mismatch')
+    expect(within(table).queryByText(/tax mismatch/)).not.toBeInTheDocument()
+    const toggle = within(table).getByRole('button', { name: 'Show error details of total mismatch' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(within(table).getAllByRole('button', { name: /Show error details/ })).toHaveLength(1)
+
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    const details = within(table).getByTestId('error-details')
+    expect(details.textContent).toBe(
+      'failure: total mismatch\nexpected 10 got 9\n\nfailure: tax mismatch\nexpected 2 got 1',
+    )
+    await user.click(within(table).getByRole('button', { name: 'Hide error details of total mismatch' }))
+    expect(within(table).queryByTestId('error-details')).not.toBeInTheDocument()
   })
 })

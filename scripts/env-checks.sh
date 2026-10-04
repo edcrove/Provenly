@@ -7,7 +7,9 @@
 set -euo pipefail
 [ "${CI:-}" = true ] || { echo "env-checks: CI only (it resets prod and writes backups/)" >&2; exit 1; }
 cd "$(dirname "$0")/.."
-fail() { echo "env-checks: $*" >&2; exit 1; }
+# Failures are also GitHub annotations, readable from the check run without the raw log.
+fail() { echo "env-checks: $*" >&2; [ -z "${GITHUB_ACTIONS:-}" ] || echo "::error title=env-checks::$*"; exit 1; }
+trap 'rc=$?; [ -z "${GITHUB_ACTIONS:-}" ] || echo "::error title=env-checks::line $LINENO: $BASH_COMMAND (exit $rc)"' ERR
 ok() { echo "env-checks: ok - $*"; }
 curl_() { curl -fsS --noproxy '*' "$@"; }
 run="$(date +%s)"  # unique titles: a re-run never counts an earlier run's rows
@@ -30,12 +32,13 @@ ok "isolation"
 
 # A snapshot of qa becomes a seed: an empty environment started with it holds qa's data; demo-reset undoes it.
 make --no-print-directory seed-snapshot FROM=qa NAME=envcheck >/dev/null
-trap 'rm -f seeds/envcheck.sql' EXIT
+rm_seed() { rm -f seeds/envcheck.sql; }
 SEED=envcheck docker compose --env-file envs/demo.env down -v >/dev/null 2>&1
 SEED=envcheck docker compose --env-file envs/demo.env up -d --wait >/dev/null 2>&1
 [ "$(count http://localhost:8080 "env-checks qa only $run")" = 1 ] || fail "seed from a qa snapshot"
 make --no-print-directory demo-reset >/dev/null 2>&1
 [ "$(count http://localhost:8080 "env-checks qa only $run")" = 0 ] || fail "demo-reset did not restore the demo seed"
+rm_seed
 ok "snapshot as seed, demo-reset"
 
 # qa dump/restore round trip: a test case created after the dump is gone after restoring it.

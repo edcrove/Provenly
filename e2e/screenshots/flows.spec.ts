@@ -74,7 +74,7 @@ test('UI flows', async ({ page, request }) => {
   await shot(page, 'test-case-step-edit')
   await page.keyboard.press('Escape')
   await page.goto(`/test-cases/${login}`)
-  await page.getByRole('button', { name: 'Edit' }).click()
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await shot(page, 'test-case-edit')
   await page.getByRole('button', { name: 'Cancel' }).click()
 
@@ -207,7 +207,7 @@ test('UI flows', async ({ page, request }) => {
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
   await shot(page, 'test-case-invalid-id')
   await page.goto(`/test-cases/${login}`)
-  await page.getByRole('button', { name: 'Edit' }).click()
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
   await page.getByLabel('Title').fill('   ')
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByLabel('Title')).toHaveAttribute('aria-invalid', 'true')

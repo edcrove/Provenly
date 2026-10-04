@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { testCase } from '@/test/fixtures'
@@ -208,6 +208,36 @@ describe('FE-INT-007 execution history', () => {
     )
     expect(within(table).getAllByText('0123456789')).toHaveLength(2)
     expect(within(table).getByText('failed')).toBeInTheDocument()
+  })
+
+  it('FE-INT-007 dates each result by when the report says it ran, not when it was ingested', async () => {
+    const ran = {
+      startedAt: '2026-09-28T10:00:00Z',
+      completedAt: '2026-10-04T11:31:59Z',
+      createdAt: '2026-10-04T11:31:59Z',
+    }
+    db.runs[0] = { ...db.runs[0], ...ran }
+    renderRoute('/test-cases/153')
+    let table = await screen.findByRole('table', { name: 'Execution history' })
+    expect(within(table).getAllByText('2026-09-28 10:00:00 UTC')).toHaveLength(2)
+    expect(within(table).queryByText('2026-10-04 11:31:59 UTC')).not.toBeInTheDocument()
+    cleanup()
+
+    // Without a suite timestamp the run is dated by its completion, then by its ingestion.
+    db.runs[0] = {
+      ...db.runs[0],
+      startedAt: null,
+      completedAt: '2026-10-04T11:31:59Z',
+      createdAt: '2026-10-04T11:30:00Z',
+    }
+    renderRoute('/test-cases/153')
+    table = await screen.findByRole('table', { name: 'Execution history' })
+    expect(within(table).getAllByText('2026-10-04 11:31:59 UTC')).toHaveLength(2)
+    cleanup()
+    db.runs[0] = { ...db.runs[0], startedAt: null, completedAt: null }
+    renderRoute('/test-cases/153')
+    table = await screen.findByRole('table', { name: 'Execution history' })
+    expect(within(table).getAllByText('2026-10-04 11:30:00 UTC')).toHaveLength(2)
   })
 
   it('FE-INT-007 marks results received after deprecation', async () => {

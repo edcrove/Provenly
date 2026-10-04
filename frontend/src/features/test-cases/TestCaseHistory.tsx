@@ -56,7 +56,7 @@ export function TestCaseHistory({ testCaseId }: { testCaseId: number }) {
                     </TableCell>
                     <TableCell>{run.branch || '—'}</TableCell>
                     <TableCell className="font-mono">{shortCommit(run.commit)}</TableCell>
-                    <TableCell>{formatDateTime(run.completedAt ?? run.createdAt)}</TableCell>
+                    <TableCell>{formatDateTime(run.startedAt ?? run.completedAt ?? run.createdAt)}</TableCell>
                     <TableCell>{formatDuration(result.durationMs)}</TableCell>
                   </TableRow>
                 ))}

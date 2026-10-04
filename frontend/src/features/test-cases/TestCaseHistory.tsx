@@ -29,6 +29,7 @@ export function TestCaseHistory({ testCaseId }: { testCaseId: number }) {
                   <TableHead>Branch</TableHead>
                   <TableHead>Commit</TableHead>
                   <TableHead>Executed</TableHead>
+                  <TableHead>Reported</TableHead>
                   <TableHead>Duration</TableHead>
                 </TableRow>
               </TableHeader>
@@ -56,7 +57,8 @@ export function TestCaseHistory({ testCaseId }: { testCaseId: number }) {
                     </TableCell>
                     <TableCell>{run.branch || '—'}</TableCell>
                     <TableCell className="font-mono">{shortCommit(run.commit)}</TableCell>
-                    <TableCell>{formatDateTime(run.startedAt ?? run.completedAt ?? run.createdAt)}</TableCell>
+                    <TableCell>{formatDateTime(run.startedAt)}</TableCell>
+                    <TableCell>{formatDateTime(run.createdAt)}</TableCell>
                     <TableCell>{formatDuration(result.durationMs)}</TableCell>
                   </TableRow>
                 ))}

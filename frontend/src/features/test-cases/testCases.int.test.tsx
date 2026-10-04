@@ -210,34 +210,41 @@ describe('FE-INT-007 execution history', () => {
     expect(within(table).getByText('failed')).toBeInTheDocument()
   })
 
-  it('FE-INT-007 dates each result by when the report says it ran, not when it was ingested', async () => {
-    const ran = {
-      startedAt: '2026-09-28T10:00:00Z',
-      completedAt: '2026-10-04T11:31:59Z',
-      createdAt: '2026-10-04T11:31:59Z',
+  it('FE-INT-007 shows when each result was executed apart from when its report was received', async () => {
+    const dates = async () => {
+      const table = await screen.findByRole('table', { name: 'Execution history' })
+      const headers = within(table)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent)
+      const [executed, reported] = [headers.indexOf('Executed'), headers.indexOf('Reported')]
+      return within(table)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => {
+          const cells = within(row).getAllByRole('cell')
+          return [cells[executed].textContent, cells[reported].textContent]
+        })
     }
-    db.runs[0] = { ...db.runs[0], ...ran }
-    renderRoute('/test-cases/153')
-    let table = await screen.findByRole('table', { name: 'Execution history' })
-    expect(within(table).getAllByText('2026-09-28 10:00:00 UTC')).toHaveLength(2)
-    expect(within(table).queryByText('2026-10-04 11:31:59 UTC')).not.toBeInTheDocument()
-    cleanup()
-
-    // Without a suite timestamp the run is dated by its completion, then by its ingestion.
     db.runs[0] = {
       ...db.runs[0],
-      startedAt: null,
+      startedAt: '2026-09-28T10:00:00Z',
       completedAt: '2026-10-04T11:31:59Z',
-      createdAt: '2026-10-04T11:30:00Z',
+      createdAt: '2026-10-04T11:31:58Z',
     }
     renderRoute('/test-cases/153')
-    table = await screen.findByRole('table', { name: 'Execution history' })
-    expect(within(table).getAllByText('2026-10-04 11:31:59 UTC')).toHaveLength(2)
+    expect(await dates()).toEqual([
+      ['2026-09-28 10:00:00 UTC', '2026-10-04 11:31:58 UTC'],
+      ['2026-09-28 10:00:00 UTC', '2026-10-04 11:31:58 UTC'],
+    ])
     cleanup()
-    db.runs[0] = { ...db.runs[0], startedAt: null, completedAt: null }
+
+    // A report without a suite timestamp does not say when it ran: never shown as the ingestion date.
+    db.runs[0] = { ...db.runs[0], startedAt: null }
     renderRoute('/test-cases/153')
-    table = await screen.findByRole('table', { name: 'Execution history' })
-    expect(within(table).getAllByText('2026-10-04 11:30:00 UTC')).toHaveLength(2)
+    expect(await dates()).toEqual([
+      ['—', '2026-10-04 11:31:58 UTC'],
+      ['—', '2026-10-04 11:31:58 UTC'],
+    ])
   })
 
   it('FE-INT-007 marks results received after deprecation', async () => {

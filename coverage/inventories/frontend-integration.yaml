@@ -22,7 +22,7 @@ targets:
     description: steps management (add, edit, cancel, delete, move up/down, empty and error states)
     surfaces: [src/features/test-cases/StepsEditor.tsx]
   - id: FE-INT-007
-    description: execution history of a TC-ID across runs with observed metadata (dated by when the report ran), pagination
+    description: execution history of a TC-ID across runs with observed metadata (executed and reported dates), pagination
     surfaces: [src/features/test-cases/TestCaseHistory.tsx]
   - id: FE-INT-008
     description: test run list with verdict, pass rate, outcome breakdown, execution status, metadata, empty state and pagination

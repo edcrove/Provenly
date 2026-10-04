@@ -150,8 +150,9 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     a `415 unsupported_media_type` with a clear message (validation of CI/CD Result Ingestion API).
     **Status: Decided by Ed (2026-10-03) — gzip support goes to the MVP** (`docs/mvp-plan.md` D6, card 3.4).
 
-17. **When a result ran.** The test case history dates each result by when the report says its tests ran: the run's
-    `startedAt` (earliest `testsuite@timestamp`), then `completedAt`, then `createdAt` (ingestion). The run list
-    and run detail keep showing Provenly's own `Created` date alongside `Started`/`Completed`.
+17. **When a result ran.** The test case history shows two dates per result: **Executed**, when the report says its
+    tests ran (the run's `startedAt`, earliest `testsuite@timestamp`; `—` when the report does not say), and
+    **Reported**, when Provenly received the report (the run's `createdAt`). The ingestion date is never shown as the
+    execution date. The run detail keeps `Created`, `Started` and `Completed`.
     **Status: Decided by Ed (2026-10-04)** (validation of End-to-End POC Demo Flow: a report from 2026-09-28
     ingested on 2026-10-04 read "Executed 2026-10-04"). FE-INT-007, FE-E2E-002.

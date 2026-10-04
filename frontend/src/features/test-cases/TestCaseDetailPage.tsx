@@ -146,7 +146,8 @@ function Definition({ tc }: { tc: TestCase }) {
         <CardHeader>
           <CardTitle as="h2">Execution history</CardTitle>
           <CardDescription>
-            Observed at execution time: test name, run, branch, commit and date as reported by CI.
+            Observed at execution time: test name, run, branch, commit and execution date as reported by CI;
+            Reported is when Provenly received the report.
           </CardDescription>
         </CardHeader>
         <CardContent>

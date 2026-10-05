@@ -1,12 +1,14 @@
 import { Plus } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
-import { useProjects, useTestCases } from '@/api/queries'
+import { useDimensions, useProjects, useTestCases } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { PageTitle } from '@/components/PageTitle'
 import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -15,6 +17,26 @@ import { can } from '@/lib/roles'
 import { pickEnum, positiveInt } from '@/lib/status'
 
 const statuses = ['active', 'deprecated'] as const
+
+/** A tag filter applied on submit (Enter), not on every keystroke. */
+function TagFilter({ value, onApply }: { value: string; onApply: (tag: string) => void }) {
+  const [text, setText] = useState(value)
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    onApply(text.trim().toLowerCase())
+  }
+  return (
+    <form onSubmit={submit} role="search" aria-label="Filter by tag">
+      <Input
+        aria-label="Tag"
+        placeholder="Tag (Enter)"
+        className="w-36"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+    </form>
+  )
+}
 
 export function TestCaseListPage() {
   const [params, setParams] = useSearchParams()
@@ -26,7 +48,16 @@ export function TestCaseListPage() {
   const canCreate = (projects.data?.items ?? []).some(
     (p) => (!project || p.key === project) && can(p.myRole, 'member'),
   )
-  const query = useTestCases(page, status, project || undefined)
+  const tag = params.get('tag') ?? ''
+  const classification = params.get('classification') ?? ''
+  // Classification filters need a project: dimensions and their values are per project.
+  const dimensions = useDimensions(project).data?.items ?? []
+  const query = useTestCases(page, {
+    status,
+    project: project || undefined,
+    tag: tag || undefined,
+    classification: (project && classification) || undefined,
+  })
 
   const update = (next: Record<string, string | undefined>, replace = false) => {
     const merged = new URLSearchParams(params)
@@ -54,6 +85,33 @@ export function TestCaseListPage() {
             <option value="active">Active</option>
             <option value="deprecated">Deprecated</option>
           </NativeSelect>
+          <TagFilter
+            key={tag}
+            value={tag}
+            onApply={(t) => update({ tag: t || undefined, page: undefined })}
+          />
+          {project && dimensions.length > 0 ? (
+            <NativeSelect
+              aria-label="Filter by classification"
+              value={classification}
+              onChange={(e) => update({ classification: e.target.value || undefined, page: undefined })}
+            >
+              <option value="">Any classification</option>
+              {dimensions
+                .filter((d) => d.archivedAt === null)
+                .map((d) => (
+                  <optgroup key={d.key} label={d.name}>
+                    {d.values
+                      .filter((v) => v.archivedAt === null || `${d.key}:${v.key}` === classification)
+                      .map((v) => (
+                        <option key={v.key} value={`${d.key}:${v.key}`}>
+                          {d.name}: {v.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+            </NativeSelect>
+          ) : null}
           {canCreate ? (
             <Button asChild>
               <Link to="/test-cases/new">
@@ -74,13 +132,18 @@ export function TestCaseListPage() {
                     <TableHead>Title</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Automated</TableHead>
+                    <TableHead>Tags</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.items.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-muted-foreground">
-                        {status ? `No ${status} test cases` : 'No test cases yet'}
+                      <TableCell colSpan={5} className="text-muted-foreground">
+                        {tag || classification
+                          ? 'No test cases match the filters'
+                          : status
+                            ? `No ${status} test cases`
+                            : 'No test cases yet'}
                         {project ? ` in ${project}.` : '.'}
                       </TableCell>
                     </TableRow>
@@ -97,6 +160,15 @@ export function TestCaseListPage() {
                         <Badge variant={tc.status === 'active' ? 'secondary' : 'outline'}>{tc.status}</Badge>
                       </TableCell>
                       <TableCell>{tc.automated ? 'Yes' : 'No'}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {tc.tags.map((t) => (
+                            <Badge key={t} variant="outline" className="font-mono">
+                              #{t}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

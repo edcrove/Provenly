@@ -307,6 +307,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/dimensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        /** List the project's classification dimensions and their values (anyone who can see the project) */
+        get: operations["listDimensions"];
+        put?: never;
+        /** Add a project-specific dimension (maintainers and administrators) */
+        post: operations["createDimension"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/dimensions/{dimensionKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example risk */
+                dimensionKey: components["parameters"]["DimensionKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename, archive or restore a dimension (maintainers and administrators) */
+        patch: operations["updateDimension"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example risk */
+                dimensionKey: components["parameters"]["DimensionKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Append a controlled value to a dimension (maintainers and administrators) */
+        post: operations["createDimensionValue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example risk */
+                dimensionKey: components["parameters"]["DimensionKey"];
+                /** @example critical */
+                valueKey: components["parameters"]["ValueKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename, archive or restore a value (maintainers and administrators) */
+        patch: operations["updateDimensionValue"];
+        trace?: never;
+    };
     "/api/v1/test-cases": {
         parameters: {
             query?: never;
@@ -662,9 +751,12 @@ export interface components {
         /** @enum {string} */
         TestCaseStatus: "active" | "deprecated";
         TestCase: {
+            /** @description Free labels, lower-case and sorted. */
+            tags: components["schemas"]["Tag"][];
+            classification: components["schemas"]["Classification"];
             /**
              * Format: int64
-             * @description Advances with every change to the test case or its steps; also sent as the `ETag` header.
+             * @description Advances with every change to the test case, its steps, tags or classification; also sent as the `ETag` header.
              * @example 7
              */
             version: number;
@@ -873,12 +965,84 @@ export interface components {
             expectedResult?: string;
             /** @default false */
             automated?: boolean;
+            /** @description Free labels; trimmed, lower-cased and deduplicated by the server (at most 20). */
+            tags?: string[];
+            /** @description Dimension key → value key; each must be an active value of an active dimension of the project. */
+            classification?: {
+                [key: string]: string;
+            };
         };
         UpdateTestCaseRequest: {
             title?: string;
             description?: string;
             expectedResult?: string;
             automated?: boolean;
+            /** @description Replaces every tag; trimmed, lower-cased and deduplicated by the server (at most 20). */
+            tags?: string[];
+            /**
+             * @description Merged into the current classification: a dimension mapped to a value key takes it, one mapped to
+             *     `null` loses its value, absent dimensions keep theirs. Archived values and dimensions cannot be newly
+             *     assigned (sending the current value again is accepted).
+             */
+            classification?: {
+                [key: string]: string | null;
+            };
+        };
+        /** @example smoke */
+        Tag: string;
+        /**
+         * @description Dimension key → value key of the test case (at most one value per dimension).
+         * @example {
+         *       "risk": "critical",
+         *       "feature": "payments"
+         *     }
+         */
+        Classification: {
+            [key: string]: string;
+        };
+        Dimension: {
+            /**
+             * @description Never changes.
+             * @example risk
+             */
+            key: string;
+            /** @example Risk */
+            name: string;
+            /** @description Seeded with every project (feature, component, level, depth, type, risk, platform). */
+            builtIn: boolean;
+            /**
+             * Format: date-time
+             * @description Archived dimensions keep their test case values but cannot be assigned.
+             */
+            archivedAt: string | null;
+            values: components["schemas"]["DimensionValue"][];
+        };
+        DimensionValue: {
+            /**
+             * @description Never changes.
+             * @example critical
+             */
+            key: string;
+            /** @example Critical */
+            name: string;
+            /** Format: date-time */
+            archivedAt: string | null;
+        };
+        DimensionList: {
+            items: components["schemas"]["Dimension"][];
+        };
+        CreateDimensionRequest: {
+            key: string;
+            name: string;
+        };
+        CreateDimensionValueRequest: {
+            key: string;
+            name: string;
+        };
+        UpdateDimensionRequest: {
+            name?: string;
+            /** @description true archives (idempotent), false restores. */
+            archived?: boolean;
         };
         TestStep: {
             /** Format: int64 */
@@ -1339,6 +1503,10 @@ export interface components {
         InvitationId: number;
         /** @example CHK */
         ProjectKey: string;
+        /** @example risk */
+        DimensionKey: string;
+        /** @example critical */
+        ValueKey: string;
         /**
          * @description Only items of the project with this key (an unknown key is a 404).
          * @example CHK
@@ -1944,6 +2112,175 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    listDimensions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The project's dimensions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DimensionList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createDimension: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDimensionRequest"];
+            };
+        };
+        responses: {
+            /** @description The dimension */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dimension"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateDimension: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example risk */
+                dimensionKey: components["parameters"]["DimensionKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDimensionRequest"];
+            };
+        };
+        responses: {
+            /** @description The dimension */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dimension"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createDimensionValue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example risk */
+                dimensionKey: components["parameters"]["DimensionKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDimensionValueRequest"];
+            };
+        };
+        responses: {
+            /** @description The dimension */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dimension"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateDimensionValue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example risk */
+                dimensionKey: components["parameters"]["DimensionKey"];
+                /** @example critical */
+                valueKey: components["parameters"]["ValueKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDimensionRequest"];
+            };
+        };
+        responses: {
+            /** @description The dimension */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dimension"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     listTestCases: {
         parameters: {
             query?: {
@@ -1955,6 +2292,13 @@ export interface operations {
                  * @example CHK
                  */
                 project?: components["parameters"]["ProjectFilter"];
+                /** @description Only test cases with this tag. */
+                tag?: components["schemas"]["Tag"];
+                /**
+                 * @description Up to 10 comma-separated `dimension:value` pairs that must all hold.
+                 * @example risk:critical,feature:payments
+                 */
+                classification?: string;
             };
             header?: never;
             path?: never;

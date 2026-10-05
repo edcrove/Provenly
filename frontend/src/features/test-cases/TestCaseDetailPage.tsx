@@ -4,6 +4,7 @@ import { useParams } from 'react-router'
 import type { TestCase } from '@/api/client'
 import {
   useDeprecateTestCase,
+  useDimensions,
   useReactivateTestCase,
   useTestCase,
   useTestCaseHistory,
@@ -16,9 +17,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { NotFoundPage } from '@/app/NotFoundPage'
-import { changedFields } from '@/lib/changedFields'
 import { formatDateTime } from '@/lib/format'
 import { positiveInt } from '@/lib/status'
+import { classificationLabels, formatTags, updateBody } from '@/lib/taxonomy'
 
 import { useProjectRole } from '@/features/projects/useProjectRole'
 import { can } from '@/lib/roles'
@@ -32,6 +33,8 @@ const fields = (tc: TestCase): TestCaseFormValues => ({
   description: tc.description,
   expectedResult: tc.expectedResult,
   automated: tc.automated,
+  tags: formatTags(tc.tags),
+  classification: tc.classification,
 })
 
 function Definition({ tc }: { tc: TestCase }) {
@@ -48,6 +51,7 @@ function Definition({ tc }: { tc: TestCase }) {
   const role = useProjectRole(tc.projectKey)
   const canEdit = can(role, 'member')
   const canManage = can(role, 'maintainer')
+  const dimensions = useDimensions(tc.projectKey).data?.items ?? []
 
   return (
     <div className="grid gap-4">
@@ -60,6 +64,18 @@ function Definition({ tc }: { tc: TestCase }) {
           <div className="mt-2 flex gap-2">
             <Badge variant={tc.status === 'active' ? 'secondary' : 'outline'}>{tc.status}</Badge>
             <Badge variant="outline">{tc.automated ? 'automated' : 'manual'}</Badge>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2" data-testid="taxonomy">
+            {classificationLabels(tc.classification, dimensions).map(({ key, label }) => (
+              <Badge key={key} variant="secondary">
+                {label}
+              </Badge>
+            ))}
+            {tc.tags.map((t) => (
+              <Badge key={t} variant="outline" className="font-mono">
+                #{t}
+              </Badge>
+            ))}
           </div>
         </div>
         <div className="flex gap-2">
@@ -129,11 +145,12 @@ function Definition({ tc }: { tc: TestCase }) {
           {editing ? (
             <TestCaseForm
               initial={base}
+              dimensions={dimensions}
               submitLabel="Save changes"
               pending={update.isPending}
               error={update.error}
               onSubmit={(values) => {
-                const changed = changedFields(base, values)
+                const changed = updateBody(base, values)
                 if (Object.keys(changed).length === 0) return setEditing(false)
                 update.mutate(changed, { onSuccess: () => setEditing(false) })
               }}

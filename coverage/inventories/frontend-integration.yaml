@@ -123,3 +123,6 @@ targets:
     surfaces: [src/features/test-runs/RunAmendments.tsx]
   - id: FE-INT-036
     description: retries - a run shows its flaky count (detail and list) and flaky test cases; results and the test case history mark each attempt and the retried ones; single attempts show no marker
+  - id: FE-INT-037
+    description: taxonomy - maintainers add dimensions and values and archive or restore them (duplicates reported), viewers only read; a test case is created and edited with tags and a classification (only changed dimensions sent, archived values only when current, field errors on tags and dimensions); the list shows tags and filters by tag and, within a project, by classification
+    surfaces: [src/features/projects/ClassificationSection.tsx, src/features/test-cases/TestCaseForm.tsx, src/features/test-cases/TestCaseListPage.tsx]

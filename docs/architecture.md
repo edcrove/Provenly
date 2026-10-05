@@ -85,6 +85,16 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
   `charset` overrides the XML declaration; `Content-Encoding: gzip` is accepted with the size limit on the decompressed body, other encodings are a 415; every parameter error is listed at once). `201` creates the run, `200` is an idempotent
   replay (nothing re-processed).
 
+## Taxonomy (prototype feature 9)
+
+Each project classifies test cases along dimensions (`classification_dimensions`) with controlled values
+(`classification_values`); a test case has at most one value per dimension (`test_case_classifications`, primary key
+`(test_case_id, dimension_id)`) and free tags (`test_case_tags`). Composite foreign keys keep a value inside its
+dimension and the dimension inside the test case's project; triggers forbid deleting dimensions or values, changing
+their keys or moving a dimension. A trigger on `projects` seeds the built-in dimensions. Tag and classification
+writes advance the test case version through the same trigger as steps, so they follow If-Match. The catalog
+service resolves keys to ids and validates them (archived values only when already current).
+
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its

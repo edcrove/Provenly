@@ -90,3 +90,7 @@ targets:
     description: snapshot amendments add reported TC-IDs to a run's universe without touching the snapshot (summary, run, list and history reflect it); of twenty concurrent amendments of one TC-ID exactly one is recorded; the database refuses TC-IDs without valid results or already in the snapshot and keeps amendments append-only
   - id: BE-INT-044
     description: retries - Surefire flaky and rerun attempts and the attempt/retry property are stored per result; the last attempt is the logical result (flaky when it passed after failing) in summary, run outcome, results (retried flag) and history
+  - id: BE-INT-045
+    description: taxonomy - every project (existing and new) gets the built-in dimensions and values; project dimensions and values conflict on duplicate keys, append in order and archive/restore; tags and classification advance the version (not on a no-op), honour If-Match, roll back with a failed write and keep archived values; tag and classification filters (AND) agree with counts; of twenty concurrent tag edits one wins; the database refuses cross-project or cross-dimension values, two values per dimension, malformed tags, deletes, key changes and moving dimensions
+  - id: BE-INT-046
+    description: taxonomy persistence failures propagate - a tags, classification or values table failing after the queries before it succeeded fails the read or write instead of returning a partial test case, list or dimension

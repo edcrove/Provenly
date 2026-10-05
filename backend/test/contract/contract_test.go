@@ -163,7 +163,8 @@ func TestProjects(t *testing.T) {
 func TestAuthentication(t *testing.T) {
 	s := fresh(t)
 	e := anon(t, s, 1<<20)
-	params := strings.NewReplacer("{testCaseId}", "1", "{testRunId}", "1", "{stepId}", "1", "{projectKey}", "TC", "{invitationId}", "1", "{username}", "admin", "{apiKeyId}", "1")
+	params := strings.NewReplacer("{testCaseId}", "1", "{testRunId}", "1", "{stepId}", "1", "{projectKey}", "TC", "{invitationId}", "1", "{username}", "admin", "{apiKeyId}", "1",
+		"{dimensionKey}", "risk", "{valueKey}", "low")
 	protected := 0
 	for path, item := range doc.Paths.Map() {
 		for method, op := range item.Operations() {
@@ -175,7 +176,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 36, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 41, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -531,6 +532,11 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.GET("/api/v1/test-runs/1/parse-errors").Expect())
 	problem(e.GET("/api/v1/test-runs/1/amendments").Expect())
 	problem(e.POST("/api/v1/test-runs/1/amendments").WithJSON(map[string]any{"testCaseId": 1, "reason": "x"}).Expect())
+	problem(e.GET("/api/v1/projects/TC/dimensions").Expect())
+	problem(e.POST("/api/v1/projects/TC/dimensions").WithJSON(map[string]any{"key": "os", "name": "OS"}).Expect())
+	problem(e.PATCH("/api/v1/projects/TC/dimensions/risk").WithJSON(map[string]any{"name": "R"}).Expect())
+	problem(e.POST("/api/v1/projects/TC/dimensions/risk/values").WithJSON(map[string]any{"key": "x", "name": "X"}).Expect())
+	problem(e.PATCH("/api/v1/projects/TC/dimensions/risk/values/low").WithJSON(map[string]any{"name": "L"}).Expect())
 	problem(ingest(e, "1", 1, strings.ReplaceAll(report(1), "\n", "")).Expect())
 }
 
@@ -808,4 +814,68 @@ func TestAmendments(t *testing.T) {
 		"displayName": "Mia", "password": "mia's password"}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
 	member.POST(path + "/amendments").WithJSON(map[string]any{"testCaseId": manual, "reason": "x"}).Expect().Status(http.StatusForbidden)
 	member.GET(path + "/amendments").Expect().Status(http.StatusOK)
+}
+
+// TestTaxonomy: dimensions and values per project (maintainers write, anyone in the project reads), tags and
+// classification in the test case body and the list filters.
+func TestTaxonomy(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	e := anon(t, s, 1<<20)
+	dims := admin.GET("/api/v1/projects/TC/dimensions").Expect().Status(http.StatusOK).JSON().Object().Value("items").Array()
+	dims.Length().IsEqual(7)
+	dims.Value(5).Object().HasValue("key", "risk").HasValue("builtIn", true).Value("values").Array().Length().IsEqual(4)
+	admin.GET("/api/v1/projects/tc/dimensions").Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/projects/NOPE/dimensions").Expect().Status(http.StatusNotFound)
+
+	admin.POST("/api/v1/projects/TC/dimensions").WithJSON(map[string]any{"key": "browser", "name": "Browser"}).Expect().
+		Status(http.StatusCreated).JSON().Object().HasValue("builtIn", false).HasValue("archivedAt", nil)
+	admin.POST("/api/v1/projects/TC/dimensions").WithJSON(map[string]any{"key": "browser", "name": "Again"}).Expect().Status(http.StatusConflict)
+	admin.POST("/api/v1/projects/TC/dimensions").WithJSON(map[string]any{"key": "Browser", "name": "x"}).Expect().Status(http.StatusBadRequest)
+	admin.POST("/api/v1/projects/TC/dimensions").WithText(`{"key":"os","name":"OS"}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.POST("/api/v1/projects/NOPE/dimensions").WithJSON(map[string]any{"key": "os", "name": "OS"}).Expect().Status(http.StatusNotFound)
+
+	admin.POST("/api/v1/projects/TC/dimensions/browser/values").WithJSON(map[string]any{"key": "chrome", "name": "Chrome"}).Expect().
+		Status(http.StatusCreated).JSON().Object().Value("values").Array().Value(0).Object().HasValue("key", "chrome")
+	admin.POST("/api/v1/projects/TC/dimensions/browser/values").WithJSON(map[string]any{"key": "chrome", "name": "x"}).Expect().Status(http.StatusConflict)
+	admin.POST("/api/v1/projects/TC/dimensions/browser/values").WithJSON(map[string]any{"key": "-x", "name": "x"}).Expect().Status(http.StatusBadRequest)
+	admin.POST("/api/v1/projects/TC/dimensions/os/values").WithJSON(map[string]any{"key": "x", "name": "x"}).Expect().Status(http.StatusNotFound)
+	admin.POST("/api/v1/projects/TC/dimensions/browser/values").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+
+	admin.PATCH("/api/v1/projects/TC/dimensions/browser").WithJSON(map[string]any{"archived": true}).Expect().
+		Status(http.StatusOK).JSON().Object().Value("archivedAt").String().NotEmpty()
+	admin.PATCH("/api/v1/projects/TC/dimensions/browser").WithJSON(map[string]any{}).Expect().Status(http.StatusBadRequest)
+	admin.PATCH("/api/v1/projects/TC/dimensions/os").WithJSON(map[string]any{"name": "OS"}).Expect().Status(http.StatusNotFound)
+	admin.PATCH("/api/v1/projects/TC/dimensions/browser").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.PATCH("/api/v1/projects/TC/dimensions/risk/values/low").WithJSON(map[string]any{"name": "Minor"}).Expect().
+		Status(http.StatusOK).JSON().Object().Value("values").Array().Value(3).Object().HasValue("name", "Minor")
+	admin.PATCH("/api/v1/projects/TC/dimensions/risk/values/Low").WithJSON(map[string]any{"name": "x"}).Expect().Status(http.StatusBadRequest)
+	admin.PATCH("/api/v1/projects/TC/dimensions/risk/values/none").WithJSON(map[string]any{"name": "x"}).Expect().Status(http.StatusNotFound)
+	admin.PATCH("/api/v1/projects/TC/dimensions/risk/values/low").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+
+	// Test cases carry tags and classification; the list filters by them.
+	created := admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "pay", "tags": []string{"Smoke"}, "classification": map[string]any{"risk": "critical"}}).
+		Expect().Status(http.StatusCreated).JSON().Object()
+	created.Value("tags").Array().IsEqual([]string{"smoke"})
+	created.Value("classification").Object().IsEqual(map[string]any{"risk": "critical"})
+	id := strconv.FormatInt(int64(created.Value("id").Number().Raw()), 10)
+	admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "x", "classification": map[string]any{"browser": "chrome"}}).Expect().
+		Status(http.StatusBadRequest).JSON(problemOpts).Object().Value("errors").Array().Value(0).Object().HasValue("field", "classification.browser")
+	admin.PATCH("/api/v1/test-cases/"+id).WithJSON(map[string]any{"classification": map[string]any{"risk": nil}, "tags": []string{"api"}}).Expect().
+		Status(http.StatusOK).JSON().Object().HasValue("classification", map[string]any{}).HasValue("tags", []string{"api"})
+	admin.PATCH("/api/v1/test-cases/" + id).WithJSON(map[string]any{"tags": []string{"a b"}}).Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/test-cases").WithQuery("tag", "api").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	admin.GET("/api/v1/test-cases").WithQuery("classification", "risk:critical").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
+	admin.GET("/api/v1/test-cases").WithQuery("classification", "risk").Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/test-cases").WithQuery("tag", "").Expect().Status(http.StatusBadRequest)
+
+	// A viewer reads dimensions; writes need a maintainer (403).
+	inv := admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "TC", "role": "viewer"}).Expect().Status(http.StatusCreated).JSON().Object()
+	viewer := as(e, e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "vic",
+		"displayName": "Vic", "password": "vic's password"}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
+	viewer.GET("/api/v1/projects/TC/dimensions").Expect().Status(http.StatusOK)
+	viewer.POST("/api/v1/projects/TC/dimensions").WithJSON(map[string]any{"key": "os", "name": "OS"}).Expect().Status(http.StatusForbidden)
+	viewer.PATCH("/api/v1/projects/TC/dimensions/risk").WithJSON(map[string]any{"name": "R"}).Expect().Status(http.StatusForbidden)
+	viewer.POST("/api/v1/projects/TC/dimensions/risk/values").WithJSON(map[string]any{"key": "x", "name": "X"}).Expect().Status(http.StatusForbidden)
+	viewer.PATCH("/api/v1/projects/TC/dimensions/risk/values/low").WithJSON(map[string]any{"name": "L"}).Expect().Status(http.StatusForbidden)
 }

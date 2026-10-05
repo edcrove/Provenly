@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 
-import { useCreateTestCase, useProjects } from '@/api/queries'
+import { useCreateTestCase, useDimensions, useProjects } from '@/api/queries'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/select'
 import { PageTitle } from '@/components/PageTitle'
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { can } from '@/lib/roles'
+import { createBody } from '@/lib/taxonomy'
 
 import { TestCaseForm } from './TestCaseForm'
 
@@ -17,6 +18,7 @@ export function NewTestCasePage() {
   const projects = useProjects()
   const { project: current } = useCurrentProject()
   const [project, setProject] = useState(current || 'TC')
+  const dimensions = useDimensions(project).data?.items ?? []
   return (
     <Card className="max-w-2xl">
       <CardHeader>
@@ -43,11 +45,16 @@ export function NewTestCasePage() {
           </NativeSelect>
         </div>
         <TestCaseForm
+          dimensions={dimensions}
           submitLabel="Create test case"
           pending={create.isPending}
           error={create.error}
           onSubmit={(values) =>
-            create.mutate({ ...values, project }, { onSuccess: (tc) => navigate(`/test-cases/${tc.id}`) })
+            // Only dimensions of the chosen project: the form keeps what was picked before switching projects.
+            create.mutate(
+              { ...createBody(values, dimensions), project },
+              { onSuccess: (tc) => navigate(`/test-cases/${tc.id}`) },
+            )
           }
           onCancel={() => navigate('/test-cases')}
         />

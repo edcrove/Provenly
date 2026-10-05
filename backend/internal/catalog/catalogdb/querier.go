@@ -9,37 +9,56 @@ import (
 )
 
 type Querier interface {
+	AddTestCaseTags(ctx context.Context, arg AddTestCaseTagsParams) error
+	ClearTestCaseClassification(ctx context.Context, arg ClearTestCaseClassificationParams) error
 	CloseTestStepGap(ctx context.Context, arg CloseTestStepGapParams) error
 	CountProjects(ctx context.Context, projectIds []int64) (int64, error)
 	CountTestCases(ctx context.Context, arg CountTestCasesParams) (int64, error)
 	CountTestSteps(ctx context.Context, testCaseID int64) (int64, error)
+	CreateDimension(ctx context.Context, arg CreateDimensionParams) (ClassificationDimension, error)
+	// Appended after the dimension's last value; no row when the key already exists in the dimension.
+	CreateDimensionValue(ctx context.Context, arg CreateDimensionValueParams) (ClassificationValue, error)
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	// The number comes from the project's counter in the same statement: numbers
 	// are assigned per project, in order, and never reused. No row when the
 	// project does not exist.
 	CreateTestCase(ctx context.Context, arg CreateTestCaseParams) (TestCase, error)
 	CreateTestStep(ctx context.Context, arg CreateTestStepParams) (TestStep, error)
+	// Removes the tags not in keep (all of them when keep is empty).
+	DeleteTestCaseTags(ctx context.Context, arg DeleteTestCaseTagsParams) error
 	DeleteTestStep(ctx context.Context, arg DeleteTestStepParams) (int32, error)
 	DeprecateTestCase(ctx context.Context, id int64) (TestCase, error)
 	GetProject(ctx context.Context, id int64) (Project, error)
 	GetProjectByKey(ctx context.Context, key string) (Project, error)
 	GetTestCase(ctx context.Context, id int64) (TestCase, error)
 	ListAllTestSteps(ctx context.Context, testCaseID int64) ([]TestStep, error)
+	ListDimensionValues(ctx context.Context, projectID int64) ([]ClassificationValue, error)
+	// A project's classification dimensions: built-ins first in their seeded order, then the project's own by key.
+	ListDimensions(ctx context.Context, projectID int64) ([]ClassificationDimension, error)
 	// One statement, so the expected universe of the project (active AND automated)
 	// and the status of the referenced numbers come from the same snapshot: a
 	// deprecation committed during an ingestion cannot put a TC in one and not the other.
 	ListIngestionView(ctx context.Context, arg ListIngestionViewParams) ([]ListIngestionViewRow, error)
 	// project_ids NULL means every project (administrators); otherwise only those.
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
+	// The classification of the given test cases as dimension and value keys.
+	ListTestCaseClassifications(ctx context.Context, ids []int64) ([]ListTestCaseClassificationsRow, error)
 	// The identity (project and number) of the given test cases, for display.
 	ListTestCaseKeys(ctx context.Context, ids []int64) ([]ListTestCaseKeysRow, error)
+	ListTestCaseTags(ctx context.Context, ids []int64) ([]TestCaseTag, error)
+	// classified holds distinct dimension:value pairs that must all hold (AND); a test case has one value per
+	// dimension, so two values of one dimension match nothing.
 	ListTestCases(ctx context.Context, arg ListTestCasesParams) ([]TestCase, error)
 	ListTestSteps(ctx context.Context, arg ListTestStepsParams) ([]TestStep, error)
 	// Locks the test case (and its steps' order) until the transaction ends; returns its current version.
 	LockTestCase(ctx context.Context, id int64) (int64, error)
 	ReactivateTestCase(ctx context.Context, id int64) (TestCase, error)
+	// Sets the value of one dimension; unchanged when it already has that value (so the version does not advance).
+	SetTestCaseClassification(ctx context.Context, arg SetTestCaseClassificationParams) error
 	SetTestStepPosition(ctx context.Context, arg SetTestStepPositionParams) error
 	ShiftTestStepsDown(ctx context.Context, arg ShiftTestStepsDownParams) error
+	UpdateDimension(ctx context.Context, arg UpdateDimensionParams) (ClassificationDimension, error)
+	UpdateDimensionValue(ctx context.Context, arg UpdateDimensionValueParams) (ClassificationValue, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateTestCase(ctx context.Context, arg UpdateTestCaseParams) (TestCase, error)
 	UpdateTestStep(ctx context.Context, arg UpdateTestStepParams) (TestStep, error)

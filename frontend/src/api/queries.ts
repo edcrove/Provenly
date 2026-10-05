@@ -19,6 +19,7 @@ import {
   type CreateInvitationRequest,
   type CreateProjectRequest,
   type CreateTestCaseRequest,
+  type UpdateDimensionRequest,
   type UpdateProjectRequest,
   type UpdateTestCaseRequest,
 } from './client'
@@ -262,14 +263,88 @@ export function useUpdateProject(key: string) {
   })
 }
 
-export function useTestCases(page: number, status?: 'active' | 'deprecated', project?: string) {
+/** Narrows the test case list: a tag and `dimension:value` pairs that must all hold. */
+export interface TestCaseFilter {
+  status?: 'active' | 'deprecated'
+  project?: string
+  tag?: string
+  classification?: string
+}
+
+export function useTestCases(page: number, filter: TestCaseFilter = {}) {
+  const { status, project, tag, classification } = filter
+  const key = [...keys.testCases, 'list', project, status, tag, classification, page]
   return useQuery({
-    queryKey: [...keys.testCases, 'list', project, status, page],
-    placeholderData: (prev, q) =>
-      previousPage([...keys.testCases, 'list', project, status, page], prev, q?.queryKey),
+    queryKey: key,
+    placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
-      unwrap(await api.GET('/api/v1/test-cases', { params: { query: { page, status, project } } })),
+      unwrap(
+        await api.GET('/api/v1/test-cases', {
+          params: { query: { page, status, project, tag, classification } },
+        }),
+      ),
   })
+}
+
+export function useDimensions(projectKey: string, enabled = true) {
+  return useQuery({
+    queryKey: [...keys.projects, projectKey, 'dimensions'],
+    enabled: enabled && projectKey !== '',
+    queryFn: async () =>
+      unwrap(await api.GET('/api/v1/projects/{projectKey}/dimensions', { params: { path: { projectKey } } })),
+  })
+}
+
+export function useDimensionMutations(projectKey: string) {
+  const qc = useQueryClient()
+  // Refetch after failures too: someone else may have added the same key.
+  const onSettled = () => qc.invalidateQueries({ queryKey: [...keys.projects, projectKey, 'dimensions'] })
+  return {
+    create: useExclusiveMutation({
+      mutationFn: async (body: { key: string; name: string }) =>
+        unwrap(
+          await api.POST('/api/v1/projects/{projectKey}/dimensions', {
+            params: { path: { projectKey } },
+            body,
+          }),
+        ),
+      onSettled,
+    }),
+    update: useExclusiveMutation({
+      mutationFn: async ({ dimensionKey, ...body }: UpdateDimensionRequest & { dimensionKey: string }) =>
+        unwrap(
+          await api.PATCH('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}', {
+            params: { path: { projectKey, dimensionKey } },
+            body,
+          }),
+        ),
+      onSettled,
+    }),
+    createValue: useExclusiveMutation({
+      mutationFn: async ({ dimensionKey, ...body }: { dimensionKey: string; key: string; name: string }) =>
+        unwrap(
+          await api.POST('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values', {
+            params: { path: { projectKey, dimensionKey } },
+            body,
+          }),
+        ),
+      onSettled,
+    }),
+    updateValue: useExclusiveMutation({
+      mutationFn: async ({
+        dimensionKey,
+        valueKey,
+        ...body
+      }: UpdateDimensionRequest & { dimensionKey: string; valueKey: string }) =>
+        unwrap(
+          await api.PATCH('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}', {
+            params: { path: { projectKey, dimensionKey, valueKey } },
+            body,
+          }),
+        ),
+      onSettled,
+    }),
+  }
 }
 
 export function useTestCase(id: number) {

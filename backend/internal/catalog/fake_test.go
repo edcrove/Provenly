@@ -3,8 +3,10 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -21,12 +23,14 @@ type fakeRepo struct {
 	now      time.Time
 	// locks counts LockTestCase calls; errs["LockTestCase#n"] fails the n-th one.
 	locks int
+	dims  map[int64][]Dimension
+	ids   int64
 }
 
 func newFakeRepo() *fakeRepo {
 	f := &fakeRepo{
 		projects: map[int64]Project{}, nextNum: map[int64]int64{},
-		cases: map[int64]TestCase{}, steps: map[int64][]TestStep{}, errs: map[string]error{},
+		cases: map[int64]TestCase{}, steps: map[int64][]TestStep{}, errs: map[string]error{}, dims: map[int64][]Dimension{},
 		now: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
 	}
 	_, _ = f.CreateProject(context.Background(), CreateProjectInput{Key: DefaultProjectKey, Name: "Default"})
@@ -46,7 +50,8 @@ func (f *fakeRepo) CreateTestCase(_ context.Context, in CreateInput) (TestCase, 
 	f.nextID++
 	f.nextNum[p.ID]++
 	tc := TestCase{ID: f.nextID, ProjectID: p.ID, ProjectKey: p.Key, Number: f.nextNum[p.ID], Title: in.Title, Description: in.Description, ExpectedResult: in.ExpectedResult,
-		Automated: in.Automated, Status: StatusActive, CreatedAt: f.now, UpdatedAt: f.now, Version: 1}
+		Automated: in.Automated, Status: StatusActive, CreatedAt: f.now, UpdatedAt: f.now, Version: 1,
+		Tags: []string{}, Classification: map[string]string{}}
 	f.cases[tc.ID] = tc
 	return tc, nil
 }
@@ -87,7 +92,8 @@ func (f *fakeRepo) advance(id int64) {
 func (f *fakeRepo) filtered(lf ListFilter) []TestCase {
 	var out []TestCase
 	for _, tc := range f.cases {
-		if (lf.Status == nil || tc.Status == *lf.Status) && (lf.ProjectIDs == nil || slices.Contains(lf.ProjectIDs, tc.ProjectID)) {
+		if (lf.Status == nil || tc.Status == *lf.Status) && (lf.ProjectIDs == nil || slices.Contains(lf.ProjectIDs, tc.ProjectID)) &&
+			(lf.Tag == nil || slices.Contains(tc.Tags, *lf.Tag)) && classifiedAs(tc, lf.Classified) {
 			out = append(out, tc)
 		}
 	}
@@ -210,6 +216,15 @@ func (f *fakeRepo) CreateProject(_ context.Context, in CreateProjectInput) (Proj
 	f.nextPID++
 	p := Project{ID: f.nextPID, Key: in.Key, Name: in.Name, Description: in.Description, CreatedAt: f.now, UpdatedAt: f.now}
 	f.projects[p.ID] = p
+	// Like the database seed, a reduced set of built-in dimensions.
+	risk, _ := f.CreateDimension(context.Background(), p.ID, DimensionInput{Key: "risk", Name: "Risk"})
+	_, _ = f.CreateDimension(context.Background(), p.ID, DimensionInput{Key: "feature", Name: "Feature"})
+	for _, v := range []string{"critical", "high", "low"} {
+		_, _ = f.CreateDimensionValue(context.Background(), risk.ID, DimensionInput{Key: v, Name: v})
+	}
+	for i := range f.dims[p.ID] {
+		f.dims[p.ID][i].BuiltIn = true
+	}
 	return p, nil
 }
 
@@ -398,4 +413,141 @@ func (f *fakeRepo) InTx(_ context.Context, fn func(Repository) error) error {
 		return err
 	}
 	return fn(f)
+}
+
+func classifiedAs(tc TestCase, pairs []string) bool {
+	for _, p := range pairs {
+		dim, value, _ := strings.Cut(p, ":")
+		if tc.Classification[dim] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func (f *fakeRepo) ListDimensions(_ context.Context, projectID int64) ([]Dimension, error) {
+	if err := f.fail("ListDimensions"); err != nil {
+		return nil, err
+	}
+	out := make([]Dimension, len(f.dims[projectID]))
+	for i, d := range f.dims[projectID] {
+		d.Values = slices.Clone(d.Values)
+		out[i] = d
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) CreateDimension(_ context.Context, projectID int64, in DimensionInput) (Dimension, error) {
+	if err := f.fail("CreateDimension"); err != nil {
+		return Dimension{}, err
+	}
+	for _, d := range f.dims[projectID] {
+		if d.Key == in.Key {
+			return Dimension{}, ErrConflict
+		}
+	}
+	f.ids++
+	d := Dimension{ID: f.ids, ProjectID: projectID, Key: in.Key, Name: in.Name, CreatedAt: f.now, Values: []DimensionValue{}}
+	f.dims[projectID] = append(f.dims[projectID], d)
+	return d, nil
+}
+
+// dimension returns a pointer to a stored dimension found by match.
+func (f *fakeRepo) dimension(match func(Dimension) bool) *Dimension {
+	for pid := range f.dims {
+		for i := range f.dims[pid] {
+			if match(f.dims[pid][i]) {
+				return &f.dims[pid][i]
+			}
+		}
+	}
+	return nil
+}
+
+func (f *fakeRepo) archive(at **time.Time, in UpdateDimensionInput, name *string) {
+	if in.Name != nil {
+		*name = *in.Name
+	}
+	if in.Archived != nil {
+		if !*in.Archived {
+			*at = nil
+		} else if *at == nil {
+			now := f.now
+			*at = &now
+		}
+	}
+}
+
+func (f *fakeRepo) UpdateDimension(_ context.Context, projectID int64, key string, in UpdateDimensionInput) (Dimension, error) {
+	if err := f.fail("UpdateDimension"); err != nil {
+		return Dimension{}, err
+	}
+	d := f.dimension(func(d Dimension) bool { return d.ProjectID == projectID && d.Key == key })
+	if d == nil {
+		return Dimension{}, ErrNotFound
+	}
+	f.archive(&d.ArchivedAt, in, &d.Name)
+	return *d, nil
+}
+
+func (f *fakeRepo) CreateDimensionValue(_ context.Context, dimensionID int64, in DimensionInput) (DimensionValue, error) {
+	if err := f.fail("CreateDimensionValue"); err != nil {
+		return DimensionValue{}, err
+	}
+	d := f.dimension(func(d Dimension) bool { return d.ID == dimensionID })
+	if _, ok := d.value(in.Key); ok {
+		return DimensionValue{}, ErrConflict
+	}
+	f.ids++
+	v := DimensionValue{ID: f.ids, DimensionID: dimensionID, Key: in.Key, Name: in.Name, Position: int32(len(d.Values) + 1), CreatedAt: f.now}
+	d.Values = append(d.Values, v)
+	return v, nil
+}
+
+func (f *fakeRepo) UpdateDimensionValue(_ context.Context, dimensionID int64, key string, in UpdateDimensionInput) (DimensionValue, error) {
+	if err := f.fail("UpdateDimensionValue"); err != nil {
+		return DimensionValue{}, err
+	}
+	d := f.dimension(func(d Dimension) bool { return d.ID == dimensionID })
+	for i := range d.Values {
+		if v := &d.Values[i]; v.Key == key {
+			f.archive(&v.ArchivedAt, in, &v.Name)
+			return *v, nil
+		}
+	}
+	return DimensionValue{}, ErrNotFound
+}
+
+func (f *fakeRepo) SetTags(_ context.Context, testCaseID int64, tags []string) error {
+	if err := f.fail("SetTags"); err != nil {
+		return err
+	}
+	tc := f.cases[testCaseID]
+	if !slices.Equal(tc.Tags, tags) {
+		tc.Tags = slices.Clone(tags)
+		tc.Version++
+		f.cases[testCaseID] = tc
+	}
+	return nil
+}
+
+func (f *fakeRepo) SetClassification(_ context.Context, testCaseID, projectID, dimensionID, valueID int64) error {
+	if err := f.fail("SetClassification"); err != nil {
+		return err
+	}
+	tc := f.cases[testCaseID]
+	d := f.dimension(func(d Dimension) bool { return d.ID == dimensionID && d.ProjectID == projectID })
+	classification := maps.Clone(tc.Classification)
+	delete(classification, d.Key)
+	for _, v := range d.Values {
+		if v.ID == valueID {
+			classification[d.Key] = v.Key
+		}
+	}
+	if !maps.Equal(classification, tc.Classification) {
+		tc.Classification = classification
+		tc.Version++
+		f.cases[testCaseID] = tc
+	}
+	return nil
 }

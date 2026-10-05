@@ -30,7 +30,7 @@ func TestPlatform(t *testing.T) {
 		assert.Equal(t, 0, n)
 		require.NoError(t, postgres.Migrate(ctx, db.Pool, "up"))
 		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_name LIKE 'test_%'`).Scan(&n))
-		assert.Equal(t, 7, n)
+		assert.Equal(t, 9, n)
 		assert.ErrorContains(t, postgres.Migrate(ctx, db.Pool, "sideways"), "migrate sideways")
 	})
 

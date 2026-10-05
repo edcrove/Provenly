@@ -73,6 +73,8 @@ export function testCase(overrides: Partial<TestCase> = {}): TestCase {
     updatedAt: at,
     deprecatedAt: null,
     version: 1,
+    tags: [],
+    classification: {},
     ...overrides,
   }
 }

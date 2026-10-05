@@ -8,6 +8,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ClassificationDimension struct {
+	ID         int64
+	ProjectID  int64
+	Key        string
+	Name       string
+	BuiltIn    bool
+	ArchivedAt pgtype.Timestamptz
+	CreatedAt  pgtype.Timestamptz
+}
+
+type ClassificationValue struct {
+	ID          int64
+	DimensionID int64
+	Key         string
+	Name        string
+	Position    int32
+	ArchivedAt  pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+}
+
 type Project struct {
 	ID          int64
 	Key         string
@@ -31,6 +51,18 @@ type TestCase struct {
 	ProjectID      int64
 	Number         int64
 	Version        int64
+}
+
+type TestCaseClassification struct {
+	TestCaseID  int64
+	ProjectID   int64
+	DimensionID int64
+	ValueID     int64
+}
+
+type TestCaseTag struct {
+	TestCaseID int64
+	Tag        string
 }
 
 type TestStep struct {

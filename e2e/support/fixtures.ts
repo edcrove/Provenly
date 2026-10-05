@@ -22,7 +22,15 @@ export interface TestCase {
 export class ProvenlyApi {
   constructor(readonly request: APIRequestContext) {}
 
-  async createTestCase(body: { title: string; automated?: boolean; expectedResult?: string; description?: string; project?: string }) {
+  async createTestCase(body: {
+    title: string
+    automated?: boolean
+    expectedResult?: string
+    description?: string
+    project?: string
+    tags?: string[]
+    classification?: Record<string, string>
+  }) {
     const res = await this.request.post(`${apiURL}/api/v1/test-cases`, { data: body })
     expect(res.status()).toBe(201)
     return (await res.json()) as TestCase

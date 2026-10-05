@@ -17,6 +17,7 @@ import { can, memberRoles, roleDescriptions, type MemberRole } from '@/lib/roles
 import { positiveInt } from '@/lib/status'
 
 import { ApiKeysSection } from './ApiKeysSection'
+import { ClassificationSection } from './ClassificationSection'
 import { useProjectRole } from './useProjectRole'
 
 function RoleSelect({
@@ -169,6 +170,7 @@ export function ProjectMembersPage() {
           {manage ? <AddMember projectKey={projectKey} /> : null}
         </CardContent>
       </Card>
+      <ClassificationSection projectKey={projectKey} manage={manage} />
       {manage ? <ApiKeysSection projectKey={projectKey} /> : null}
     </div>
   )

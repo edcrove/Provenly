@@ -690,9 +690,244 @@ const authScenarios: Scenario[] = [
   },
 ]
 
+const risk = { projectKey: 'TC', dimensionKey: 'risk' }
+const critical = { ...risk, valueKey: 'critical' }
+const named = { key: 'browser', name: 'Browser' }
+
+/** The usual failures of a maintainer-only taxonomy write: 403 for a viewer, 404, 415 and 500. */
+function taxonomyWriteFailures(
+  op: string,
+  call: (c: ApiClient, headers?: Record<string, string>) => Promise<Result>,
+) {
+  return [
+    { op, status: 403, setup: asViewer, call: (c: ApiClient) => call(c) },
+    { op, status: 415, call: (c: ApiClient) => call(c, textPlain) },
+    { op, status: 500, setup: fail, call: (c: ApiClient) => call(c) },
+  ]
+}
+
+const taxonomyScenarios: Scenario[] = [
+  {
+    op: 'GET /api/v1/projects/{projectKey}/dimensions',
+    status: 200,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/dimensions', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/dimensions',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/dimensions', { params: { path: { projectKey: 'tc' } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/dimensions',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/dimensions', { params: { path: chk } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/dimensions',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/dimensions', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/dimensions',
+    status: 201,
+    call: (c) => c.POST('/api/v1/projects/{projectKey}/dimensions', { params: { path: tcKey }, body: named }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/dimensions',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/dimensions', {
+        params: { path: tcKey },
+        body: { key: 'Browser', name: 'x' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/dimensions',
+    status: 404,
+    call: (c) => c.POST('/api/v1/projects/{projectKey}/dimensions', { params: { path: chk }, body: named }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/dimensions',
+    status: 409,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/dimensions', {
+        params: { path: tcKey },
+        body: { key: 'risk', name: 'Risk' },
+      }),
+  },
+  ...taxonomyWriteFailures('POST /api/v1/projects/{projectKey}/dimensions', (c, headers) =>
+    c.POST('/api/v1/projects/{projectKey}/dimensions', { params: { path: tcKey }, body: named, headers }),
+  ),
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}',
+    status: 200,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}', {
+        params: { path: risk },
+        body: { name: 'Business risk', archived: true },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}',
+    status: 400,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}', {
+        params: { path: risk },
+        body: {},
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}',
+    status: 404,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}', {
+        params: { path: { ...risk, dimensionKey: 'browser' } },
+        body: { archived: false },
+      }),
+  },
+  ...taxonomyWriteFailures('PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}', (c, headers) =>
+    c.PATCH('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}', {
+      params: { path: risk },
+      body: { name: 'R' },
+      headers,
+    }),
+  ),
+  {
+    op: 'POST /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values',
+    status: 201,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values', {
+        params: { path: risk },
+        body: { key: 'medium', name: 'Medium' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values', {
+        params: { path: risk },
+        body: { key: '-x', name: 'x' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values',
+    status: 404,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values', {
+        params: { path: { ...risk, dimensionKey: 'browser' } },
+        body: { key: 'chrome', name: 'Chrome' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values',
+    status: 409,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values', {
+        params: { path: risk },
+        body: { key: 'critical', name: 'Critical' },
+      }),
+  },
+  ...taxonomyWriteFailures(
+    'POST /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values',
+    (c, headers) =>
+      c.POST('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values', {
+        params: { path: risk },
+        body: { key: 'medium', name: 'Medium' },
+        headers,
+      }),
+  ),
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}',
+    status: 200,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}', {
+        params: { path: critical },
+        body: { archived: true },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}',
+    status: 400,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}', {
+        params: { path: { ...critical, valueKey: 'Critical' } },
+        body: { archived: true },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}',
+    status: 404,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}', {
+        params: { path: { ...critical, valueKey: 'blocker' } },
+        body: { archived: true },
+      }),
+  },
+  ...taxonomyWriteFailures(
+    'PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}',
+    (c, headers) =>
+      c.PATCH('/api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}', {
+        params: { path: critical },
+        body: { name: 'Blocker' },
+        headers,
+      }),
+  ),
+  // Tags and classification on test cases, and the list filters.
+  {
+    op: 'POST /api/v1/test-cases',
+    status: 201,
+    call: (c) =>
+      c.POST('/api/v1/test-cases', {
+        body: { title: 'Pay', tags: ['Smoke'], classification: { risk: 'critical' } },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-cases',
+    status: 400,
+    call: (c) => c.POST('/api/v1/test-cases', { body: { title: 'Pay', classification: { os: 'linux' } } }),
+  },
+  {
+    op: 'PATCH /api/v1/test-cases/{testCaseId}',
+    status: 200,
+    call: (c) =>
+      c.PATCH('/api/v1/test-cases/{testCaseId}', {
+        params: { path: tc },
+        body: { tags: ['api'], classification: { risk: 'high', feature: null } },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/test-cases/{testCaseId}',
+    status: 400,
+    call: (c) =>
+      c.PATCH('/api/v1/test-cases/{testCaseId}', { params: { path: tc }, body: { tags: ['a b'] } }),
+  },
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 200,
+    call: (c) =>
+      c.GET('/api/v1/test-cases', { params: { query: { tag: 'smoke', classification: 'risk:critical' } } }),
+  },
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 400,
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { classification: 'risk' } } }),
+  },
+]
+
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 type AnyCall = (path: string, init: object) => Promise<Result>
-const anyPath = { testCaseId: 153, testRunId: 7, stepId: 1, projectKey: 'TC', invitationId: 1 }
+const anyPath = {
+  testCaseId: 153,
+  testRunId: 7,
+  stepId: 1,
+  projectKey: 'TC',
+  invitationId: 1,
+  dimensionKey: 'risk',
+  valueKey: 'critical',
+}
 
 /** Without a session every operation that declares 401 answers it (sign-in's own 401 is a wrong password). */
 const signedOutScenarios = (): Scenario[] =>
@@ -722,6 +957,7 @@ const scenarios: Scenario[] = [
   ...apiKeyScenarios,
   ...staleScenarios,
   ...amendmentScenarios,
+  ...taxonomyScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
   // Projects

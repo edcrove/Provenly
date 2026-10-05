@@ -30,6 +30,11 @@ type API interface {
 	ProjectByKey(ctx context.Context, key string) (Project, error)
 	ListProjects(ctx context.Context, projectIDs []int64, page pagination.Page) (pagination.Result[Project], error)
 	UpdateProject(ctx context.Context, key string, in UpdateProjectInput) (Project, error)
+	Dimensions(ctx context.Context, projectID int64) ([]Dimension, error)
+	CreateDimension(ctx context.Context, projectID int64, in DimensionInput) (Dimension, error)
+	UpdateDimension(ctx context.Context, projectID int64, key string, in UpdateDimensionInput) (Dimension, error)
+	CreateDimensionValue(ctx context.Context, projectID int64, dimensionKey string, in DimensionInput) (Dimension, error)
+	UpdateDimensionValue(ctx context.Context, projectID int64, dimensionKey, valueKey string, in UpdateDimensionInput) (Dimension, error)
 }
 
 // ProjectKeyMessage is the validation message of a malformed project key.
@@ -81,29 +86,39 @@ func ProjectQuery(r *http.Request, byKey func(context.Context, string) (Project,
 
 // TestCaseDTO is the wire form of TestCase.
 type TestCaseDTO struct {
-	ID             int64      `json:"id"`
-	Key            string     `json:"key"`
-	ProjectID      int64      `json:"projectId"`
-	ProjectKey     string     `json:"projectKey"`
-	Number         int64      `json:"number"`
-	Title          string     `json:"title"`
-	Description    string     `json:"description"`
-	ExpectedResult string     `json:"expectedResult"`
-	Status         Status     `json:"status"`
-	Automated      bool       `json:"automated"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	UpdatedAt      time.Time  `json:"updatedAt"`
-	DeprecatedAt   *time.Time `json:"deprecatedAt"`
-	Version        int64      `json:"version"`
+	ID             int64             `json:"id"`
+	Key            string            `json:"key"`
+	ProjectID      int64             `json:"projectId"`
+	ProjectKey     string            `json:"projectKey"`
+	Number         int64             `json:"number"`
+	Title          string            `json:"title"`
+	Description    string            `json:"description"`
+	ExpectedResult string            `json:"expectedResult"`
+	Status         Status            `json:"status"`
+	Automated      bool              `json:"automated"`
+	CreatedAt      time.Time         `json:"createdAt"`
+	UpdatedAt      time.Time         `json:"updatedAt"`
+	DeprecatedAt   *time.Time        `json:"deprecatedAt"`
+	Version        int64             `json:"version"`
+	Tags           []string          `json:"tags"`
+	Classification map[string]string `json:"classification"`
 }
 
 // ToDTO converts a TestCase to its wire form.
 func ToDTO(tc TestCase) TestCaseDTO {
-	return TestCaseDTO{
+	dto := TestCaseDTO{
 		ID: tc.ID, Key: tc.Key(), ProjectID: tc.ProjectID, ProjectKey: tc.ProjectKey, Number: tc.Number, Title: tc.Title, Description: tc.Description,
 		ExpectedResult: tc.ExpectedResult, Status: tc.Status, Automated: tc.Automated,
 		CreatedAt: tc.CreatedAt, UpdatedAt: tc.UpdatedAt, DeprecatedAt: tc.DeprecatedAt, Version: tc.Version,
+		Tags: tc.Tags, Classification: tc.Classification,
 	}
+	if dto.Tags == nil {
+		dto.Tags = []string{}
+	}
+	if dto.Classification == nil {
+		dto.Classification = map[string]string{}
+	}
+	return dto
 }
 
 // writeVersioned answers a test case read or write with its version as the ETag (optimistic locking).
@@ -136,18 +151,22 @@ type TestStepDTO struct {
 func stepDTO(s TestStep) TestStepDTO { return TestStepDTO(s) }
 
 type createTestCaseRequest struct {
-	Project        string `json:"project"`
-	Title          string `json:"title"`
-	Description    string `json:"description"`
-	ExpectedResult string `json:"expectedResult"`
-	Automated      bool   `json:"automated"`
+	Project        string            `json:"project"`
+	Title          string            `json:"title"`
+	Description    string            `json:"description"`
+	ExpectedResult string            `json:"expectedResult"`
+	Automated      bool              `json:"automated"`
+	Tags           []string          `json:"tags"`
+	Classification map[string]string `json:"classification"`
 }
 
 type updateTestCaseRequest struct {
-	Title          *string `json:"title"`
-	Description    *string `json:"description"`
-	ExpectedResult *string `json:"expectedResult"`
-	Automated      *bool   `json:"automated"`
+	Title          *string            `json:"title"`
+	Description    *string            `json:"description"`
+	ExpectedResult *string            `json:"expectedResult"`
+	Automated      *bool              `json:"automated"`
+	Tags           *[]string          `json:"tags"`
+	Classification map[string]*string `json:"classification"`
 }
 
 type createStepRequest struct {
@@ -243,6 +262,11 @@ func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("POST /api/v1/projects", h.createProject)
 	mux.HandleFunc("GET /api/v1/projects/{projectKey}", h.getProject)
 	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}", h.updateProject)
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/dimensions", h.listDimensions)
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/dimensions", h.createDimension)
+	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}", h.updateDimension)
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values", h.createDimensionValue)
+	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}", h.updateDimensionValue)
 	mux.HandleFunc("GET /api/v1/test-cases", h.list)
 	mux.HandleFunc("POST /api/v1/test-cases", h.create)
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}", h.onTestCase(authz.RoleViewer, h.get))
@@ -271,6 +295,14 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	if raw != nil {
 		s := Status(*raw)
 		f.Status = &s
+	}
+	if f.Tag, err = httpx.PatternQuery(r, "tag", TagPattern, TagMessage); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	if f.Classified, err = classifiedQuery(r); err != nil {
+		httpx.WriteError(w, r, err)
+		return
 	}
 	if f.ProjectIDs, err = VisibleProjects(r, h.api.ProjectByKey, h.guard); err != nil {
 		httpx.WriteError(w, r, err)
@@ -305,6 +337,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 	tc, err := h.api.Create(r.Context(), CreateInput{
 		ProjectID: p.ID, Title: req.Title, Description: req.Description, ExpectedResult: req.ExpectedResult, Automated: req.Automated,
+		Tags: req.Tags, Classification: req.Classification,
 	})
 	if err != nil {
 		httpx.WriteError(w, r, err)

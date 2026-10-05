@@ -546,6 +546,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        /** The project's quality indicators - automation, test cases not executed recently and flaky test cases (anyone who can see the project) */
+        get: operations["getProjectQuality"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/issues": {
         parameters: {
             query?: never;
@@ -1744,6 +1764,55 @@ export interface components {
         };
         IssueLinksRequest: {
             testCaseIds: number[];
+        };
+        ProjectQuality: {
+            testCases: {
+                /** Format: int32 */
+                active: number;
+                /** Format: int32 */
+                automated: number;
+                /** Format: int32 */
+                manual: number;
+                /**
+                 * Format: double
+                 * @description Percentage of active test cases that are automated (0 without active ones).
+                 */
+                automationRate: number;
+            };
+            execution: {
+                /** Format: int32 */
+                staleDays: number;
+                /**
+                 * Format: int32
+                 * @description Active test cases without any valid result.
+                 */
+                neverExecuted: number;
+                /**
+                 * Format: int32
+                 * @description Active test cases whose latest valid result is older than staleDays.
+                 */
+                stale: number;
+                /** @description Never executed first, then the oldest. */
+                testCases: {
+                    /** Format: int64 */
+                    testCaseId: number;
+                    testCaseKey: string;
+                    /** Format: date-time */
+                    lastExecutedAt: string | null;
+                }[];
+            };
+            flaky: {
+                /** Format: int32 */
+                window: number;
+                /** @description Test cases that passed on a retry in some of the latest window runs, most flaky first. */
+                testCases: {
+                    /** Format: int64 */
+                    testCaseId: number;
+                    testCaseKey: string;
+                    /** Format: int32 */
+                    runs: number;
+                }[];
+            };
         };
         TestRunPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["TestRun"][];
@@ -3224,6 +3293,38 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getProjectQuality: {
+        parameters: {
+            query?: {
+                /** @description An active test case not executed for more days than this is stale (default 14). */
+                staleDays?: number;
+                /** @description How many of the latest runs flakiness is counted over (default 20). */
+                window?: number;
+            };
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The quality indicators */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectQuality"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };

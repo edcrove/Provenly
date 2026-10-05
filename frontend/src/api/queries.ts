@@ -481,6 +481,19 @@ export function useIssueMutations(projectKey: string) {
   }
 }
 
+export function useQuality(projectKey: string, staleDays: number, window: number) {
+  return useQuery({
+    queryKey: [...keys.projects, projectKey, 'quality', staleDays, window],
+    enabled: projectKey !== '',
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/projects/{projectKey}/quality', {
+          params: { path: { projectKey }, query: { staleDays, window } },
+        }),
+      ),
+  })
+}
+
 export function useDimensions(projectKey: string, enabled = true) {
   return useQuery({
     queryKey: [...keys.projects, projectKey, 'dimensions'],

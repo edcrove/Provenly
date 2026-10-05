@@ -16,6 +16,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/identity"
 	identitypg "github.com/edcrove/provenly/backend/internal/identity/postgres"
 	"github.com/edcrove/provenly/backend/internal/ingestion"
+	"github.com/edcrove/provenly/backend/internal/insights"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 )
 
@@ -26,6 +27,7 @@ type Services struct {
 	Execution *execution.Service
 	Ingestion *ingestion.Service
 	Manual    *ingestion.Manual
+	Insights  *insights.Service
 	Identity  *identity.Service
 	// Now is the clock of the services (session and invitation expiry).
 	Now func() time.Time
@@ -50,6 +52,7 @@ func NewServicesWith(pool *pgxpool.Pool, now func() time.Time, idcfg identity.Co
 	return Services{
 		Catalog: cat, Execution: exe, Ingestion: ingestion.NewService(cat, exe, ids),
 		Manual:   ingestion.NewManual(cat, exe, ids),
+		Insights: insights.NewService(cat, exe, ids, now),
 		Identity: ids, Now: now, Ready: pool.Ping,
 	}
 }
@@ -96,6 +99,7 @@ func register(r httpx.Router, s Services, maxIngestBytes int64) {
 	catalog.NewHandler(s.Catalog, s.Identity).Register(p)
 	execution.NewHandler(s.Execution, s.Catalog, s.Identity).Register(p)
 	ingestion.NewManualHandler(s.Manual).Register(p)
+	insights.NewHandler(s.Insights).Register(p)
 }
 
 type patternRecorder []string

@@ -28,7 +28,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 11 | Manual execution (manual runs, step results) | MVP D3, Planning #4, Incubator | ✅ | proto/11-manual-execution |
 | 12 | Requirements and requirement ↔ test traceability | Incubator (Requirements Federation) | ✅ | proto/12-requirements |
 | 13 | Issues, known issues and issue verification | Incubator, Planning #8 | ✅ | proto/13-issues |
-| 14 | Quality dashboard (trends, flaky, coverage) | Incubator (Quality Intelligence) | ⏳ | |
+| 14 | Quality dashboard (trends, flaky, coverage) | Incubator (Quality Intelligence) | ✅ | proto/14-dashboard |
 | 15 | Live runs: execution sessions, live events, reconciliation | Trello Live Streaming, Planning #9 | ⏳ | |
 | 16 | Playwright reporter (`@provenly/playwright-reporter`) | Trello, DEC-15 | ⏳ | |
 | 17 | OpenTelemetry basic instrumentation | Trello, DEC-11 | ⏳ | |
@@ -128,6 +128,11 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P13-4 | Aggregation | The issue takes its worst link: reopen > known issue > unverified > not reproducible > validated fixed. Not configurable in the prototype | Notion asks for a configurable policy; one safe default first, configuration once there is a second policy to offer |
 | P13-5 | Known issues | The run page lists failing test cases linked to an open issue as "known issue" and the rest as "new failures"; the run's verdict is unchanged | Triage help without hiding failures in the verdict |
 | P13-6 | Not now | No verification timeline (history), no write-back to trackers (reopen, comment, transition) | Timeline needs stored state changes (feature 20, audit log); write-back needs tracker credentials (feature 18) |
+| P14-1 | Scope | A per-project dashboard with the candidate areas of Notion 21 that existing data supports: latest run, pass-rate trend, test cases not executed recently, flaky test cases, automation, requirement coverage, issue verification. Release/environment quality and duration trends are left out | Releases and environments are not modelled yet; durations are optional in JUnit and too sparse to trend |
+| P14-2 | Automation | Automation rate = automated / active test cases, from the catalog flag (no AutomationMapping) | Notion 21: "do not define automation coverage via AutomationMapping"; the denominator is explicit and stable |
+| P14-3 | Stale | An active test case is stale when its latest valid result is older than `staleDays` (default 14, 1–365) or it has none; never-executed ones are listed first, then the oldest (20 listed, counts complete) | Highlights tests nobody runs; the threshold depends on the team's cadence, so it is a parameter |
+| P14-4 | Flaky | Counted per test case over the latest `window` runs (default 20, 1–200) with the D1 rule (passed on its last attempt after a failed or errored one); manual re-tests never count | Same definition as the run summaries; a window keeps old flakiness from dominating |
+| P14-5 | Architecture | A new read-only `insights` module computes what no module owns (cross catalog/execution); the trend, coverage and verification come from the existing endpoints | Keeps modules owning their data; one new endpoint instead of a monolithic dashboard API |
 | P12-6 | UI | A Requirements page (list with coverage, native creation and external registration), a requirement page (covering test cases, latest results, link/unlink, archive) and "Requirements" on the test case page | Traceability is visible from both sides |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
@@ -301,6 +306,18 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: new manual run page, manual execution panel on the run page, running/manual badges (screenshots 56–57).
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
+
+### 14. Quality dashboard (Notion 21 Dashboards, Metrics & Quality Intelligence)
+
+- **Behavior**: the Dashboard (first in the navigation) shows, for the current project, the latest run and its verdict,
+  a pass-rate bar per recent run (red when it did not pass, each linking to its run), the automation rate, the test
+  cases never or not recently executed (period selectable), the flaky test cases (window selectable), the requirement
+  coverage breakdown (archived requirements excluded) and the issue verification breakdown.
+- **API**: `GET /projects/{key}/quality?staleDays=&window=` (viewers and up).
+- **Data**: none new; two execution queries (`ListLastExecuted`, `ListFlakyCounts`).
+- **UI**: Dashboard page (screenshot 64).
+- **Tests**: unit (insights service and handler, execution reads), BE-INT-052, backend and frontend contract,
+  FE-INT-042, BE-E2E-020, FE-E2E-022, probe quality sweep.
 
 ### 13. Issues, known issues and verification (DEC-8, Planning #8)
 

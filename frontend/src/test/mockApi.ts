@@ -44,6 +44,8 @@ export interface MockDb {
   /** Requirements by project id; latest is the latest result status of each test case (coverage). */
   requirements: (Requirement & { projectId: number })[]
   latest: Record<number, 'passed' | 'failed' | 'error' | 'skipped'>
+  /** Flaky test case counts the quality endpoint reports (by test case id). */
+  flaky: Record<number, number>
   /** Issues by project id; their verification is recomputed from latest (skipped is inconclusive). */
   issues: (Issue & { projectId: number })[]
   /** Classification dimensions by project id. */
@@ -80,6 +82,7 @@ export function seed(): MockDb {
     requirements: [],
     latest: {},
     issues: [],
+    flaky: {},
     projects: [project()],
     testCases: [tc, testCase({ id: 154, title: 'Logout works' })],
     steps: [
@@ -543,6 +546,49 @@ const stepsOf = (tcId: number) =>
   db.steps.filter((s) => s.testCaseId === tcId).sort((a, b) => a.position - b.position)
 
 export const handlers = [
+  http.get(
+    `${BASE}/projects/:projectKey/quality`,
+    guard(({ params, request }) => {
+      const q = new URL(request.url).searchParams
+      const bounded = (name: string, fallback: number, max: number) => {
+        const raw = q.get(name)
+        if (raw === null) return fallback
+        const n = Number(raw)
+        return Number.isInteger(n) && n >= 1 && n <= max ? n : undefined
+      }
+      const staleDays = bounded('staleDays', 14, 365)
+      if (staleDays === undefined) return validation('staleDays', 'must be 1 to 365')
+      const window = bounded('window', 20, 200)
+      if (window === undefined) return validation('window', 'must be 1 to 200')
+      const p = visibleProject(params.projectKey)
+      if (p instanceof Response) return p
+      const active = db.testCases.filter((t) => t.projectId === p.id && t.status === 'active')
+      const automated = active.filter((t) => t.automated).length
+      const never = active.filter((t) => !db.results.some((r) => r.testCaseId === t.id))
+      return respond({
+        testCases: {
+          active: active.length,
+          automated,
+          manual: active.length - automated,
+          automationRate: active.length ? Math.round((automated * 10000) / active.length) / 100 : 0,
+        },
+        execution: {
+          staleDays,
+          neverExecuted: never.length,
+          stale: 0,
+          testCases: never.map((t) => ({ testCaseId: t.id, testCaseKey: t.key, lastExecutedAt: null })),
+        },
+        flaky: {
+          window,
+          testCases: Object.entries(db.flaky).map(([id, runs]) => ({
+            testCaseId: Number(id),
+            testCaseKey: `TC-${id}`,
+            runs,
+          })),
+        },
+      })
+    }),
+  ),
   http.get(
     `${BASE}/projects/:projectKey/issues`,
     guard(({ params, request }) => {

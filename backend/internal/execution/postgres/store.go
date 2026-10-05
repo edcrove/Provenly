@@ -433,3 +433,29 @@ func (s *Store) ListLatestConclusive(ctx context.Context, testCaseIDs []int64) (
 	}
 	return out, nil
 }
+
+// ListLastExecuted implements execution.Repository.
+func (s *Store) ListLastExecuted(ctx context.Context, testCaseIDs []int64) (map[int64]time.Time, error) {
+	rows, err := s.q.ListLastExecuted(ctx, testCaseIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]time.Time, len(rows))
+	for _, r := range rows {
+		out[r.TestCaseID] = r.LastExecutedAt.Time
+	}
+	return out, nil
+}
+
+// ListFlakyCounts implements execution.Repository.
+func (s *Store) ListFlakyCounts(ctx context.Context, projectID int64, window, limit int32) ([]execution.FlakyCount, error) {
+	rows, err := s.q.ListFlakyCounts(ctx, executiondb.ListFlakyCountsParams{ProjectID: projectID, WindowRuns: window, MaxItems: limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]execution.FlakyCount, len(rows))
+	for i, r := range rows {
+		out[i] = execution.FlakyCount{TestCaseID: r.TestCaseID, Runs: r.FlakyRuns}
+	}
+	return out, nil
+}

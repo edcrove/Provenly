@@ -289,6 +289,12 @@ type Conclusive struct {
 	Status     ResultStatus
 }
 
+// FlakyCount is how many of a project's latest runs a test case was flaky in.
+type FlakyCount struct {
+	TestCaseID int64
+	Runs       int32
+}
+
 // Repository is the persistence port of the execution module.
 type Repository interface {
 	// InsertTestRun inserts a run unless its external id exists; ok is false on conflict.
@@ -303,6 +309,10 @@ type Repository interface {
 	ListLatestResults(ctx context.Context, testCaseIDs []int64) ([]ValidResult, error)
 	// ListLatestConclusive returns, per test case, its latest run with a conclusive logical status and that status.
 	ListLatestConclusive(ctx context.Context, testCaseIDs []int64) ([]Conclusive, error)
+	// ListLastExecuted returns when each test case last had a valid result (absent: never).
+	ListLastExecuted(ctx context.Context, testCaseIDs []int64) (map[int64]time.Time, error)
+	// ListFlakyCounts returns the test cases flaky in a project's latest window runs, most flaky first, at most limit.
+	ListFlakyCounts(ctx context.Context, projectID int64, window, limit int32) ([]FlakyCount, error)
 	// FinishTestRun ends a running run with a final status.
 	FinishTestRun(ctx context.Context, id int64, status RunStatus) error
 	GetTestRunIDByExternalID(ctx context.Context, projectID int64, externalRunID string) (int64, error)

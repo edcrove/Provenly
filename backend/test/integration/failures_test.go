@@ -105,6 +105,8 @@ func TestPersistenceFailures(t *testing.T) {
 			"catalog.SetRequirementTestCases": func() error { return cat.SetRequirementTestCases(ctx, 1, 1, []int64{1}) },
 			"execution.ListLatestResults":     func() error { _, err := exe.ListLatestResults(ctx, []int64{1}); return err },
 			"execution.ListLatestConclusive":  func() error { _, err := exe.ListLatestConclusive(ctx, []int64{1}); return err },
+			"execution.ListLastExecuted":      func() error { _, err := exe.ListLastExecuted(ctx, []int64{1}); return err },
+			"execution.ListFlakyCounts":       func() error { _, err := exe.ListFlakyCounts(ctx, 1, 20, 20); return err },
 			"catalog.ListIssues":              func() error { _, err := cat.ListIssues(ctx, 1, catalog.IssueFilter{}); return err },
 			"catalog.GetIssue":                func() error { _, err := cat.GetIssue(ctx, 1, 1); return err },
 			"catalog.NextNativeIssueNumber":   func() error { _, err := cat.NextNativeIssueNumber(ctx, 1); return err },

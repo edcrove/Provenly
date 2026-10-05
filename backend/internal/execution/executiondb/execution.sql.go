@@ -444,6 +444,90 @@ func (q *Queries) ListDiagnosticResults(ctx context.Context, testRunID int64) ([
 	return items, nil
 }
 
+const listFlakyCounts = `-- name: ListFlakyCounts :many
+WITH runs AS (
+    SELECT id FROM test_runs WHERE project_id = $2 ORDER BY id DESC LIMIT $3
+), tests AS (
+    SELECT t.test_case_id, t.test_run_id,
+        (array_agg(t.status ORDER BY t.attempt DESC, t.id DESC))[1] AS last_status,
+        bool_or(t.status IN ('failed', 'error')) AS any_failure
+    FROM test_results t
+    WHERE t.test_run_id IN (SELECT id FROM runs) AND t.correlation = 'valid' AND t.class_name <> 'provenly-manual'
+    GROUP BY t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name
+)
+SELECT x.test_case_id::bigint AS test_case_id, count(DISTINCT x.test_run_id)::int AS flaky_runs
+FROM tests x WHERE x.last_status = 'passed' AND x.any_failure
+GROUP BY x.test_case_id
+ORDER BY flaky_runs DESC, x.test_case_id
+LIMIT $1
+`
+
+type ListFlakyCountsParams struct {
+	MaxItems   int32
+	ProjectID  int64
+	WindowRuns int32
+}
+
+type ListFlakyCountsRow struct {
+	TestCaseID int64
+	FlakyRuns  int32
+}
+
+// In a project's latest runs, how many runs each test case was flaky in: one of its tests passed on its last attempt
+// after a failed or errored one. Manual re-tests are never flaky.
+func (q *Queries) ListFlakyCounts(ctx context.Context, arg ListFlakyCountsParams) ([]ListFlakyCountsRow, error) {
+	rows, err := q.db.Query(ctx, listFlakyCounts, arg.MaxItems, arg.ProjectID, arg.WindowRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFlakyCountsRow
+	for rows.Next() {
+		var i ListFlakyCountsRow
+		if err := rows.Scan(&i.TestCaseID, &i.FlakyRuns); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLastExecuted = `-- name: ListLastExecuted :many
+SELECT t.test_case_id::bigint AS test_case_id, max(r.created_at)::timestamptz AS last_executed_at
+FROM test_results t JOIN test_runs r ON r.id = t.test_run_id
+WHERE t.correlation = 'valid' AND t.test_case_id = ANY($1::bigint[])
+GROUP BY t.test_case_id
+`
+
+type ListLastExecutedRow struct {
+	TestCaseID     int64
+	LastExecutedAt pgtype.Timestamptz
+}
+
+// When each given test case last had a valid result (the creation time of its latest run with one).
+func (q *Queries) ListLastExecuted(ctx context.Context, testCaseIds []int64) ([]ListLastExecutedRow, error) {
+	rows, err := q.db.Query(ctx, listLastExecuted, testCaseIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLastExecutedRow
+	for rows.Next() {
+		var i ListLastExecutedRow
+		if err := rows.Scan(&i.TestCaseID, &i.LastExecutedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLatestConclusive = `-- name: ListLatestConclusive :many
 WITH last_attempts AS (
     SELECT DISTINCT ON (t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name)

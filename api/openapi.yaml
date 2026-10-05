@@ -46,6 +46,7 @@ tags:
   - name: test-runs
   - name: requirements
   - name: issues
+  - name: insights
   - name: ingestion
 paths:
   /healthz:
@@ -1046,6 +1047,46 @@ paths:
           $ref: "#/components/responses/NotFound"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/quality:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [insights]
+      operationId: getProjectQuality
+      summary: The project's quality indicators - automation, test cases not executed recently and flaky test cases (anyone who can see the project)
+      parameters:
+        - name: staleDays
+          in: query
+          required: false
+          description: An active test case not executed for more days than this is stale (default 14).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+        - name: window
+          in: query
+          required: false
+          description: How many of the latest runs flakiness is counted over (default 20).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        "200":
+          description: The quality indicators
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectQuality"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -3802,6 +3843,89 @@ components:
           items:
             type: integer
             format: int64
+
+    ProjectQuality:
+      type: object
+      additionalProperties: false
+      required: [testCases, execution, flaky]
+      properties:
+        testCases:
+          type: object
+          additionalProperties: false
+          required: [active, automated, manual, automationRate]
+          properties:
+            active:
+              type: integer
+              format: int32
+            automated:
+              type: integer
+              format: int32
+            manual:
+              type: integer
+              format: int32
+            automationRate:
+              type: number
+              format: double
+              description: Percentage of active test cases that are automated (0 without active ones).
+        execution:
+          type: object
+          additionalProperties: false
+          required: [staleDays, neverExecuted, stale, testCases]
+          properties:
+            staleDays:
+              type: integer
+              format: int32
+            neverExecuted:
+              type: integer
+              format: int32
+              description: Active test cases without any valid result.
+            stale:
+              type: integer
+              format: int32
+              description: Active test cases whose latest valid result is older than staleDays.
+            testCases:
+              type: array
+              maxItems: 20
+              description: Never executed first, then the oldest.
+              items:
+                type: object
+                additionalProperties: false
+                required: [testCaseId, testCaseKey, lastExecutedAt]
+                properties:
+                  testCaseId:
+                    type: integer
+                    format: int64
+                  testCaseKey:
+                    type: string
+                  lastExecutedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+        flaky:
+          type: object
+          additionalProperties: false
+          required: [window, testCases]
+          properties:
+            window:
+              type: integer
+              format: int32
+            testCases:
+              type: array
+              maxItems: 20
+              description: Test cases that passed on a retry in some of the latest window runs, most flaky first.
+              items:
+                type: object
+                additionalProperties: false
+                required: [testCaseId, testCaseKey, runs]
+                properties:
+                  testCaseId:
+                    type: integer
+                    format: int64
+                  testCaseKey:
+                    type: string
+                  runs:
+                    type: integer
+                    format: int32
 
     TestRunPage:
       allOf:

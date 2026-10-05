@@ -176,7 +176,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 61, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 62, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -541,6 +541,7 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.PATCH("/api/v1/projects/TC/requirements/1").WithJSON(map[string]any{"title": "x"}).Expect())
 	problem(e.PUT("/api/v1/projects/TC/requirements/1/test-cases").WithJSON(map[string]any{"testCaseIds": []int{}}).Expect())
 	problem(e.GET("/api/v1/projects/TC/issues").Expect())
+	problem(e.GET("/api/v1/projects/TC/quality").Expect())
 	problem(e.POST("/api/v1/projects/TC/issues").WithJSON(map[string]any{"title": "x"}).Expect())
 	problem(e.POST("/api/v1/projects/TC/issues/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "X-1", "title": "x", "state": "open"}}}).Expect())
 	problem(e.GET("/api/v1/projects/TC/issues/1").Expect())
@@ -1122,4 +1123,35 @@ func TestIssues(t *testing.T) {
 	viewer.POST(issues + "/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "1", "title": "x", "state": "open"}}}).Expect().Status(http.StatusForbidden)
 	viewer.PATCH(issues + "/" + jiraID).WithJSON(map[string]any{"title": "x"}).Expect().Status(http.StatusForbidden)
 	viewer.PUT(issues + "/" + jiraID + "/test-cases").WithJSON(map[string]any{"testCaseIds": []int64{}}).Expect().Status(http.StatusForbidden)
+}
+
+func TestQuality(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	e := anon(t, s, 1<<20)
+	login := admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "login", "automated": true}).Expect().Status(http.StatusCreated).JSON().Object()
+	admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "receipt"}).Expect().Status(http.StatusCreated)
+	key := login.Value("key").String().Raw()
+	ingest(admin, "93", 1, `<testsuite><testcase name="login"><properties><property name="tc-id" value="`+key+`"/></properties><flakyFailure message="x"/></testcase></testsuite>`).
+		Expect().Status(http.StatusCreated)
+
+	q := admin.GET("/api/v1/projects/TC/quality").Expect().Status(http.StatusOK).JSON().Object()
+	q.Value("testCases").Object().IsEqual(map[string]any{"active": 2, "automated": 1, "manual": 1, "automationRate": 50})
+	ex := q.Value("execution").Object().HasValue("staleDays", 14).HasValue("neverExecuted", 1).HasValue("stale", 0)
+	ex.Value("testCases").Array().Value(0).Object().HasValue("lastExecutedAt", nil)
+	q.Value("flaky").Object().HasValue("window", 20).Value("testCases").Array().Value(0).Object().HasValue("testCaseKey", key).HasValue("runs", 1)
+	admin.GET("/api/v1/projects/TC/quality").WithQuery("staleDays", 7).WithQuery("window", 5).Expect().Status(http.StatusOK).
+		JSON().Object().Value("flaky").Object().HasValue("window", 5)
+	admin.GET("/api/v1/projects/TC/quality").WithQuery("staleDays", 366).Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/projects/TC/quality").WithQuery("window", "x").Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/projects/tc/quality").Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/projects/NOPE/quality").Expect().Status(http.StatusNotFound)
+
+	// Viewers of a project read it; other projects stay invisible.
+	inv := admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "TC", "role": "viewer"}).Expect().Status(http.StatusCreated).JSON().Object()
+	viewer := as(e, e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "vic",
+		"displayName": "Vic", "password": "vic's password"}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
+	viewer.GET("/api/v1/projects/TC/quality").Expect().Status(http.StatusOK)
+	admin.POST("/api/v1/projects").WithJSON(map[string]any{"key": "CHK", "name": "Checkout"}).Expect().Status(http.StatusCreated)
+	viewer.GET("/api/v1/projects/CHK/quality").Expect().Status(http.StatusNotFound)
 }

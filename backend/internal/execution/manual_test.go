@@ -158,3 +158,25 @@ func TestLatestConclusive(t *testing.T) {
 	_, _, err = svc.LatestConclusive(ctx, []int64{1})
 	assert.ErrorIs(t, err, errBoom)
 }
+
+// Last executions and flaky counts come from the repository.
+func TestQualityReads(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo, func() time.Time { return fixedNow })
+	ctx := context.Background()
+	tc1 := int64(1)
+	repo.runs[1] = TestRun{ID: 1, CreatedAt: fixedNow.Add(-time.Hour)}
+	repo.runs[2] = TestRun{ID: 2, CreatedAt: fixedNow}
+	repo.results[1] = []TestResult{{TestCaseID: &tc1, Correlation: CorrelationValid, Status: Passed}}
+	repo.results[2] = []TestResult{{TestCaseID: &tc1, Correlation: CorrelationValid, Status: Failed}, {Correlation: CorrelationMissing}}
+	last, err := svc.LastExecuted(ctx, []int64{1, 2})
+	require.NoError(t, err)
+	assert.Equal(t, map[int64]time.Time{1: fixedNow}, last)
+	repo.flaky = []FlakyCount{{TestCaseID: 1, Runs: 3}, {TestCaseID: 2, Runs: 1}}
+	flaky, err := svc.FlakyCounts(ctx, 1, 20, 1)
+	require.NoError(t, err)
+	assert.Equal(t, []FlakyCount{{TestCaseID: 1, Runs: 3}}, flaky)
+	repo.errs["ListLastExecuted"] = errBoom
+	_, err = svc.LastExecuted(ctx, []int64{1})
+	assert.ErrorIs(t, err, errBoom)
+}

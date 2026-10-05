@@ -108,7 +108,7 @@ func TestGetAndListRuns(t *testing.T) {
 	svc, repo, ctx := setup()
 	_, _, _ = svc.RecordRun(ctx, run(1), nil, nil, nil)
 	_, _, _ = svc.RecordRun(ctx, run(2), nil, nil, nil)
-	res, err := svc.ListRuns(ctx, nil, pagination.Page{Number: 1, Size: 1})
+	res, err := svc.ListRuns(ctx, RunFilter{}, pagination.Page{Number: 1, Size: 1})
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), res.Total)
 	assert.Equal(t, int64(2), res.Items[0].ID)
@@ -123,10 +123,10 @@ func TestGetAndListRuns(t *testing.T) {
 	assert.ErrorIs(t, err, errBoom)
 
 	repo.errs["CountTestRuns"] = errBoom
-	_, err = svc.ListRuns(ctx, nil, pagination.Default())
+	_, err = svc.ListRuns(ctx, RunFilter{}, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 	repo.errs["ListTestRuns"] = errBoom
-	_, err = svc.ListRuns(ctx, nil, pagination.Default())
+	_, err = svc.ListRuns(ctx, RunFilter{}, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 }
 
@@ -238,7 +238,7 @@ func TestRunsCarryTheirOutcome(t *testing.T) {
 	got, err := svc.GetRun(ctx, r.ID)
 	require.NoError(t, err)
 	assert.Equal(t, r.Outcome, got.Outcome)
-	list, err := svc.ListRuns(ctx, nil, pagination.Page{Number: 1, Size: 10})
+	list, err := svc.ListRuns(ctx, RunFilter{}, pagination.Page{Number: 1, Size: 10})
 	require.NoError(t, err)
 	assert.Equal(t, r.Outcome, list.Items[0].Outcome)
 	hist, err := svc.History(ctx, 1, pagination.Page{Number: 1, Size: 10})
@@ -250,7 +250,7 @@ func TestRunsCarryTheirOutcome(t *testing.T) {
 	assert.ErrorIs(t, err, errBoom)
 	_, err = svc.GetRun(ctx, r.ID)
 	assert.ErrorIs(t, err, errBoom)
-	_, err = svc.ListRuns(ctx, nil, pagination.Page{Number: 1, Size: 10})
+	_, err = svc.ListRuns(ctx, RunFilter{}, pagination.Page{Number: 1, Size: 10})
 	assert.ErrorIs(t, err, errBoom)
 	_, err = svc.History(ctx, 1, pagination.Page{Number: 1, Size: 10})
 	assert.ErrorIs(t, err, errBoom)
@@ -275,7 +275,7 @@ func TestRunsArePerProject(t *testing.T) {
 	assert.Equal(t, second.ID, replay.ID)
 
 	two := int64(2)
-	res, err := svc.ListRuns(ctx, []int64{two}, pagination.Default())
+	res, err := svc.ListRuns(ctx, RunFilter{ProjectIDs: []int64{two}}, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), res.Total)
 	assert.Equal(t, second.ID, res.Items[0].ID)

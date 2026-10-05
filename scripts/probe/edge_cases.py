@@ -351,6 +351,51 @@ def main():
     st, page = call(base, "GET", f"/test-cases?project={key}&tag=t0")
     check("tag filter finds the normalized tags", page.get("totalItems") if isinstance(page, dict) else st, 1)
 
+    # Suites (prototype feature 10, MVP D2): keys, kinds, queries and member lists are validated before any lookup;
+    # duplicates are 409s; ?suite= on ingestion, test case and run lists is validated; archived suites take no runs;
+    # concurrent creations of one key: exactly one wins.
+    suites = f"/projects/{key}/suites"
+    member = call(base, "POST", "/test-cases", {"title": "probe-suite", "project": key, "automated": True, "tags": ["probe-s"]})[1]["id"]
+    for body, exp in [({"key": "Bad", "name": "x", "kind": "static"}, 400), ({"key": "x", "name": "", "kind": "static"}, 400),
+                      ({"key": "x", "name": "x", "kind": "dynamic"}, 400), ({"key": "x", "name": "x"}, 400),
+                      ({"key": "x", "name": "x", "kind": "query"}, 400), ({"key": "x", "name": "x", "kind": "query", "query": {"tag": "A B"}}, 400),
+                      ({"key": "x", "name": "x", "kind": "query", "query": {"classification": ["risk"]}}, 400),
+                      ({"key": "x", "name": "x", "kind": "query", "query": {"classification": [f"d{i}:v" for i in range(11)]}}, 400),
+                      ({"key": "x", "name": "x", "kind": "static", "query": {"tag": "a"}}, 400),
+                      ({"key": "x", "name": "x", "kind": "static", "testCaseIds": [0]}, 400), ({"key": "x", "name": "x", "kind": "static", "testCaseIds": [-1]}, 400),
+                      ({"key": "x", "name": "x", "kind": "static", "testCaseIds": [9223372036854775807]}, 400),
+                      ({"key": "x", "name": "x", "kind": "static", "testCaseIds": [1.5]}, 400), ({"key": "x", "name": "x", "kind": "static", "testCaseIds": list(range(1, 1002))}, 400),
+                      ({"key": "x", "name": "a\u0000", "kind": "static"}, 400), ({"key": "x", "name": "x", "kind": "static", "description": "d" * 2001}, 400),
+                      ({"key": "probe-static", "name": "ñ" * 100, "kind": "static", "testCaseIds": [member, member]}, 201),
+                      ({"key": "probe-query", "name": "Q", "kind": "query", "query": {"tag": "Probe-S"}}, 201),
+                      ({"key": "probe-static", "name": "again", "kind": "static"}, 409)]:
+        check(f"create suite {str(body)[:50]}", call(base, "POST", suites, body)[0], exp)
+    check("create suite text/plain", call(base, "POST", suites, raw=b"{}", ctype="text/plain")[0], 415)
+    for path, method, body, exp in [(f"{suites}/Bad", "GET", None, 400), (f"{suites}/nope", "GET", None, 404), (f"{suites}/%00", "GET", None, 400),
+                                    (f"{suites}/probe-static", "PATCH", {}, 400), (f"{suites}/probe-static", "PATCH", {"query": {"tag": "x"}}, 400),
+                                    (f"{suites}/probe-query", "PATCH", {"query": {}}, 400), (f"{suites}/probe-query", "PATCH", {"archived": "yes"}, 400),
+                                    (f"{suites}/probe-static/cases", "PUT", {}, 400), (f"{suites}/probe-static/cases", "PUT", {"testCaseIds": None}, 400),
+                                    (f"{suites}/probe-query/cases", "PUT", {"testCaseIds": []}, 400), (f"{suites}/probe-static/cases", "PUT", {"testCaseIds": [a]}, 400),
+                                    (f"{suites}/nope/cases", "PUT", {"testCaseIds": []}, 404), (f"{suites}/probe-static/cases", "PUT", {"testCaseIds": [member]}, 200)]:
+        check(f"{method} {path[len(suites):] or '/'} {str(body)[:30]}", call(base, method, path, body)[0], exp)
+    codes = []
+    threads = [threading.Thread(target=lambda: codes.append(call(base, "POST", suites, {"key": "probe-race", "name": "race", "kind": "static"})[0])) for _ in range(20)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    check("20 concurrent suite creations: one wins", f"{codes.count(201)} created, {codes.count(409)} conflicts", "1 created, 19 conflicts")
+    for qs, exp in [(f"project={key}&suite=probe-static", 200), ("suite=probe-static", 400), (f"project={key}&suite=", 400), (f"project={key}&suite=Bad", 400),
+                    (f"project={key}&suite=nope", 404), (f"project={key}&suite=probe-static&tag=x", 400)]:
+        check(f"test cases ?{qs[-40:]}", call(base, "GET", f"/test-cases?{qs}")[0], exp)
+    for qs, exp in [("suite=probe-static", 200), ("suite=", 400), ("suite=Bad", 400), ("suite=%00", 400)]:
+        check(f"runs ?{qs}", call(base, "GET", f"/test-runs?{qs}")[0], exp)
+    sq = "/ingestion/junit?project=" + key + "&" + q.format(60)
+    for suite, exp in [("&suite=", 400), ("&suite=Bad", 400), ("&suite=nope", 404), ("&suite=" + "s" * 31, 400)]:
+        check(f"ingest {suite}", call(base, "POST", sq + suite, raw=xml, ctype="application/xml")[0], exp)
+    st, body = call(base, "POST", sq + "&suite=probe-query", raw=xml, ctype="application/xml")
+    check("ingest for a suite", f"{st} expected {body.get('testRun', {}).get('expectedCount') if isinstance(body, dict) else None}", "201 expected 1")
+    check("archive a suite", call(base, "PATCH", f"{suites}/probe-query", {"archived": True})[0], 200)
+    check("ingest for an archived suite", call(base, "POST", "/ingestion/junit?project=" + key + "&suite=probe-query&" + q.format(61), raw=xml, ctype="application/xml")[0], 409)
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

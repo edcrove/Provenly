@@ -15,7 +15,7 @@ import (
 // API is the set of execution use cases exposed over REST.
 type API interface {
 	GetRun(ctx context.Context, id int64) (TestRun, error)
-	ListRuns(ctx context.Context, projectIDs []int64, page pagination.Page) (pagination.Result[TestRun], error)
+	ListRuns(ctx context.Context, f RunFilter, page pagination.Page) (pagination.Result[TestRun], error)
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, page pagination.Page) (pagination.Result[TestResult], error)
 	Summary(ctx context.Context, runID int64) (Summary, error)
 	ListParseErrors(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[ParseError], error)
@@ -37,6 +37,8 @@ type TestCaseChecker interface {
 // ProjectKeyPattern mirrors the catalog's project key format (validated before any lookup).
 var ProjectKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 
+var suiteKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,29}$`)
+
 // TestRunDTO is the wire form of TestRun.
 type TestRunDTO struct {
 	ID            int64      `json:"id"`
@@ -57,6 +59,14 @@ type TestRunDTO struct {
 	CreatedAt      time.Time  `json:"createdAt"`
 	StartedAt      *time.Time `json:"startedAt"`
 	CompletedAt    *time.Time `json:"completedAt"`
+	// Suite is the suite the run was reported for (null: the project's automated catalog).
+	Suite *SuiteRefDTO `json:"suite"`
+}
+
+// SuiteRefDTO names a suite as it was when the run was created.
+type SuiteRefDTO struct {
+	Key  string `json:"key"`
+	Name string `json:"name"`
 }
 
 type outcomeDTO struct {
@@ -73,13 +83,17 @@ type outcomeDTO struct {
 
 // RunDTO converts a TestRun to its wire form.
 func RunDTO(r TestRun) TestRunDTO {
-	return TestRunDTO{
+	dto := TestRunDTO{
 		ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.Commit, Status: r.Status,
 		Outcome:       outcomeDTO(r.Outcome),
 		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt,
 		StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,
 	}
+	if r.SuiteKey != "" {
+		dto.Suite = &SuiteRefDTO{Key: r.SuiteKey, Name: r.SuiteName}
+	}
+	return dto
 }
 
 // TestResultDTO is the wire form of TestResult.
@@ -319,12 +333,16 @@ func (h *Handler) listRuns(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	projectIDs, err := h.visibleProjects(r)
-	if err != nil {
+	var f RunFilter
+	if f.SuiteKey, err = httpx.PatternQuery(r, "suite", suiteKeyPattern, "must be a suite key: 1 to 30 lower-case letters, digits or '-', starting with a letter"); err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	res, err := h.api.ListRuns(r.Context(), projectIDs, page)
+	if f.ProjectIDs, err = h.visibleProjects(r); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	res, err := h.api.ListRuns(r.Context(), f, page)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

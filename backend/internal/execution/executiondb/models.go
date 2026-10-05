@@ -40,6 +40,8 @@ type TestRun struct {
 	CompletedAt   pgtype.Timestamptz
 	ReportSha256  string
 	ProjectID     int64
+	SuiteKey      pgtype.Text
+	SuiteName     pgtype.Text
 }
 
 type TestRunAmendment struct {

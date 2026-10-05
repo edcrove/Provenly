@@ -917,6 +917,221 @@ const taxonomyScenarios: Scenario[] = [
   },
 ]
 
+const smoke = { projectKey: 'TC', suiteKey: 'smoke' }
+const release = { projectKey: 'TC', suiteKey: 'release' }
+const withSuites = () => {
+  db.suites.push(
+    {
+      projectId: 1,
+      id: 900,
+      members: [153],
+      key: 'release',
+      name: 'Release',
+      description: '',
+      kind: 'static',
+      query: null,
+      archivedAt: null,
+      createdAt: '2026-10-05T10:00:00Z',
+      updatedAt: '2026-10-05T10:00:00Z',
+      caseCount: 0,
+    },
+    {
+      projectId: 1,
+      id: 901,
+      members: [],
+      key: 'smoke',
+      name: 'Smoke',
+      description: '',
+      kind: 'query',
+      query: { tag: 'smoke', classification: [] },
+      archivedAt: null,
+      createdAt: '2026-10-05T10:00:00Z',
+      updatedAt: '2026-10-05T10:00:00Z',
+      caseCount: 0,
+    },
+  )
+}
+const newSuite = { key: 'nightly', name: 'Nightly', kind: 'query' as const, query: { tag: 'nightly' } }
+
+const suiteScenarios: Scenario[] = [
+  {
+    op: 'GET /api/v1/projects/{projectKey}/suites',
+    status: 200,
+    setup: withSuites,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/suites', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/suites',
+    status: 400,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey: 'tc' } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/suites',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/suites', { params: { path: chk } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/suites',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/suites', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/suites',
+    status: 201,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/suites', {
+        params: { path: tcKey },
+        body: { key: 'release', name: 'Release', kind: 'static', testCaseIds: [153] },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/suites',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/suites', {
+        params: { path: tcKey },
+        body: { key: 'q', name: 'Q', kind: 'query', query: {} },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/suites',
+    status: 404,
+    call: (c) => c.POST('/api/v1/projects/{projectKey}/suites', { params: { path: chk }, body: newSuite }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/suites',
+    status: 409,
+    setup: withSuites,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/suites', {
+        params: { path: tcKey },
+        body: { ...newSuite, key: 'smoke' },
+      }),
+  },
+  ...taxonomyWriteFailures('POST /api/v1/projects/{projectKey}/suites', (c, headers) =>
+    c.POST('/api/v1/projects/{projectKey}/suites', { params: { path: tcKey }, body: newSuite, headers }),
+  ),
+  {
+    op: 'GET /api/v1/projects/{projectKey}/suites/{suiteKey}',
+    status: 200,
+    setup: withSuites,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/suites/{suiteKey}', { params: { path: release } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/suites/{suiteKey}',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/suites/{suiteKey}', {
+        params: { path: { ...smoke, suiteKey: 'Bad' } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/suites/{suiteKey}',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/suites/{suiteKey}', { params: { path: smoke } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/suites/{suiteKey}',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/suites/{suiteKey}', { params: { path: smoke } }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/suites/{suiteKey}',
+    status: 200,
+    setup: withSuites,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/suites/{suiteKey}', {
+        params: { path: smoke },
+        body: { archived: true, query: { tag: null, classification: ['risk:high'] } },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/suites/{suiteKey}',
+    status: 400,
+    setup: withSuites,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/suites/{suiteKey}', {
+        params: { path: release },
+        body: { query: { tag: 'x' } },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/suites/{suiteKey}',
+    status: 404,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/suites/{suiteKey}', {
+        params: { path: smoke },
+        body: { name: 'x' },
+      }),
+  },
+  ...taxonomyWriteFailures('PATCH /api/v1/projects/{projectKey}/suites/{suiteKey}', (c, headers) =>
+    c.PATCH('/api/v1/projects/{projectKey}/suites/{suiteKey}', {
+      params: { path: smoke },
+      body: { name: 'S' },
+      headers,
+    }),
+  ),
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/suites/{suiteKey}/cases',
+    status: 200,
+    setup: withSuites,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/suites/{suiteKey}/cases', {
+        params: { path: release },
+        body: { testCaseIds: [153, 154] },
+      }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/suites/{suiteKey}/cases',
+    status: 400,
+    setup: withSuites,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/suites/{suiteKey}/cases', {
+        params: { path: release },
+        body: { testCaseIds: [987654] },
+      }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/suites/{suiteKey}/cases',
+    status: 404,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/suites/{suiteKey}/cases', {
+        params: { path: release },
+        body: { testCaseIds: [] },
+      }),
+  },
+  ...taxonomyWriteFailures('PUT /api/v1/projects/{projectKey}/suites/{suiteKey}/cases', (c, headers) =>
+    c.PUT('/api/v1/projects/{projectKey}/suites/{suiteKey}/cases', {
+      params: { path: release },
+      body: { testCaseIds: [] },
+      headers,
+    }),
+  ),
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 200,
+    setup: withSuites,
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { project: 'TC', suite: 'release' } } }),
+  },
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 404,
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { project: 'TC', suite: 'nope' } } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs',
+    status: 200,
+    call: (c) => c.GET('/api/v1/test-runs', { params: { query: { suite: 'smoke' } } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs',
+    status: 400,
+    call: (c) => c.GET('/api/v1/test-runs', { params: { query: { suite: 'Smoke' } } }),
+  },
+]
+
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 type AnyCall = (path: string, init: object) => Promise<Result>
 const anyPath = {
@@ -927,6 +1142,7 @@ const anyPath = {
   invitationId: 1,
   dimensionKey: 'risk',
   valueKey: 'critical',
+  suiteKey: 'smoke',
 }
 
 /** Without a session every operation that declares 401 answers it (sign-in's own 401 is a wrong password). */
@@ -958,6 +1174,7 @@ const scenarios: Scenario[] = [
   ...staleScenarios,
   ...amendmentScenarios,
   ...taxonomyScenarios,
+  ...suiteScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
   // Projects

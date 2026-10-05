@@ -90,6 +90,9 @@ type TestRun struct {
 	CompletedAt    *time.Time
 	// ReportSHA256 is the digest of the report that created the run (internal; not exposed).
 	ReportSHA256 string
+	// SuiteKey and SuiteName name the suite the run was reported for, as they were then (empty: none).
+	SuiteKey  string
+	SuiteName string
 }
 
 // TestResult is one persisted result. TestCaseID is set when the correlation
@@ -129,6 +132,16 @@ type NewRun struct {
 	ReportSHA256 string
 	// Status is how the execution ended; empty means completed.
 	Status RunStatus
+	// SuiteKey and SuiteName name the suite the run was reported for (empty: the project's automated catalog).
+	SuiteKey  string
+	SuiteName string
+}
+
+// RunFilter narrows a run list; nil fields do not filter.
+type RunFilter struct {
+	// ProjectIDs nil means every project.
+	ProjectIDs []int64
+	SuiteKey   *string
 }
 
 // ExecutionStatuses are the statuses CI may report with a final report.
@@ -244,8 +257,8 @@ type Repository interface {
 	ListParseErrors(ctx context.Context, runID int64, limit, offset int32) ([]ParseError, error)
 	CountParseErrors(ctx context.Context, runID int64) (int64, error)
 	GetTestRun(ctx context.Context, id int64) (TestRun, error)
-	ListTestRuns(ctx context.Context, projectIDs []int64, limit, offset int32) ([]TestRun, error)
-	CountTestRuns(ctx context.Context, projectIDs []int64) (int64, error)
+	ListTestRuns(ctx context.Context, f RunFilter, limit, offset int32) ([]TestRun, error)
+	CountTestRuns(ctx context.Context, f RunFilter) (int64, error)
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, limit, offset int32) ([]TestResult, error)
 	CountRunResults(ctx context.Context, runID int64, f ResultFilter) (int64, error)
 	// ListSummaryInputs returns the snapshot TC-IDs and valid results of each given run.

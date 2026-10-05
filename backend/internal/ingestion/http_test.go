@@ -111,8 +111,8 @@ func TestIngestHandlerReportsEveryParameterError(t *testing.T) {
 		assert.Contains(t, rec.Body.String(), field)
 	}
 	assert.Equal(t, 1, strings.Count(rec.Body.String(), `"field":"runAttempt"`), "runAttempt is reported once")
-	rec = post(&stubAPI{}, 1024, "provider=Bad&runId=7&runAttempt=x&status=", "application/xml", "<x/>")
-	for _, field := range []string{`"field":"provider"`, `"field":"runAttempt"`, `"field":"status"`} {
+	rec = post(&stubAPI{}, 1024, "provider=Bad&runId=7&runAttempt=x&status=&suite=", "application/xml", "<x/>")
+	for _, field := range []string{`"field":"provider"`, `"field":"runAttempt"`, `"field":"status"`, `"field":"suite"`} {
 		assert.Contains(t, rec.Body.String(), field)
 	}
 }

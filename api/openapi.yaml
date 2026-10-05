@@ -723,6 +723,147 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/projects/{projectKey}/suites:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [projects]
+      operationId: listSuites
+      summary: List the project's suites by key (anyone who can see the project)
+      responses:
+        "200":
+          description: The suites
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuiteList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [projects]
+      operationId: createSuite
+      summary: Create a static or query suite (maintainers and administrators)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSuiteRequest"
+      responses:
+        "201":
+          description: The suite
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Suite"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/suites/{suiteKey}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/SuiteKey"
+    get:
+      tags: [projects]
+      operationId: getSuite
+      summary: A suite with the test cases a static suite lists
+      responses:
+        "200":
+          description: The suite
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Suite"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [projects]
+      operationId: updateSuite
+      summary: Rename, re-query, archive or restore a suite (maintainers and administrators)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSuiteRequest"
+      responses:
+        "200":
+          description: The suite
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Suite"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/suites/{suiteKey}/cases:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/SuiteKey"
+    put:
+      tags: [projects]
+      operationId: setSuiteCases
+      summary: Replace the test cases a static suite lists (maintainers and administrators)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuiteCasesRequest"
+      responses:
+        "200":
+          description: The suite
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Suite"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/test-cases:
     get:
       tags: [test-cases]
@@ -751,6 +892,13 @@ paths:
             type: string
             pattern: "^[a-z][a-z0-9-]{0,29}:[a-z0-9][a-z0-9-]{0,29}(,[a-z][a-z0-9-]{0,29}:[a-z0-9][a-z0-9-]{0,29}){0,9}$"
           example: risk:critical,feature:payments
+        - name: suite
+          in: query
+          required: false
+          description: Only the test cases of this suite of `project` (needs `project`; not combined with tag or classification).
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9-]{0,29}$"
       responses:
         "200":
           description: Page of test cases
@@ -1127,6 +1275,13 @@ paths:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
         - $ref: "#/components/parameters/ProjectFilter"
+        - name: suite
+          in: query
+          required: false
+          description: Only runs reported for the suite with this key.
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9-]{0,29}$"
       responses:
         "200":
           description: Page of test runs
@@ -1345,6 +1500,17 @@ paths:
             type: string
             pattern: "^[A-Z][A-Z0-9]{1,9}$"
           example: CHK
+        - name: suite
+          in: query
+          required: false
+          description: |
+            Key of the suite the run executed (partial run): the expected universe is the suite's active automated
+            test cases instead of the whole project's; results outside it stay valid but outside the universe. An
+            unknown suite is 404, an archived one 409.
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9-]{0,29}$"
+          example: smoke
         - name: provider
           in: query
           required: true
@@ -1433,6 +1599,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
         "415":
@@ -1498,6 +1666,14 @@ components:
         type: string
         pattern: "^[a-z][a-z0-9-]{0,29}$"
       example: risk
+    SuiteKey:
+      name: suiteKey
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-z][a-z0-9-]{0,29}$"
+      example: smoke
     ValueKey:
       name: valueKey
       in: path
@@ -2472,7 +2648,20 @@ components:
         - resultCount
         - amendmentCount
         - createdAt
+        - suite
       properties:
+        suite:
+          description: The suite the run was reported for, as named then (null - the project's automated catalog).
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [key, name]
+          properties:
+            key:
+              type: string
+              pattern: "^[a-z][a-z0-9-]{0,29}$"
+            name:
+              type: string
         amendmentCount:
           type: integer
           format: int32
@@ -2522,6 +2711,143 @@ components:
           type: string
           format: date-time
           nullable: true
+
+    SuiteQuery:
+      type: object
+      additionalProperties: false
+      properties:
+        tag:
+          type: string
+          nullable: true
+          description: Only test cases with this tag (normalized like tags).
+        classification:
+          type: array
+          maxItems: 10
+          description: dimension:value pairs that must all hold.
+          items:
+            type: string
+            pattern: "^[a-z][a-z0-9-]{0,29}:[a-z0-9][a-z0-9-]{0,29}$"
+
+    Suite:
+      type: object
+      additionalProperties: false
+      required: [key, name, description, kind, query, archivedAt, createdAt, updatedAt, caseCount]
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z][a-z0-9-]{0,29}$"
+          description: Never changes; CI reports a run for the suite with `?suite=<key>`.
+          example: smoke
+        name:
+          type: string
+        description:
+          type: string
+        kind:
+          type: string
+          enum: [static, query]
+          description: static lists its test cases; query selects them by tag and classification. Never changes.
+        query:
+          description: The selection of a query suite (null for static suites).
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [tag, classification]
+          properties:
+            tag:
+              type: string
+              nullable: true
+            classification:
+              type: array
+              items:
+                type: string
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Archived suites keep their runs but receive no new ones (409).
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        caseCount:
+          type: integer
+          format: int32
+          description: Test cases a static suite lists (0 for query suites).
+        testCaseIds:
+          type: array
+          description: The test cases a static suite lists (when reading one suite).
+          items:
+            type: integer
+            format: int64
+
+    SuiteList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Suite"
+
+    CreateSuiteRequest:
+      type: object
+      additionalProperties: false
+      required: [key, name, kind]
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z][a-z0-9-]{0,29}$"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 2000
+        kind:
+          type: string
+          enum: [static, query]
+        query:
+          $ref: "#/components/schemas/SuiteQuery"
+        testCaseIds:
+          type: array
+          maxItems: 1000
+          items:
+            type: integer
+            format: int64
+
+    UpdateSuiteRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 2000
+        query:
+          $ref: "#/components/schemas/SuiteQuery"
+        archived:
+          type: boolean
+
+    SuiteCasesRequest:
+      type: object
+      additionalProperties: false
+      required: [testCaseIds]
+      properties:
+        testCaseIds:
+          type: array
+          maxItems: 1000
+          description: Every test case the static suite lists (replaces them).
+          items:
+            type: integer
+            format: int64
 
     TestRunPage:
       allOf:

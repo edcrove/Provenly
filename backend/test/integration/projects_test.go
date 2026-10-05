@@ -177,10 +177,10 @@ func TestProjects(t *testing.T) {
 		assert.False(t, replay.Created, "externalRunId is unique per project")
 		assert.Equal(t, out.Run.ID, replay.Run.ID)
 
-		runs, err := s.Execution.ListRuns(ctx, []int64{chk.ID}, pagination.Default())
+		runs, err := s.Execution.ListRuns(ctx, execution.RunFilter{ProjectIDs: []int64{chk.ID}}, pagination.Default())
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), runs.Total)
-		all, err := s.Execution.ListRuns(ctx, nil, pagination.Default())
+		all, err := s.Execution.ListRuns(ctx, execution.RunFilter{}, pagination.Default())
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), all.Total)
 

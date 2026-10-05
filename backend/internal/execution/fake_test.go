@@ -38,7 +38,7 @@ func (f *fakeRepo) InsertTestRun(_ context.Context, p InsertRunParams) (int64, b
 	completed := p.CompletedAt
 	f.runs[f.nextRun] = TestRun{ID: f.nextRun, ProjectID: p.ProjectID, ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID,
 		RunAttempt: p.RunAttempt, Pipeline: p.Pipeline, Branch: p.Branch, Commit: p.Commit, Status: p.Status,
-		StartedAt: p.StartedAt, CompletedAt: &completed, CreatedAt: completed}
+		StartedAt: p.StartedAt, CompletedAt: &completed, CreatedAt: completed, SuiteKey: p.SuiteKey, SuiteName: p.SuiteName}
 	f.byExt[ext] = f.nextRun
 	return f.nextRun, true, nil
 }
@@ -113,13 +113,13 @@ func (f *fakeRepo) GetTestRun(_ context.Context, id int64) (TestRun, error) {
 	return r, nil
 }
 
-func (f *fakeRepo) ListTestRuns(ctx context.Context, projectIDs []int64, limit, offset int32) ([]TestRun, error) {
+func (f *fakeRepo) ListTestRuns(ctx context.Context, flt RunFilter, limit, offset int32) ([]TestRun, error) {
 	if err := f.errs["ListTestRuns"]; err != nil {
 		return nil, err
 	}
 	var out []TestRun
 	for id, run := range f.runs {
-		if projectIDs != nil && !slices.Contains(projectIDs, run.ProjectID) {
+		if !runMatches(run, flt) {
 			continue
 		}
 		r, _ := f.GetTestRun(ctx, id)
@@ -132,13 +132,17 @@ func (f *fakeRepo) ListTestRuns(ctx context.Context, projectIDs []int64, limit, 
 	return out[offset:min(len(out), int(offset+limit))], nil
 }
 
-func (f *fakeRepo) CountTestRuns(_ context.Context, projectIDs []int64) (int64, error) {
+func runMatches(run TestRun, flt RunFilter) bool {
+	return (flt.ProjectIDs == nil || slices.Contains(flt.ProjectIDs, run.ProjectID)) && (flt.SuiteKey == nil || run.SuiteKey == *flt.SuiteKey)
+}
+
+func (f *fakeRepo) CountTestRuns(_ context.Context, flt RunFilter) (int64, error) {
 	if err := f.errs["CountTestRuns"]; err != nil {
 		return 0, err
 	}
 	n := 0
 	for _, run := range f.runs {
-		if projectIDs == nil || slices.Contains(projectIDs, run.ProjectID) {
+		if runMatches(run, flt) {
 			n++
 		}
 	}

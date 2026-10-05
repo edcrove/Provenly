@@ -164,7 +164,7 @@ func TestAuthentication(t *testing.T) {
 	s := fresh(t)
 	e := anon(t, s, 1<<20)
 	params := strings.NewReplacer("{testCaseId}", "1", "{testRunId}", "1", "{stepId}", "1", "{projectKey}", "TC", "{invitationId}", "1", "{username}", "admin", "{apiKeyId}", "1",
-		"{dimensionKey}", "risk", "{valueKey}", "low")
+		"{dimensionKey}", "risk", "{valueKey}", "low", "{suiteKey}", "smoke")
 	protected := 0
 	for path, item := range doc.Paths.Map() {
 		for method, op := range item.Operations() {
@@ -176,7 +176,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 41, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 46, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -533,6 +533,11 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.GET("/api/v1/test-runs/1/amendments").Expect())
 	problem(e.POST("/api/v1/test-runs/1/amendments").WithJSON(map[string]any{"testCaseId": 1, "reason": "x"}).Expect())
 	problem(e.GET("/api/v1/projects/TC/dimensions").Expect())
+	problem(e.GET("/api/v1/projects/TC/suites").Expect())
+	problem(e.POST("/api/v1/projects/TC/suites").WithJSON(map[string]any{"key": "s", "name": "S", "kind": "static"}).Expect())
+	problem(e.GET("/api/v1/projects/TC/suites/s").Expect())
+	problem(e.PATCH("/api/v1/projects/TC/suites/s").WithJSON(map[string]any{"name": "S"}).Expect())
+	problem(e.PUT("/api/v1/projects/TC/suites/s/cases").WithJSON(map[string]any{"testCaseIds": []int{}}).Expect())
 	problem(e.POST("/api/v1/projects/TC/dimensions").WithJSON(map[string]any{"key": "os", "name": "OS"}).Expect())
 	problem(e.PATCH("/api/v1/projects/TC/dimensions/risk").WithJSON(map[string]any{"name": "R"}).Expect())
 	problem(e.POST("/api/v1/projects/TC/dimensions/risk/values").WithJSON(map[string]any{"key": "x", "name": "X"}).Expect())
@@ -878,4 +883,65 @@ func TestTaxonomy(t *testing.T) {
 	viewer.PATCH("/api/v1/projects/TC/dimensions/risk").WithJSON(map[string]any{"name": "R"}).Expect().Status(http.StatusForbidden)
 	viewer.POST("/api/v1/projects/TC/dimensions/risk/values").WithJSON(map[string]any{"key": "x", "name": "X"}).Expect().Status(http.StatusForbidden)
 	viewer.PATCH("/api/v1/projects/TC/dimensions/risk/values/low").WithJSON(map[string]any{"name": "L"}).Expect().Status(http.StatusForbidden)
+}
+
+// TestSuites: suites per project (maintainers write, anyone in the project reads), the list and run filters, and
+// runs reported for a suite (partial runs, MVP D2).
+func TestSuites(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	e := anon(t, s, 1<<20)
+	tc := admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "login", "automated": true, "tags": []string{"smoke"}}).
+		Expect().Status(http.StatusCreated).JSON().Object()
+	id := int64(tc.Value("id").Number().Raw())
+	admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "pay", "automated": true}).Expect().Status(http.StatusCreated)
+
+	suites := "/api/v1/projects/TC/suites"
+	admin.POST(suites).WithJSON(map[string]any{"key": "release", "name": "Release", "kind": "static", "testCaseIds": []int64{id}}).Expect().
+		Status(http.StatusCreated).JSON().Object().HasValue("testCaseIds", []int64{id}).HasValue("query", nil).HasValue("caseCount", 1)
+	admin.POST(suites).WithJSON(map[string]any{"key": "smoke", "name": "Smoke", "kind": "query", "query": map[string]any{"tag": "smoke"}}).Expect().
+		Status(http.StatusCreated).JSON().Object().Value("query").Object().HasValue("tag", "smoke").HasValue("classification", []string{})
+	admin.POST(suites).WithJSON(map[string]any{"key": "smoke", "name": "x", "kind": "query", "query": map[string]any{"tag": "x"}}).Expect().Status(http.StatusConflict)
+	admin.POST(suites).WithJSON(map[string]any{"key": "x", "name": "x", "kind": "query"}).Expect().Status(http.StatusBadRequest)
+	admin.POST(suites).WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.POST("/api/v1/projects/NOPE/suites").WithJSON(map[string]any{"key": "x", "name": "x", "kind": "static"}).Expect().Status(http.StatusNotFound)
+	admin.GET(suites).Expect().Status(http.StatusOK).JSON().Object().Value("items").Array().Length().IsEqual(2)
+	admin.GET("/api/v1/projects/tc/suites").Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/projects/NOPE/suites").Expect().Status(http.StatusNotFound)
+	admin.GET(suites+"/release").Expect().Status(http.StatusOK).JSON().Object().HasValue("kind", "static")
+	admin.GET(suites + "/Bad").Expect().Status(http.StatusBadRequest)
+	admin.GET(suites + "/nope").Expect().Status(http.StatusNotFound)
+	admin.PATCH(suites+"/smoke").WithJSON(map[string]any{"description": "fast checks"}).Expect().Status(http.StatusOK).JSON().Object().HasValue("description", "fast checks")
+	admin.PATCH(suites + "/release").WithJSON(map[string]any{"query": map[string]any{"tag": "x"}}).Expect().Status(http.StatusBadRequest)
+	admin.PATCH(suites + "/nope").WithJSON(map[string]any{"name": "x"}).Expect().Status(http.StatusNotFound)
+	admin.PATCH(suites + "/smoke").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.PUT(suites+"/release/cases").WithJSON(map[string]any{"testCaseIds": []int64{}}).Expect().Status(http.StatusOK).JSON().Object().HasValue("caseCount", 0)
+	admin.PUT(suites + "/release/cases").WithJSON(map[string]any{"testCaseIds": []int64{987654}}).Expect().Status(http.StatusBadRequest)
+	admin.PUT(suites + "/nope/cases").WithJSON(map[string]any{"testCaseIds": []int64{}}).Expect().Status(http.StatusNotFound)
+	admin.PUT(suites + "/release/cases").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+
+	// Lists narrowed to a suite.
+	admin.GET("/api/v1/test-cases").WithQuery("project", "TC").WithQuery("suite", "smoke").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	admin.GET("/api/v1/test-cases").WithQuery("project", "TC").WithQuery("suite", "nope").Expect().Status(http.StatusNotFound)
+
+	// A run for a suite: only the suite's test cases are expected; the run names its suite.
+	run := ingest(admin, "70", 1, `<testsuite><testcase name="login TC-`+strconv.FormatInt(id, 10)+`"/></testsuite>`).WithQuery("suite", "smoke").
+		Expect().Status(http.StatusCreated).JSON().Object().Value("testRun").Object()
+	run.HasValue("expectedCount", 1).Value("suite").Object().IsEqual(map[string]any{"key": "smoke", "name": "Smoke"})
+	ingest(admin, "71", 1, `<testsuite/>`).Expect().Status(http.StatusCreated).JSON().Object().Value("testRun").Object().HasValue("suite", nil)
+	admin.GET("/api/v1/test-runs").WithQuery("suite", "smoke").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	admin.GET("/api/v1/test-runs").WithQuery("suite", "Smoke").Expect().Status(http.StatusBadRequest)
+	ingest(admin, "72", 1, `<testsuite/>`).WithQuery("suite", "nope").Expect().Status(http.StatusNotFound)
+	admin.PATCH(suites + "/smoke").WithJSON(map[string]any{"archived": true}).Expect().Status(http.StatusOK)
+	ingest(admin, "73", 1, `<testsuite/>`).WithQuery("suite", "smoke").Expect().Status(http.StatusConflict).JSON(problemOpts).Object().HasValue("code", "conflict")
+
+	// A viewer reads suites; writes need a maintainer (403).
+	inv := admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "TC", "role": "viewer"}).Expect().Status(http.StatusCreated).JSON().Object()
+	viewer := as(e, e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "vic",
+		"displayName": "Vic", "password": "vic's password"}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
+	viewer.GET(suites).Expect().Status(http.StatusOK)
+	viewer.GET(suites + "/release").Expect().Status(http.StatusOK)
+	viewer.POST(suites).WithJSON(map[string]any{"key": "v", "name": "V", "kind": "static"}).Expect().Status(http.StatusForbidden)
+	viewer.PATCH(suites + "/release").WithJSON(map[string]any{"name": "R"}).Expect().Status(http.StatusForbidden)
+	viewer.PUT(suites + "/release/cases").WithJSON(map[string]any{"testCaseIds": []int64{}}).Expect().Status(http.StatusForbidden)
 }

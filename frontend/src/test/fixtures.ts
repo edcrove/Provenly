@@ -97,6 +97,7 @@ export function testRun(overrides: Partial<TestRun> = {}): TestRun {
     id: 7,
     projectId: 1,
     externalRunId: 'github:9876:1',
+    suite: null,
     provider: 'github',
     providerRunId: '9876',
     runAttempt: 1,

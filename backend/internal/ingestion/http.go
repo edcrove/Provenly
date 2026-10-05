@@ -129,7 +129,7 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	meta := RunMeta{
 		ProjectKey: q.Get("project"), Provider: q.Get("provider"), ProviderRunID: q.Get("runId"),
-		Pipeline: q.Get("pipeline"), Branch: q.Get("branch"), Commit: q.Get("commit"),
+		Pipeline: q.Get("pipeline"), Branch: q.Get("branch"), Commit: q.Get("commit"), SuiteKey: q.Get("suite"),
 		Status: execution.RunStatus(q.Get("status")), Charset: charset,
 	}
 	// Every parameter error is reported at once.
@@ -139,6 +139,9 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	if q.Has("project") && meta.ProjectKey == "" {
 		fields = append(fields, apperr.FieldError{Field: "project", Message: catalog.ProjectKeyMessage})
+	}
+	if q.Has("suite") && meta.SuiteKey == "" {
+		fields = append(fields, apperr.FieldError{Field: "suite", Message: catalog.SuiteKeyMessage})
 	}
 	attempt, err := strconv.ParseInt(q.Get("runAttempt"), 10, 32)
 	if err != nil {

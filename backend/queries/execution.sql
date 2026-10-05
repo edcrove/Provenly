@@ -1,6 +1,6 @@
 -- name: InsertTestRun :one
-INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256)
-VALUES (@project_id, @external_run_id, @provider, @provider_run_id, @run_attempt, @pipeline, @branch, @commit_sha, @status, @started_at, @completed_at, @report_sha256)
+INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256, suite_key, suite_name)
+VALUES (@project_id, @external_run_id, @provider, @provider_run_id, @run_attempt, @pipeline, @branch, @commit_sha, @status, @started_at, @completed_at, @report_sha256, sqlc.narg('suite_key'), sqlc.narg('suite_name'))
 ON CONFLICT (project_id, external_run_id) DO NOTHING
 RETURNING id;
 
@@ -32,14 +32,16 @@ SELECT r.*,
 FROM test_runs r
 WHERE r.id IN (
     SELECT p.id FROM test_runs p
-    WHERE sqlc.narg('project_ids')::bigint[] IS NULL OR p.project_id = ANY(sqlc.narg('project_ids')::bigint[])
+    WHERE (sqlc.narg('project_ids')::bigint[] IS NULL OR p.project_id = ANY(sqlc.narg('project_ids')::bigint[]))
+      AND (sqlc.narg('suite_key')::text IS NULL OR p.suite_key = sqlc.narg('suite_key')::text)
     ORDER BY p.id DESC LIMIT @page_limit OFFSET @page_offset
 )
 ORDER BY r.id DESC;
 
 -- name: CountTestRuns :one
 SELECT count(*) FROM test_runs
-WHERE sqlc.narg('project_ids')::bigint[] IS NULL OR project_id = ANY(sqlc.narg('project_ids')::bigint[]);
+WHERE (sqlc.narg('project_ids')::bigint[] IS NULL OR project_id = ANY(sqlc.narg('project_ids')::bigint[]))
+  AND (sqlc.narg('suite_key')::text IS NULL OR suite_key = sqlc.narg('suite_key')::text);
 
 -- name: ListRunResults :many
 -- retried: a later attempt of the same test exists in the run, so this one is not its logical result.

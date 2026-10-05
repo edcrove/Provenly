@@ -123,16 +123,16 @@ func (s *Service) getRun(ctx context.Context, id int64) (TestRun, error) {
 	return run, err
 }
 
-// ListRuns returns a page of runs with their outcomes, newest first, optionally of one project.
-func (s *Service) ListRuns(ctx context.Context, projectIDs []int64, page pagination.Page) (pagination.Result[TestRun], error) {
-	items, err := s.repo.ListTestRuns(ctx, projectIDs, page.Limit(), page.Offset())
+// ListRuns returns a page of runs with their outcomes, newest first, narrowed by projects and suite.
+func (s *Service) ListRuns(ctx context.Context, f RunFilter, page pagination.Page) (pagination.Result[TestRun], error) {
+	items, err := s.repo.ListTestRuns(ctx, f, page.Limit(), page.Offset())
 	if err != nil {
 		return pagination.Result[TestRun]{}, err
 	}
 	if err := attachOutcomes(ctx, s.repo, items, func(i int, o RunOutcome) { items[i].Outcome = o }); err != nil {
 		return pagination.Result[TestRun]{}, err
 	}
-	total, err := s.repo.CountTestRuns(ctx, projectIDs)
+	total, err := s.repo.CountTestRuns(ctx, f)
 	if err != nil {
 		return pagination.Result[TestRun]{}, err
 	}

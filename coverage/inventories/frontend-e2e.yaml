@@ -34,3 +34,5 @@ targets:
     description: a run whose test passed on a retry (retry property) shows the flaky badge, the flaky test case, a passed verdict and each attempt marked in results and history
   - id: FE-E2E-017
     description: a maintainer adds a feature value on the project page, creates a test case with tags, feature and risk, changes its risk, and filters the project's list by tag and by classification
+  - id: FE-E2E-018
+    description: a maintainer creates a static suite and adds a test case in the UI; CI reports a run for the suite; the suite's runs link shows it and the run page shows the suite badge and its verdict

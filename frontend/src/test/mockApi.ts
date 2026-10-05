@@ -4,6 +4,7 @@ import type {
   Amendment,
   ApiKey,
   Dimension,
+  Suite,
   Invitation,
   ParseError,
   Project,
@@ -36,6 +37,8 @@ export interface MockDb {
   apiKeys: (ApiKey & { projectId: number })[]
   /** Snapshot amendments (DEC-42), all runs. */
   amendments: Amendment[]
+  /** Suites (with their members for static ones) by project id. */
+  suites: (Suite & { projectId: number; id: number; members: number[] })[]
   /** Classification dimensions by project id. */
   dimensions: (Dimension & { projectId: number })[]
   /** The signed-in user's id (the session cookie), or null when signed out. */
@@ -66,6 +69,7 @@ export function seed(): MockDb {
     apiKeys: [],
     amendments: [],
     dimensions: seedDimensions(1),
+    suites: [],
     projects: [project()],
     testCases: [tc, testCase({ id: 154, title: 'Logout works' })],
     steps: [
@@ -370,10 +374,133 @@ function classify(tc: TestCase, raw: unknown): Response | undefined {
   return undefined
 }
 
+/** The wire form of a mock suite (members only when reading one). */
+function suiteDto({ projectId, id, members, ...su }: MockDb['suites'][number], withCases: boolean): Suite {
+  void projectId
+  void id
+  return {
+    ...su,
+    caseCount: su.kind === 'static' ? members.length : 0,
+    ...(withCases && su.kind === 'static' ? { testCaseIds: [...members].sort((a, b) => a - b) } : {}),
+  }
+}
+
+/** A suite of a project the user sees (viewer) or maintains, like the server: else 400, 403 or 404. */
+function findSuite(params: Record<string, string | readonly string[] | undefined>, maintain: boolean) {
+  if (!DIMENSION.test(String(params.suiteKey))) return validation('suiteKey', 'must be a suite key')
+  const p = maintain ? maintainedProject(params.projectKey) : visibleProject(params.projectKey)
+  if (p instanceof Response) return p
+  return (
+    db.suites.find((x) => x.projectId === p.id && x.key === params.suiteKey) ??
+    notFound(`suite ${String(params.suiteKey)}`)
+  )
+}
+
+/** Validates a static suite's members like the server. */
+function suiteMembers(projectId: number, raw: unknown): number[] | Response {
+  const ids = [...new Set((Array.isArray(raw) ? raw : []).map(Number))]
+  const missing = ids.filter((id) => !db.testCases.some((t) => t.id === id && t.projectId === projectId))
+  return missing.length
+    ? validation('testCaseIds', `not test cases of the project: ${missing.join(', ')}`)
+    : ids
+}
+
 const stepsOf = (tcId: number) =>
   db.steps.filter((s) => s.testCaseId === tcId).sort((a, b) => a.position - b.position)
 
 export const handlers = [
+  http.get(
+    `${BASE}/projects/:projectKey/suites`,
+    guard(({ params }) => {
+      const p = visibleProject(params.projectKey)
+      if (p instanceof Response) return p
+      const items = db.suites
+        .filter((x) => x.projectId === p.id)
+        .sort((a, b) => a.key.localeCompare(b.key))
+        .map((x) => suiteDto(x, false))
+      return respond({ items })
+    }),
+  ),
+  http.post(
+    `${BASE}/projects/:projectKey/suites`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const p = maintainedProject(params.projectKey)
+        if (p instanceof Response) return p
+        const body = await readBody(request)
+        const input = keyAndName(body, DIMENSION)
+        if (input instanceof Response) return input
+        const kind = body?.kind
+        if (kind !== 'static' && kind !== 'query') return validation('kind', 'must be one of static, query')
+        const query = (body?.query ?? null) as Suite['query']
+        if (kind === 'query' && !query?.tag && !(query?.classification ?? []).length)
+          return validation('query', 'a query suite needs a tag or a dimension:value pair')
+        const members = suiteMembers(p.id, body?.testCaseIds)
+        if (members instanceof Response) return members
+        if (db.suites.some((x) => x.projectId === p.id && x.key === input.key))
+          return problem(409, 'conflict', `suite ${input.key} already exists`)
+        const su = {
+          projectId: p.id,
+          id: ++db.nextId,
+          members: kind === 'static' ? members : [],
+          ...input,
+          description: String(body?.description ?? ''),
+          kind,
+          query:
+            kind === 'query'
+              ? { tag: query?.tag ?? null, classification: query?.classification ?? [] }
+              : null,
+          archivedAt: null,
+          createdAt: now(),
+          updatedAt: now(),
+          caseCount: 0,
+        } satisfies MockDb['suites'][number]
+        db.suites.push(su)
+        return respond(suiteDto(su, true), 201)
+      }),
+    ),
+  ),
+  http.get(
+    `${BASE}/projects/:projectKey/suites/:suiteKey`,
+    guard(({ params }) => {
+      const su = findSuite(params, false)
+      return su instanceof Response ? su : respond(suiteDto(su, true))
+    }),
+  ),
+  http.patch(
+    `${BASE}/projects/:projectKey/suites/:suiteKey`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const su = findSuite(params, true)
+        if (su instanceof Response) return su
+        const body = await readBody(request)
+        if (body?.query !== undefined && su.kind !== 'query')
+          return validation('query', 'a static suite lists its test cases instead')
+        const invalid = renameOrArchive(su, body)
+        if (invalid) return invalid
+        if (body?.query !== undefined) su.query = body.query as Suite['query']
+        su.updatedAt = now()
+        return respond(suiteDto(su, true))
+      }),
+    ),
+  ),
+  http.put(
+    `${BASE}/projects/:projectKey/suites/:suiteKey/cases`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const su = findSuite(params, true)
+        if (su instanceof Response) return su
+        const body = await readBody(request)
+        if (!Array.isArray(body?.testCaseIds)) return validation('testCaseIds', 'is required')
+        if (su.kind !== 'static')
+          return validation('testCaseIds', 'a query suite selects its test cases with its query')
+        const members = suiteMembers(su.projectId, body.testCaseIds)
+        if (members instanceof Response) return members
+        su.members = members
+        return respond(suiteDto(su, true))
+      }),
+    ),
+  ),
   http.get(
     `${BASE}/projects/:projectKey/dimensions`,
     guard(({ params }) => {
@@ -749,6 +876,23 @@ export const handlers = [
       const classified = url.searchParams.get('classification')
       if (classified !== null && !CLASSIFIED.test(classified))
         return validation('classification', 'must be dimension:value pairs')
+      const suiteKey = url.searchParams.get('suite')
+      let suite: MockDb['suites'][number] | undefined
+      if (suiteKey !== null) {
+        if (!DIMENSION.test(suiteKey)) return validation('suite', 'must be a suite key')
+        if (!p || tag !== null || classified !== null)
+          return validation('suite', 'needs ?project= and cannot be combined with tag or classification')
+        suite = db.suites.find((x) => x.projectId === p.id && x.key === suiteKey)
+        if (!suite) return notFound(`suite ${suiteKey}`)
+      }
+      const inSuite = (t: TestCase) =>
+        !suite ||
+        (suite.kind === 'static'
+          ? suite.members.includes(t.id)
+          : (!suite.query?.tag || t.tags.includes(suite.query.tag)) &&
+            (suite.query?.classification ?? []).every(
+              (pair) => t.classification[pair.split(':')[0]] === pair.split(':')[1],
+            ))
       const pairs = (classified ?? '').split(',').filter(Boolean)
       const items = db.testCases
         .filter(
@@ -756,6 +900,7 @@ export const handlers = [
             (!status || t.status === status) &&
             (!p || t.projectId === p.id) &&
             (tag === null || t.tags.includes(tag)) &&
+            inSuite(t) &&
             pairs.every((pair) => `${pair.split(':')[0]}:${t.classification[pair.split(':')[0]]}` === pair),
         )
         .sort((a, b) => b.id - a.id)
@@ -972,10 +1117,14 @@ export const handlers = [
       const url = new URL(request.url)
       const p = projectFilter(url)
       if (p instanceof Response) return p
+      const suite = url.searchParams.get('suite')
+      if (suite !== null && !DIMENSION.test(suite)) return validation('suite', 'must be a suite key')
       return respond(
         pageOf(
           url,
-          db.runs.filter((r) => !p || r.projectId === p.id).sort((a, b) => b.id - a.id),
+          db.runs
+            .filter((r) => (!p || r.projectId === p.id) && (suite === null || r.suite?.key === suite))
+            .sort((a, b) => b.id - a.id),
         ),
       )
     }),

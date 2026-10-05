@@ -35,6 +35,11 @@ type API interface {
 	UpdateDimension(ctx context.Context, projectID int64, key string, in UpdateDimensionInput) (Dimension, error)
 	CreateDimensionValue(ctx context.Context, projectID int64, dimensionKey string, in DimensionInput) (Dimension, error)
 	UpdateDimensionValue(ctx context.Context, projectID int64, dimensionKey, valueKey string, in UpdateDimensionInput) (Dimension, error)
+	Suites(ctx context.Context, projectID int64) ([]Suite, error)
+	Suite(ctx context.Context, projectID int64, key string) (Suite, error)
+	CreateSuite(ctx context.Context, projectID int64, in SuiteInput) (Suite, error)
+	UpdateSuite(ctx context.Context, projectID int64, key string, in UpdateSuiteInput) (Suite, error)
+	SetSuiteCases(ctx context.Context, projectID int64, key string, ids []int64) (Suite, error)
 }
 
 // ProjectKeyMessage is the validation message of a malformed project key.
@@ -267,6 +272,11 @@ func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}", h.updateDimension)
 	mux.HandleFunc("POST /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values", h.createDimensionValue)
 	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}", h.updateDimensionValue)
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/suites", h.listSuites)
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/suites", h.createSuite)
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/suites/{suiteKey}", h.getSuite)
+	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/suites/{suiteKey}", h.updateSuite)
+	mux.HandleFunc("PUT /api/v1/projects/{projectKey}/suites/{suiteKey}/cases", h.setSuiteCases)
 	mux.HandleFunc("GET /api/v1/test-cases", h.list)
 	mux.HandleFunc("POST /api/v1/test-cases", h.create)
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}", h.onTestCase(authz.RoleViewer, h.get))
@@ -305,6 +315,10 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if f.ProjectIDs, err = VisibleProjects(r, h.api.ProjectByKey, h.guard); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	if f, err = h.suiteQuery(r, f); err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}

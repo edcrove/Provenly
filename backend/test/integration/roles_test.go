@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/edcrove/provenly/backend/internal/catalog"
+	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/identity"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
@@ -87,7 +88,7 @@ func TestRoles(t *testing.T) {
 			cases, err := s.Catalog.List(ctx, catalog.ListFilter{ProjectIDs: c.ids}, pagination.Default())
 			require.NoError(t, err)
 			assert.Equal(t, c.want, cases.Total, "test cases %v", c.ids)
-			runs, err := s.Execution.ListRuns(ctx, c.ids, pagination.Default())
+			runs, err := s.Execution.ListRuns(ctx, execution.RunFilter{ProjectIDs: c.ids}, pagination.Default())
 			require.NoError(t, err)
 			assert.Equal(t, c.want, runs.Total, "runs %v", c.ids)
 			projects, err := s.Catalog.ListProjects(ctx, c.ids, pagination.Default())

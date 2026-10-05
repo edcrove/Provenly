@@ -74,3 +74,23 @@ type TestStep struct {
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 }
+
+type TestSuite struct {
+	ID              int64
+	ProjectID       int64
+	Key             string
+	Name            string
+	Description     string
+	Kind            string
+	QueryTag        pgtype.Text
+	QueryClassified []string
+	ArchivedAt      pgtype.Timestamptz
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type TestSuiteCase struct {
+	SuiteID    int64
+	ProjectID  int64
+	TestCaseID int64
+}

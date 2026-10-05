@@ -153,6 +153,11 @@ per run); `execution.Service.Live` derives the provisional state of each expecte
 finished, reconciles the events with the run summary (status mismatch, live-only, final-only,
 started-without-finished, duplicate, invalid correlation). The UI polls every two seconds while the run is running.
 
+## Playwright reporter (prototype feature 16)
+
+`reporters/playwright` is a client of the public API only (live runs, events and JUnit ingestion with a project API
+key): it adds no server code. Its TC-ID conventions mirror the JUnit ones (`tc-id` property, KEY-n in the name).
+
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its

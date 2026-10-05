@@ -30,7 +30,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 13 | Issues, known issues and issue verification | Incubator, Planning #8 | ✅ | proto/13-issues |
 | 14 | Quality dashboard (trends, flaky, coverage) | Incubator (Quality Intelligence) | ✅ | proto/14-dashboard |
 | 15 | Live runs: execution sessions, live events, reconciliation | Trello Live Streaming, Planning #9 | ✅ | proto/15-live-runs |
-| 16 | Playwright reporter (`@provenly/playwright-reporter`) | Trello, DEC-15 | ⏳ | |
+| 16 | Playwright reporter (`@provenly/playwright-reporter`) | Trello, DEC-15 | ✅ | proto/16-playwright-reporter |
 | 17 | OpenTelemetry basic instrumentation | Trello, DEC-11 | ⏳ | |
 | 18 | Export sink (webhooks) and GitHub connector, secrets at rest | Planning #3, #21, Incubator, MVP D4 | ⏳ | |
 | 19 | MCP server (agent interface) | Incubator, DEC-10 | ⏳ | |
@@ -139,6 +139,12 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P15-4 | Live state | Derived on read: per expected test case waiting / running / its last finished status (by sequence); counts and the runner's run.finished flag; provisional only | "Live state is provisional; the final suite result is the source of truth" |
 | P15-5 | Reconciliation | Computed on read once the run is finished: CONSISTENT or MISMATCH with the card's kinds (status mismatch, live-only, final-only, started-without-finished, duplicate, invalid correlation). Events carry the test's attempt: each test (by name) counts with its last finished attempt and a test case's variants aggregate failed > error > skipped > passed, then compare with the run summary per TC-ID; a duplicate is one attempt of one test finished twice (a retry is not); events without a TC-ID are not reconciled | A mismatch never changes the final results; per-TC-ID comparison matches how summaries count |
 | P15-6 | Not now | No execution-session concept beyond the run, no step-level results, no automatic timeout of a run whose report never arrives (a member can still see it as running) | Kept for the reporter (feature 16) and a later decision on abandoned runs |
+| P16-1 | Shape | A dependency-free TypeScript reporter in `reporters/playwright` (Playwright types declared structurally): live run at `onBegin`, `test.started`/`test.finished` events (with attempt) batched by 50, `run.finished` and the final JUnit report at `onEnd` | Works with any Playwright that has the Reporter API; nothing to keep in sync with Playwright releases |
+| P16-2 | TC-ID | A test declares its TC-ID with a `tc-id` annotation, a `@KEY-n` tag or a KEY-n in its title (that order) | Uses Playwright's own metadata first; the title form matches the JUnit name fallback |
+| P16-3 | Report | One JUnit testcase per attempt with `tc-id` and `attempt` properties; Playwright `interrupted` is an error, `timedOut` a failure; an interrupted or timed-out run is sent with `status=interrupted` | Reuses the ingestion's retry model (D1) and execution statuses unchanged |
+| P16-4 | Resilience | Provenly unreachable never fails the test run: a failed live start or event batch is logged and the final report is still sent (3 tries on network errors and 5xx; 4xx is logged, not retried) | Reporting must not turn a green build red |
+| P16-5 | Configuration | `PROVENLY_URL`, `PROVENLY_API_KEY`, optional `PROVENLY_PROJECT`/`PROVENLY_SUITE`; run identity from `GITHUB_*` on GitHub Actions, else `local` and a timestamp; options override all; no URL means no-op | Zero configuration in CI beyond the key; local runs stay silent |
+| P16-6 | Quality and dogfooding | Own CI job with 100% statement/branch/function/line thresholds; BE-E2E-022 drives it against the real API; Provenly's own E2E journeys load it (inactive unless `PROVENLY_URL` is set). Publishing to npm is left to feature 21 | Same bar as the product; dogfooding ready without coupling CI to a running instance |
 | P12-6 | UI | A Requirements page (list with coverage, native creation and external registration), a requirement page (covering test cases, latest results, link/unlink, archive) and "Requirements" on the test case page | Traceability is visible from both sides |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
@@ -312,6 +318,15 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: new manual run page, manual execution panel on the run page, running/manual badges (screenshots 56–57).
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
+
+### 16. Playwright reporter (DEC-15)
+
+- **Behavior**: add `['@provenly/playwright-reporter']` to `playwright.config.ts` and set `PROVENLY_URL` and
+  `PROVENLY_API_KEY` in CI: each run appears in Provenly as a live run while it executes and is completed by the
+  reporter's JUnit report (retries as attempts, flaky detection, TC-IDs from annotations, tags or titles).
+- **Code**: `reporters/playwright` (README, unit tests at 100%), CI job "Playwright reporter", `make test-reporter`.
+- **Tests**: reporter unit tests (TC-ID sources, status mapping, XML, live streaming, batching, failures and retries,
+  no-op without URL), BE-E2E-022 against the real API with a project API key.
 
 ### 15. Live runs and reconciliation (Trello Live Streaming, Planning #9)
 

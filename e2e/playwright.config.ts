@@ -28,7 +28,14 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   forbidOnly: !!process.env.CI,
-  reporter: [['list'], ['json', { outputFile: 'coverage/results.json' }], ['html', { open: 'never' }]],
+  reporter: [
+    ['list'],
+    ['json', { outputFile: 'coverage/results.json' }],
+    ['html', { open: 'never' }],
+    // Dogfooding (prototype feature 16): with PROVENLY_URL and PROVENLY_API_KEY set, these journeys report themselves
+    // to a Provenly instance; without them the reporter does nothing.
+    ['../reporters/playwright/src/index.ts'],
+  ],
   use: {
     baseURL: `http://localhost:${webPort}`,
     // Every journey (browser and API request fixture) starts signed in as the administrator.

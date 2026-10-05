@@ -9,6 +9,8 @@ describe('ciSnippet', () => {
       '"https://provenly.example/api/v1/ingestion/junit?project=CHK&provider=github&runId=$GITHUB_RUN_ID',
     )
     expect(s).toContain('-H "Authorization: Bearer $PROVENLY_API_KEY"')
-    expect(s).toContain('--data-binary @junit.xml')
+    expect(s).toContain('gzip -c junit.xml | curl')
+    expect(s).toContain('-H "Content-Encoding: gzip"')
+    expect(s).toContain('--data-binary @-')
   })
 })

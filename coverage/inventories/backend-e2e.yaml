@@ -27,3 +27,5 @@ targets:
     description: snapshot amendment through the public API - a reported manual TC-ID is included in a run by a maintainer; summary, run and outcome follow the amended universe, the snapshot total is kept, the history records who and why; repeats are 409 and unreported TC-IDs 400
   - id: BE-E2E-013
     description: retries through the public API - Surefire flaky and rerun attempts are stored with their attempt and details; the last attempt is the logical result in run outcome, summary (flaky) and results (retried flag)
+  - id: BE-E2E-014
+    description: gzip reports through the public API - a gzip report is ingested like a plain one; a gzip bomb is a 413 problem (limit on the decompressed body); a broken stream is 400 and other encodings 415

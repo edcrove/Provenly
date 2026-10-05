@@ -1,7 +1,10 @@
 package ingestion
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"crypto/rand"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -128,22 +131,61 @@ func TestIngestHandlerMediaTypes(t *testing.T) {
 	assert.Equal(t, "ISO-8859-1", api.gotMeta.Charset, "the charset parameter is passed on: it overrides the XML declaration")
 }
 
-func TestIngestHandlerRejectsCompressedBodies(t *testing.T) {
+func gz(t *testing.T, body string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	w := gzip.NewWriter(&buf)
+	_, err := w.Write([]byte(body))
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+	return buf.String()
+}
+
+// MVP D6: gzip reports are accepted with the size limit on the decompressed body; other encodings are a 415.
+func TestIngestHandlerContentEncodings(t *testing.T) {
+	api := &stubAPI{}
 	mux := http.NewServeMux()
-	NewHandler(&stubAPI{}, 1024).Register(mux)
-	for _, enc := range []string{"gzip", "br", "deflate"} {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/ingestion/junit?"+q, strings.NewReader("\x1f\x8b"))
+	NewHandler(api, 1024).Register(mux)
+	send := func(enc, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/ingestion/junit?"+q, strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/xml")
 		req.Header.Set("Content-Encoding", enc)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
-		assert.Equal(t, http.StatusUnsupportedMediaType, rec.Code, enc)
-		assert.Contains(t, rec.Body.String(), "Content-Encoding", enc)
+		return rec
 	}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/ingestion/junit?"+q, strings.NewReader("<x/>"))
-	req.Header.Set("Content-Type", "application/xml")
-	req.Header.Set("Content-Encoding", "identity")
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	assert.Equal(t, http.StatusOK, rec.Code, "identity is no encoding")
+	for _, enc := range []string{"br", "deflate", "gzip, br", "compress"} {
+		rec := send(enc, "<x/>")
+		assert.Equal(t, http.StatusUnsupportedMediaType, rec.Code, enc)
+		assert.Contains(t, rec.Body.String(), "uncompressed or gzip", enc)
+	}
+	for _, enc := range []string{"", "identity", " Identity "} {
+		assert.Equal(t, http.StatusOK, send(enc, "<x/>").Code, "no encoding: %q", enc)
+	}
+	for _, enc := range []string{"gzip", "GZIP", "x-gzip"} {
+		require.Equal(t, http.StatusOK, send(enc, gz(t, "<testsuite/>")).Code, enc)
+		assert.Equal(t, "<testsuite/>", api.gotBody, enc)
+	}
+
+	exact := strings.Repeat("a", 1024)
+	assert.Equal(t, http.StatusOK, send("gzip", gz(t, exact)).Code, "exactly the limit decompressed")
+	assert.Equal(t, exact, api.gotBody)
+	bomb := send("gzip", gz(t, strings.Repeat("a", 1025)))
+	assert.Equal(t, http.StatusRequestEntityTooLarge, bomb.Code, "the limit applies to the decompressed body")
+	assert.Equal(t, http.StatusRequestEntityTooLarge, send("gzip", gz(t, strings.Repeat("a", 1<<20))).Code, "a gzip bomb")
+
+	for name, body := range map[string]string{
+		"not gzip":  "<testsuite/>",
+		"truncated": gz(t, "<testsuite/>")[:15],
+		"corrupt":   gz(t, "<testsuite/>")[:10] + "xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+		"empty":     "",
+	} {
+		rec := send("gzip", body)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, name)
+		assert.Contains(t, rec.Body.String(), "is not valid gzip", name)
+	}
+	noise := make([]byte, 4096)
+	_, _ = rand.Read(noise)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, send("gzip", gz(t, string(noise))).Code,
+		"an incompressible report over the limit is too large while still compressed")
 }

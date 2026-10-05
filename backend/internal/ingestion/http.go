@@ -1,7 +1,9 @@
 package ingestion
 
 import (
+	"compress/gzip"
 	"context"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -51,6 +53,52 @@ func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("POST /api/v1/ingestion/junit", h.ingestJUnit)
 }
 
+// contentEncoding accepts an uncompressed body (no encoding or identity) or gzip (MVP D6).
+func contentEncoding(raw string) (gzipped, ok bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "identity":
+		return false, true
+	case "gzip", "x-gzip":
+		return true, true
+	}
+	return false, false
+}
+
+// gzipError turns a broken gzip stream into a client error; a body over the size limit stays a 413.
+func gzipError(err error) error {
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		return err
+	}
+	return apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "body", Message: "is not valid gzip: " + err.Error()})
+}
+
+// decompressed reads a gzip stream up to a limit of decompressed bytes.
+type decompressed struct {
+	r     io.Reader
+	left  int64
+	limit int64
+}
+
+func (d *decompressed) Read(p []byte) (int, error) {
+	if d.left <= 0 {
+		// Probe one more byte: exactly the limit is fine, anything past it is too large.
+		var one [1]byte
+		if n, _ := d.r.Read(one[:]); n > 0 {
+			return 0, &http.MaxBytesError{Limit: d.limit}
+		}
+	}
+	if int64(len(p)) > d.left {
+		p = p[:max(d.left, 0)]
+	}
+	n, err := d.r.Read(p)
+	d.left -= int64(n)
+	if err != nil && !errors.Is(err, io.EOF) {
+		err = gzipError(err)
+	}
+	return n, err
+}
+
 // xmlMediaType returns the charset parameter of an XML Content-Type (application/xml,
 // text/xml or any +xml type, RFC 7303), and false when the type is not XML.
 func xmlMediaType(contentType string) (charset string, ok bool) {
@@ -72,9 +120,10 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 			"charset "+charset+" is not supported; send UTF-8 (or ISO-8859-1, windows-1252, UTF-16)")
 		return
 	}
-	if enc := r.Header.Get("Content-Encoding"); enc != "" && !strings.EqualFold(enc, "identity") {
+	gzipped, ok := contentEncoding(r.Header.Get("Content-Encoding"))
+	if !ok {
 		httpx.WriteProblem(w, http.StatusUnsupportedMediaType, httpx.CodeUnsupportedMediaType,
-			"Content-Encoding "+enc+" is not supported; send the report uncompressed")
+			"Content-Encoding "+r.Header.Get("Content-Encoding")+" is not supported; send the report uncompressed or gzip")
 		return
 	}
 	q := r.URL.Query()
@@ -103,7 +152,17 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, fields...))
 		return
 	}
-	out, err := h.api.IngestJUnit(r.Context(), meta, http.MaxBytesReader(w, r.Body, h.maxBytes))
+	body := io.Reader(http.MaxBytesReader(w, r.Body, h.maxBytes))
+	if gzipped {
+		zr, err := gzip.NewReader(body)
+		if err != nil {
+			httpx.WriteError(w, r, gzipError(err))
+			return
+		}
+		// The size limit applies to the decompressed report (MVP D6): a small compressed body cannot expand past it.
+		body = &decompressed{r: zr, left: h.maxBytes, limit: h.maxBytes}
+	}
+	out, err := h.api.IngestJUnit(r.Context(), meta, body)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

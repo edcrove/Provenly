@@ -3,6 +3,8 @@
 package contract
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"net/http"
@@ -689,7 +691,7 @@ func TestRunsAndResultsAreReadOnly(t *testing.T) {
 
 // TestIngestionMediaTypes: the charset parameter overrides the document, text/xml
 // and +xml types are XML, compressed bodies and unknown charsets are a 415, and
-// every query parameter error is reported at once (docs/review.md finding 24).
+// every query parameter error is reported at once (docs/review.md finding 24); gzip is accepted (MVP D6).
 func TestIngestionMediaTypes(t *testing.T) {
 	e := api(t, fresh(t), 1<<20)
 	send := func(runID, contentType string, body []byte) *httpexpect.Request {
@@ -705,8 +707,23 @@ func TestIngestionMediaTypes(t *testing.T) {
 	send("textxml", "text/xml", []byte(`<testsuite name="s"/>`)).Expect().Status(http.StatusCreated)
 	send("charset", "application/xml; charset=shift_jis", []byte(`<testsuite/>`)).Expect().
 		Status(http.StatusUnsupportedMediaType).JSON(problemOpts).Object().HasValue("code", "unsupported_media_type")
-	send("gzip", "application/xml", []byte{0x1f, 0x8b}).WithHeader("Content-Encoding", "gzip").Expect().
+	// MVP D6: gzip reports are read with the size limit on the decompressed body; other encodings are a 415.
+	var zipped bytes.Buffer
+	zw := gzip.NewWriter(&zipped)
+	_, _ = zw.Write([]byte(`<testsuite name="zipped"><testcase name="gz"/></testsuite>`))
+	_ = zw.Close()
+	send("gzip", "application/xml", zipped.Bytes()).WithHeader("Content-Encoding", "gzip").Expect().
+		Status(http.StatusCreated).JSON().Object().HasValue("received", 1)
+	send("gzip-broken", "application/xml", []byte{0x1f, 0x8b}).WithHeader("Content-Encoding", "gzip").Expect().
+		Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "validation_error")
+	send("br", "application/xml", []byte(`<testsuite/>`)).WithHeader("Content-Encoding", "br").Expect().
 		Status(http.StatusUnsupportedMediaType).JSON(problemOpts).Object().HasValue("code", "unsupported_media_type")
+	var bomb bytes.Buffer
+	bw := gzip.NewWriter(&bomb)
+	_, _ = bw.Write(bytes.Repeat([]byte(" "), 2<<20))
+	_ = bw.Close()
+	send("bomb", "application/xml", bomb.Bytes()).WithHeader("Content-Encoding", "gzip").Expect().
+		Status(http.StatusRequestEntityTooLarge).JSON(problemOpts).Object().HasValue("code", "payload_too_large")
 
 	errs := e.POST("/api/v1/ingestion/junit").WithHeader("Content-Type", xmlType).WithText(`<testsuite/>`).Expect().
 		Status(http.StatusBadRequest).JSON(problemOpts).Object().Value("errors").Array()

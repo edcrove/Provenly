@@ -55,6 +55,7 @@ test.describe('CI API keys', () => {
     await page.getByRole('button', { name: 'Create API key' }).click()
     const token = (await page.getByTestId('api-key-token').textContent())!
     await expect(page.getByTestId('api-key-snippet')).toContainText(`project=${key}`)
+    await expect(page.getByTestId('api-key-snippet')).toContainText('Content-Encoding: gzip')
 
     const runId = uniqueRunId()
     const ci = await apiRequest.newContext({ storageState: empty, extraHTTPHeaders: { Authorization: `Bearer ${token}` } })

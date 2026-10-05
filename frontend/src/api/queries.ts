@@ -18,8 +18,10 @@ import {
   type AcceptInvitationRequest,
   type CreateInvitationRequest,
   type CreateProjectRequest,
+  type CreateIssueRequest,
   type CreateRequirementRequest,
   type CreateSuiteRequest,
+  type UpdateIssueRequest,
   type UpdateRequirementRequest,
   type ManualResultRequest,
   type StartManualRunRequest,
@@ -408,6 +410,69 @@ export function useRequirementMutations(projectKey: string) {
         unwrap(
           await api.PUT('/api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases', {
             params: { path: { projectKey, requirementId } },
+            body: { testCaseIds },
+          }),
+        ),
+      onSettled,
+    }),
+  }
+}
+
+export function useIssues(projectKey: string, filter: { testCase?: number; state?: 'open' | 'closed' } = {}) {
+  return useQuery({
+    queryKey: [...keys.projects, projectKey, 'issues', filter.testCase, filter.state],
+    enabled: projectKey !== '',
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/projects/{projectKey}/issues', {
+          params: { path: { projectKey }, query: filter },
+        }),
+      ),
+  })
+}
+
+export function useIssue(projectKey: string, issueId: number) {
+  return useQuery({
+    queryKey: [...keys.projects, projectKey, 'issues', 'one', issueId],
+    enabled: issueId > 0,
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/projects/{projectKey}/issues/{issueId}', {
+          params: { path: { projectKey, issueId } },
+        }),
+      ),
+  })
+}
+
+export function useIssueMutations(projectKey: string) {
+  const qc = useQueryClient()
+  const onSettled = () => qc.invalidateQueries({ queryKey: [...keys.projects, projectKey, 'issues'] })
+  return {
+    create: useExclusiveMutation({
+      mutationFn: async (body: CreateIssueRequest) =>
+        unwrap(
+          await api.POST('/api/v1/projects/{projectKey}/issues', {
+            params: { path: { projectKey } },
+            body,
+          }),
+        ),
+      onSettled,
+    }),
+    update: useExclusiveMutation({
+      mutationFn: async ({ issueId, ...body }: UpdateIssueRequest & { issueId: number }) =>
+        unwrap(
+          await api.PATCH('/api/v1/projects/{projectKey}/issues/{issueId}', {
+            params: { path: { projectKey, issueId } },
+            body,
+          }),
+        ),
+      onSettled,
+    }),
+    link: useExclusiveMutation({
+      mutationFn: async ({ issueId, testCaseIds }: { issueId: number; testCaseIds: number[] }) =>
+        unwrap(
+          await api.PUT('/api/v1/projects/{projectKey}/issues/{issueId}/test-cases', {
+            params: { path: { projectKey, issueId } },
             body: { testCaseIds },
           }),
         ),

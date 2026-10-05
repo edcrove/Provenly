@@ -137,3 +137,24 @@ func TestLatestStatuses(t *testing.T) {
 	_, err = svc.LatestStatuses(ctx, []int64{1})
 	assert.ErrorIs(t, err, errBoom)
 }
+
+// The latest conclusive status of a test case skips runs where it was only skipped.
+func TestLatestConclusive(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo, func() time.Time { return fixedNow })
+	ctx := context.Background()
+	tc1, tc2 := int64(1), int64(2)
+	repo.results[1] = []TestResult{{TestCaseID: &tc1, Correlation: CorrelationValid, TestName: "a", Status: Failed, Attempt: 1}}
+	repo.results[2] = []TestResult{
+		{TestCaseID: &tc1, Correlation: CorrelationValid, TestName: "a", Status: Skipped, Attempt: 1},
+		{TestCaseID: &tc2, Correlation: CorrelationValid, TestName: "b", Status: Error, Attempt: 1},
+		{TestCaseID: &tc2, Correlation: CorrelationValid, TestName: "b", Status: Passed, Attempt: 2},
+	}
+	statuses, runs, err := svc.LatestConclusive(ctx, []int64{1, 2, 3})
+	require.NoError(t, err)
+	assert.Equal(t, map[int64]string{1: "failed", 2: "passed"}, statuses)
+	assert.Equal(t, map[int64]int64{1: 1, 2: 2}, runs)
+	repo.errs["ListLatestConclusive"] = errBoom
+	_, _, err = svc.LatestConclusive(ctx, []int64{1})
+	assert.ErrorIs(t, err, errBoom)
+}

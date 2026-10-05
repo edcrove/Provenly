@@ -24,6 +24,7 @@ import { classificationLabels, formatTags, updateBody } from '@/lib/taxonomy'
 import { useProjectRole } from '@/features/projects/useProjectRole'
 import { can } from '@/lib/roles'
 
+import { LinkedIssues } from '@/features/issues/LinkedIssues'
 import { CoveredRequirements } from '@/features/requirements/CoveredRequirements'
 
 import { StepsEditor } from './StepsEditor'
@@ -188,6 +189,16 @@ function Definition({ tc }: { tc: TestCase }) {
         </CardHeader>
         <CardContent>
           <CoveredRequirements projectKey={tc.projectKey} testCaseId={tc.id} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle as="h2">Issues</CardTitle>
+          <CardDescription>Defects this test case reproduces.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LinkedIssues projectKey={tc.projectKey} testCaseId={tc.id} />
         </CardContent>
       </Card>
 

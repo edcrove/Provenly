@@ -361,3 +361,31 @@ func (f *fakeRepo) ListLatestResults(_ context.Context, ids []int64) ([]ValidRes
 	}
 	return out, nil
 }
+
+func (f *fakeRepo) ListLatestConclusive(_ context.Context, ids []int64) ([]Conclusive, error) {
+	if err := f.errs["ListLatestConclusive"]; err != nil {
+		return nil, err
+	}
+	var runIDs []int64
+	for runID := range f.results {
+		runIDs = append(runIDs, runID)
+	}
+	slices.Sort(runIDs)
+	slices.Reverse(runIDs)
+	var out []Conclusive
+	for _, id := range ids {
+		for _, runID := range runIDs {
+			var vs []ValidResult
+			for _, r := range f.results[runID] {
+				if r.TestCaseID != nil && *r.TestCaseID == id && r.Correlation == CorrelationValid {
+					vs = append(vs, ValidResult{TestCaseID: id, Status: r.Status, Execution: r.TestName, Attempt: r.Attempt})
+				}
+			}
+			if statuses, _ := logical(vs); len(statuses) > 0 && Aggregate(statuses) != SummaryStatus(Skipped) {
+				out = append(out, Conclusive{TestCaseID: id, RunID: runID, Status: ResultStatus(Aggregate(statuses))})
+				break
+			}
+		}
+	}
+	return out, nil
+}

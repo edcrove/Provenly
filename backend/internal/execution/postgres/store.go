@@ -420,3 +420,16 @@ func (s *Store) ListLatestResults(ctx context.Context, testCaseIDs []int64) ([]e
 	}
 	return out, nil
 }
+
+// ListLatestConclusive implements execution.Repository.
+func (s *Store) ListLatestConclusive(ctx context.Context, testCaseIDs []int64) ([]execution.Conclusive, error) {
+	rows, err := s.q.ListLatestConclusive(ctx, testCaseIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]execution.Conclusive, len(rows))
+	for i, r := range rows {
+		out[i] = execution.Conclusive{TestCaseID: r.TestCaseID, RunID: r.TestRunID, Status: execution.ResultStatus(r.Status)}
+	}
+	return out, nil
+}

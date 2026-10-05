@@ -13,9 +13,17 @@ import (
 )
 
 type fakeResults struct {
-	latest map[int64]string
-	err    error
-	asked  []int64
+	latest     map[int64]string
+	conclusive map[int64]string
+	runs       map[int64]int64
+	err        error
+	errConcl   error
+	asked      []int64
+}
+
+func (f *fakeResults) LatestConclusive(_ context.Context, ids []int64) (map[int64]string, map[int64]int64, error) {
+	f.asked = ids
+	return f.conclusive, f.runs, f.errConcl
 }
 
 func (f *fakeResults) LatestStatuses(_ context.Context, ids []int64) (map[int64]string, error) {

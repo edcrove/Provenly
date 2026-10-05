@@ -198,6 +198,57 @@ type UpdateRequirementInput struct {
 	Archived       *bool
 }
 
+// Issue states: an issue is open until it is fixed (closed) in its tracker.
+const (
+	IssueOpen   = "open"
+	IssueClosed = "closed"
+)
+
+// Issue is a defect tracked in Provenly or mirrored from an external tracker, and the test cases that reproduce it.
+// Provider and external id never change; issues are closed, never deleted.
+type Issue struct {
+	ID             int64
+	ProjectID      int64
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	URL            string
+	State          string
+	ProviderStatus string
+	ClosedAt       *time.Time
+	LastSyncedAt   *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	TestCaseIDs    []int64
+}
+
+// IssueInput is a new (or, when imported, mirrored) issue.
+type IssueInput struct {
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	URL            string
+	State          string
+	ProviderStatus string
+}
+
+// UpdateIssueInput holds the issue fields to change; nil means unchanged.
+type UpdateIssueInput struct {
+	Title          *string
+	Description    *string
+	URL            *string
+	State          *string
+	ProviderStatus *string
+}
+
+// IssueFilter narrows a project's issues.
+type IssueFilter struct {
+	State      *string
+	TestCaseID *int64
+}
+
 // SuiteKind tells how a suite selects its test cases.
 type SuiteKind string
 
@@ -377,6 +428,16 @@ type Repository interface {
 	UpdateRequirement(ctx context.Context, projectID, id int64, in UpdateRequirementInput) error
 	// SetRequirementTestCases replaces the test cases that cover a requirement.
 	SetRequirementTestCases(ctx context.Context, requirementID, projectID int64, ids []int64) error
+	// ListIssues returns a project's issues, newest first, narrowed by f.
+	ListIssues(ctx context.Context, projectID int64, f IssueFilter) ([]Issue, error)
+	GetIssue(ctx context.Context, projectID, id int64) (Issue, error)
+	// NextNativeIssueNumber returns the n of the next native I-<n>.
+	NextNativeIssueNumber(ctx context.Context, projectID int64) (int64, error)
+	// UpsertIssue creates an issue or, with sync, updates the mirrored one; ok=false when it existed without sync.
+	UpsertIssue(ctx context.Context, projectID int64, in IssueInput, sync bool, syncedAt *time.Time) (id int64, created, ok bool, err error)
+	UpdateIssue(ctx context.Context, projectID, id int64, in UpdateIssueInput) error
+	// SetIssueTestCases replaces the test cases linked to an issue.
+	SetIssueTestCases(ctx context.Context, issueID, projectID int64, ids []int64) error
 
 	// InTx runs fn inside one database transaction.
 	InTx(ctx context.Context, fn func(Repository) error) error

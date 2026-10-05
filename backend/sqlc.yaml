@@ -10,6 +10,7 @@ sql:
       - migrations/00020_taxonomy.sql
       - migrations/00021_suites.sql
       - migrations/00024_requirements.sql
+      - migrations/00025_issues.sql
     queries: queries/catalog.sql
     gen:
       go:

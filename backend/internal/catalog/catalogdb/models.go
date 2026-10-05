@@ -28,6 +28,28 @@ type ClassificationValue struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type Issue struct {
+	ID             int64
+	ProjectID      int64
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	Url            string
+	State          string
+	ProviderStatus string
+	ClosedAt       pgtype.Timestamptz
+	LastSyncedAt   pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type IssueTestCase struct {
+	IssueID    int64
+	ProjectID  int64
+	TestCaseID int64
+}
+
 type Project struct {
 	ID                    int64
 	Key                   string
@@ -37,6 +59,7 @@ type Project struct {
 	CreatedAt             pgtype.Timestamptz
 	UpdatedAt             pgtype.Timestamptz
 	NextRequirementNumber int64
+	NextIssueNumber       int64
 }
 
 type Requirement struct {

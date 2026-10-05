@@ -12,6 +12,7 @@ import { PageTitle } from '@/components/PageTitle'
 import { formatDateTime, formatPercent } from '@/lib/format'
 import { can } from '@/lib/roles'
 import { isInterruptedRun, positiveInt } from '@/lib/status'
+import { RunKnownIssues } from '@/features/issues/RunKnownIssues'
 import { ManualExecution } from '@/features/manual/ManualExecution'
 
 import { RunAmendments } from './RunAmendments'
@@ -101,6 +102,10 @@ export function TestRunDetailPage() {
                   </CardHeader>
                   <CardContent>
                     <RunSummary summary={s} />
+                    <RunKnownIssues
+                      projectKey={projects.find((p) => p.id === r.projectId)?.key ?? ''}
+                      summary={s}
+                    />
                   </CardContent>
                 </Card>
                 <Card>

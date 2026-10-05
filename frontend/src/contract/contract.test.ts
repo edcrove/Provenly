@@ -1550,6 +1550,212 @@ const requirementScenarios: Scenario[] = [
   ).map((sc) => ({ ...sc, setup: sc.setup ? () => (withRequirement(), sc.setup!()) : withRequirement })),
 ]
 
+const withIssue = () => {
+  db.issues.push({
+    projectId: 1,
+    id: 960,
+    provider: 'jira',
+    externalId: 'PAY-12',
+    title: 'Refund twice',
+    description: '',
+    url: 'https://jira.test/PAY-12',
+    state: 'open',
+    providerStatus: 'In Progress',
+    closedAt: null,
+    lastSyncedAt: '2026-10-05T10:00:00Z',
+    createdAt: '2026-10-05T10:00:00Z',
+    updatedAt: '2026-10-05T10:00:00Z',
+    testCaseIds: [153],
+    verification: { status: 'unlinked', testCases: [] },
+  })
+  db.latest[153] = 'failed'
+}
+const issue960 = { projectKey: 'TC', issueId: 960 }
+const unknownIssue = { projectKey: 'TC', issueId: 987654 }
+
+const issueScenarios: Scenario[] = [
+  {
+    op: 'GET /api/v1/projects/{projectKey}/issues',
+    status: 200,
+    setup: withIssue,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/issues', {
+        params: { path: tcKey, query: { testCase: 153 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/issues',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/issues', {
+        params: { path: tcKey, query: { testCase: 0 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/issues',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/issues', { params: { path: chk } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/issues',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/issues', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/issues',
+    status: 201,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/issues', {
+        params: { path: tcKey },
+        body: { title: 'Crash', url: 'https://x.test' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/issues',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/issues', { params: { path: tcKey }, body: { title: ' ' } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/issues',
+    status: 403,
+    setup: asViewer,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/issues', { params: { path: tcKey }, body: { title: 'x' } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/issues',
+    status: 404,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/issues', { params: { path: chk }, body: { title: 'x' } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/issues',
+    status: 409,
+    setup: withIssue,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/issues', {
+        params: { path: tcKey },
+        body: { title: 'x', provider: 'jira', externalId: 'PAY-12' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/issues',
+    status: 415,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/issues', {
+        params: { path: tcKey },
+        body: { title: 'x' },
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/issues',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/issues', { params: { path: tcKey }, body: { title: 'x' } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/issues/{issueId}',
+    status: 200,
+    setup: withIssue,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/issues/{issueId}', { params: { path: issue960 } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/issues/{issueId}',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/issues/{issueId}', {
+        params: { path: { projectKey: 'TC', issueId: 0 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/issues/{issueId}',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/issues/{issueId}', { params: { path: unknownIssue } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/issues/{issueId}',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/issues/{issueId}', { params: { path: issue960 } }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/issues/{issueId}',
+    status: 200,
+    setup: withIssue,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/issues/{issueId}', {
+        params: { path: issue960 },
+        body: { state: 'closed' },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/issues/{issueId}',
+    status: 400,
+    setup: withIssue,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/issues/{issueId}', {
+        params: { path: issue960 },
+        body: {},
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/issues/{issueId}',
+    status: 404,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/issues/{issueId}', {
+        params: { path: unknownIssue },
+        body: { title: 'x' },
+      }),
+  },
+  ...taxonomyWriteFailures('PATCH /api/v1/projects/{projectKey}/issues/{issueId}', (c, headers) =>
+    c.PATCH('/api/v1/projects/{projectKey}/issues/{issueId}', {
+      params: { path: issue960 },
+      body: { title: 'x' },
+      headers,
+    }),
+  ).map((sc) => ({ ...sc, setup: sc.setup ? () => (withIssue(), sc.setup!()) : withIssue })),
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/issues/{issueId}/test-cases',
+    status: 200,
+    setup: withIssue,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/issues/{issueId}/test-cases', {
+        params: { path: issue960 },
+        body: { testCaseIds: [153, 154] },
+      }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/issues/{issueId}/test-cases',
+    status: 400,
+    setup: withIssue,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/issues/{issueId}/test-cases', {
+        params: { path: issue960 },
+        body: { testCaseIds: [987654] },
+      }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/issues/{issueId}/test-cases',
+    status: 404,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/issues/{issueId}/test-cases', {
+        params: { path: unknownIssue },
+        body: { testCaseIds: [] },
+      }),
+  },
+  ...taxonomyWriteFailures('PUT /api/v1/projects/{projectKey}/issues/{issueId}/test-cases', (c, headers) =>
+    c.PUT('/api/v1/projects/{projectKey}/issues/{issueId}/test-cases', {
+      params: { path: issue960 },
+      body: { testCaseIds: [] },
+      headers,
+    }),
+  ).map((sc) => ({ ...sc, setup: sc.setup ? () => (withIssue(), sc.setup!()) : withIssue })),
+]
+
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 type AnyCall = (path: string, init: object) => Promise<Result>
 const anyPath = {
@@ -1562,6 +1768,7 @@ const anyPath = {
   valueKey: 'critical',
   suiteKey: 'smoke',
   requirementId: 1,
+  issueId: 1,
 }
 
 /** Without a session every operation that declares 401 answers it (sign-in's own 401 is a wrong password). */
@@ -1596,6 +1803,7 @@ const scenarios: Scenario[] = [
   ...suiteScenarios,
   ...manualScenarios,
   ...requirementScenarios,
+  ...issueScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
   // Projects

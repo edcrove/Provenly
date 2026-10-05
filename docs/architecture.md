@@ -122,6 +122,17 @@ external tool by provider and external id (`UpsertRequirement`: an import create
 of each covering test case in the latest run that has a valid result for it, and derives uncovered / not_run /
 failing / partial / passing. The catalog stays independent of the execution module.
 
+## Issues and verification (prototype feature 13, DEC-8)
+
+`issues` and `issue_test_cases` belong to the catalog and mirror requirements: native (`I-<n>` from
+`projects.next_issue_number`) or federated from a tracker by provider and external id, with a normalized `state`
+(open / closed, `closed_at` kept consistent by a check constraint). Verification is derived on read: the
+`catalog.ResultReader` port also offers `LatestConclusive` (execution query `ListLatestConclusive`: per test case, the
+latest run whose logical status is passed, failed or error, computed in SQL with the same last-attempt and
+failed > error > skipped > passed rules as summaries), and the base matrix of DEC-8 maps state + evidence per link;
+the issue takes the worst link (reopen > known_issue > unverified > not_reproducible > validated_fixed). The run page
+splits its failures into known issues (linked to an open issue) and new failures.
+
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its

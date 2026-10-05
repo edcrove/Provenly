@@ -4,6 +4,7 @@ import type {
   Amendment,
   ApiKey,
   Dimension,
+  Issue,
   Requirement,
   Suite,
   Invitation,
@@ -43,6 +44,8 @@ export interface MockDb {
   /** Requirements by project id; latest is the latest result status of each test case (coverage). */
   requirements: (Requirement & { projectId: number })[]
   latest: Record<number, 'passed' | 'failed' | 'error' | 'skipped'>
+  /** Issues by project id; their verification is recomputed from latest (skipped is inconclusive). */
+  issues: (Issue & { projectId: number })[]
   /** Classification dimensions by project id. */
   dimensions: (Dimension & { projectId: number })[]
   /** The signed-in user's id (the session cookie), or null when signed out. */
@@ -76,6 +79,7 @@ export function seed(): MockDb {
     suites: [],
     requirements: [],
     latest: {},
+    issues: [],
     projects: [project()],
     testCases: [tc, testCase({ id: 154, title: 'Logout works' })],
     steps: [
@@ -491,10 +495,167 @@ function findRequirement(params: Record<string, string | readonly string[] | und
   return db.requirements.find((r) => r.projectId === p.id && r.id === id) ?? notFound(`requirement ${id}`)
 }
 
+type Verification = Issue['verification']['status']
+const RANK: Verification[] = ['validated_fixed', 'not_reproducible', 'unverified', 'known_issue', 'reopen']
+
+/** An issue with its verification recomputed from db.latest, like the server (DEC-8). */
+function issueDto({ projectId, ...i }: MockDb['issues'][number]): Issue {
+  void projectId
+  const testCases = i.testCaseIds.map((id) => {
+    const latest = db.latest[id]
+    const evidence = latest === 'skipped' || latest === undefined ? null : latest
+    const status: Issue['verification']['testCases'][number]['status'] =
+      evidence === null
+        ? 'unverified'
+        : evidence === 'passed'
+          ? i.state === 'open'
+            ? 'not_reproducible'
+            : 'validated_fixed'
+          : i.state === 'open'
+            ? 'known_issue'
+            : 'reopen'
+    return {
+      testCaseId: id,
+      status,
+      evidence,
+      evidenceRunId: evidence ? 1 : null,
+      latestInconclusive: latest === 'skipped',
+    }
+  })
+  const status = testCases.reduce<Verification>(
+    (worst, c) => (RANK.indexOf(c.status) > RANK.indexOf(worst) ? c.status : worst),
+    testCases.length ? 'validated_fixed' : 'unlinked',
+  )
+  return { ...i, verification: { status, testCases } }
+}
+
+function findIssue(params: Record<string, string | readonly string[] | undefined>, min: MemberRole) {
+  const id = pathId(params.issueId)
+  if (id === undefined) return validation('issueId', 'must be a positive integer')
+  const p = visibleProject(params.projectKey)
+  if (p instanceof Response) return p
+  const denied = requireRole(p.id, min, () => notFound(`project ${p.key}`))
+  if (denied) return denied
+  return db.issues.find((i) => i.projectId === p.id && i.id === id) ?? notFound(`issue ${id}`)
+}
+
 const stepsOf = (tcId: number) =>
   db.steps.filter((s) => s.testCaseId === tcId).sort((a, b) => a.position - b.position)
 
 export const handlers = [
+  http.get(
+    `${BASE}/projects/:projectKey/issues`,
+    guard(({ params, request }) => {
+      const p = visibleProject(params.projectKey)
+      if (p instanceof Response) return p
+      const q = new URL(request.url).searchParams
+      const raw = q.get('testCase')
+      const testCase = raw === null ? undefined : pathId(raw)
+      if (raw !== null && testCase === undefined) return validation('testCase', 'must be a positive integer')
+      const state = q.get('state')
+      if (state !== null && state !== 'open' && state !== 'closed')
+        return validation('state', 'must be one of open, closed')
+      const items = db.issues
+        .filter(
+          (i) =>
+            i.projectId === p.id &&
+            (testCase === undefined || i.testCaseIds.includes(testCase)) &&
+            (state === null || i.state === state),
+        )
+        .sort((a, b) => b.id - a.id)
+        .map(issueDto)
+      return respond({ items })
+    }),
+  ),
+  http.post(
+    `${BASE}/projects/:projectKey/issues`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const p = visibleProject(params.projectKey)
+        if (p instanceof Response) return p
+        const denied = requireRole(p.id, 'member', () => notFound(`project ${p.key}`))
+        if (denied) return denied
+        const body = await readBody(request)
+        const title = typeof body?.title === 'string' ? body.title.trim() : ''
+        if (!title) return validation('title', 'must not be empty')
+        const provider = String(body?.provider ?? 'provenly')
+        if (!PROVIDERS.includes(provider)) return validation('provider', 'is not a provider')
+        const native = provider === 'provenly'
+        const externalId = native
+          ? `I-${db.issues.filter((i) => i.projectId === p.id && i.provider === 'provenly').length + 1}`
+          : String(body?.externalId ?? '')
+        if (!native && !/^[A-Za-z0-9][A-Za-z0-9._#/-]{0,99}$/.test(externalId))
+          return validation('externalId', 'must be the id in the tracker')
+        if (
+          db.issues.some(
+            (i) => i.projectId === p.id && i.provider === provider && i.externalId === externalId,
+          )
+        )
+          return problem(409, 'conflict', `issue ${externalId} of ${provider} already exists`)
+        const state = body?.state === 'closed' ? 'closed' : 'open'
+        const i = {
+          projectId: p.id,
+          id: ++db.nextId,
+          provider: provider as Issue['provider'],
+          externalId,
+          title,
+          description: String(body?.description ?? ''),
+          url: String(body?.url ?? ''),
+          state: state as Issue['state'],
+          providerStatus: String(body?.providerStatus ?? ''),
+          closedAt: state === 'closed' ? now() : null,
+          lastSyncedAt: null,
+          createdAt: now(),
+          updatedAt: now(),
+          testCaseIds: [],
+          verification: { status: 'unlinked' as const, testCases: [] },
+        }
+        db.issues.push(i)
+        return respond(issueDto(i), 201)
+      }),
+    ),
+  ),
+  http.get(
+    `${BASE}/projects/:projectKey/issues/:issueId`,
+    guard(({ params }) => {
+      const i = findIssue(params, 'viewer')
+      return i instanceof Response ? i : respond(issueDto(i))
+    }),
+  ),
+  http.patch(
+    `${BASE}/projects/:projectKey/issues/:issueId`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const i = findIssue(params, 'member')
+        if (i instanceof Response) return i
+        const body = await readBody(request)
+        if (!body || Object.keys(body).length === 0)
+          return validation('body', 'at least one field is required')
+        if (body.state !== undefined && body.state !== 'open' && body.state !== 'closed')
+          return validation('state', 'must be one of open, closed')
+        if (body.state === 'closed') i.closedAt ??= now()
+        if (body.state === 'open') i.closedAt = null
+        if (body.state !== undefined) i.state = body.state as Issue['state']
+        i.updatedAt = now()
+        return respond(issueDto(i))
+      }),
+    ),
+  ),
+  http.put(
+    `${BASE}/projects/:projectKey/issues/:issueId/test-cases`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const i = findIssue(params, 'member')
+        if (i instanceof Response) return i
+        const body = await readBody(request)
+        if (!Array.isArray(body?.testCaseIds)) return validation('testCaseIds', 'is required')
+        const ids = suiteMembers(i.projectId, body.testCaseIds)
+        if (ids instanceof Response) return ids
+        i.testCaseIds = ids.sort((a, b) => a - b)
+        return respond(issueDto(i))
+      }),
+    ),
+  ),
   http.get(
     `${BASE}/projects/:projectKey/requirements`,
     guard(({ params, request }) => {

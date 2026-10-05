@@ -426,6 +426,7 @@ test('UI flows', async ({ page }) => {
   await giftCard.getByRole('button', { name: 'Fail' }).click()
   await expect(giftCard.getByTestId('status-badge')).toHaveText('failed')
   await shot(page, 'manual-run-in-progress')
+  const manualRunId = new URL(page.url()).pathname.split('/').pop()
   // Requirements (prototype feature 12): a Jira import and a native requirement, covered by CHK test cases.
   const chk = ((await (await request.get(`${api}/test-cases?project=CHK&pageSize=100`)).json()) as { items: { id: number; key: string }[] }).items
   const idOf = (k: string) => chk.find((t) => t.key === k)!.id
@@ -455,5 +456,28 @@ test('UI flows', async ({ page }) => {
   await page.goto(`/test-cases/${idOf('CHK-4')}`)
   await expect(page.getByTestId('covered-requirements')).toBeVisible()
   await shot(page, 'test-case-covered-requirements')
+  // Issues (prototype feature 13, DEC-8): a Jira bug reproduced by the failing gift-card test; a closed one that passes.
+  const issuesApi = `${api}/projects/CHK/issues`
+  expect((await request.post(`${issuesApi}/import`, {
+    data: { provider: 'jira', items: [
+      { externalId: 'PAY-52', title: 'Gift card balance not updated after refund', state: 'open', providerStatus: 'In progress', url: 'https://jira.example.com/browse/PAY-52' },
+      { externalId: 'PAY-48', title: 'Refund email sent twice', state: 'closed', providerStatus: 'Done' },
+    ] },
+  })).status()).toBe(200)
+  const imported = ((await (await request.get(issuesApi)).json()) as { items: { id: number; externalId: string }[] }).items
+  const issueId = (ext: string) => imported.find((i) => i.externalId === ext)!.id
+  expect((await request.put(`${issuesApi}/${issueId('PAY-52')}/test-cases`, { data: { testCaseIds: [idOf('CHK-4')] } })).status()).toBe(200)
+  expect((await request.put(`${issuesApi}/${issueId('PAY-48')}/test-cases`, { data: { testCaseIds: [idOf('CHK-2')] } })).status()).toBe(200)
+  await page.goto('/issues')
+  await page.getByLabel('Title').fill('Discount code ignored on mobile')
+  await page.getByRole('button', { name: 'Add issue' }).click()
+  await expect(page.getByTestId('issue-I-1')).toBeVisible()
+  await shot(page, 'issues')
+  await page.goto(`/issues/CHK/${issueId('PAY-52')}`)
+  await expect(page.getByTestId('verification-badge')).toHaveText('Known issue')
+  await shot(page, 'issue-detail')
+  await page.goto(`/test-runs/${manualRunId}`)
+  await expect(page.getByTestId('run-known-issues')).toBeVisible()
+  await shot(page, 'test-run-known-issues')
   await page.getByLabel('Current project').selectOption('')
 })

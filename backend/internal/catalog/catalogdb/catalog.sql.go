@@ -11,6 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addIssueLinks = `-- name: AddIssueLinks :exec
+INSERT INTO issue_test_cases (issue_id, project_id, test_case_id)
+SELECT $1, $2, unnest($3::bigint[])
+ON CONFLICT DO NOTHING
+`
+
+type AddIssueLinksParams struct {
+	IssueID     int64
+	ProjectID   int64
+	TestCaseIds []int64
+}
+
+func (q *Queries) AddIssueLinks(ctx context.Context, arg AddIssueLinksParams) error {
+	_, err := q.db.Exec(ctx, addIssueLinks, arg.IssueID, arg.ProjectID, arg.TestCaseIds)
+	return err
+}
+
 const addRequirementLinks = `-- name: AddRequirementLinks :exec
 INSERT INTO requirement_test_cases (requirement_id, project_id, test_case_id)
 SELECT $1, $2, unnest($3::bigint[])
@@ -212,7 +229,7 @@ const createProject = `-- name: CreateProject :one
 INSERT INTO projects (key, name, description)
 VALUES ($1, $2, $3)
 ON CONFLICT (key) DO NOTHING
-RETURNING id, key, name, description, next_number, created_at, updated_at, next_requirement_number
+RETURNING id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number
 `
 
 type CreateProjectParams struct {
@@ -233,6 +250,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.NextRequirementNumber,
+		&i.NextIssueNumber,
 	)
 	return i, err
 }
@@ -350,6 +368,20 @@ func (q *Queries) CreateTestStep(ctx context.Context, arg CreateTestStepParams) 
 	return i, err
 }
 
+const deleteIssueLinks = `-- name: DeleteIssueLinks :exec
+DELETE FROM issue_test_cases WHERE issue_id = $1 AND NOT (test_case_id = ANY(coalesce($2::bigint[], '{}')))
+`
+
+type DeleteIssueLinksParams struct {
+	IssueID int64
+	Keep    []int64
+}
+
+func (q *Queries) DeleteIssueLinks(ctx context.Context, arg DeleteIssueLinksParams) error {
+	_, err := q.db.Exec(ctx, deleteIssueLinks, arg.IssueID, arg.Keep)
+	return err
+}
+
 const deleteRequirementLinks = `-- name: DeleteRequirementLinks :exec
 DELETE FROM requirement_test_cases WHERE requirement_id = $1 AND NOT (test_case_id = ANY(coalesce($2::bigint[], '{}')))
 `
@@ -440,8 +472,57 @@ func (q *Queries) DeprecateTestCase(ctx context.Context, id int64) (TestCase, er
 	return i, err
 }
 
+const getIssue = `-- name: GetIssue :one
+SELECT i.id, i.project_id, i.provider, i.external_id, i.title, i.description, i.url, i.state, i.provider_status, i.closed_at, i.last_synced_at, i.created_at, i.updated_at, coalesce((SELECT array_agg(l.test_case_id ORDER BY l.test_case_id) FROM issue_test_cases l WHERE l.issue_id = i.id), '{}')::bigint[] AS test_case_ids
+FROM issues i WHERE i.project_id = $1 AND i.id = $2
+`
+
+type GetIssueParams struct {
+	ProjectID int64
+	ID        int64
+}
+
+type GetIssueRow struct {
+	ID             int64
+	ProjectID      int64
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	Url            string
+	State          string
+	ProviderStatus string
+	ClosedAt       pgtype.Timestamptz
+	LastSyncedAt   pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	TestCaseIds    []int64
+}
+
+func (q *Queries) GetIssue(ctx context.Context, arg GetIssueParams) (GetIssueRow, error) {
+	row := q.db.QueryRow(ctx, getIssue, arg.ProjectID, arg.ID)
+	var i GetIssueRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Provider,
+		&i.ExternalID,
+		&i.Title,
+		&i.Description,
+		&i.Url,
+		&i.State,
+		&i.ProviderStatus,
+		&i.ClosedAt,
+		&i.LastSyncedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TestCaseIds,
+	)
+	return i, err
+}
+
 const getProject = `-- name: GetProject :one
-SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number FROM projects WHERE id = $1
+SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number FROM projects WHERE id = $1
 `
 
 func (q *Queries) GetProject(ctx context.Context, id int64) (Project, error) {
@@ -456,12 +537,13 @@ func (q *Queries) GetProject(ctx context.Context, id int64) (Project, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.NextRequirementNumber,
+		&i.NextIssueNumber,
 	)
 	return i, err
 }
 
 const getProjectByKey = `-- name: GetProjectByKey :one
-SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number FROM projects WHERE key = $1
+SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number FROM projects WHERE key = $1
 `
 
 func (q *Queries) GetProjectByKey(ctx context.Context, key string) (Project, error) {
@@ -476,6 +558,7 @@ func (q *Queries) GetProjectByKey(ctx context.Context, key string) (Project, err
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.NextRequirementNumber,
+		&i.NextIssueNumber,
 	)
 	return i, err
 }
@@ -746,6 +829,75 @@ func (q *Queries) ListIngestionView(ctx context.Context, arg ListIngestionViewPa
 	return items, nil
 }
 
+const listIssues = `-- name: ListIssues :many
+SELECT i.id, i.project_id, i.provider, i.external_id, i.title, i.description, i.url, i.state, i.provider_status, i.closed_at, i.last_synced_at, i.created_at, i.updated_at, coalesce((SELECT array_agg(l.test_case_id ORDER BY l.test_case_id) FROM issue_test_cases l WHERE l.issue_id = i.id), '{}')::bigint[] AS test_case_ids
+FROM issues i
+WHERE i.project_id = $1
+  AND ($2::text IS NULL OR i.state = $2::text)
+  AND ($3::bigint IS NULL OR EXISTS (SELECT 1 FROM issue_test_cases x WHERE x.issue_id = i.id AND x.test_case_id = $3::bigint))
+ORDER BY i.id DESC
+`
+
+type ListIssuesParams struct {
+	ProjectID  int64
+	State      pgtype.Text
+	TestCaseID pgtype.Int8
+}
+
+type ListIssuesRow struct {
+	ID             int64
+	ProjectID      int64
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	Url            string
+	State          string
+	ProviderStatus string
+	ClosedAt       pgtype.Timestamptz
+	LastSyncedAt   pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	TestCaseIds    []int64
+}
+
+// A project's issues (optionally only those linked to a test case, or in one state), newest first, with their linked
+// test cases.
+func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListIssuesRow, error) {
+	rows, err := q.db.Query(ctx, listIssues, arg.ProjectID, arg.State, arg.TestCaseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIssuesRow
+	for rows.Next() {
+		var i ListIssuesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Provider,
+			&i.ExternalID,
+			&i.Title,
+			&i.Description,
+			&i.Url,
+			&i.State,
+			&i.ProviderStatus,
+			&i.ClosedAt,
+			&i.LastSyncedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.TestCaseIds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjectCaseIDs = `-- name: ListProjectCaseIDs :many
 SELECT id FROM test_cases WHERE project_id = $1 AND id = ANY($2::bigint[]) ORDER BY id
 `
@@ -777,7 +929,7 @@ func (q *Queries) ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDs
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number FROM projects
+SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number FROM projects
 WHERE $1::bigint[] IS NULL OR id = ANY($1::bigint[])
 ORDER BY key LIMIT $3 OFFSET $2
 `
@@ -807,6 +959,7 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.NextRequirementNumber,
+			&i.NextIssueNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -1230,6 +1383,20 @@ func (q *Queries) LockTestCase(ctx context.Context, id int64) (int64, error) {
 	return version, err
 }
 
+const nextNativeIssueNumber = `-- name: NextNativeIssueNumber :one
+UPDATE projects SET next_issue_number = next_issue_number + 1
+WHERE id = $1
+RETURNING (next_issue_number - 1)::bigint AS number
+`
+
+// Takes the next I-<n> of a project's native issues from its counter (the row lock serializes concurrent creations).
+func (q *Queries) NextNativeIssueNumber(ctx context.Context, projectID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextNativeIssueNumber, projectID)
+	var number int64
+	err := row.Scan(&number)
+	return number, err
+}
+
 const nextNativeRequirementNumber = `-- name: NextNativeRequirementNumber :one
 UPDATE projects SET next_requirement_number = next_requirement_number + 1
 WHERE id = $1
@@ -1404,13 +1571,51 @@ func (q *Queries) UpdateDimensionValue(ctx context.Context, arg UpdateDimensionV
 	return i, err
 }
 
+const updateIssue = `-- name: UpdateIssue :one
+UPDATE issues SET
+    title           = coalesce($1, title),
+    description     = coalesce($2, description),
+    url             = coalesce($3, url),
+    provider_status = coalesce($4, provider_status),
+    state           = coalesce($5, state),
+    closed_at       = CASE WHEN coalesce($5, state) = 'closed' THEN coalesce(closed_at, now()) END,
+    updated_at      = now()
+WHERE project_id = $6 AND id = $7
+RETURNING id
+`
+
+type UpdateIssueParams struct {
+	Title          pgtype.Text
+	Description    pgtype.Text
+	Url            pgtype.Text
+	ProviderStatus pgtype.Text
+	State          pgtype.Text
+	ProjectID      int64
+	ID             int64
+}
+
+func (q *Queries) UpdateIssue(ctx context.Context, arg UpdateIssueParams) (int64, error) {
+	row := q.db.QueryRow(ctx, updateIssue,
+		arg.Title,
+		arg.Description,
+		arg.Url,
+		arg.ProviderStatus,
+		arg.State,
+		arg.ProjectID,
+		arg.ID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const updateProject = `-- name: UpdateProject :one
 UPDATE projects SET
     name        = coalesce($1, name),
     description = coalesce($2, description),
     updated_at  = now()
 WHERE key = $3
-RETURNING id, key, name, description, next_number, created_at, updated_at, next_requirement_number
+RETURNING id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number
 `
 
 type UpdateProjectParams struct {
@@ -1431,6 +1636,7 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.NextRequirementNumber,
+		&i.NextIssueNumber,
 	)
 	return i, err
 }
@@ -1593,6 +1799,56 @@ func (q *Queries) UpdateTestStep(ctx context.Context, arg UpdateTestStepParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const upsertIssue = `-- name: UpsertIssue :one
+INSERT INTO issues (project_id, provider, external_id, title, description, url, state, provider_status, closed_at, last_synced_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+    CASE WHEN $7::text = 'closed' THEN now() END, $9)
+ON CONFLICT (project_id, provider, external_id) DO UPDATE SET
+    title = EXCLUDED.title, description = EXCLUDED.description, url = EXCLUDED.url, state = EXCLUDED.state,
+    provider_status = EXCLUDED.provider_status, last_synced_at = EXCLUDED.last_synced_at,
+    closed_at = CASE WHEN EXCLUDED.state = 'closed' THEN coalesce(issues.closed_at, now()) END, updated_at = now()
+WHERE $10::boolean
+RETURNING id, (xmax = 0)::boolean AS created
+`
+
+type UpsertIssueParams struct {
+	ProjectID      int64
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	Url            string
+	State          string
+	ProviderStatus string
+	LastSyncedAt   pgtype.Timestamptz
+	Sync           bool
+}
+
+type UpsertIssueRow struct {
+	ID      int64
+	Created bool
+}
+
+// Creates an issue, or (when sync is true) updates the mirrored one with the same provider and external id; closed_at
+// follows the state (kept while it stays closed).
+func (q *Queries) UpsertIssue(ctx context.Context, arg UpsertIssueParams) (UpsertIssueRow, error) {
+	row := q.db.QueryRow(ctx, upsertIssue,
+		arg.ProjectID,
+		arg.Provider,
+		arg.ExternalID,
+		arg.Title,
+		arg.Description,
+		arg.Url,
+		arg.State,
+		arg.ProviderStatus,
+		arg.LastSyncedAt,
+		arg.Sync,
+	)
+	var i UpsertIssueRow
+	err := row.Scan(&i.ID, &i.Created)
 	return i, err
 }
 

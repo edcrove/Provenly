@@ -379,3 +379,17 @@ func (s *Service) LatestStatuses(ctx context.Context, testCaseIDs []int64) (map[
 	}
 	return out, nil
 }
+
+// LatestConclusive returns, for each test case with conclusive evidence, its logical status (passed, failed or error)
+// in the latest run where it was conclusive, and that run's id; skipped runs are inconclusive and ignored.
+func (s *Service) LatestConclusive(ctx context.Context, testCaseIDs []int64) (map[int64]string, map[int64]int64, error) {
+	rows, err := s.repo.ListLatestConclusive(ctx, testCaseIDs)
+	if err != nil {
+		return nil, nil, err
+	}
+	statuses, runs := make(map[int64]string, len(rows)), make(map[int64]int64, len(rows))
+	for _, r := range rows {
+		statuses[r.TestCaseID], runs[r.TestCaseID] = string(r.Status), r.RunID
+	}
+	return statuses, runs, nil
+}

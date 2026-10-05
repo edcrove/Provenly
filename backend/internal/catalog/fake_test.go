@@ -29,6 +29,7 @@ type fakeRepo struct {
 	suites  map[int64][]Suite
 	members map[int64][]int64
 	reqs    []Requirement
+	issues  []Issue
 }
 
 func newFakeRepo() *fakeRepo {
@@ -751,6 +752,116 @@ func (f *fakeRepo) SetRequirementTestCases(_ context.Context, requirementID, _ i
 	for i := range f.reqs {
 		if f.reqs[i].ID == requirementID {
 			f.reqs[i].TestCaseIDs = slices.Clone(ids)
+		}
+	}
+	return nil
+}
+
+func (f *fakeRepo) ListIssues(_ context.Context, projectID int64, flt IssueFilter) ([]Issue, error) {
+	if err := f.fail("ListIssues"); err != nil {
+		return nil, err
+	}
+	out := []Issue{}
+	for i := len(f.issues) - 1; i >= 0; i-- {
+		is := f.issues[i]
+		if is.ProjectID == projectID && (flt.TestCaseID == nil || slices.Contains(is.TestCaseIDs, *flt.TestCaseID)) &&
+			(flt.State == nil || is.State == *flt.State) {
+			out = append(out, is)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) GetIssue(_ context.Context, projectID, id int64) (Issue, error) {
+	if err := f.fail("GetIssue"); err != nil {
+		return Issue{}, err
+	}
+	for _, is := range f.issues {
+		if is.ProjectID == projectID && is.ID == id {
+			return is, nil
+		}
+	}
+	return Issue{}, ErrNotFound
+}
+
+func (f *fakeRepo) NextNativeIssueNumber(_ context.Context, projectID int64) (int64, error) {
+	if err := f.fail("NextNativeIssueNumber"); err != nil {
+		return 0, err
+	}
+	n := int64(0)
+	for _, is := range f.issues {
+		if is.ProjectID == projectID && is.Provider == ProviderProvenly {
+			n++
+		}
+	}
+	return n + 1, nil
+}
+
+// closed sets an issue's state and its closing time.
+func (f *fakeRepo) closed(is *Issue, state string) {
+	is.State = state
+	if state != IssueClosed {
+		is.ClosedAt = nil
+	} else if is.ClosedAt == nil {
+		now := f.now
+		is.ClosedAt = &now
+	}
+}
+
+func (f *fakeRepo) UpsertIssue(_ context.Context, projectID int64, in IssueInput, sync bool, syncedAt *time.Time) (int64, bool, bool, error) {
+	if err := f.fail("UpsertIssue"); err != nil {
+		return 0, false, false, err
+	}
+	for i := range f.issues {
+		is := &f.issues[i]
+		if is.ProjectID == projectID && is.Provider == in.Provider && is.ExternalID == in.ExternalID {
+			if !sync {
+				return 0, false, false, nil
+			}
+			is.Title, is.Description, is.URL, is.ProviderStatus, is.LastSyncedAt = in.Title, in.Description, in.URL, in.ProviderStatus, syncedAt
+			f.closed(is, in.State)
+			return is.ID, false, true, nil
+		}
+	}
+	f.ids++
+	is := Issue{ID: f.ids, ProjectID: projectID, Provider: in.Provider, ExternalID: in.ExternalID, Title: in.Title, Description: in.Description,
+		URL: in.URL, ProviderStatus: in.ProviderStatus, LastSyncedAt: syncedAt, CreatedAt: f.now, UpdatedAt: f.now, TestCaseIDs: []int64{}}
+	f.closed(&is, in.State)
+	f.issues = append(f.issues, is)
+	return f.ids, true, true, nil
+}
+
+func (f *fakeRepo) UpdateIssue(_ context.Context, projectID, id int64, in UpdateIssueInput) error {
+	if err := f.fail("UpdateIssue"); err != nil {
+		return err
+	}
+	for i := range f.issues {
+		is := &f.issues[i]
+		if is.ProjectID == projectID && is.ID == id {
+			for _, p := range []struct {
+				v   *string
+				dst *string
+			}{{in.Title, &is.Title}, {in.Description, &is.Description}, {in.URL, &is.URL}, {in.ProviderStatus, &is.ProviderStatus}} {
+				if p.v != nil {
+					*p.dst = *p.v
+				}
+			}
+			if in.State != nil {
+				f.closed(is, *in.State)
+			}
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
+func (f *fakeRepo) SetIssueTestCases(_ context.Context, issueID, _ int64, ids []int64) error {
+	if err := f.fail("SetIssueTestCases"); err != nil {
+		return err
+	}
+	for i := range f.issues {
+		if f.issues[i].ID == issueID {
+			f.issues[i].TestCaseIDs = slices.Clone(ids)
 		}
 	}
 	return nil

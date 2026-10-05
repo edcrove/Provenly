@@ -26,6 +26,8 @@ const (
 	KindUnauthorized
 	// KindForbidden means the caller is authenticated but may not do this.
 	KindForbidden
+	// KindPreconditionFailed means the resource changed since the caller read it (If-Match).
+	KindPreconditionFailed
 )
 
 // FieldError points a validation problem at a specific input field.
@@ -69,6 +71,11 @@ func Unauthorized(format string, args ...any) error {
 // Forbidden builds a KindForbidden error.
 func Forbidden(format string, args ...any) error {
 	return &Error{Kind: KindForbidden, Message: fmt.Sprintf(format, args...)}
+}
+
+// PreconditionFailed builds a KindPreconditionFailed error.
+func PreconditionFailed(format string, args ...any) error {
+	return &Error{Kind: KindPreconditionFailed, Message: fmt.Sprintf(format, args...)}
 }
 
 // InvalidDocument builds a KindInvalidDocument error.

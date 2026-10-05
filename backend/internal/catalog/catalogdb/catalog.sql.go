@@ -103,7 +103,7 @@ WITH n AS (
 )
 INSERT INTO test_cases (project_id, number, title, description, expected_result, automated)
 SELECT $1, n.number, $2, $3, $4, $5 FROM n
-RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number
+RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number, version
 `
 
 type CreateTestCaseParams struct {
@@ -138,6 +138,7 @@ func (q *Queries) CreateTestCase(ctx context.Context, arg CreateTestCaseParams) 
 		&i.DeprecatedAt,
 		&i.ProjectID,
 		&i.Number,
+		&i.Version,
 	)
 	return i, err
 }
@@ -198,7 +199,7 @@ UPDATE test_cases SET
     deprecated_at = coalesce(deprecated_at, now()),
     updated_at    = CASE WHEN status = 'deprecated' THEN updated_at ELSE now() END
 WHERE id = $1
-RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number
+RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number, version
 `
 
 func (q *Queries) DeprecateTestCase(ctx context.Context, id int64) (TestCase, error) {
@@ -216,6 +217,7 @@ func (q *Queries) DeprecateTestCase(ctx context.Context, id int64) (TestCase, er
 		&i.DeprecatedAt,
 		&i.ProjectID,
 		&i.Number,
+		&i.Version,
 	)
 	return i, err
 }
@@ -259,7 +261,7 @@ func (q *Queries) GetProjectByKey(ctx context.Context, key string) (Project, err
 }
 
 const getTestCase = `-- name: GetTestCase :one
-SELECT id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number FROM test_cases WHERE id = $1
+SELECT id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number, version FROM test_cases WHERE id = $1
 `
 
 func (q *Queries) GetTestCase(ctx context.Context, id int64) (TestCase, error) {
@@ -277,6 +279,7 @@ func (q *Queries) GetTestCase(ctx context.Context, id int64) (TestCase, error) {
 		&i.DeprecatedAt,
 		&i.ProjectID,
 		&i.Number,
+		&i.Version,
 	)
 	return i, err
 }
@@ -435,7 +438,7 @@ func (q *Queries) ListTestCaseKeys(ctx context.Context, ids []int64) ([]ListTest
 }
 
 const listTestCases = `-- name: ListTestCases :many
-SELECT id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number FROM test_cases
+SELECT id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number, version FROM test_cases
 WHERE ($1::text IS NULL OR status = $1::text)
   AND ($2::bigint[] IS NULL OR project_id = ANY($2::bigint[]))
 ORDER BY id DESC
@@ -475,6 +478,7 @@ func (q *Queries) ListTestCases(ctx context.Context, arg ListTestCasesParams) ([
 			&i.DeprecatedAt,
 			&i.ProjectID,
 			&i.Number,
+			&i.Version,
 		); err != nil {
 			return nil, err
 		}
@@ -528,14 +532,15 @@ func (q *Queries) ListTestSteps(ctx context.Context, arg ListTestStepsParams) ([
 }
 
 const lockTestCase = `-- name: LockTestCase :one
-SELECT id FROM test_cases WHERE id = $1 FOR UPDATE
+SELECT version FROM test_cases WHERE id = $1 FOR UPDATE
 `
 
+// Locks the test case (and its steps' order) until the transaction ends; returns its current version.
 func (q *Queries) LockTestCase(ctx context.Context, id int64) (int64, error) {
 	row := q.db.QueryRow(ctx, lockTestCase, id)
-	var id_2 int64
-	err := row.Scan(&id_2)
-	return id_2, err
+	var version int64
+	err := row.Scan(&version)
+	return version, err
 }
 
 const reactivateTestCase = `-- name: ReactivateTestCase :one
@@ -544,7 +549,7 @@ UPDATE test_cases SET
     deprecated_at = NULL,
     updated_at    = CASE WHEN status = 'active' THEN updated_at ELSE now() END
 WHERE id = $1
-RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number
+RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number, version
 `
 
 func (q *Queries) ReactivateTestCase(ctx context.Context, id int64) (TestCase, error) {
@@ -562,6 +567,7 @@ func (q *Queries) ReactivateTestCase(ctx context.Context, id int64) (TestCase, e
 		&i.DeprecatedAt,
 		&i.ProjectID,
 		&i.Number,
+		&i.Version,
 	)
 	return i, err
 }
@@ -635,7 +641,7 @@ UPDATE test_cases SET
     automated       = coalesce($4, automated),
     updated_at      = now()
 WHERE id = $5
-RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number
+RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number, version
 `
 
 type UpdateTestCaseParams struct {
@@ -667,6 +673,7 @@ func (q *Queries) UpdateTestCase(ctx context.Context, arg UpdateTestCaseParams) 
 		&i.DeprecatedAt,
 		&i.ProjectID,
 		&i.Number,
+		&i.Version,
 	)
 	return i, err
 }

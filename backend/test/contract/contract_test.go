@@ -717,3 +717,40 @@ func TestIngestionMediaTypes(t *testing.T) {
 		WithHeader("Content-Type", "application/junit+xml").WithText(`<testsuite name="s"/>`).Expect().Status(http.StatusCreated)
 	raw.GET("/api/v1/ingestion/junit").Expect().Status(http.StatusMethodNotAllowed)
 }
+
+// TestOptimisticLocking: test case and step reads carry the version as the ETag; every write accepts If-Match and
+// answers 412 when someone saved in between, changing nothing.
+func TestOptimisticLocking(t *testing.T) {
+	e := api(t, fresh(t), 1<<20)
+	tc := e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "Login"}).Expect().Status(http.StatusCreated).JSON().Object()
+	path := "/api/v1/test-cases/" + strconv.FormatInt(int64(tc.Value("id").Number().Raw()), 10)
+	tc.HasValue("version", 1)
+	get := e.GET(path).Expect().Status(http.StatusOK)
+	get.Header("ETag").IsEqual(`"1"`)
+	e.GET(path + "/steps").Expect().Status(http.StatusOK).Header("ETag").IsEqual(`"1"`)
+
+	saved := e.PATCH(path).WithHeader("If-Match", `"1"`).WithJSON(map[string]any{"title": "Login v2"}).Expect().Status(http.StatusOK)
+	saved.Header("ETag").IsEqual(`"2"`)
+	saved.JSON().Object().HasValue("version", 2)
+	step := e.POST(path+"/steps").WithHeader("If-Match", `"2"`).WithJSON(map[string]any{"action": "open"}).Expect().Status(http.StatusCreated)
+	step.Header("ETag").IsEqual(`"3"`)
+	stepPath := path + "/steps/" + strconv.FormatInt(int64(step.JSON().Object().Value("id").Number().Raw()), 10)
+
+	stale := `"1"`
+	for _, r := range []*httpexpect.Request{
+		e.PATCH(path).WithJSON(map[string]any{"title": "lost"}),
+		e.POST(path + "/deprecate"),
+		e.POST(path + "/reactivate"),
+		e.POST(path + "/steps").WithJSON(map[string]any{"action": "lost"}),
+		e.PUT(path + "/steps/order").WithJSON(map[string]any{"stepIds": []int{}}),
+		e.PATCH(stepPath).WithJSON(map[string]any{"action": "lost"}),
+		e.DELETE(stepPath),
+	} {
+		r.WithHeader("If-Match", stale).Expect().Status(http.StatusPreconditionFailed).
+			JSON(problemOpts).Object().HasValue("code", "precondition_failed")
+	}
+	e.GET(path).Expect().Status(http.StatusOK).JSON().Object().HasValue("title", "Login v2").HasValue("version", 3)
+	e.PATCH(path).WithHeader("If-Match", "3").WithJSON(map[string]any{"title": "x"}).Expect().Status(http.StatusBadRequest)
+	e.DELETE(stepPath).WithHeader("If-Match", `"3"`).Expect().Status(http.StatusNoContent).Header("ETag").NotEmpty()
+	e.POST(path + "/deprecate").Expect().Status(http.StatusOK).Header("ETag").NotEmpty()
+}

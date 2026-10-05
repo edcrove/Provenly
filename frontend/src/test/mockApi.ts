@@ -113,6 +113,7 @@ const statusText: Record<number, string> = {
   403: 'Forbidden',
   404: 'Not Found',
   409: 'Conflict',
+  412: 'Precondition Failed',
   415: 'Unsupported Media Type',
   500: 'Internal Server Error',
 }
@@ -140,6 +141,23 @@ function pageOf<T>(url: URL, items: T[]): JsonBodyType | Response {
 
 function respond(body: JsonBodyType | Response, status = 200) {
   return body instanceof Response ? body : HttpResponse.json(body, { status })
+}
+
+/** A test case response with its version as the ETag (optimistic locking). */
+function tagged(body: JsonBodyType | null, tc: TestCase, status = 200) {
+  const headers = { ETag: `"${tc.version}"` }
+  return body === null
+    ? new HttpResponse(null, { status, headers })
+    : HttpResponse.json(body, { status, headers })
+}
+
+/** Like the server: an If-Match that no longer matches the test case's version is a 412. */
+function stale(request: Request, tc: TestCase): Response | undefined {
+  const header = request.headers.get('If-Match')
+  if (!header || header.trim() === '*') return undefined
+  const tags = header.split(',').map((t) => t.trim())
+  if (tags.includes(`"${tc.version}"`)) return undefined
+  return problem(412, 'precondition_failed', `test case ${tc.id} changed since you read it`)
 }
 
 function pathId(raw: string | readonly string[] | undefined): number | undefined {
@@ -596,7 +614,10 @@ export const handlers = [
   ),
   http.get(
     `${BASE}/test-cases/:testCaseId`,
-    guard(({ params }) => respond(findCase(params.testCaseId) as JsonBodyType)),
+    guard(({ params }) => {
+      const tc = findCase(params.testCaseId)
+      return tc instanceof Response ? tc : tagged(tc, tc)
+    }),
   ),
   http.patch(
     `${BASE}/test-cases/:testCaseId`,
@@ -609,29 +630,37 @@ export const handlers = [
           return validation('body', 'at least one field is required')
         if (body.title !== undefined && !String(body.title).trim())
           return validation('title', 'must not be empty')
-        Object.assign(tc, body, { updatedAt: now() })
-        return respond(tc)
+        const conflict = stale(request, tc)
+        if (conflict) return conflict
+        Object.assign(tc, body, { updatedAt: now(), version: tc.version + 1 })
+        return tagged(tc, tc)
       }),
     ),
   ),
   http.post(
     `${BASE}/test-cases/:testCaseId/deprecate`,
-    guard(({ params }) => {
+    guard(({ params, request }) => {
       const tc = findCase(params.testCaseId, 'maintainer')
       if (tc instanceof Response) return tc
+      const conflict = stale(request, tc)
+      if (conflict) return conflict
       tc.status = 'deprecated'
       tc.deprecatedAt ??= now()
-      return respond(tc)
+      tc.version++
+      return tagged(tc, tc)
     }),
   ),
   http.post(
     `${BASE}/test-cases/:testCaseId/reactivate`,
-    guard(({ params }) => {
+    guard(({ params, request }) => {
       const tc = findCase(params.testCaseId, 'maintainer')
       if (tc instanceof Response) return tc
+      const conflict = stale(request, tc)
+      if (conflict) return conflict
       tc.status = 'active'
       tc.deprecatedAt = null
-      return respond(tc)
+      tc.version++
+      return tagged(tc, tc)
     }),
   ),
   http.get(
@@ -639,7 +668,8 @@ export const handlers = [
     guard(({ params, request }) => {
       const tc = findCase(params.testCaseId)
       if (tc instanceof Response) return tc
-      return respond(pageOf(new URL(request.url), stepsOf(tc.id)))
+      const page = pageOf(new URL(request.url), stepsOf(tc.id))
+      return page instanceof Response ? page : tagged(page, tc)
     }),
   ),
   http.post(
@@ -651,6 +681,8 @@ export const handlers = [
         const body = await readBody(request)
         const action = typeof body?.action === 'string' ? body.action.trim() : ''
         if (!action) return validation('action', 'must not be empty')
+        const conflict = stale(request, tc)
+        if (conflict) return conflict
         const step = testStep({
           id: ++db.nextId,
           testCaseId: tc.id,
@@ -659,7 +691,8 @@ export const handlers = [
           expectedResult: String(body?.expectedResult ?? ''),
         })
         db.steps.push(step)
-        return respond(step, 201)
+        tc.version++
+        return tagged(step, tc, 201)
       }),
     ),
   ),
@@ -674,11 +707,14 @@ export const handlers = [
         const current = stepsOf(tc.id)
         const valid = ids.length === current.length && current.every((s) => ids.includes(s.id))
         if (!valid) return validation('stepIds', 'must list every step of the test case exactly once')
+        const conflict = stale(request, tc)
+        if (conflict) return conflict
         ids.forEach((id, i) => {
           const step = current.find((s) => s.id === id)!
           step.position = i + 1
         })
-        return respond({ items: stepsOf(tc.id) })
+        tc.version++
+        return tagged({ items: stepsOf(tc.id) }, tc)
       }),
     ),
   ),
@@ -697,23 +733,29 @@ export const handlers = [
           return validation('action', 'must not be empty')
         const step = stepsOf(tc.id).find((s) => s.id === stepId)
         if (!step) return notFound(`step ${stepId}`)
+        const conflict = stale(request, tc)
+        if (conflict) return conflict
         Object.assign(step, body, { updatedAt: now() })
-        return respond(step)
+        tc.version++
+        return tagged(step, tc)
       }),
     ),
   ),
   http.delete(
     `${BASE}/test-cases/:testCaseId/steps/:stepId`,
-    guard(({ params }) => {
+    guard(({ params, request }) => {
       const tc = findCase(params.testCaseId, 'member')
       if (tc instanceof Response) return tc
       const stepId = pathId(params.stepId)
       if (stepId === undefined) return validation('stepId', 'must be a positive integer')
       const step = stepsOf(tc.id).find((s) => s.id === stepId)
       if (!step) return notFound(`step ${stepId}`)
+      const conflict = stale(request, tc)
+      if (conflict) return conflict
       db.steps = db.steps.filter((s) => s.id !== stepId)
       stepsOf(tc.id).forEach((s, i) => (s.position = i + 1))
-      return new HttpResponse(null, { status: 204 })
+      tc.version++
+      return tagged(null, tc, 204)
     }),
   ),
   http.get(

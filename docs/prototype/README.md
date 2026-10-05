@@ -19,7 +19,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 2 | Users, login (JWT) and invitations | MVP D13, DEC-30 | ✅ | proto/02-auth |
 | 3 | Roles and project membership (Admin, Maintainer, Member, Viewer) | MVP D12 | ✅ | proto/03-roles |
 | 4 | API keys for CI, `?project=` ingestion (secrets at rest moved to 18, see P4-6) | MVP D4, D11 | ✅ | proto/04-api-keys |
-| 5 | Optimistic locking (ETag / If-Match) | MVP D7 | ⏳ | |
+| 5 | Optimistic locking (ETag / If-Match) | MVP D7 | ✅ | proto/05-optimistic-locking |
 | 6 | Snapshot amendment per run | DEC-42 | ⏳ | |
 | 7 | Retries, logical result and flaky | MVP D1 | ⏳ | |
 | 8 | Compressed (gzip) report ingestion | MVP D6 | ⏳ | |
@@ -74,6 +74,12 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P4-5 | Last use | `lastUsedAt` written at most once a minute | Lets maintainers spot unused keys without a write per report |
 | P4-6 | Secrets at rest (D4) | Moved to feature 18 (webhooks / GitHub), the first feature that stores a secret Provenly must read back | API keys and invitations are hashed, never encrypted; envelope encryption without a consumer would be untested code |
 | P4-7 | Key transport | Keys are read only from the `Authorization` header, never from the session cookie | Found by the probe: a key placed in the cookie was accepted; cookies are browser sessions |
+| P5-1 | Unit of locking | One version per test case covering its content and its steps (`test_cases.version`); step reads and writes use the test case's ETag | People edit "the test case"; a step reorder racing a title edit is the same conflict. One counter, one ETag |
+| P5-2 | Who advances it | Database triggers: any content change of the test case and any step insert, update or delete advance it; a no-op save does not; it never goes back | No write path (today's or a future one) can forget to; checked in the same transaction that locks the row |
+| P5-3 | Contract | `ETag: "<version>"` on test case and step responses, `version` in the test case body; writes accept `If-Match` (`*`, a list of tags; weak tags never match) and answer `412 precondition_failed`; malformed is 400; without `If-Match` last write wins (D7) | RFC 9110 semantics; CI tools and scripts keep working without it |
+| P5-4 | UI | Every test case and step write sends `If-Match` with the version on screen; step writes carry the new ETag forward; a 412 shows "Someone else saved this test case" with Reload | D7: the UI always sends it; successive own edits never conflict with themselves |
+| P5-5 | Partial saves | The edit form sends only the fields the user changed since opening it | After a conflict and Reload, saving does not overwrite the other person's change in other fields; found while writing the E2E |
+| P5-6 | Projects | Not versioned in this feature | D7 covers test cases and steps; project renames are rare and maintainer-only |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
 ## What each feature does
@@ -150,4 +156,17 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **Tests**: identity and ingestion unit tests (key format, revocation, scope, cookie regression), BE-INT-041,
   contract scenarios on both sides, FE-INT-033, BE-E2E-010, FE-E2E-013, probe API key sweep. The probe found keys
   accepted from the session cookie (P4-7); fixed with unit and contract regressions.
+
+### 5. Optimistic locking
+
+- **Behavior**: two people editing the same test case cannot silently overwrite each other. The second save is refused
+  (412) with a notice; Reload shows the other change and the form keeps what was typed, sending only the changed fields.
+- **API**: `version` in `TestCase`, `ETag` on the test case and step operations, `If-Match` on the 7 writes, 412
+  `precondition_failed`.
+- **Schema**: migration 00017 (`version` column, triggers on `test_cases` and `test_steps`).
+- **Code**: `internal/platform/etag` (parse and match); `catalog.Service.guarded` locks the row, checks the
+  precondition, writes and re-reads the version in one transaction.
+- **UI**: conflict notice with Reload (screenshot 45); copy on the definition card no longer says "never creates a version".
+- **Tests**: etag, apperr, httpx and catalog unit tests; BE-INT-042 (triggers, 20 concurrent writes: one wins);
+  contract 412 scenarios for every write on both sides; FE-INT-034; BE-E2E-011; FE-E2E-014; probe If-Match sweep.
 

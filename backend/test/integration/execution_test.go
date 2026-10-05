@@ -17,6 +17,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/ingestion"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/etag"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
@@ -38,7 +39,7 @@ func TestExecutionPersistence(t *testing.T) {
 		login, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "login", Automated: true})
 		logout, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "logout", Automated: true})
 		old, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "old", Automated: true})
-		_, _ = s.Catalog.Deprecate(ctx, old.ID)
+		_, _ = s.Catalog.Deprecate(ctx, old.ID, etag.Match{})
 
 		doc := junitFor(
 			tcProp("login chrome", itoa(login.ID), ""),
@@ -243,8 +244,8 @@ func TestExecutionPersistence(t *testing.T) {
 		require.NoError(t, err)
 
 		_, _ = s.Catalog.Create(ctx, catalog.CreateInput{Title: "new", Automated: true})
-		_, _ = s.Catalog.Deprecate(ctx, b.ID)
-		_, _ = s.Catalog.Update(ctx, a.ID, catalog.UpdateInput{Title: ptr("renamed"), Automated: ptr(false)})
+		_, _ = s.Catalog.Deprecate(ctx, b.ID, etag.Match{})
+		_, _ = s.Catalog.Update(ctx, a.ID, catalog.UpdateInput{Title: ptr("renamed"), Automated: ptr(false)}, etag.Match{})
 
 		after, err := s.Execution.Summary(ctx, out.Run.ID)
 		require.NoError(t, err)
@@ -338,7 +339,7 @@ func TestExecutionPersistence(t *testing.T) {
 				defer wg.Done()
 				out, err = s.Ingestion.IngestJUnit(ctx, meta("race"+itoa(int64(i)), 1), strings.NewReader(junitFor(tcProp("t", itoa(tc.ID), ""))))
 			}()
-			go func() { defer wg.Done(); _, _ = s.Catalog.Deprecate(ctx, tc.ID) }()
+			go func() { defer wg.Done(); _, _ = s.Catalog.Deprecate(ctx, tc.ID, etag.Match{}) }()
 			wg.Wait()
 			require.NoError(t, err)
 			sum, err := s.Execution.Summary(ctx, out.Run.ID)
@@ -385,7 +386,7 @@ func TestExecutionPersistence(t *testing.T) {
 		a, b, c, e, f, g, l := auto("A"), auto("B"), auto("C"), auto("E"), auto("F"), auto("G"), auto("L")
 		manual, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "M"})
 		dep := auto("D")
-		_, _ = s.Catalog.Deprecate(ctx, dep)
+		_, _ = s.Catalog.Deprecate(ctx, dep, etag.Match{})
 		tcase := func(name string, id int64, body string) string {
 			return `<testcase name="` + name + ` TC-` + itoa(id) + `">` + body + `</testcase>`
 		}
@@ -420,9 +421,9 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Equal(t, int64(15), res.Total, "every individual result is still listed")
 
 		// Later catalog changes never touch the summary of an existing run.
-		_, _ = s.Catalog.Deprecate(ctx, l)
-		_, _ = s.Catalog.Deprecate(ctx, e)
-		_, _ = s.Catalog.Update(ctx, a, catalog.UpdateInput{Title: ptr("renamed"), Automated: ptr(false)})
+		_, _ = s.Catalog.Deprecate(ctx, l, etag.Match{})
+		_, _ = s.Catalog.Deprecate(ctx, e, etag.Match{})
+		_, _ = s.Catalog.Update(ctx, a, catalog.UpdateInput{Title: ptr("renamed"), Automated: ptr(false)}, etag.Match{})
 		auto("added later")
 		again, err := s.Execution.Summary(ctx, out.Run.ID)
 		require.NoError(t, err)
@@ -512,7 +513,7 @@ func TestExecutionPersistence(t *testing.T) {
 		require.NoError(t, err)
 		_, err = s.Ingestion.IngestJUnit(ctx, meta("701", 1), strings.NewReader(junitFor(tcProp("a renamed", itoa(tc.ID), "<failure/>"))))
 		require.NoError(t, err)
-		_, _ = s.Catalog.Update(ctx, tc.ID, catalog.UpdateInput{Title: ptr("edited later")})
+		_, _ = s.Catalog.Update(ctx, tc.ID, catalog.UpdateInput{Title: ptr("edited later")}, etag.Match{})
 
 		h, err := s.Execution.History(ctx, tc.ID, pagination.Default())
 		require.NoError(t, err)

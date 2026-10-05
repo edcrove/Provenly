@@ -91,6 +91,8 @@ type TestCase struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	DeprecatedAt   *time.Time
+	// Version advances with every change to the test case or its steps (optimistic locking, ETag).
+	Version int64
 }
 
 // Key is the test case key, e.g. CHK-12 (TC-153 in the default project).
@@ -152,7 +154,8 @@ type UpdateStepInput struct {
 type Repository interface {
 	CreateTestCase(ctx context.Context, in CreateInput) (TestCase, error)
 	GetTestCase(ctx context.Context, id int64) (TestCase, error)
-	LockTestCase(ctx context.Context, id int64) error
+	// LockTestCase locks the test case until the transaction ends and returns its version.
+	LockTestCase(ctx context.Context, id int64) (int64, error)
 	ListTestCases(ctx context.Context, f ListFilter, limit, offset int32) ([]TestCase, error)
 	CountTestCases(ctx context.Context, f ListFilter) (int64, error)
 	UpdateTestCase(ctx context.Context, id int64, in UpdateInput) (TestCase, error)

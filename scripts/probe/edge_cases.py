@@ -240,6 +240,26 @@ def main():
     check("revoke it again", call(base, "POST", f"/projects/{key}/api-keys/{kid}/revoke")[0], 409)
     check("revoked key", call(base, "POST", "/ingestion/junit?" + q.format(22), raw=xml, ctype="application/xml", headers=as_key)[0], 401)
 
+    # Optimistic locking (prototype feature 5): malformed If-Match is a 400, a stale or weak tag a 412 that changes
+    # nothing, "*" and the current tag pass; 20 concurrent writes from the same read: exactly one wins.
+    v = call(base, "GET", f"/test-cases/{b}")[1]["version"]
+    for hdr, exp in [("7", 400), ('"7', 400), ("'7'", 400), ('"a b"', 400), ('"7",', 400), ('*, "7"', 400), ("W/" + '"' + str(v) + '"', 412),
+                     ('"0"', 412), ('"99999999999999999999"', 412), (", ".join(f'"{i}"' for i in range(500)) if v >= 500 else ", ".join(f'"{i + 1000}"' for i in range(500)), 412)]:
+        check(f"If-Match {hdr[:20]!r}", call(base, "PATCH", f"/test-cases/{b}", {"title": "probe-b"}, headers={"If-Match": hdr})[0], exp)
+    check("If-Match stale left the title", call(base, "GET", f"/test-cases/{b}")[1]["title"], "probe-b")
+    check("If-Match *", call(base, "PATCH", f"/test-cases/{b}", {"title": "probe-b2"}, headers={"If-Match": "*"})[0], 200)
+    st, cur = call(base, "GET", f"/test-cases/{b}")
+    for path, method, body in [(f"/test-cases/{b}/steps", "POST", {"action": "x"}), (f"/test-cases/{b}/steps/order", "PUT", {"stepIds": [sb]}),
+                               (f"/test-cases/{b}/steps/{sb}", "PATCH", {"action": "y"}), (f"/test-cases/{b}/steps/{sb}", "DELETE", None),
+                               (f"/test-cases/{b}/deprecate", "POST", None), (f"/test-cases/{b}/reactivate", "POST", None)]:
+        check(f"{method} {path} stale", call(base, method, path, body, headers={"If-Match": '"1"'})[0], 412)
+    tag = '"' + str(cur["version"]) + '"'
+    codes = []
+    threads = [threading.Thread(target=lambda i=i: codes.append(call(base, "PATCH", f"/test-cases/{b}", {"title": f"probe-race-{i}"}, headers={"If-Match": tag})[0])) for i in range(20)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    check("20 concurrent saves from one read: one wins", f"{codes.count(200)} won, {codes.count(412)} refused", "1 won, 19 refused")
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

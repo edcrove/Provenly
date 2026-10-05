@@ -30,6 +30,7 @@ type TestCase struct {
 	DeprecatedAt   pgtype.Timestamptz
 	ProjectID      int64
 	Number         int64
+	Version        int64
 }
 
 type TestStep struct {

@@ -35,6 +35,7 @@ type Querier interface {
 	ListTestCaseKeys(ctx context.Context, ids []int64) ([]ListTestCaseKeysRow, error)
 	ListTestCases(ctx context.Context, arg ListTestCasesParams) ([]TestCase, error)
 	ListTestSteps(ctx context.Context, arg ListTestStepsParams) ([]TestStep, error)
+	// Locks the test case (and its steps' order) until the transaction ends; returns its current version.
 	LockTestCase(ctx context.Context, id int64) (int64, error)
 	ReactivateTestCase(ctx context.Context, id int64) (TestCase, error)
 	SetTestStepPosition(ctx context.Context, arg SetTestStepPositionParams) error

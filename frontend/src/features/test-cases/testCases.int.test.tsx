@@ -87,7 +87,7 @@ describe('FE-INT-004 test case detail and edit', () => {
     renderRoute('/test-cases/153')
     expect(await screen.findByRole('heading', { name: 'TC-153 · Login works' })).toBeInTheDocument()
     expect(screen.getByText('Current definition')).toBeInTheDocument()
-    expect(screen.getByText(/editing content never creates a version/)).toBeInTheDocument()
+    expect(screen.getByText(/editing content keeps no copy of the old wording/)).toBeInTheDocument()
     expect(screen.getByText('Execution history')).toBeInTheDocument()
     expect(screen.getByText(/Observed at execution time/)).toBeInTheDocument()
     expect(screen.getByText('User logs in with valid credentials')).toBeInTheDocument()

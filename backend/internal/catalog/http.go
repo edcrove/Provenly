@@ -8,6 +8,7 @@ import (
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
+	"github.com/edcrove/provenly/backend/internal/platform/etag"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
@@ -17,14 +18,14 @@ type API interface {
 	Create(ctx context.Context, in CreateInput) (TestCase, error)
 	Get(ctx context.Context, id int64) (TestCase, error)
 	List(ctx context.Context, f ListFilter, page pagination.Page) (pagination.Result[TestCase], error)
-	Update(ctx context.Context, id int64, in UpdateInput) (TestCase, error)
-	Deprecate(ctx context.Context, id int64) (TestCase, error)
-	Reactivate(ctx context.Context, id int64) (TestCase, error)
+	Update(ctx context.Context, id int64, in UpdateInput, m etag.Match) (TestCase, error)
+	Deprecate(ctx context.Context, id int64, m etag.Match) (TestCase, error)
+	Reactivate(ctx context.Context, id int64, m etag.Match) (TestCase, error)
 	ListSteps(ctx context.Context, testCaseID int64, page pagination.Page) (pagination.Result[TestStep], error)
-	CreateStep(ctx context.Context, testCaseID int64, in CreateStepInput) (TestStep, error)
-	UpdateStep(ctx context.Context, testCaseID, stepID int64, in UpdateStepInput) (TestStep, error)
-	DeleteStep(ctx context.Context, testCaseID, stepID int64) error
-	ReorderSteps(ctx context.Context, testCaseID int64, stepIDs []int64) ([]TestStep, error)
+	CreateStep(ctx context.Context, testCaseID int64, in CreateStepInput, m etag.Match) (TestStep, int64, error)
+	UpdateStep(ctx context.Context, testCaseID, stepID int64, in UpdateStepInput, m etag.Match) (TestStep, int64, error)
+	DeleteStep(ctx context.Context, testCaseID, stepID int64, m etag.Match) (int64, error)
+	ReorderSteps(ctx context.Context, testCaseID int64, stepIDs []int64, m etag.Match) ([]TestStep, int64, error)
 	CreateProject(ctx context.Context, in CreateProjectInput) (Project, error)
 	ProjectByKey(ctx context.Context, key string) (Project, error)
 	ListProjects(ctx context.Context, projectIDs []int64, page pagination.Page) (pagination.Result[Project], error)
@@ -93,6 +94,7 @@ type TestCaseDTO struct {
 	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"updatedAt"`
 	DeprecatedAt   *time.Time `json:"deprecatedAt"`
+	Version        int64      `json:"version"`
 }
 
 // ToDTO converts a TestCase to its wire form.
@@ -100,8 +102,24 @@ func ToDTO(tc TestCase) TestCaseDTO {
 	return TestCaseDTO{
 		ID: tc.ID, Key: tc.Key(), ProjectID: tc.ProjectID, ProjectKey: tc.ProjectKey, Number: tc.Number, Title: tc.Title, Description: tc.Description,
 		ExpectedResult: tc.ExpectedResult, Status: tc.Status, Automated: tc.Automated,
-		CreatedAt: tc.CreatedAt, UpdatedAt: tc.UpdatedAt, DeprecatedAt: tc.DeprecatedAt,
+		CreatedAt: tc.CreatedAt, UpdatedAt: tc.UpdatedAt, DeprecatedAt: tc.DeprecatedAt, Version: tc.Version,
 	}
+}
+
+// writeVersioned answers a test case read or write with its version as the ETag (optimistic locking).
+func writeVersioned(w http.ResponseWriter, status int, version int64, body any) {
+	w.Header().Set("ETag", etag.Tag(version))
+	httpx.WriteJSON(w, status, body)
+}
+
+// ifMatch parses the request's If-Match (400 when malformed).
+func ifMatch(w http.ResponseWriter, r *http.Request) (etag.Match, bool) {
+	m, err := etag.FromRequest(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return m, false
+	}
+	return m, true
 }
 
 // TestStepDTO is the wire form of TestStep.
@@ -301,7 +319,8 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Loaded and authorized by onTestCase.
-	httpx.WriteJSON(w, http.StatusOK, ToDTO(r.Context().Value(testCaseKey{}).(TestCase)))
+	tc := r.Context().Value(testCaseKey{}).(TestCase)
+	writeVersioned(w, http.StatusOK, tc.Version, ToDTO(tc))
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
@@ -315,12 +334,16 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	tc, err := h.api.Update(r.Context(), id, UpdateInput(req))
+	m, ok := ifMatch(w, r)
+	if !ok {
+		return
+	}
+	tc, err := h.api.Update(r.Context(), id, UpdateInput(req), m)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, ToDTO(tc))
+	writeVersioned(w, http.StatusOK, tc.Version, ToDTO(tc))
 }
 
 func (h *Handler) deprecate(w http.ResponseWriter, r *http.Request) {
@@ -329,12 +352,16 @@ func (h *Handler) deprecate(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	tc, err := h.api.Deprecate(r.Context(), id)
+	m, ok := ifMatch(w, r)
+	if !ok {
+		return
+	}
+	tc, err := h.api.Deprecate(r.Context(), id, m)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, ToDTO(tc))
+	writeVersioned(w, http.StatusOK, tc.Version, ToDTO(tc))
 }
 
 func (h *Handler) reactivate(w http.ResponseWriter, r *http.Request) {
@@ -343,12 +370,16 @@ func (h *Handler) reactivate(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	tc, err := h.api.Reactivate(r.Context(), id)
+	m, ok := ifMatch(w, r)
+	if !ok {
+		return
+	}
+	tc, err := h.api.Reactivate(r.Context(), id, m)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, ToDTO(tc))
+	writeVersioned(w, http.StatusOK, tc.Version, ToDTO(tc))
 }
 
 func (h *Handler) listSteps(w http.ResponseWriter, r *http.Request) {
@@ -367,7 +398,9 @@ func (h *Handler) listSteps(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, stepDTO))
+	// The version read before the steps: a change in between makes the next write fail safe (412).
+	tc := r.Context().Value(testCaseKey{}).(TestCase)
+	writeVersioned(w, http.StatusOK, tc.Version, httpx.NewPage(res, stepDTO))
 }
 
 func (h *Handler) createStep(w http.ResponseWriter, r *http.Request) {
@@ -381,12 +414,16 @@ func (h *Handler) createStep(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	step, err := h.api.CreateStep(r.Context(), id, CreateStepInput(req))
+	m, ok := ifMatch(w, r)
+	if !ok {
+		return
+	}
+	step, version, err := h.api.CreateStep(r.Context(), id, CreateStepInput(req), m)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, stepDTO(step))
+	writeVersioned(w, http.StatusCreated, version, stepDTO(step))
 }
 
 func (h *Handler) reorderSteps(w http.ResponseWriter, r *http.Request) {
@@ -400,7 +437,11 @@ func (h *Handler) reorderSteps(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	steps, err := h.api.ReorderSteps(r.Context(), id, req.StepIDs)
+	m, ok := ifMatch(w, r)
+	if !ok {
+		return
+	}
+	steps, version, err := h.api.ReorderSteps(r.Context(), id, req.StepIDs, m)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -409,7 +450,7 @@ func (h *Handler) reorderSteps(w http.ResponseWriter, r *http.Request) {
 	for i, s := range steps {
 		out.Items[i] = stepDTO(s)
 	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	writeVersioned(w, http.StatusOK, version, out)
 }
 
 func (h *Handler) stepIDs(w http.ResponseWriter, r *http.Request) (int64, int64, bool) {
@@ -435,12 +476,16 @@ func (h *Handler) updateStep(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	step, err := h.api.UpdateStep(r.Context(), id, stepID, UpdateStepInput(req))
+	m, ok := ifMatch(w, r)
+	if !ok {
+		return
+	}
+	step, version, err := h.api.UpdateStep(r.Context(), id, stepID, UpdateStepInput(req), m)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, stepDTO(step))
+	writeVersioned(w, http.StatusOK, version, stepDTO(step))
 }
 
 func (h *Handler) deleteStep(w http.ResponseWriter, r *http.Request) {
@@ -448,10 +493,16 @@ func (h *Handler) deleteStep(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.api.DeleteStep(r.Context(), id, stepID); err != nil {
+	m, ok := ifMatch(w, r)
+	if !ok {
+		return
+	}
+	version, err := h.api.DeleteStep(r.Context(), id, stepID, m)
+	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	w.Header().Set("ETag", etag.Tag(version))
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -6,6 +6,7 @@ sql:
     schema:
       - migrations/00001_catalog.sql
       - migrations/00012_projects.sql
+      - migrations/00017_test_case_versions.sql
     queries: queries/catalog.sql
     gen:
       go:

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { NotFoundPage } from '@/app/NotFoundPage'
+import { changedFields } from '@/lib/changedFields'
 import { formatDateTime } from '@/lib/format'
 import { positiveInt } from '@/lib/status'
 
@@ -23,11 +24,21 @@ import { useProjectRole } from '@/features/projects/useProjectRole'
 import { can } from '@/lib/roles'
 
 import { StepsEditor } from './StepsEditor'
-import { TestCaseForm } from './TestCaseForm'
+import { TestCaseForm, type TestCaseFormValues } from './TestCaseForm'
 import { TestCaseHistory } from './TestCaseHistory'
 
+const fields = (tc: TestCase): TestCaseFormValues => ({
+  title: tc.title,
+  description: tc.description,
+  expectedResult: tc.expectedResult,
+  automated: tc.automated,
+})
+
 function Definition({ tc }: { tc: TestCase }) {
-  const [editing, setEditing] = useState(false)
+  // The values the edit form was opened with (null while not editing).
+  const [base, setBase] = useState<TestCaseFormValues | null>(null)
+  const editing = base !== null
+  const setEditing = (on: boolean) => setBase(on ? fields(tc) : null)
   const [confirming, setConfirming] = useState(false)
   const update = useUpdateTestCase(tc.id)
   const deprecate = useDeprecateTestCase(tc.id)
@@ -110,22 +121,22 @@ function Definition({ tc }: { tc: TestCase }) {
           <CardTitle as="h2">Current definition</CardTitle>
           <CardDescription>
             What this test case says today. Past results were recorded against the TC-ID, not against this
-            exact wording: editing content never creates a version or changes how old results are read.
+            exact wording: editing content keeps no copy of the old wording and never changes how old results
+            are read.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           {editing ? (
             <TestCaseForm
-              initial={{
-                title: tc.title,
-                description: tc.description,
-                expectedResult: tc.expectedResult,
-                automated: tc.automated,
-              }}
+              initial={base}
               submitLabel="Save changes"
               pending={update.isPending}
               error={update.error}
-              onSubmit={(values) => update.mutate(values, { onSuccess: () => setEditing(false) })}
+              onSubmit={(values) => {
+                const changed = changedFields(base, values)
+                if (Object.keys(changed).length === 0) return setEditing(false)
+                update.mutate(changed, { onSuccess: () => setEditing(false) })
+              }}
               onCancel={() => setEditing(false)}
             />
           ) : (

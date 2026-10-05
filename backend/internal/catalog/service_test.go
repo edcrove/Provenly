@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/etag"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
@@ -72,7 +74,7 @@ func TestUnicodeWhitespaceIsBlank(t *testing.T) {
 	for _, ws := range []string{"\t\n", "\u00a0", "\u3000", "\u2028", "\u2003\u2009", "\u0085"} {
 		_, err := svc.Create(ctx, CreateInput{ProjectID: 1, Title: ws})
 		assert.Equal(t, apperr.KindValidation, kindOf(t, err), "title %q", ws)
-		_, err = svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: ws})
+		_, _, err = svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: ws}, etag.Match{})
 		assert.Equal(t, apperr.KindValidation, kindOf(t, err), "action %q", ws)
 	}
 }
@@ -103,7 +105,7 @@ func TestList(t *testing.T) {
 	for _, title := range []string{"a", "b", "c"} {
 		_, _ = svc.Create(ctx, CreateInput{ProjectID: 1, Title: title})
 	}
-	_, _ = svc.Deprecate(ctx, 2)
+	_, _ = svc.Deprecate(ctx, 2, etag.Match{})
 	res, err := svc.List(ctx, ListFilter{}, pagination.Page{Number: 1, Size: 2})
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), res.Total)
@@ -124,7 +126,7 @@ func TestList(t *testing.T) {
 func TestUpdateKeepsIdentity(t *testing.T) {
 	svc, _, ctx := setup(t)
 	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "old"})
-	up, err := svc.Update(ctx, tc.ID, UpdateInput{Title: ptr(" new "), Description: ptr("d"), ExpectedResult: ptr("e"), Automated: ptr(true)})
+	up, err := svc.Update(ctx, tc.ID, UpdateInput{Title: ptr(" new "), Description: ptr("d"), ExpectedResult: ptr("e"), Automated: ptr(true)}, etag.Match{})
 	require.NoError(t, err)
 	assert.Equal(t, tc.ID, up.ID)
 	assert.Equal(t, "new", up.Title)
@@ -132,7 +134,7 @@ func TestUpdateKeepsIdentity(t *testing.T) {
 	assert.Equal(t, "e", up.ExpectedResult)
 	assert.True(t, up.Automated)
 
-	_, err = svc.Update(ctx, 99, UpdateInput{Automated: ptr(false)})
+	_, err = svc.Update(ctx, 99, UpdateInput{Automated: ptr(false)}, etag.Match{})
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 }
 
@@ -149,7 +151,7 @@ func TestUpdateValidation(t *testing.T) {
 		{Description: ptr("\x00")},
 		{ExpectedResult: ptr("\x00")},
 	} {
-		_, err := svc.Update(ctx, 1, in)
+		_, err := svc.Update(ctx, 1, in, etag.Match{})
 		assert.Equal(t, apperr.KindValidation, kindOf(t, err))
 	}
 }
@@ -157,24 +159,24 @@ func TestUpdateValidation(t *testing.T) {
 func TestDeprecate(t *testing.T) {
 	svc, _, ctx := setup(t)
 	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a", Automated: true})
-	dep, err := svc.Deprecate(ctx, tc.ID)
+	dep, err := svc.Deprecate(ctx, tc.ID, etag.Match{})
 	require.NoError(t, err)
 	assert.Equal(t, StatusDeprecated, dep.Status)
-	_, err = svc.Deprecate(ctx, 99)
+	_, err = svc.Deprecate(ctx, 99, etag.Match{})
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 }
 
 func TestReactivate(t *testing.T) {
 	svc, _, ctx := setup(t)
 	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a", Automated: true})
-	_, _ = svc.Deprecate(ctx, tc.ID)
-	back, err := svc.Reactivate(ctx, tc.ID)
+	_, _ = svc.Deprecate(ctx, tc.ID, etag.Match{})
+	back, err := svc.Reactivate(ctx, tc.ID, etag.Match{})
 	require.NoError(t, err)
 	assert.Equal(t, tc.ID, back.ID, "same TC-ID")
 	assert.Equal(t, StatusActive, back.Status)
 	view, _ := svc.IngestionView(ctx, 1, nil)
 	assert.Equal(t, []int64{tc.ID}, view.Expected, "future runs include it again")
-	_, err = svc.Reactivate(ctx, 99)
+	_, err = svc.Reactivate(ctx, 99, etag.Match{})
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 }
 
@@ -183,7 +185,7 @@ func TestExpectedUniverseAndStatuses(t *testing.T) {
 	_, _ = svc.Create(ctx, CreateInput{ProjectID: 1, Title: "auto", Automated: true})
 	_, _ = svc.Create(ctx, CreateInput{ProjectID: 1, Title: "manual"})
 	_, _ = svc.Create(ctx, CreateInput{ProjectID: 1, Title: "auto-deprecated", Automated: true})
-	_, _ = svc.Deprecate(ctx, 3)
+	_, _ = svc.Deprecate(ctx, 3, etag.Match{})
 
 	view, err := svc.IngestionView(ctx, 1, []int64{1, 3, 42})
 	require.NoError(t, err)
@@ -198,13 +200,13 @@ func TestExpectedUniverseAndStatuses(t *testing.T) {
 func TestStepsLifecycle(t *testing.T) {
 	svc, _, ctx := setup(t)
 	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
-	s1, err := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "open", ExpectedResult: "page"})
+	s1, _, err := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "open", ExpectedResult: "page"}, etag.Match{})
 	require.NoError(t, err)
-	s2, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "click"})
-	s0, err := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "prepare", Position: ptr(int32(1))})
+	s2, _, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "click"}, etag.Match{})
+	s0, _, err := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "prepare", Position: ptr(int32(1))}, etag.Match{})
 	require.NoError(t, err)
 	assert.Equal(t, int32(1), s0.Position)
-	s3, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "last", Position: ptr(int32(50))})
+	s3, _, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "last", Position: ptr(int32(50))}, etag.Match{})
 	assert.Equal(t, int32(4), s3.Position)
 
 	page, err := svc.ListSteps(ctx, tc.ID, pagination.Default())
@@ -212,15 +214,16 @@ func TestStepsLifecycle(t *testing.T) {
 	assert.Equal(t, int64(4), page.Total)
 	assert.Equal(t, []int64{s0.ID, s1.ID, s2.ID, s3.ID}, stepIDs(page.Items))
 
-	up, err := svc.UpdateStep(ctx, tc.ID, s1.ID, UpdateStepInput{Action: ptr("open app"), ExpectedResult: ptr("home")})
+	up, _, err := svc.UpdateStep(ctx, tc.ID, s1.ID, UpdateStepInput{Action: ptr("open app"), ExpectedResult: ptr("home")}, etag.Match{})
 	require.NoError(t, err)
 	assert.Equal(t, "open app", up.Action)
 
-	require.NoError(t, svc.DeleteStep(ctx, tc.ID, s0.ID))
+	_, err = svc.DeleteStep(ctx, tc.ID, s0.ID, etag.Match{})
+	require.NoError(t, err)
 	page, _ = svc.ListSteps(ctx, tc.ID, pagination.Default())
 	assert.Equal(t, []int32{1, 2, 3}, positions(page.Items))
 
-	steps, err := svc.ReorderSteps(ctx, tc.ID, []int64{s3.ID, s1.ID, s2.ID})
+	steps, _, err := svc.ReorderSteps(ctx, tc.ID, []int64{s3.ID, s1.ID, s2.ID}, etag.Match{})
 	require.NoError(t, err)
 	assert.Equal(t, []int64{s3.ID, s1.ID, s2.ID}, stepIDs(steps))
 	assert.Equal(t, []int32{1, 2, 3}, positions(steps))
@@ -256,31 +259,33 @@ func TestStepValidationAndNotFound(t *testing.T) {
 		{Action: "a\x00"},
 		{Action: "a", ExpectedResult: "\x00"},
 	} {
-		_, err := svc.CreateStep(ctx, tc.ID, in)
+		_, _, err := svc.CreateStep(ctx, tc.ID, in, etag.Match{})
 		assert.Equal(t, apperr.KindValidation, kindOf(t, err))
 	}
-	_, err := svc.CreateStep(ctx, 99, CreateStepInput{Action: "a"})
+	_, _, err := svc.CreateStep(ctx, 99, CreateStepInput{Action: "a"}, etag.Match{})
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 
-	_, err = svc.UpdateStep(ctx, tc.ID, 1, UpdateStepInput{})
+	_, _, err = svc.UpdateStep(ctx, tc.ID, 1, UpdateStepInput{}, etag.Match{})
 	assert.Equal(t, apperr.KindValidation, kindOf(t, err))
-	_, err = svc.UpdateStep(ctx, 99, 1, UpdateStepInput{Action: ptr("x")})
+	_, _, err = svc.UpdateStep(ctx, 99, 1, UpdateStepInput{Action: ptr("x")}, etag.Match{})
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
-	_, err = svc.UpdateStep(ctx, tc.ID, 1, UpdateStepInput{Action: ptr("x")})
+	_, _, err = svc.UpdateStep(ctx, tc.ID, 1, UpdateStepInput{Action: ptr("x")}, etag.Match{})
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 
-	assert.Equal(t, apperr.KindNotFound, kindOf(t, svc.DeleteStep(ctx, 99, 1)))
-	assert.Equal(t, apperr.KindNotFound, kindOf(t, svc.DeleteStep(ctx, tc.ID, 1)))
+	_, err = svc.DeleteStep(ctx, 99, 1, etag.Match{})
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
+	_, err = svc.DeleteStep(ctx, tc.ID, 1, etag.Match{})
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 
 	_, err = svc.ListSteps(ctx, 99, pagination.Default())
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 
-	_, err = svc.ReorderSteps(ctx, 99, nil)
+	_, _, err = svc.ReorderSteps(ctx, 99, nil, etag.Match{})
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
-	s1, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "a"})
-	s2, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "b"})
+	s1, _, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "a"}, etag.Match{})
+	s2, _, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "b"}, etag.Match{})
 	for _, ids := range [][]int64{{s1.ID}, {s1.ID, s1.ID}, {s1.ID, 999}, {s2.ID, s1.ID, 5}} {
-		_, err = svc.ReorderSteps(ctx, tc.ID, ids)
+		_, _, err = svc.ReorderSteps(ctx, tc.ID, ids, etag.Match{})
 		assert.Equal(t, apperr.KindValidation, kindOf(t, err), "%v", ids)
 	}
 }
@@ -289,26 +294,29 @@ func TestStepLimit(t *testing.T) {
 	svc, _, ctx := setup(t)
 	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
 	for i := 0; i < MaxSteps; i++ {
-		_, err := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "s"})
+		_, _, err := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "s"}, etag.Match{})
 		require.NoError(t, err)
 	}
-	_, err := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "one too many"})
+	_, _, err := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "one too many"}, etag.Match{})
 	assert.Equal(t, apperr.KindValidation, kindOf(t, err))
 }
 
 func TestStepRepositoryErrors(t *testing.T) {
 	type op func(*Service, context.Context, int64, int64) error
 	createAt1 := func(s *Service, ctx context.Context, tc, _ int64) error {
-		_, err := s.CreateStep(ctx, tc, CreateStepInput{Action: "x", Position: ptr(int32(1))})
+		_, _, err := s.CreateStep(ctx, tc, CreateStepInput{Action: "x", Position: ptr(int32(1))}, etag.Match{})
 		return err
 	}
 	update := func(s *Service, ctx context.Context, tc, st int64) error {
-		_, err := s.UpdateStep(ctx, tc, st, UpdateStepInput{Action: ptr("y")})
+		_, _, err := s.UpdateStep(ctx, tc, st, UpdateStepInput{Action: ptr("y")}, etag.Match{})
 		return err
 	}
-	del := func(s *Service, ctx context.Context, tc, st int64) error { return s.DeleteStep(ctx, tc, st) }
+	del := func(s *Service, ctx context.Context, tc, st int64) error {
+		_, err := s.DeleteStep(ctx, tc, st, etag.Match{})
+		return err
+	}
 	reorder := func(s *Service, ctx context.Context, tc, st int64) error {
-		_, err := s.ReorderSteps(ctx, tc, []int64{st})
+		_, _, err := s.ReorderSteps(ctx, tc, []int64{st}, etag.Match{})
 		return err
 	}
 	list := func(s *Service, ctx context.Context, tc, _ int64) error {
@@ -329,7 +337,7 @@ func TestStepRepositoryErrors(t *testing.T) {
 	for _, c := range cases {
 		svc, repo, ctx := setup(t)
 		tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
-		st, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "s"})
+		st, _, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "s"}, etag.Match{})
 		repo.errs[c.method] = errBoom
 		assert.ErrorIs(t, c.op(svc, ctx, tc.ID, st.ID), errBoom, c.method)
 	}
@@ -338,10 +346,10 @@ func TestStepRepositoryErrors(t *testing.T) {
 func TestReorderFinalListError(t *testing.T) {
 	svc, repo, ctx := setup(t)
 	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
-	st, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "s"})
+	st, _, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "s"}, etag.Match{})
 	failing := &failSecondListRepo{fakeRepo: repo}
 	svc = NewService(failing)
-	_, err := svc.ReorderSteps(ctx, tc.ID, []int64{st.ID})
+	_, _, err := svc.ReorderSteps(ctx, tc.ID, []int64{st.ID}, etag.Match{})
 	assert.ErrorIs(t, err, errBoom)
 }
 
@@ -490,4 +498,60 @@ func TestTestCaseNumbersPerProject(t *testing.T) {
 	keys, err = svc.Keys(ctx, nil)
 	require.NoError(t, err)
 	assert.Empty(t, keys)
+}
+
+func match(t *testing.T, header string) etag.Match {
+	t.Helper()
+	m, err := etag.Parse(header)
+	require.NoError(t, err)
+	return m
+}
+
+// Optimistic locking (MVP D7): every write of a test case or its steps checks If-Match against the current
+// version and advances it; a stale version is a 412 and changes nothing.
+func TestOptimisticLocking(t *testing.T) {
+	svc, repo, ctx := setup(t)
+	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
+	require.Equal(t, int64(1), tc.Version)
+
+	up, err := svc.Update(ctx, tc.ID, UpdateInput{Title: ptr("b")}, match(t, `"1"`))
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), up.Version)
+	_, err = svc.Update(ctx, tc.ID, UpdateInput{Title: ptr("lost update")}, match(t, `"1"`))
+	assert.Equal(t, apperr.KindPreconditionFailed, kindOf(t, err))
+	assert.Contains(t, err.Error(), "changed since you read it (it is now at version 2)")
+	got, _ := svc.Get(ctx, tc.ID)
+	assert.Equal(t, "b", got.Title, "a rejected write changes nothing")
+
+	st, v, err := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "s"}, match(t, `"2"`))
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), v, "a step change advances the test case")
+	_, _, err = svc.UpdateStep(ctx, tc.ID, st.ID, UpdateStepInput{Action: ptr("x")}, match(t, `"2"`))
+	assert.Equal(t, apperr.KindPreconditionFailed, kindOf(t, err))
+	_, v, err = svc.UpdateStep(ctx, tc.ID, st.ID, UpdateStepInput{Action: ptr("x")}, match(t, `"2", "3"`))
+	require.NoError(t, err)
+	assert.Equal(t, int64(4), v)
+	_, _, err = svc.ReorderSteps(ctx, tc.ID, []int64{st.ID}, match(t, `W/"4"`))
+	assert.Equal(t, apperr.KindPreconditionFailed, kindOf(t, err), "weak tags never match")
+	_, v, err = svc.ReorderSteps(ctx, tc.ID, []int64{st.ID}, match(t, "*"))
+	require.NoError(t, err)
+	_, err = svc.DeleteStep(ctx, tc.ID, st.ID, match(t, `"4"`))
+	assert.Equal(t, apperr.KindPreconditionFailed, kindOf(t, err))
+	v, err = svc.DeleteStep(ctx, tc.ID, st.ID, match(t, `"`+strconv.FormatInt(v, 10)+`"`))
+	require.NoError(t, err)
+
+	dep, err := svc.Deprecate(ctx, tc.ID, match(t, `"`+strconv.FormatInt(v, 10)+`"`))
+	require.NoError(t, err)
+	assert.Equal(t, v+1, dep.Version)
+	_, err = svc.Reactivate(ctx, tc.ID, match(t, `"1"`))
+	assert.Equal(t, apperr.KindPreconditionFailed, kindOf(t, err))
+	back, err := svc.Reactivate(ctx, tc.ID, etag.Match{})
+	require.NoError(t, err, "without If-Match: last write wins")
+	assert.Equal(t, dep.Version+1, back.Version)
+
+	// The version is re-read after the write, in the same transaction.
+	repo.locks = 0
+	repo.errs["LockTestCase#2"] = errBoom
+	_, err = svc.Update(ctx, tc.ID, UpdateInput{Title: ptr("c")}, etag.Match{})
+	assert.ErrorIs(t, err, errBoom)
 }

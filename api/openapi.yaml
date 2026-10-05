@@ -633,6 +633,9 @@ paths:
       responses:
         "200":
           description: Test case
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -648,7 +651,9 @@ paths:
     patch:
       tags: [test-cases]
       operationId: updateTestCase
-      summary: Edit test case content. Never changes the TC-ID nor creates a version.
+      summary: Edit test case content. Never changes the TC-ID nor keeps old content; the version advances.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -658,6 +663,9 @@ paths:
       responses:
         "200":
           description: Updated test case
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -672,6 +680,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -682,9 +692,14 @@ paths:
       tags: [test-cases]
       operationId: deprecateTestCase
       summary: Deprecate a test case (idempotent). History is preserved; it leaves the expected universe of future runs.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "200":
           description: Deprecated test case
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -697,6 +712,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -707,9 +724,14 @@ paths:
       tags: [test-cases]
       operationId: reactivateTestCase
       summary: Reactivate a deprecated test case (idempotent). Same TC-ID; existing run snapshots are unchanged, future runs include it again if automated.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "200":
           description: Active test case
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -722,6 +744,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -738,6 +762,9 @@ paths:
       responses:
         "200":
           description: Page of steps
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -754,6 +781,8 @@ paths:
       tags: [test-steps]
       operationId: createTestStep
       summary: Add a step. Appended at the end unless `position` is given.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -763,6 +792,9 @@ paths:
       responses:
         "201":
           description: Created step
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -777,6 +809,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -787,6 +821,8 @@ paths:
       tags: [test-steps]
       operationId: reorderTestSteps
       summary: Reorder steps. `stepIds` must be a permutation of all current step ids.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -796,6 +832,9 @@ paths:
       responses:
         "200":
           description: Steps in their new order
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -810,6 +849,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -821,6 +862,8 @@ paths:
       tags: [test-steps]
       operationId: updateTestStep
       summary: Edit a step's action and/or expected result
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -830,6 +873,9 @@ paths:
       responses:
         "200":
           description: Updated step
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -844,15 +890,22 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "500":
           $ref: "#/components/responses/InternalError"
     delete:
       tags: [test-steps]
       operationId: deleteTestStep
       summary: Delete a step. Remaining steps are renumbered contiguously.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
       responses:
         "204":
           description: Deleted
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -861,6 +914,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -1165,6 +1220,16 @@ components:
       scheme: bearer
       bearerFormat: pvk_ project API key
   parameters:
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: |
+        Optimistic locking: the `ETag` last read (or `*`). When it no longer matches the test case's
+        version the write is refused with 412 and nothing changes. Without it the write always applies.
+      schema:
+        type: string
+        example: '"7"'
     Username:
       name: username
       in: path
@@ -1244,7 +1309,21 @@ components:
         format: int64
         minimum: 1
 
+  headers:
+    ETag:
+      description: |
+        The test case's version as an entity tag (e.g. `"7"`). It advances with every change to the
+        test case or its steps; send it back in `If-Match` to write only if nobody saved in between.
+      schema:
+        type: string
+        example: '"7"'
   responses:
+    PreconditionFailed:
+      description: The test case changed since the `If-Match` version was read; reload it and apply the change again
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     BadRequest:
       description: Invalid request (parameters, body or document)
       content:
@@ -1337,6 +1416,7 @@ components:
             - conflict
             - unauthorized
             - forbidden
+            - precondition_failed
             - method_not_allowed
             - payload_too_large
             - unsupported_media_type
@@ -1383,8 +1463,14 @@ components:
     TestCase:
       type: object
       additionalProperties: false
-      required: [id, key, projectId, projectKey, number, title, description, expectedResult, status, automated, createdAt, updatedAt]
+      required: [id, key, projectId, projectKey, number, title, description, expectedResult, status, automated, createdAt, updatedAt, version]
       properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Advances with every change to the test case or its steps; also sent as the `ETag` header.
+          example: 7
         id:
           type: integer
           format: int64

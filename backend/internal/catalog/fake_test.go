@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"sort"
 	"time"
@@ -18,6 +19,8 @@ type fakeRepo struct {
 	nextSID  int64
 	errs     map[string]error
 	now      time.Time
+	// locks counts LockTestCase calls; errs["LockTestCase#n"] fails the n-th one.
+	locks int
 }
 
 func newFakeRepo() *fakeRepo {
@@ -43,7 +46,7 @@ func (f *fakeRepo) CreateTestCase(_ context.Context, in CreateInput) (TestCase, 
 	f.nextID++
 	f.nextNum[p.ID]++
 	tc := TestCase{ID: f.nextID, ProjectID: p.ID, ProjectKey: p.Key, Number: f.nextNum[p.ID], Title: in.Title, Description: in.Description, ExpectedResult: in.ExpectedResult,
-		Automated: in.Automated, Status: StatusActive, CreatedAt: f.now, UpdatedAt: f.now}
+		Automated: in.Automated, Status: StatusActive, CreatedAt: f.now, UpdatedAt: f.now, Version: 1}
 	f.cases[tc.ID] = tc
 	return tc, nil
 }
@@ -59,14 +62,26 @@ func (f *fakeRepo) GetTestCase(_ context.Context, id int64) (TestCase, error) {
 	return tc, nil
 }
 
-func (f *fakeRepo) LockTestCase(_ context.Context, id int64) error {
+func (f *fakeRepo) LockTestCase(_ context.Context, id int64) (int64, error) {
+	f.locks++
 	if err := f.fail("LockTestCase"); err != nil {
-		return err
+		return 0, err
 	}
-	if _, ok := f.cases[id]; !ok {
-		return ErrNotFound
+	if err := f.fail(fmt.Sprintf("LockTestCase#%d", f.locks)); err != nil {
+		return 0, err
 	}
-	return nil
+	tc, ok := f.cases[id]
+	if !ok {
+		return 0, ErrNotFound
+	}
+	return tc.Version, nil
+}
+
+// advance moves a test case to its next version, like the database triggers on test cases and steps.
+func (f *fakeRepo) advance(id int64) {
+	tc := f.cases[id]
+	tc.Version++
+	f.cases[id] = tc
 }
 
 func (f *fakeRepo) filtered(lf ListFilter) []TestCase {
@@ -119,6 +134,7 @@ func (f *fakeRepo) UpdateTestCase(_ context.Context, id int64, in UpdateInput) (
 	if in.Automated != nil {
 		tc.Automated = *in.Automated
 	}
+	tc.Version++
 	f.cases[id] = tc
 	return tc, nil
 }
@@ -132,6 +148,7 @@ func (f *fakeRepo) DeprecateTestCase(_ context.Context, id int64) (TestCase, err
 		return TestCase{}, ErrNotFound
 	}
 	tc.Status = StatusDeprecated
+	tc.Version++
 	f.cases[id] = tc
 	return tc, nil
 }
@@ -145,6 +162,7 @@ func (f *fakeRepo) ReactivateTestCase(_ context.Context, id int64) (TestCase, er
 		return TestCase{}, ErrNotFound
 	}
 	tc.Status, tc.DeprecatedAt = StatusActive, nil
+	tc.Version++
 	f.cases[id] = tc
 	return tc, nil
 }
@@ -312,6 +330,7 @@ func (f *fakeRepo) CreateTestStep(_ context.Context, tcID int64, position int32,
 	f.nextSID++
 	st := TestStep{ID: f.nextSID, TestCaseID: tcID, Position: position, Action: action, ExpectedResult: expected}
 	f.steps[tcID] = append(f.steps[tcID], st)
+	f.advance(tcID)
 	return st, nil
 }
 
@@ -328,6 +347,7 @@ func (f *fakeRepo) UpdateTestStep(_ context.Context, tcID, stepID int64, in Upda
 				st.ExpectedResult = *in.ExpectedResult
 			}
 			f.steps[tcID][i] = st
+			f.advance(tcID)
 			return st, nil
 		}
 	}
@@ -341,6 +361,7 @@ func (f *fakeRepo) DeleteTestStep(_ context.Context, tcID, stepID int64) (int32,
 	for i, st := range f.steps[tcID] {
 		if st.ID == stepID {
 			f.steps[tcID] = append(f.steps[tcID][:i], f.steps[tcID][i+1:]...)
+			f.advance(tcID)
 			return st.Position, nil
 		}
 	}
@@ -368,6 +389,7 @@ func (f *fakeRepo) SetTestStepPosition(_ context.Context, tcID, stepID int64, po
 			f.steps[tcID][i].Position = position
 		}
 	}
+	f.advance(tcID)
 	return nil
 }
 

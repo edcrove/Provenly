@@ -20,6 +20,7 @@ const (
 	CodeConflict             = "conflict"
 	CodeUnauthorized         = "unauthorized"
 	CodeForbidden            = "forbidden"
+	CodePreconditionFailed   = "precondition_failed"
 	CodeMethodNotAllowed     = "method_not_allowed"
 	CodePayloadTooLarge      = "payload_too_large"
 	CodeUnsupportedMediaType = "unsupported_media_type"
@@ -82,6 +83,9 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 			return
 		case apperr.KindForbidden:
 			WriteProblem(w, http.StatusForbidden, CodeForbidden, e.Message)
+			return
+		case apperr.KindPreconditionFailed:
+			WriteProblem(w, http.StatusPreconditionFailed, CodePreconditionFailed, e.Message)
 			return
 		case apperr.KindInvalidDocument:
 			WriteProblem(w, http.StatusBadRequest, CodeInvalidJUnit, e.Message)

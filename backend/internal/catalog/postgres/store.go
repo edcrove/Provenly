@@ -99,7 +99,7 @@ func toTestCase(r catalogdb.TestCase) catalog.TestCase {
 	return catalog.TestCase{
 		ID: r.ID, ProjectID: r.ProjectID, Number: r.Number, Title: r.Title, Description: r.Description, ExpectedResult: r.ExpectedResult,
 		Status: catalog.Status(r.Status), Automated: r.Automated,
-		CreatedAt: r.CreatedAt.Time, UpdatedAt: r.UpdatedAt.Time, DeprecatedAt: timePtr(r.DeprecatedAt),
+		CreatedAt: r.CreatedAt.Time, UpdatedAt: r.UpdatedAt.Time, DeprecatedAt: timePtr(r.DeprecatedAt), Version: r.Version,
 	}
 }
 
@@ -146,9 +146,9 @@ func (s *Store) GetTestCase(ctx context.Context, id int64) (catalog.TestCase, er
 }
 
 // LockTestCase implements catalog.Repository.
-func (s *Store) LockTestCase(ctx context.Context, id int64) error {
-	_, err := s.q.LockTestCase(ctx, id)
-	return notFound(err)
+func (s *Store) LockTestCase(ctx context.Context, id int64) (int64, error) {
+	v, err := s.q.LockTestCase(ctx, id)
+	return v, notFound(err)
 }
 
 // ListTestCases implements catalog.Repository.

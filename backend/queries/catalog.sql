@@ -15,7 +15,8 @@ RETURNING *;
 SELECT * FROM test_cases WHERE id = @id;
 
 -- name: LockTestCase :one
-SELECT id FROM test_cases WHERE id = @id FOR UPDATE;
+-- Locks the test case (and its steps' order) until the transaction ends; returns its current version.
+SELECT version FROM test_cases WHERE id = @id FOR UPDATE;
 
 -- name: ListTestCases :many
 SELECT * FROM test_cases

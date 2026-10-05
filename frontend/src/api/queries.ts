@@ -14,6 +14,7 @@ import type { Correlation, ResultStatus } from '@/lib/status'
 
 import {
   api,
+  type TestCase,
   type AcceptInvitationRequest,
   type CreateInvitationRequest,
   type CreateProjectRequest,
@@ -280,6 +281,19 @@ export function useTestCase(id: number) {
   })
 }
 
+/** If-Match with the version of the test case on screen (optimistic locking, MVP D7). */
+function ifMatch(qc: ReturnType<typeof useQueryClient>, id: number) {
+  const version = qc.getQueryData<TestCase>(keys.testCase(id))?.version
+  return version ? { 'If-Match': `"${version}"` } : undefined
+}
+
+/** Keeps the version on screen in step with a step write (its ETag), so the next write is not refused. */
+function keepVersion(qc: ReturnType<typeof useQueryClient>, id: number, response: Response) {
+  const version = Number(response.headers.get('ETag')?.replaceAll('"', ''))
+  if (response.ok && Number.isInteger(version) && version > 0)
+    qc.setQueryData<TestCase>(keys.testCase(id), (tc) => (tc ? { ...tc, version } : tc))
+}
+
 export function useCreateTestCase() {
   const qc = useQueryClient()
   return useExclusiveMutation({
@@ -293,7 +307,11 @@ export function useUpdateTestCase(id: number) {
   return useExclusiveMutation({
     mutationFn: async (body: UpdateTestCaseRequest) =>
       unwrap(
-        await api.PATCH('/api/v1/test-cases/{testCaseId}', { params: { path: { testCaseId: id } }, body }),
+        await api.PATCH('/api/v1/test-cases/{testCaseId}', {
+          params: { path: { testCaseId: id } },
+          body,
+          headers: ifMatch(qc, id),
+        }),
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.testCases }),
   })
@@ -304,7 +322,10 @@ export function useDeprecateTestCase(id: number) {
   return useExclusiveMutation({
     mutationFn: async () =>
       unwrap(
-        await api.POST('/api/v1/test-cases/{testCaseId}/deprecate', { params: { path: { testCaseId: id } } }),
+        await api.POST('/api/v1/test-cases/{testCaseId}/deprecate', {
+          params: { path: { testCaseId: id } },
+          headers: ifMatch(qc, id),
+        }),
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.testCases }),
   })
@@ -317,6 +338,7 @@ export function useReactivateTestCase(id: number) {
       unwrap(
         await api.POST('/api/v1/test-cases/{testCaseId}/reactivate', {
           params: { path: { testCaseId: id } },
+          headers: ifMatch(qc, id),
         }),
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.testCases }),
@@ -337,40 +359,53 @@ export function useTestSteps(id: number) {
 
 export function useStepMutations(id: number) {
   const qc = useQueryClient()
-  // Refetch after failures too: a 400/404 usually means the list on screen is stale (changed elsewhere).
+  // Refetch after failures too: a 400/404/412 usually means the list on screen is stale (changed elsewhere).
   const onSettled = () => qc.invalidateQueries({ queryKey: keys.steps(id) })
   const path = { testCaseId: id }
+  /** Sends the write with If-Match and keeps the new version (ETag) for the next one. */
+  const send = async <T>(
+    call: (headers?: Record<string, string>) => Promise<{ data?: T; error?: unknown; response: Response }>,
+  ) => {
+    const result = await call(ifMatch(qc, id))
+    keepVersion(qc, id, result.response)
+    return unwrap(result)
+  }
   return {
     create: useExclusiveMutation({
-      mutationFn: async (body: { action: string; expectedResult: string }) =>
-        unwrap(await api.POST('/api/v1/test-cases/{testCaseId}/steps', { params: { path }, body })),
+      mutationFn: (body: { action: string; expectedResult: string }) =>
+        send((headers) =>
+          api.POST('/api/v1/test-cases/{testCaseId}/steps', { params: { path }, body, headers }),
+        ),
       onSettled,
     }),
     update: useExclusiveMutation({
-      mutationFn: async ({ stepId, ...body }: { stepId: number; action: string; expectedResult: string }) =>
-        unwrap(
-          await api.PATCH('/api/v1/test-cases/{testCaseId}/steps/{stepId}', {
+      mutationFn: ({ stepId, ...body }: { stepId: number; action: string; expectedResult: string }) =>
+        send((headers) =>
+          api.PATCH('/api/v1/test-cases/{testCaseId}/steps/{stepId}', {
             params: { path: { ...path, stepId } },
             body,
+            headers,
           }),
         ),
       onSettled,
     }),
     remove: useExclusiveMutation({
-      mutationFn: async (stepId: number) =>
-        unwrap(
-          await api.DELETE('/api/v1/test-cases/{testCaseId}/steps/{stepId}', {
+      mutationFn: (stepId: number) =>
+        send((headers) =>
+          api.DELETE('/api/v1/test-cases/{testCaseId}/steps/{stepId}', {
             params: { path: { ...path, stepId } },
+            headers,
           }),
         ),
       onSettled,
     }),
     reorder: useExclusiveMutation({
-      mutationFn: async (stepIds: number[]) =>
-        unwrap(
-          await api.PUT('/api/v1/test-cases/{testCaseId}/steps/order', {
+      mutationFn: (stepIds: number[]) =>
+        send((headers) =>
+          api.PUT('/api/v1/test-cases/{testCaseId}/steps/order', {
             params: { path },
             body: { stepIds },
+            headers,
           }),
         ),
       onSettled,

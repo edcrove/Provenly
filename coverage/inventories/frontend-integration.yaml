@@ -116,3 +116,5 @@ targets:
   - id: FE-INT-033
     description: project API keys - a maintainer creates a key (shown once with the CI step), lists them by page with last use, revokes one; failures are shown where they happen; members and viewers do not see keys
     surfaces: [src/features/projects/ApiKeysSection.tsx]
+  - id: FE-INT-034
+    description: concurrent edits - a stale test case edit, step write or deprecation is refused with a conflict notice and nothing is overwritten; Reload shows the other version and the next save works; successive step writes carry the version forward without false conflicts

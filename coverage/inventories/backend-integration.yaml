@@ -84,3 +84,5 @@ targets:
     description: test case, run and project lists are narrowed to the visible projects (every project, some, or none for a user without memberships)
   - id: BE-INT-041
     description: project API keys persist only their digest, authenticate (a use recorded at most once a minute), report runs into their own project only, stop at once when revoked, and the database forbids deleting or altering them
+  - id: BE-INT-042
+    description: test case versions are advanced by the database on every content or step change (not on a no-op save) and never go back; a stale If-Match is refused without changes, and of twenty concurrent writes from the same read exactly one wins

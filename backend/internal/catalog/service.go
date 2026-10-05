@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/etag"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
@@ -101,8 +102,34 @@ func (s *Service) List(ctx context.Context, f ListFilter, page pagination.Page) 
 	return pagination.Result[TestCase]{Items: items, Page: page, Total: total}, nil
 }
 
-// Update edits content fields. The TC-ID never changes and no version is created.
-func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) (TestCase, error) {
+// changed is the error of a write whose If-Match no longer matches the test case.
+func changed(id, version int64) error {
+	return apperr.PreconditionFailed("test case %d changed since you read it (it is now at version %d): reload it and apply your change again", id, version)
+}
+
+// guarded runs a write on a test case in a transaction that locks it and checks the client's If-Match first
+// (optimistic locking, MVP D7). It returns the test case version after the write.
+func (s *Service) guarded(ctx context.Context, id int64, m etag.Match, write func(Repository) error) (int64, error) {
+	var version int64
+	err := s.repo.InTx(ctx, func(r Repository) error {
+		v, err := r.LockTestCase(ctx, id)
+		if err != nil {
+			return mapNotFound(err, id)
+		}
+		if !m.Matches(v) {
+			return changed(id, v)
+		}
+		if err := write(r); err != nil {
+			return err
+		}
+		version, err = r.LockTestCase(ctx, id)
+		return err
+	})
+	return version, err
+}
+
+// Update edits content fields. The TC-ID never changes; the version advances (If-Match is checked first).
+func (s *Service) Update(ctx context.Context, id int64, in UpdateInput, m etag.Match) (TestCase, error) {
 	var v apperr.Validator
 	v.Check(in.Title != nil || in.Description != nil || in.ExpectedResult != nil || in.Automated != nil, "body", "at least one field is required")
 	if in.Title != nil {
@@ -123,23 +150,35 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) (TestCas
 	if err := v.Err(); err != nil {
 		return TestCase{}, err
 	}
-	tc, err := s.repo.UpdateTestCase(ctx, id, in)
-	return tc, mapNotFound(err, id)
+	var tc TestCase
+	_, err := s.guarded(ctx, id, m, func(r Repository) (err error) {
+		tc, err = r.UpdateTestCase(ctx, id, in)
+		return err
+	})
+	return tc, err
 }
 
 // Deprecate marks a test case deprecated (idempotent). Its history is kept and
 // it leaves the expected universe of runs created afterwards.
-func (s *Service) Deprecate(ctx context.Context, id int64) (TestCase, error) {
-	tc, err := s.repo.DeprecateTestCase(ctx, id)
-	return tc, mapNotFound(err, id)
+func (s *Service) Deprecate(ctx context.Context, id int64, m etag.Match) (TestCase, error) {
+	var tc TestCase
+	_, err := s.guarded(ctx, id, m, func(r Repository) (err error) {
+		tc, err = r.DeprecateTestCase(ctx, id)
+		return err
+	})
+	return tc, err
 }
 
 // Reactivate brings a deprecated test case back to active (idempotent), keeping
 // its TC-ID. Existing run snapshots are immutable; future runs include it again
 // when it is automated.
-func (s *Service) Reactivate(ctx context.Context, id int64) (TestCase, error) {
-	tc, err := s.repo.ReactivateTestCase(ctx, id)
-	return tc, mapNotFound(err, id)
+func (s *Service) Reactivate(ctx context.Context, id int64, m etag.Match) (TestCase, error) {
+	var tc TestCase
+	_, err := s.guarded(ctx, id, m, func(r Repository) (err error) {
+		tc, err = r.ReactivateTestCase(ctx, id)
+		return err
+	})
+	return tc, err
 }
 
 // IngestionView returns, in one snapshot, the project's test cases that are
@@ -269,21 +308,19 @@ func validateStepText(v *apperr.Validator, action, expected *string) {
 	}
 }
 
-// CreateStep inserts a step at the requested position (clamped to the end) or appends it.
-func (s *Service) CreateStep(ctx context.Context, testCaseID int64, in CreateStepInput) (TestStep, error) {
+// CreateStep inserts a step at the requested position (clamped to the end) or appends it; it returns the
+// test case's new version.
+func (s *Service) CreateStep(ctx context.Context, testCaseID int64, in CreateStepInput, m etag.Match) (TestStep, int64, error) {
 	var v apperr.Validator
 	validateStepText(&v, &in.Action, &in.ExpectedResult)
 	if in.Position != nil {
 		v.Check(*in.Position >= 1, "position", "must be >= 1")
 	}
 	if err := v.Err(); err != nil {
-		return TestStep{}, err
+		return TestStep{}, 0, err
 	}
 	var step TestStep
-	err := s.repo.InTx(ctx, func(r Repository) error {
-		if err := r.LockTestCase(ctx, testCaseID); err != nil {
-			return mapNotFound(err, testCaseID)
-		}
+	version, err := s.guarded(ctx, testCaseID, m, func(r Repository) error {
 		count, err := r.CountTestSteps(ctx, testCaseID)
 		if err != nil {
 			return err
@@ -301,37 +338,36 @@ func (s *Service) CreateStep(ctx context.Context, testCaseID int64, in CreateSte
 		step, err = r.CreateTestStep(ctx, testCaseID, position, in.Action, in.ExpectedResult)
 		return err
 	})
-	return step, err
+	return step, version, err
 }
 
 func stepNotFound(testCaseID, stepID int64) error {
 	return apperr.NotFound("step %d of test case %d not found", stepID, testCaseID)
 }
 
-// UpdateStep edits a step's content. It never affects the TC-ID or historical results.
-func (s *Service) UpdateStep(ctx context.Context, testCaseID, stepID int64, in UpdateStepInput) (TestStep, error) {
+// UpdateStep edits a step's content. It never affects the TC-ID or historical results; it returns the test
+// case's new version.
+func (s *Service) UpdateStep(ctx context.Context, testCaseID, stepID int64, in UpdateStepInput, m etag.Match) (TestStep, int64, error) {
 	var v apperr.Validator
 	v.Check(in.Action != nil || in.ExpectedResult != nil, "body", "at least one field is required")
 	validateStepText(&v, in.Action, in.ExpectedResult)
 	if err := v.Err(); err != nil {
-		return TestStep{}, err
+		return TestStep{}, 0, err
 	}
-	if err := s.EnsureExists(ctx, testCaseID); err != nil {
-		return TestStep{}, err
-	}
-	step, err := s.repo.UpdateTestStep(ctx, testCaseID, stepID, in)
-	if errors.Is(err, ErrNotFound) {
-		return TestStep{}, stepNotFound(testCaseID, stepID)
-	}
-	return step, err
+	var step TestStep
+	version, err := s.guarded(ctx, testCaseID, m, func(r Repository) (err error) {
+		step, err = r.UpdateTestStep(ctx, testCaseID, stepID, in)
+		if errors.Is(err, ErrNotFound) {
+			return stepNotFound(testCaseID, stepID)
+		}
+		return err
+	})
+	return step, version, err
 }
 
-// DeleteStep removes a step and renumbers the remaining ones contiguously.
-func (s *Service) DeleteStep(ctx context.Context, testCaseID, stepID int64) error {
-	return s.repo.InTx(ctx, func(r Repository) error {
-		if err := r.LockTestCase(ctx, testCaseID); err != nil {
-			return mapNotFound(err, testCaseID)
-		}
+// DeleteStep removes a step and renumbers the remaining ones contiguously; it returns the test case's new version.
+func (s *Service) DeleteStep(ctx context.Context, testCaseID, stepID int64, m etag.Match) (int64, error) {
+	return s.guarded(ctx, testCaseID, m, func(r Repository) error {
 		position, err := r.DeleteTestStep(ctx, testCaseID, stepID)
 		if errors.Is(err, ErrNotFound) {
 			return stepNotFound(testCaseID, stepID)
@@ -343,13 +379,11 @@ func (s *Service) DeleteStep(ctx context.Context, testCaseID, stepID int64) erro
 	})
 }
 
-// ReorderSteps applies a new order; stepIDs must be a permutation of all current steps.
-func (s *Service) ReorderSteps(ctx context.Context, testCaseID int64, stepIDs []int64) ([]TestStep, error) {
+// ReorderSteps applies a new order; stepIDs must be a permutation of all current steps. It returns the steps
+// and the test case's new version.
+func (s *Service) ReorderSteps(ctx context.Context, testCaseID int64, stepIDs []int64, m etag.Match) ([]TestStep, int64, error) {
 	var steps []TestStep
-	err := s.repo.InTx(ctx, func(r Repository) error {
-		if err := r.LockTestCase(ctx, testCaseID); err != nil {
-			return mapNotFound(err, testCaseID)
-		}
+	version, err := s.guarded(ctx, testCaseID, m, func(r Repository) error {
 		current, err := r.ListAllTestSteps(ctx, testCaseID)
 		if err != nil {
 			return err
@@ -365,7 +399,7 @@ func (s *Service) ReorderSteps(ctx context.Context, testCaseID int64, stepIDs []
 		steps, err = r.ListAllTestSteps(ctx, testCaseID)
 		return err
 	})
-	return steps, err
+	return steps, version, err
 }
 
 func isPermutation(current []TestStep, ids []int64) bool {

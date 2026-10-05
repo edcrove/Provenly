@@ -21,3 +21,5 @@ targets:
     description: roles through the public API - an invitation grants a project role, a viewer sees only their project and gets 403 on writes, a member edits but cannot deprecate or create projects, removal makes the project invisible
   - id: BE-E2E-010
     description: CI API keys through the public API - 401 without a key, a key reports into its project by default (404 for another), opens no other route, records its last use, never appears in lists, and stops at once when revoked
+  - id: BE-E2E-011
+    description: optimistic locking through the public API - reads return the version as ETag, a stale If-Match gets 412 and changes nothing, step writes advance the same version, no If-Match keeps last-write-wins and a malformed one is 400

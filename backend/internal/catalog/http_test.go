@@ -15,6 +15,7 @@ import (
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
+	"github.com/edcrove/provenly/backend/internal/platform/etag"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
@@ -32,10 +33,11 @@ type stubAPI struct {
 	gotUpdate     UpdateInput
 	gotStep       CreateStepInput
 	gotOrder      []int64
+	gotMatch      etag.Match
 }
 
 var sample = TestCase{ID: 153, ProjectID: 1, ProjectKey: "TC", Number: 153, Title: "Login", Status: StatusActive, Automated: true,
-	CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Version: 4}
 
 var sampleStep = TestStep{ID: 9, TestCaseID: 153, Position: 1, Action: "open"}
 
@@ -71,27 +73,40 @@ func (s *stubAPI) List(_ context.Context, f ListFilter, p pagination.Page) (pagi
 	s.gotPage = p
 	return pagination.Result[TestCase]{Items: []TestCase{sample}, Page: p, Total: 1}, s.err
 }
-func (s *stubAPI) Update(_ context.Context, _ int64, in UpdateInput) (TestCase, error) {
-	s.gotUpdate = in
+func (s *stubAPI) Update(_ context.Context, _ int64, in UpdateInput, m etag.Match) (TestCase, error) {
+	s.gotUpdate, s.gotMatch = in, m
 	return sample, s.err
 }
-func (s *stubAPI) Deprecate(context.Context, int64) (TestCase, error)  { return sample, s.err }
-func (s *stubAPI) Reactivate(context.Context, int64) (TestCase, error) { return sample, s.err }
+func (s *stubAPI) Deprecate(_ context.Context, _ int64, m etag.Match) (TestCase, error) {
+	s.gotMatch = m
+	return sample, s.err
+}
+func (s *stubAPI) Reactivate(_ context.Context, _ int64, m etag.Match) (TestCase, error) {
+	s.gotMatch = m
+	return sample, s.err
+}
 func (s *stubAPI) ListSteps(_ context.Context, _ int64, p pagination.Page) (pagination.Result[TestStep], error) {
 	return pagination.Result[TestStep]{Items: []TestStep{sampleStep}, Page: p, Total: 1}, s.err
 }
-func (s *stubAPI) CreateStep(_ context.Context, _ int64, in CreateStepInput) (TestStep, error) {
-	s.gotStep = in
-	return sampleStep, s.err
+func (s *stubAPI) CreateStep(_ context.Context, _ int64, in CreateStepInput, m etag.Match) (TestStep, int64, error) {
+	s.gotStep, s.gotMatch = in, m
+	return sampleStep, stepVersion, s.err
 }
-func (s *stubAPI) UpdateStep(context.Context, int64, int64, UpdateStepInput) (TestStep, error) {
-	return sampleStep, s.err
+func (s *stubAPI) UpdateStep(_ context.Context, _, _ int64, _ UpdateStepInput, m etag.Match) (TestStep, int64, error) {
+	s.gotMatch = m
+	return sampleStep, stepVersion, s.err
 }
-func (s *stubAPI) DeleteStep(context.Context, int64, int64) error { return s.err }
-func (s *stubAPI) ReorderSteps(_ context.Context, _ int64, ids []int64) ([]TestStep, error) {
-	s.gotOrder = ids
-	return []TestStep{sampleStep}, s.err
+func (s *stubAPI) DeleteStep(_ context.Context, _, _ int64, m etag.Match) (int64, error) {
+	s.gotMatch = m
+	return stepVersion, s.err
 }
+func (s *stubAPI) ReorderSteps(_ context.Context, _ int64, ids []int64, m etag.Match) ([]TestStep, int64, error) {
+	s.gotOrder, s.gotMatch = ids, m
+	return []TestStep{sampleStep}, stepVersion, s.err
+}
+
+// stepVersion is the test case version the stub reports after a step write.
+const stepVersion = 9
 
 func serve(api API, method, target, body string) *httptest.ResponseRecorder {
 	return serveAs(adminGuard, api, method, target, body)
@@ -320,4 +335,59 @@ func TestHandlerAuthorization(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, status(broken, "GET", target, ""), target)
 	}
 	assert.Equal(t, http.StatusInternalServerError, status(broken, "POST", "/api/v1/projects", `{"key":"CHK","name":"n"}`))
+}
+
+// Optimistic locking over HTTP: reads and writes of a test case and its steps carry the version as the ETag,
+// writes pass If-Match to the service, a malformed If-Match is a 400 and a stale one the service's 412.
+func TestHandlerVersions(t *testing.T) {
+	api := &stubAPI{}
+	for _, c := range []struct {
+		method, target, body string
+		etag                 string
+	}{
+		{"GET", "/api/v1/test-cases/153", "", `"4"`},
+		{"PATCH", "/api/v1/test-cases/153", `{"title":"x"}`, `"4"`},
+		{"POST", "/api/v1/test-cases/153/deprecate", "", `"4"`},
+		{"POST", "/api/v1/test-cases/153/reactivate", "", `"4"`},
+		{"GET", "/api/v1/test-cases/153/steps", "", `"4"`},
+		{"POST", "/api/v1/test-cases/153/steps", `{"action":"a"}`, `"9"`},
+		{"PATCH", "/api/v1/test-cases/153/steps/9", `{"action":"a"}`, `"9"`},
+		{"PUT", "/api/v1/test-cases/153/steps/order", `{"stepIds":[9]}`, `"9"`},
+		{"DELETE", "/api/v1/test-cases/153/steps/9", "", `"9"`},
+	} {
+		rec := serveWith(api, c.method, c.target, c.body, `"4", "5"`)
+		require.Less(t, rec.Code, 300, c.method+" "+c.target)
+		assert.Equal(t, c.etag, rec.Header().Get("ETag"), c.method+" "+c.target)
+		if c.method != "GET" {
+			assert.True(t, api.gotMatch.Matches(5) && !api.gotMatch.Matches(6), c.method+" "+c.target+" passes If-Match")
+		}
+		api.gotMatch = etag.Match{}
+
+		if c.method != "GET" {
+			rec = serveWith(api, c.method, c.target, c.body, `4`)
+			assert.Equal(t, http.StatusBadRequest, rec.Code, c.method+" "+c.target+" malformed If-Match")
+			assert.Contains(t, rec.Body.String(), `"field":"If-Match"`)
+		}
+	}
+	assert.Contains(t, serveWith(api, "GET", "/api/v1/test-cases/153", "", "").Body.String(), `"version":4`)
+
+	stale := &stubAPI{err: apperr.PreconditionFailed("test case 153 changed")}
+	rec := serveWith(stale, "PATCH", "/api/v1/test-cases/153", `{"title":"x"}`, `"1"`)
+	assert.Equal(t, http.StatusPreconditionFailed, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"code":"precondition_failed"`)
+}
+
+func serveWith(api API, method, target, body, ifMatch string) *httptest.ResponseRecorder {
+	mux := http.NewServeMux()
+	NewHandler(api, adminGuard).Register(mux)
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if ifMatch != "" {
+		req.Header.Set("If-Match", ifMatch)
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
 }

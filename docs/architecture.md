@@ -76,6 +76,9 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
   duplicate keys keep the last value. Text fields (JSON or query) must be valid UTF-8 without NUL characters (`400`
   otherwise), since PostgreSQL cannot store them. Every validation error has the detail `request validation failed` and lists
   the offending fields in `errors`.
+- Optimistic locking (MVP D7): test case and step responses carry `ETag: "<version>"`; their writes accept `If-Match`
+  and answer `412 precondition_failed` when the version moved. Database triggers advance the version on every content
+  or step change; the service checks the precondition under the row lock in the write's transaction.
 - Ingestion: `POST /api/v1/ingestion/junit?provider=&runId=&runAttempt=[&pipeline=&branch=&commit=]` with the
   JUnit XML as `application/xml` body (one request per complete report; `text/xml` and `*+xml` too; a Content-Type
   `charset` overrides the XML declaration; compressed bodies are a 415; every parameter error is listed at once). `201` creates the run, `200` is an idempotent

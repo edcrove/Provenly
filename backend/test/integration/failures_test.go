@@ -38,7 +38,7 @@ func TestPersistenceFailures(t *testing.T) {
 			"catalog.InTx":               func() error { return cat.InTx(ctx, func(catalog.Repository) error { return nil }) },
 			"catalog.CreateTestCase":     func() error { _, err := cat.CreateTestCase(ctx, catalog.CreateInput{Title: "x"}); return err },
 			"catalog.GetTestCase":        func() error { _, err := cat.GetTestCase(ctx, 1); return err },
-			"catalog.LockTestCase":       func() error { return cat.LockTestCase(ctx, 1) },
+			"catalog.LockTestCase":       func() error { _, err := cat.LockTestCase(ctx, 1); return err },
 			"catalog.ListTestCases":      func() error { _, err := cat.ListTestCases(ctx, catalog.ListFilter{Status: &status}, 10, 0); return err },
 			"catalog.CountTestCases":     func() error { _, err := cat.CountTestCases(ctx, catalog.ListFilter{}); return err },
 			"catalog.UpdateTestCase":     func() error { _, err := cat.UpdateTestCase(ctx, 1, catalog.UpdateInput{Title: str("x")}); return err },

@@ -37,6 +37,10 @@ func TestConstructors(t *testing.T) {
 	f, ok := As(Forbidden("admins only"))
 	require.True(t, ok)
 	assert.Equal(t, KindForbidden, f.Kind)
+	pf, ok := As(PreconditionFailed("changed at %d", 3))
+	require.True(t, ok)
+	assert.Equal(t, KindPreconditionFailed, pf.Kind)
+	assert.Equal(t, "changed at 3", pf.Message)
 
 	_, ok = As(errors.New("plain"))
 	assert.False(t, ok)

@@ -26,3 +26,5 @@ targets:
     description: an administrator adds a project member in the UI; the member signs in and sees only the actions of their role, which narrow after a demotion
   - id: FE-E2E-013
     description: a maintainer creates an API key on the project page (shown once with the CI step), CI reports a run with it, the key shows its last use, is revoked, and the run appears in the test case history
+  - id: FE-E2E-014
+    description: two people edit the same test case in two browsers; the second save is refused with a conflict notice, Reload shows the first person's change and the second change then saves on top of it

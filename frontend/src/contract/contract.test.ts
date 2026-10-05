@@ -101,6 +101,72 @@ const withKey = () => {
   })
 }
 const key9 = { projectKey: 'TC', apiKeyId: 9 }
+const staleTag = { 'If-Match': '"99"' }
+const step1 = { testCaseId: 153, stepId: 1 }
+const staleScenarios: Scenario[] = [
+  {
+    op: 'PATCH /api/v1/test-cases/{testCaseId}',
+    status: 412,
+    call: (c) =>
+      c.PATCH('/api/v1/test-cases/{testCaseId}', {
+        params: { path: tc },
+        body: { title: 'x' },
+        headers: staleTag,
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-cases/{testCaseId}/deprecate',
+    status: 412,
+    call: (c) =>
+      c.POST('/api/v1/test-cases/{testCaseId}/deprecate', { params: { path: tc }, headers: staleTag }),
+  },
+  {
+    op: 'POST /api/v1/test-cases/{testCaseId}/reactivate',
+    status: 412,
+    call: (c) =>
+      c.POST('/api/v1/test-cases/{testCaseId}/reactivate', { params: { path: tc }, headers: staleTag }),
+  },
+  {
+    op: 'POST /api/v1/test-cases/{testCaseId}/steps',
+    status: 412,
+    call: (c) =>
+      c.POST('/api/v1/test-cases/{testCaseId}/steps', {
+        params: { path: tc },
+        body: { action: 'a' },
+        headers: staleTag,
+      }),
+  },
+  {
+    op: 'PUT /api/v1/test-cases/{testCaseId}/steps/order',
+    status: 412,
+    call: (c) =>
+      c.PUT('/api/v1/test-cases/{testCaseId}/steps/order', {
+        params: { path: tc },
+        body: { stepIds: [2, 1] },
+        headers: staleTag,
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/test-cases/{testCaseId}/steps/{stepId}',
+    status: 412,
+    call: (c) =>
+      c.PATCH('/api/v1/test-cases/{testCaseId}/steps/{stepId}', {
+        params: { path: step1 },
+        body: { action: 'x' },
+        headers: staleTag,
+      }),
+  },
+  {
+    op: 'DELETE /api/v1/test-cases/{testCaseId}/steps/{stepId}',
+    status: 412,
+    call: (c) =>
+      c.DELETE('/api/v1/test-cases/{testCaseId}/steps/{stepId}', {
+        params: { path: step1 },
+        headers: staleTag,
+      }),
+  },
+]
+
 const apiKeyScenarios: Scenario[] = [
   {
     op: 'GET /api/v1/projects/{projectKey}/api-keys',
@@ -559,6 +625,7 @@ const signedOutScenarios = (): Scenario[] =>
 const scenarios: Scenario[] = [
   ...roleScenarios,
   ...apiKeyScenarios,
+  ...staleScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
   // Projects

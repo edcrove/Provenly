@@ -342,7 +342,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Edit test case content. Never changes the TC-ID nor creates a version. */
+        /** Edit test case content. Never changes the TC-ID nor keeps old content; the version advances. */
         patch: operations["updateTestCase"];
         trace?: never;
     };
@@ -616,7 +616,7 @@ export interface components {
              * @description Stable machine-readable error code. Requests that match no operation get `not_found` (404), or `method_not_allowed` (405, with an `Allow` header) when the path exists for other methods.
              * @enum {string}
              */
-            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "method_not_allowed" | "payload_too_large" | "unsupported_media_type" | "service_unavailable" | "internal_error";
+            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "precondition_failed" | "method_not_allowed" | "payload_too_large" | "unsupported_media_type" | "service_unavailable" | "internal_error";
             detail?: string;
             errors?: components["schemas"]["FieldError"][];
         };
@@ -637,6 +637,12 @@ export interface components {
         /** @enum {string} */
         TestCaseStatus: "active" | "deprecated";
         TestCase: {
+            /**
+             * Format: int64
+             * @description Advances with every change to the test case or its steps; also sent as the `ETag` header.
+             * @example 7
+             */
+            version: number;
             /**
              * Format: int64
              * @example 153
@@ -1150,6 +1156,15 @@ export interface components {
         };
     };
     responses: {
+        /** @description The test case changed since the `If-Match` version was read; reload it and apply the change again */
+        PreconditionFailed: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description Invalid request (parameters, body or document) */
         BadRequest: {
             headers: {
@@ -1233,6 +1248,11 @@ export interface components {
         };
     };
     parameters: {
+        /**
+         * @description Optimistic locking: the `ETag` last read (or `*`). When it no longer matches the test case's
+         *     version the write is refused with 412 and nothing changes. Without it the write always applies.
+         */
+        IfMatch: string;
         /** @example ana */
         Username: string;
         InvitationId: number;
@@ -1251,7 +1271,13 @@ export interface components {
         TestRunId: number;
     };
     requestBodies: never;
-    headers: never;
+    headers: {
+        /**
+         * @description The test case's version as an entity tag (e.g. `"7"`). It advances with every change to the
+         *     test case or its steps; send it back in `If-Match` to write only if nobody saved in between.
+         */
+        ETag: string;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;
@@ -1915,6 +1941,7 @@ export interface operations {
             /** @description Test case */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -1930,7 +1957,13 @@ export interface operations {
     updateTestCase: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Optimistic locking: the `ETag` last read (or `*`). When it no longer matches the test case's
+                 *     version the write is refused with 412 and nothing changes. Without it the write always applies.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description Numeric TC-ID (without the `TC-` prefix) */
                 testCaseId: components["parameters"]["TestCaseId"];
@@ -1946,6 +1979,7 @@ export interface operations {
             /** @description Updated test case */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -1956,6 +1990,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -1963,7 +1998,13 @@ export interface operations {
     deprecateTestCase: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Optimistic locking: the `ETag` last read (or `*`). When it no longer matches the test case's
+                 *     version the write is refused with 412 and nothing changes. Without it the write always applies.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description Numeric TC-ID (without the `TC-` prefix) */
                 testCaseId: components["parameters"]["TestCaseId"];
@@ -1975,6 +2016,7 @@ export interface operations {
             /** @description Deprecated test case */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -1985,13 +2027,20 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
             500: components["responses"]["InternalError"];
         };
     };
     reactivateTestCase: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Optimistic locking: the `ETag` last read (or `*`). When it no longer matches the test case's
+                 *     version the write is refused with 412 and nothing changes. Without it the write always applies.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description Numeric TC-ID (without the `TC-` prefix) */
                 testCaseId: components["parameters"]["TestCaseId"];
@@ -2003,6 +2052,7 @@ export interface operations {
             /** @description Active test case */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -2013,6 +2063,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -2034,6 +2085,7 @@ export interface operations {
             /** @description Page of steps */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -2049,7 +2101,13 @@ export interface operations {
     createTestStep: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Optimistic locking: the `ETag` last read (or `*`). When it no longer matches the test case's
+                 *     version the write is refused with 412 and nothing changes. Without it the write always applies.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description Numeric TC-ID (without the `TC-` prefix) */
                 testCaseId: components["parameters"]["TestCaseId"];
@@ -2065,6 +2123,7 @@ export interface operations {
             /** @description Created step */
             201: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -2075,6 +2134,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -2082,7 +2142,13 @@ export interface operations {
     reorderTestSteps: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Optimistic locking: the `ETag` last read (or `*`). When it no longer matches the test case's
+                 *     version the write is refused with 412 and nothing changes. Without it the write always applies.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description Numeric TC-ID (without the `TC-` prefix) */
                 testCaseId: components["parameters"]["TestCaseId"];
@@ -2098,6 +2164,7 @@ export interface operations {
             /** @description Steps in their new order */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -2108,6 +2175,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -2115,7 +2183,13 @@ export interface operations {
     deleteTestStep: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Optimistic locking: the `ETag` last read (or `*`). When it no longer matches the test case's
+                 *     version the write is refused with 412 and nothing changes. Without it the write always applies.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description Numeric TC-ID (without the `TC-` prefix) */
                 testCaseId: components["parameters"]["TestCaseId"];
@@ -2128,6 +2202,7 @@ export interface operations {
             /** @description Deleted */
             204: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -2136,13 +2211,20 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
             500: components["responses"]["InternalError"];
         };
     };
     updateTestStep: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Optimistic locking: the `ETag` last read (or `*`). When it no longer matches the test case's
+                 *     version the write is refused with 412 and nothing changes. Without it the write always applies.
+                 */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
             path: {
                 /** @description Numeric TC-ID (without the `TC-` prefix) */
                 testCaseId: components["parameters"]["TestCaseId"];
@@ -2159,6 +2241,7 @@ export interface operations {
             /** @description Updated step */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -2169,6 +2252,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };

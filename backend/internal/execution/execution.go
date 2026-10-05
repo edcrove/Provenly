@@ -109,6 +109,10 @@ type TestResult struct {
 	ErrorMessage        string
 	ErrorDetails        string
 	CreatedAt           time.Time
+	// Attempt numbers the executions of the same test in the run (1 = first, D1).
+	Attempt int32
+	// Retried tells that a later attempt of the same test exists: this result is not the test's logical result.
+	Retried bool
 }
 
 // NewRun is the metadata of a run to record.
@@ -142,6 +146,8 @@ type NewResult struct {
 	DurationMs          *int64
 	ErrorMessage        string
 	ErrorDetails        string
+	// Attempt numbers the executions of the same test in the run (1 = first, D1).
+	Attempt int32
 }
 
 // ParseError is a testcase of the ingested report that could not be fully
@@ -172,6 +178,10 @@ type ResultFilter struct {
 type ValidResult struct {
 	TestCaseID int64
 	Status     ResultStatus
+	// Execution identifies the test the result belongs to (suite, class and name); Attempt orders its attempts.
+	// An empty Execution makes the result an execution of its own.
+	Execution string
+	Attempt   int32
 }
 
 // SummaryInputs are the immutable inputs of a run's summary: its snapshot

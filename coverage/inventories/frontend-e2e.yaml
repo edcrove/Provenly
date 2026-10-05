@@ -30,3 +30,5 @@ targets:
     description: two people edit the same test case in two browsers; the second save is refused with a conflict notice, Reload shows the first person's change and the second change then saves on top of it
   - id: FE-E2E-015
     description: a maintainer includes a reported test case from the run page with a reason; the run shows the edited badge (detail and list), the amendment history and the new verdict
+  - id: FE-E2E-016
+    description: a run whose test passed on a retry (retry property) shows the flaky badge, the flaky test case, a passed verdict and each attempt marked in results and history

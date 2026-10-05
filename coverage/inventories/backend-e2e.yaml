@@ -25,3 +25,5 @@ targets:
     description: optimistic locking through the public API - reads return the version as ETag, a stale If-Match gets 412 and changes nothing, step writes advance the same version, no If-Match keeps last-write-wins and a malformed one is 400
   - id: BE-E2E-012
     description: snapshot amendment through the public API - a reported manual TC-ID is included in a run by a maintainer; summary, run and outcome follow the amended universe, the snapshot total is kept, the history records who and why; repeats are 409 and unreported TC-IDs 400
+  - id: BE-E2E-013
+    description: retries through the public API - Surefire flaky and rerun attempts are stored with their attempt and details; the last attempt is the logical result in run outcome, summary (flaky) and results (retried flag)

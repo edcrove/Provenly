@@ -4,7 +4,7 @@ import { Link } from 'react-router'
 import { useTestCaseHistory } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
-import { StatusBadge } from '@/components/StatusBadge'
+import { AttemptBadge, StatusBadge } from '@/components/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime, formatDuration, shortCommit } from '@/lib/format'
@@ -39,6 +39,7 @@ export function TestCaseHistory({ testCaseId }: { testCaseId: number }) {
                     <TableCell>
                       <span className="flex items-center gap-2">
                         <StatusBadge status={result.status} />
+                        <AttemptBadge attempt={result.attempt} retried={result.retried} />
                         {result.correlation === 'deprecated' ? (
                           <Badge
                             variant="outline"

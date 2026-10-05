@@ -29,9 +29,10 @@ type Querier interface {
 	// The page is chosen first (index on test_case_id, id DESC) and each run's counts
 	// are computed once, not for every row skipped by OFFSET or repeated per result.
 	ListResultsForTestCase(ctx context.Context, arg ListResultsForTestCaseParams) ([]ListResultsForTestCaseRow, error)
-	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]TestResult, error)
-	// Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status) of
-	// the given runs, in one read.
+	// retried: a later attempt of the same test exists in the run, so this one is not its logical result.
+	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]ListRunResultsRow, error)
+	// Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status, the
+	// test they belong to and their attempt) of the given runs, in one read.
 	ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]ListSummaryInputsRow, error)
 	// The page is chosen first: the per-run counts are only computed for its rows,
 	// not for every row skipped by OFFSET.

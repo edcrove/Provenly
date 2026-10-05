@@ -338,6 +338,17 @@ test('UI flows', async ({ page }) => {
   await outsideItem.getByRole('button', { name: 'Include in this run' }).click()
   await expect(page.getByTestId('amendments')).toBeVisible()
   await shot(page, 'test-run-amended')
+  // Retries (prototype feature 7): a test that failed and then passed on a retry is flaky; every attempt is kept.
+  const retryParams = new URLSearchParams({ project: 'CHK', provider: 'github', runId: '5152', runAttempt: '1', pipeline: 'checkout', branch: 'main', commit: '4b1d2c3e9c' })
+  const retryXml = junit(
+    `<testcase name="pay visa" classname="web" time="2.104"><flakyFailure message="Timed out waiting for the 3-D Secure frame"><stackTrace>TimeoutError: frame not attached\n    at checkout.spec.ts:88</stackTrace></flakyFailure><properties><property name="tc-id" value="CHK-1"/></properties></testcase>`,
+    tc('refund', 'CHK-2'),
+  )
+  const retryRun = await request.post(`${api}/ingestion/junit?${retryParams}`, { headers: { 'Content-Type': 'application/xml' }, data: retryXml })
+  expect(retryRun.status()).toBe(201)
+  await page.goto(`/test-runs/${((await retryRun.json()) as { testRun: { id: number } }).testRun.id}`)
+  await expect(page.getByTestId('flaky-badge')).toBeVisible()
+  await shot(page, 'test-run-flaky')
   await page.getByRole('button', { name: 'Sign out' }).click()
   await expect(page).toHaveURL(/\/login$/)
   await page.getByLabel('Username').fill('carla')

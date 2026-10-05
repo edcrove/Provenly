@@ -29,6 +29,7 @@ describe('FE-INT-008 test run list', () => {
           skipped: 0,
           untested: 0,
           passRate: 100,
+          flaky: 0,
         },
       }),
       testRun({
@@ -44,6 +45,7 @@ describe('FE-INT-008 test run list', () => {
           skipped: 0,
           untested: 0,
           passRate: 0,
+          flaky: 0,
         },
       }),
     ]
@@ -174,6 +176,7 @@ describe('FE-INT-009 test run detail and summary', () => {
           skipped: 0,
           untested: 0,
           passRate: 0,
+          flaky: 0,
         },
       }),
     ]
@@ -214,8 +217,8 @@ describe('FE-INT-009 test run detail and summary', () => {
     db.summaries[7] = summary({
       counts: { untested: 0, passed: 2, failed: 0, error: 0, skipped: 0 },
       testCases: [
-        { testCaseId: 153, testCaseKey: 'TC-153', status: 'passed', resultCount: 1 },
-        { testCaseId: 154, testCaseKey: 'TC-154', status: 'passed', resultCount: 1 },
+        { testCaseId: 153, testCaseKey: 'TC-153', status: 'passed', resultCount: 1, flaky: false },
+        { testCaseId: 154, testCaseKey: 'TC-154', status: 'passed', resultCount: 1, flaky: false },
       ],
     })
     renderRoute('/test-runs/7')

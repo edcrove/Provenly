@@ -2090,8 +2090,13 @@ components:
       type: object
       additionalProperties: false
       description: Test outcome of a run, from the same computation as its summary.
-      required: [verdict, executed, passed, failed, error, skipped, untested, passRate]
+      required: [verdict, executed, passed, failed, error, skipped, untested, passRate, flaky]
       properties:
+        flaky:
+          type: integer
+          format: int32
+          minimum: 0
+          description: TC-IDs that passed only on a retry (MVP D1); they count as passed.
         verdict:
           $ref: "#/components/schemas/RunVerdict"
         executed:
@@ -2228,7 +2233,18 @@ components:
         - errorMessage
         - errorDetails
         - createdAt
+        - attempt
+        - retried
       properties:
+        attempt:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 100
+          description: Which attempt of its test this result was (1 = first). Read from Surefire flaky/rerun elements or an `attempt`/`retry` testcase property.
+        retried:
+          type: boolean
+          description: A later attempt of the same test exists in the run, so this result is not the test's logical result.
         id:
           type: integer
           format: int64
@@ -2390,8 +2406,11 @@ components:
     TestCaseOutcome:
       type: object
       additionalProperties: false
-      required: [testCaseId, testCaseKey, status, resultCount]
+      required: [testCaseId, testCaseKey, status, resultCount, flaky]
       properties:
+        flaky:
+          type: boolean
+          description: One of its tests passed on a retry after failed attempts (MVP D1).
         testCaseId:
           type: integer
           format: int64
@@ -2481,8 +2500,14 @@ components:
         - outsideUniverseTestCaseIds
         - testCases
         - snapshotTotal
+        - flaky
         - amendedTestCaseIds
       properties:
+        flaky:
+          type: integer
+          format: int32
+          minimum: 0
+          description: TC-IDs of the universe that passed only on a retry (MVP D1).
         snapshotTotal:
           type: integer
           format: int32

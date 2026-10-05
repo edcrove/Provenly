@@ -85,6 +85,12 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
   `charset` overrides the XML declaration; compressed bodies are a 415; every parameter error is listed at once). `201` creates the run, `200` is an idempotent
   replay (nothing re-processed).
 
+## Retries (MVP D1)
+
+Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its
+suite + class + name in the run; its highest attempt is its logical result (flaky when it passed after a failed or
+errored attempt). The summary aggregates logical results per TC-ID with failed > error > skipped > passed.
+
 ## JUnit → TC-ID extraction
 
 A run belongs to the project named by `?project=<KEY>` (default `TC`); numbers are resolved inside that project.

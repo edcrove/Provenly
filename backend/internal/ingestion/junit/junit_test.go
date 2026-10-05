@@ -2,6 +2,7 @@ package junit
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -34,7 +35,7 @@ func TestParseStatusesAndFields(t *testing.T) {
 	require.Len(t, rep.Results, 5)
 
 	assert.Equal(t, Result{Index: 0, TestName: "passes", ClassName: "pkg.Auth", SuiteName: "auth", Status: Passed, DurationMs: ms(1235),
-		Ref: TCRef{Kind: RefFound, Source: SourceProperty, Raw: "153", ID: 153}}, rep.Results[0])
+		Ref: TCRef{Kind: RefFound, Source: SourceProperty, Raw: "153", ID: 153}, Attempt: 1}, rep.Results[0])
 	assert.Equal(t, Failed, rep.Results[1].Status)
 	assert.Equal(t, "expected 1", rep.Results[1].ErrorMessage)
 	assert.Equal(t, "trace", rep.Results[1].ErrorDetails)
@@ -150,11 +151,49 @@ func TestParseRealWorldVariants(t *testing.T) {
 		assert.Equal(t, "ns TC-1", one(t, `<j:testsuite xmlns:j="urn:x" name="s"><j:testcase name="ns TC-1"/></j:testsuite>`).TestName)
 	})
 	t.Run("surefire flaky and rerun", func(t *testing.T) {
-		assert.Equal(t, Passed, one(t, `<testsuite name="s"><testcase name="f"><flakyFailure message="first try"/></testcase></testsuite>`).Status,
-			"a pass after failures is a pass (decision D1)")
-		r := one(t, `<testsuite name="s"><testcase name="r"><rerunFailure message="r1"/><failure message="final"/></testcase></testsuite>`)
-		assert.Equal(t, Failed, r.Status)
-		assert.Equal(t, "final", r.ErrorMessage)
+		rep, err := Parse(strings.NewReader(`<testsuite name="s">
+<testcase name="f" time="2"><flakyFailure message="first try"><stackTrace>at a</stackTrace></flakyFailure><flakyError message="second try"/></testcase>
+<testcase name="r"><failure message="first">t1</failure><rerunFailure message="r1"/><rerunError message="r2"/></testcase>
+</testsuite>`))
+		require.NoError(t, err)
+		var got []string
+		for _, r := range rep.Results {
+			got = append(got, fmt.Sprintf("%s#%d %s %s %s", r.TestName, r.Attempt, r.Status, r.ErrorMessage, r.ErrorDetails))
+		}
+		assert.Equal(t, []string{
+			"f#1 failed first try at a", "f#2 error second try ", "f#3 passed  ",
+			"r#1 failed first t1", "r#2 failed r1 ", "r#3 error r2 ",
+		}, got, "every attempt is kept; the last one is the logical result (decision D1)")
+		assert.Nil(t, rep.Results[0].DurationMs, "the reported time belongs to the final attempt")
+		assert.Equal(t, int64(2000), *rep.Results[2].DurationMs)
+		assert.Equal(t, 6, rep.Received)
+	})
+	t.Run("attempt and retry properties", func(t *testing.T) {
+		attempt := func(props string) (int, []CaseError) {
+			rep, err := Parse(strings.NewReader(`<testsuite name="s"><testcase name="a"><properties>` + props + `</properties></testcase></testsuite>`))
+			require.NoError(t, err)
+			return rep.Results[0].Attempt, rep.Errors
+		}
+		for props, want := range map[string]int{
+			``: 1, `<property name="attempt" value="2"/>`: 2, `<property name="Retry" value=" 0 "/>`: 1, `<property name="retry" value="3"/>`: 4,
+		} {
+			got, errs := attempt(props)
+			assert.Equal(t, want, got, props)
+			assert.Empty(t, errs, props)
+		}
+		for _, bad := range []string{`<property name="attempt" value="0"/>`, `<property name="attempt" value="x"/>`,
+			`<property name="retry" value="-1"/>`, `<property name="attempt" value="101"/>`} {
+			got, errs := attempt(bad)
+			assert.Equal(t, 1, got, bad)
+			require.Len(t, errs, 1, bad)
+			assert.Contains(t, errs[0].Message, "not a valid attempt", bad)
+		}
+		rep, err := Parse(strings.NewReader(`<testsuite name="s"><testcase name="many"><properties><property name="attempt" value="99"/></properties>` +
+			strings.Repeat(`<rerunFailure message="again"/>`, 3) + `<failure message="x"/></testcase></testsuite>`))
+		require.NoError(t, err)
+		assert.Len(t, rep.Results, 2, "attempts past the limit are dropped, oldest first")
+		assert.Equal(t, []int{99, 100}, []int{rep.Results[0].Attempt, rep.Results[1].Attempt})
+		assert.Contains(t, rep.Errors[0].Message, "more than 100 attempts")
 	})
 	t.Run("TC-ID only in classname is missing", func(t *testing.T) {
 		assert.Equal(t, RefMissing, one(t, `<testsuite name="s"><testcase classname="TC-1Suite" name="no id"/></testsuite>`).Ref.Kind)

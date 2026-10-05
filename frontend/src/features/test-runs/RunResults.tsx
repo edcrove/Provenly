@@ -5,7 +5,7 @@ import { Link, useSearchParams } from 'react-router'
 import { useTestRunResults } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
-import { CorrelationBadge, StatusBadge } from '@/components/StatusBadge'
+import { AttemptBadge, CorrelationBadge, StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -111,7 +111,10 @@ export function RunResults({ testRunId }: { testRunId: number }) {
                       </TableCell>
                       <TableCell>{r.testName}</TableCell>
                       <TableCell>
-                        <StatusBadge status={r.status} />
+                        <span className="flex flex-wrap items-center gap-1">
+                          <StatusBadge status={r.status} />
+                          <AttemptBadge attempt={r.attempt} retried={r.retried} />
+                        </span>
                       </TableCell>
                       <TableCell>{formatDuration(r.durationMs)}</TableCell>
                       <TableCell className="max-w-xs">

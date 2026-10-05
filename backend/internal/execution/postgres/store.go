@@ -102,7 +102,7 @@ func toResult(r executiondb.TestResult) execution.TestResult {
 		ID: r.ID, TestRunID: r.TestRunID, TestCaseID: int8Ptr(r.TestCaseID), RequestedTestCaseID: textPtr(r.RequestedTestCaseID),
 		Correlation: execution.Correlation(r.Correlation), TestName: r.TestName, ClassName: r.ClassName, SuiteName: r.SuiteName,
 		Status: execution.ResultStatus(r.Status), DurationMs: int8Ptr(r.DurationMs), ErrorMessage: r.ErrorMessage,
-		ErrorDetails: r.ErrorDetails, CreatedAt: r.CreatedAt.Time,
+		ErrorDetails: r.ErrorDetails, CreatedAt: r.CreatedAt.Time, Attempt: r.Attempt,
 	}
 }
 
@@ -140,7 +140,7 @@ func (s *Store) InsertTestResults(ctx context.Context, runID int64, results []ex
 		row := executiondb.InsertTestResultsParams{
 			TestRunID: runID, Correlation: string(r.Correlation), TestName: r.TestName, ClassName: r.ClassName,
 			SuiteName: r.SuiteName, Status: string(r.Status),
-			ErrorMessage: r.ErrorMessage, ErrorDetails: r.ErrorDetails,
+			ErrorMessage: r.ErrorMessage, ErrorDetails: r.ErrorDetails, Attempt: max(r.Attempt, 1),
 		}
 		if r.TestCaseID != nil {
 			row.TestCaseID = pgtype.Int8{Int64: *r.TestCaseID, Valid: true}
@@ -236,7 +236,8 @@ func (s *Store) ListRunResults(ctx context.Context, runID int64, f execution.Res
 	}
 	out := make([]execution.TestResult, len(rows))
 	for i, r := range rows {
-		out[i] = toResult(r)
+		out[i] = toResult(r.TestResult)
+		out[i].Retried = r.Retried
 	}
 	return out, nil
 }
@@ -259,7 +260,9 @@ func (s *Store) ListSummaryInputs(ctx context.Context, runIDs []int64) (map[int6
 		in := out[r.TestRunID]
 		switch r.Kind {
 		case "result":
-			in.Valid = append(in.Valid, execution.ValidResult{TestCaseID: r.TestCaseID, Status: execution.ResultStatus(r.Status.String)})
+			in.Valid = append(in.Valid, execution.ValidResult{
+				TestCaseID: r.TestCaseID, Status: execution.ResultStatus(r.Status.String), Execution: r.Execution, Attempt: r.Attempt,
+			})
 		case "amended":
 			in.Amended = append(in.Amended, r.TestCaseID)
 		default:
@@ -294,7 +297,7 @@ func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, li
 	out := make([]execution.HistoryEntry, len(rows))
 	for i, r := range rows {
 		out[i] = execution.HistoryEntry{
-			Result: toResult(r.TestResult),
+			Result: func() execution.TestResult { res := toResult(r.TestResult); res.Retried = r.Retried; return res }(),
 			Run: toRun(runRow{
 				TestRun: executiondb.TestRun{
 					ID: r.TestResult.TestRunID, ProjectID: r.RunProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,

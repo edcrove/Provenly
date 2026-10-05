@@ -9,6 +9,7 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 | `catalog` (Test Catalog) | `test_cases`, `test_steps` | `catalog.Service` | — |
 | `execution` (TestRun/Execution) | `test_runs`, `test_run_expected_cases`, `test_results` | `execution.Service` | `catalog` only through `TestCaseChecker` (404 on history) |
 | `ingestion` | none | `ingestion.Service` | `catalog` (`ExpectedUniverse`, `Statuses`), `execution` (`RecordRun`, `Diagnostics`) |
+| `audit` | `audit_events` (append-only) | `audit.Service`, `audit.Wrap` (router) | `identity` (who called, admin check) |
 | `integrations` | `webhooks`, `webhook_deliveries`, `github_connections` | `integrations.Service` | `catalog` (`ProjectByKey`, `ProjectByID`, `ImportIssues`), `identity` (access); hears completed runs from `ingestion` through `RunNotifier` |
 
 - A module never reads another module's tables and there are **no cross-module foreign keys**: execution stores
@@ -192,6 +193,14 @@ refuses anything else. Secrets Provenly only verifies (passwords, API keys) stay
 no use cases: each tool is a GET on the application's own router (`app.NewHandler` binds it after registering the
 routes) with the caller's `Authorization`/`Cookie`, so authorization, validation and JSON shapes are the REST ones.
 Path arguments must be key-shaped (no `/` or dot segments) so a tool cannot address another route.
+
+## Audit log (prototype feature 20)
+
+`internal/app` registers the session and API key routes through `audit.Wrap`, which wraps each non-GET handler
+*inside* authentication (identity's router wraps it in turn), so the caller is in the context when the handler
+returns. A 2xx answer writes one `audit_events` row (actor, method + route pattern, path, project key, status) after
+the response; the write never fails the request. MCP and live events are skipped. A trigger makes the table
+append-only.
 
 ## Retries (MVP D1)
 

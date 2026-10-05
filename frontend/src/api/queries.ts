@@ -953,3 +953,17 @@ export function useGitHubMutations(projectKey: string) {
     }),
   }
 }
+
+export interface AuditFilter {
+  project?: string
+  actor?: string
+}
+
+export function useAuditEvents(filter: AuditFilter, page: number) {
+  const key = ['audit', filter.project ?? '', filter.actor ?? '', page]
+  return useQuery({
+    queryKey: key,
+    placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
+    queryFn: async () => unwrap(await api.GET('/api/v1/audit', { params: { query: { ...filter, page } } })),
+  })
+}

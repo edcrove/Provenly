@@ -51,6 +51,7 @@ tags:
   - name: insights
   - name: integrations
   - name: agents
+  - name: audit
   - name: ingestion
 paths:
   /healthz:
@@ -1091,6 +1092,49 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/audit:
+    get:
+      tags: [audit]
+      operationId: listAuditEvents
+      summary: The audit log, newest first - every authenticated change made through the API (administrators)
+      description: >-
+        One event per successful POST, PUT, PATCH or DELETE: who (a username, or an API key by prefix and name),
+        the operation (method and route), the request path and the project it addressed. Request bodies are never
+        recorded. MCP calls (reads) and live run events are not audited.
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: project
+          in: query
+          required: false
+          description: Only events that addressed this project.
+          schema:
+            type: string
+            pattern: "^[A-Z][A-Z0-9]{1,9}$"
+        - name: actor
+          in: query
+          required: false
+          description: Only events of this actor (a username, exactly as listed).
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+      responses:
+        "200":
+          description: Page of events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEventPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -4239,6 +4283,45 @@ components:
           items:
             type: integer
             format: int64
+
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      required: [id, occurredAt, actor, action, path, project, status]
+      properties:
+        id:
+          type: integer
+          format: int64
+        occurredAt:
+          type: string
+          format: date-time
+        actor:
+          type: string
+          example: ana
+        action:
+          type: string
+          description: Method and route of the operation.
+          example: PATCH /api/v1/test-cases/{testCaseId}
+        path:
+          type: string
+          example: /api/v1/test-cases/153
+        project:
+          type: string
+          nullable: true
+          description: The project key the request addressed (path or ?project=); null when it named none.
+        status:
+          type: integer
+
+    AuditEventPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AuditEvent"
 
     JsonRpcMessage:
       type: object

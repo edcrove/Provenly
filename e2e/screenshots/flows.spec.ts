@@ -514,5 +514,9 @@ test('UI flows', async ({ page }) => {
   await expect(page.getByTestId('github-connection')).toContainText('acme/checkout')
   await expect(page.getByTestId(`webhook-${hook.webhook.id}`)).toContainText('ping:')
   await shot(page, 'project-integrations')
+  // Audit log (prototype feature 20): every change above, by user or API key.
+  await page.goto('/audit?project=CHK')
+  await expect(page.locator('[data-testid^="audit-"]').first()).toBeVisible()
+  await shot(page, 'audit-log')
   await page.getByLabel('Current project').selectOption('')
 })

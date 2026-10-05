@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/edcrove/provenly/backend/internal/audit"
+	auditpg "github.com/edcrove/provenly/backend/internal/audit/postgres"
 	"github.com/edcrove/provenly/backend/internal/catalog"
 	catalogpg "github.com/edcrove/provenly/backend/internal/catalog/postgres"
 	"github.com/edcrove/provenly/backend/internal/execution"
@@ -194,6 +196,10 @@ func TestPersistenceFailures(t *testing.T) {
 			"execution.ListResultsForTestCase":  func() error { _, err := exe.ListResultsForTestCase(ctx, 1, 10, 0); return err },
 			"execution.CountResultsForTestCase": func() error { _, err := exe.CountResultsForTestCase(ctx, 1); return err },
 		}
+		aud := auditpg.NewStore(pool)
+		calls["audit.Insert"] = func() error { return aud.Insert(ctx, audit.Event{}) }
+		calls["audit.List"] = func() error { _, err := aud.List(ctx, audit.Filter{}, 10, 0); return err }
+		calls["audit.Count"] = func() error { _, err := aud.Count(ctx, audit.Filter{}); return err }
 		itg := integrationspg.NewStore(pool)
 		for name, call := range map[string]func() error{
 			"integrations.CreateWebhook":   func() error { _, err := itg.CreateWebhook(ctx, integrations.Webhook{}); return err },

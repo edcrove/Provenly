@@ -642,6 +642,15 @@ def main():
     st, body = mcp({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_test_case", "arguments": {"testCaseId": a}}})
     check("mcp reads a test case", body.get("result", {}).get("structuredContent", {}).get("key") if isinstance(body, dict) else st, a_key)
 
+    # Audit (prototype feature 20): filters are validated, the sweep's own changes are listed, no body is recorded.
+    for q, exp in [("project=", 400), ("project=pr1", 400), ("project=" + "P" * 11, 400), ("actor=", 400), ("actor=" + "a" * 201, 400),
+                   ("page=0", 400), ("pageSize=101", 400), ("page=21474838&pageSize=100", 400), ("actor=a%00b", 400), ("actor=%ff", 400),
+                   ("actor=nobody&x=1", 200), (f"project={key}&pageSize=1&pageSize=5", 200)]:
+        check(f"audit ?{q}", call(base, "GET", f"/audit?{q}")[0], exp)
+    st, aud = call(base, "GET", f"/audit?project={key}&pageSize=100")
+    check("the sweep's project changes are audited", int(isinstance(aud, dict) and aud.get("totalItems", 0) > 0), 1)
+    check("no secret in the audit log", int("ghp_probe_secret" not in json.dumps(aud)), 1)
+
     # Tracing (prototype feature 17): every response through the proxy names its trace; a caller's traceparent is
     # continued; malformed traceparents are ignored (a new trace), never an error.
     def trace_of(path, traceparent=None):

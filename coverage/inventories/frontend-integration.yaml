@@ -150,3 +150,6 @@ targets:
   - id: FE-INT-045
     description: the account page shows how to connect an MCP client (Claude Code) as the signed-in user - sign in for a session token, then register the endpoint with it
     surfaces: [src/features/auth/AccountPage.tsx]
+  - id: FE-INT-046
+    description: audit log - an administrator reads who changed what (users and API keys, route, path, project), pages, filters by project (normalized) and actor and sees an empty result; other users have no Audit link and are refused
+    surfaces: [src/features/audit/AuditPage.tsx, src/app/Layout.tsx]

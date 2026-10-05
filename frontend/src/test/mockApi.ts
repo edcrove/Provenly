@@ -3,6 +3,7 @@ import { http, HttpResponse, type JsonBodyType } from 'msw'
 import type {
   Amendment,
   ApiKey,
+  AuditEvent,
   Dimension,
   GitHubConnection,
   Webhook,
@@ -59,6 +60,8 @@ export interface MockDb {
   deliveries: WebhookDelivery[]
   /** GitHub connections by project id; repository acme/down answers 502 on sync, an empty tokenHint 409. */
   github: (GitHubConnection & { projectId: number })[]
+  /** Audit events, oldest first (listed newest first). */
+  audit: AuditEvent[]
   /** Classification dimensions by project id. */
   dimensions: (Dimension & { projectId: number })[]
   /** The signed-in user's id (the session cookie), or null when signed out. */
@@ -95,6 +98,7 @@ export function seed(): MockDb {
     issues: [],
     webhooks: [],
     deliveries: [],
+    audit: [],
     github: [],
     flaky: {},
     live: {},
@@ -1252,6 +1256,21 @@ export const handlers = [
       if (k.revokedAt) return problem(409, 'conflict', `API key ${id} is already revoked`)
       Object.assign(k, { status: 'revoked', revokedAt: now() })
       return respond(withoutProject(k))
+    }),
+  ),
+  http.get(
+    `${BASE}/audit`,
+    guard(({ request }) => {
+      const url = new URL(request.url)
+      const project = url.searchParams.get('project')
+      const actor = url.searchParams.get('actor')
+      if (project !== null && !KEY.test(project)) return validation('project', 'must be a project key')
+      if (actor === '') return validation('actor', 'must not be empty')
+      if (!currentUser().isAdmin) return forbidden()
+      const items = db.audit
+        .filter((e) => (project === null || e.project === project) && (actor === null || e.actor === actor))
+        .reverse()
+      return respond(pageOf(url, items))
     }),
   ),
   http.get(

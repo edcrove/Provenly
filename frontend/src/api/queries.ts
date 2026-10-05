@@ -8,7 +8,7 @@ import {
 import { useRef } from 'react'
 
 import { previousPage } from '@/lib/paging'
-import { unwrap } from '@/lib/problem'
+import { ApiError, unwrap } from '@/lib/problem'
 import type { MemberRole } from '@/lib/roles'
 import type { Correlation, ResultStatus } from '@/lib/status'
 
@@ -30,6 +30,8 @@ import {
   type UpdateDimensionRequest,
   type UpdateProjectRequest,
   type UpdateTestCaseRequest,
+  type UpdateWebhookRequest,
+  type ConnectGitHubRequest,
 } from './client'
 
 const MAX_PAGE = 100
@@ -844,4 +846,112 @@ export function useTestRunParseErrors(id: number, page: number) {
         }),
       ),
   })
+}
+
+const webhooksKey = (projectKey: string) => [...keys.projects, projectKey, 'webhooks'] as const
+
+export function useWebhooks(projectKey: string) {
+  return useQuery({
+    queryKey: webhooksKey(projectKey),
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/projects/{projectKey}/webhooks', { params: { path: { projectKey } } }),
+      ),
+  })
+}
+
+export function useWebhookDeliveries(projectKey: string, webhookId: number, page: number, enabled: boolean) {
+  return useQuery({
+    queryKey: [...webhooksKey(projectKey), webhookId, 'deliveries', page],
+    enabled,
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries', {
+          params: { path: { projectKey, webhookId }, query: { page } },
+        }),
+      ),
+  })
+}
+
+export function useWebhookMutations(projectKey: string) {
+  const qc = useQueryClient()
+  const onSettled = () => qc.invalidateQueries({ queryKey: webhooksKey(projectKey) })
+  return {
+    create: useExclusiveMutation({
+      mutationFn: async (url: string) =>
+        unwrap(
+          await api.POST('/api/v1/projects/{projectKey}/webhooks', {
+            params: { path: { projectKey } },
+            body: { url, events: ['run.completed'] },
+          }),
+        ),
+      onSettled,
+    }),
+    update: useExclusiveMutation({
+      mutationFn: async ({ webhookId, body }: { webhookId: number; body: UpdateWebhookRequest }) =>
+        unwrap(
+          await api.PATCH('/api/v1/projects/{projectKey}/webhooks/{webhookId}', {
+            params: { path: { projectKey, webhookId } },
+            body,
+          }),
+        ),
+      onSettled,
+    }),
+    ping: useExclusiveMutation({
+      mutationFn: async (webhookId: number) =>
+        unwrap(
+          await api.POST('/api/v1/projects/{projectKey}/webhooks/{webhookId}/ping', {
+            params: { path: { projectKey, webhookId } },
+          }),
+        ),
+      onSettled,
+    }),
+  }
+}
+
+const githubKey = (projectKey: string) => [...keys.projects, projectKey, 'github'] as const
+
+/** The project's GitHub connection, or null when it has none. */
+export function useGitHubConnection(projectKey: string) {
+  return useQuery({
+    queryKey: githubKey(projectKey),
+    queryFn: async () => {
+      try {
+        return unwrap(
+          await api.GET('/api/v1/projects/{projectKey}/github', { params: { path: { projectKey } } }),
+        )
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return null
+        throw e
+      }
+    },
+  })
+}
+
+export function useGitHubMutations(projectKey: string) {
+  const qc = useQueryClient()
+  const onSettled = () => qc.invalidateQueries({ queryKey: [...keys.projects, projectKey] })
+  return {
+    connect: useExclusiveMutation({
+      mutationFn: async (body: ConnectGitHubRequest) =>
+        unwrap(
+          await api.PUT('/api/v1/projects/{projectKey}/github', { params: { path: { projectKey } }, body }),
+        ),
+      onSettled,
+    }),
+    disconnect: useExclusiveMutation({
+      mutationFn: async () =>
+        unwrap(
+          await api.DELETE('/api/v1/projects/{projectKey}/github', { params: { path: { projectKey } } }),
+        ),
+      onSettled,
+    }),
+    sync: useExclusiveMutation({
+      mutationFn: async () =>
+        unwrap(
+          await api.POST('/api/v1/projects/{projectKey}/github/sync', { params: { path: { projectKey } } }),
+        ),
+      onSettled,
+    }),
+  }
 }

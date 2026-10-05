@@ -41,7 +41,7 @@ func TestWebhookRoutes(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created))
 	assert.True(t, strings.HasPrefix(created.Secret, "whsec_"))
 	assert.Equal(t, map[string]any{"id": 1.0, "url": "https://hooks.example.com/p", "events": []any{"run.completed"}, "active": true,
-		"createdBy": "maria", "createdAt": "2026-10-05T12:00:00Z", "updatedAt": "2026-10-05T12:00:00Z", "lastDelivery": nil}, created.Webhook)
+		"createdBy": "maria", "createdAt": "2026-10-05T12:00:00Z", "updatedAt": "2026-10-05T12:00:00Z"}, created.Webhook)
 
 	rec = serve(t, f.svc, call{"POST", "/api/v1/projects/SHOP/webhooks/1/ping", ""})
 	assert.Equal(t, http.StatusAccepted, rec.Code)

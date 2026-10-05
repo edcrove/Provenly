@@ -4271,7 +4271,7 @@ components:
     Webhook:
       type: object
       additionalProperties: false
-      required: [id, url, events, active, createdBy, createdAt, updatedAt, lastDelivery]
+      required: [id, url, events, active, createdBy, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -4294,9 +4294,9 @@ components:
           type: string
           format: date-time
         lastDelivery:
+          description: The latest delivery; absent before the first one.
           allOf:
             - $ref: "#/components/schemas/WebhookDelivery"
-          nullable: true
 
     WebhookList:
       type: object

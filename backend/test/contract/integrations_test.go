@@ -41,7 +41,7 @@ func TestIntegrations(t *testing.T) {
 	created := admin.POST(webhooks).WithJSON(map[string]any{"url": hooks.URL + "/p", "events": []string{"run.completed"}}).
 		Expect().Status(http.StatusCreated).JSON().Object()
 	created.Value("secret").String().HasPrefix("whsec_")
-	created.Value("webhook").Object().HasValue("active", true).HasValue("createdBy", "admin").HasValue("lastDelivery", nil)
+	created.Value("webhook").Object().HasValue("active", true).HasValue("createdBy", "admin").NotContainsKey("lastDelivery")
 	id := strconv.FormatInt(int64(created.Value("webhook").Object().Value("id").Number().Raw()), 10)
 	admin.POST(webhooks).WithJSON(map[string]any{"url": "ftp://x", "events": []string{"run.completed"}}).Expect().Status(http.StatusBadRequest)
 	admin.POST(webhooks).WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)

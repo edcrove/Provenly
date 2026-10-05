@@ -1845,6 +1845,7 @@ const anyPath = {
   suiteKey: 'smoke',
   requirementId: 1,
   issueId: 1,
+  webhookId: 1,
 }
 
 /** Without a session every operation that declares 401 answers it (sign-in's own 401 is a wrong password). */
@@ -1870,7 +1871,372 @@ const signedOutScenarios = (): Scenario[] =>
       }
     })
 
+const withWebhook = () => {
+  db.webhooks.push({
+    id: 31,
+    projectId: 1,
+    url: 'https://hooks.example.com/p',
+    events: ['run.completed'],
+    active: true,
+    createdBy: 'admin',
+    createdAt: '2026-10-05T10:00:00Z',
+    updatedAt: '2026-10-05T10:00:00Z',
+  })
+}
+const hook31 = { projectKey: 'TC', webhookId: 31 }
+const hook404 = { projectKey: 'TC', webhookId: 987654 }
+const nope = { projectKey: 'NOPE' }
+const hookBody = { url: 'https://hooks.example.com/p', events: ['run.completed' as const] }
+const withGitHub =
+  (repository = 'acme/shop', tokenHint = '…1234') =>
+  () => {
+    db.github.push({
+      projectId: 1,
+      repository,
+      labels: '',
+      tokenHint,
+      lastSyncedAt: null,
+      lastError: null,
+      updatedAt: '2026-10-05T10:00:00Z',
+    })
+  }
+const ghBody = { repository: 'acme/shop', token: 'ghp_x' }
+const integrationScenarios: Scenario[] = [
+  {
+    op: 'GET /api/v1/projects/{projectKey}/webhooks',
+    status: 200,
+    setup: withWebhook,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/webhooks', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/webhooks',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/webhooks', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/webhooks',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/webhooks', { params: { path: nope } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/webhooks',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/webhooks', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/webhooks',
+    status: 201,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/webhooks', { params: { path: tcKey }, body: hookBody }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/webhooks',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/webhooks', {
+        params: { path: tcKey },
+        body: { ...hookBody, url: 'nope' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/webhooks',
+    status: 403,
+    setup: asViewer,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/webhooks', { params: { path: tcKey }, body: hookBody }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/webhooks',
+    status: 404,
+    call: (c) => c.POST('/api/v1/projects/{projectKey}/webhooks', { params: { path: nope }, body: hookBody }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/webhooks',
+    status: 415,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/webhooks', {
+        params: { path: tcKey },
+        body: hookBody,
+        bodySerializer: JSON.stringify,
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/webhooks',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/webhooks', { params: { path: tcKey }, body: hookBody }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/webhooks/{webhookId}',
+    status: 200,
+    setup: withWebhook,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/webhooks/{webhookId}', {
+        params: { path: hook31 },
+        body: { active: false },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/webhooks/{webhookId}',
+    status: 400,
+    setup: withWebhook,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/webhooks/{webhookId}', { params: { path: hook31 }, body: {} }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/webhooks/{webhookId}',
+    status: 403,
+    setup: () => {
+      withWebhook()
+      asViewer()
+    },
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/webhooks/{webhookId}', {
+        params: { path: hook31 },
+        body: { active: false },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/webhooks/{webhookId}',
+    status: 404,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/webhooks/{webhookId}', {
+        params: { path: hook404 },
+        body: { active: false },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/webhooks/{webhookId}',
+    status: 415,
+    setup: withWebhook,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/webhooks/{webhookId}', {
+        params: { path: hook31 },
+        body: { active: false },
+        bodySerializer: JSON.stringify,
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/webhooks/{webhookId}',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/webhooks/{webhookId}', {
+        params: { path: hook31 },
+        body: { active: false },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/webhooks/{webhookId}/ping',
+    status: 202,
+    setup: withWebhook,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/webhooks/{webhookId}/ping', { params: { path: hook31 } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/webhooks/{webhookId}/ping',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/webhooks/{webhookId}/ping', {
+        params: { path: { projectKey: 'TC', webhookId: 0 } },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/webhooks/{webhookId}/ping',
+    status: 403,
+    setup: () => {
+      withWebhook()
+      asViewer()
+    },
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/webhooks/{webhookId}/ping', { params: { path: hook31 } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/webhooks/{webhookId}/ping',
+    status: 404,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/webhooks/{webhookId}/ping', { params: { path: hook404 } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/webhooks/{webhookId}/ping',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/webhooks/{webhookId}/ping', { params: { path: hook31 } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries',
+    status: 200,
+    setup: withWebhook,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries', {
+        params: { path: hook31, query: { page: 1 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries',
+    status: 400,
+    setup: withWebhook,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries', {
+        params: { path: hook31, query: { page: 0 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries',
+    status: 403,
+    setup: () => {
+      withWebhook()
+      asViewer()
+    },
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries', { params: { path: hook31 } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries',
+    status: 404,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries', { params: { path: hook404 } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries', { params: { path: hook31 } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/github',
+    status: 200,
+    setup: withGitHub(),
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/github', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/github',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/github', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/github',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/github', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/github',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/github', { params: { path: tcKey } }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/github',
+    status: 200,
+    call: (c) => c.PUT('/api/v1/projects/{projectKey}/github', { params: { path: tcKey }, body: ghBody }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/github',
+    status: 400,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/github', {
+        params: { path: tcKey },
+        body: { repository: 'acme/shop' },
+      }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/github',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.PUT('/api/v1/projects/{projectKey}/github', { params: { path: tcKey }, body: ghBody }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/github',
+    status: 404,
+    call: (c) => c.PUT('/api/v1/projects/{projectKey}/github', { params: { path: nope }, body: ghBody }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/github',
+    status: 415,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/github', {
+        params: { path: tcKey },
+        body: ghBody,
+        bodySerializer: JSON.stringify,
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/github',
+    status: 500,
+    setup: fail,
+    call: (c) => c.PUT('/api/v1/projects/{projectKey}/github', { params: { path: tcKey }, body: ghBody }),
+  },
+  {
+    op: 'DELETE /api/v1/projects/{projectKey}/github',
+    status: 204,
+    setup: withGitHub(),
+    call: (c) => c.DELETE('/api/v1/projects/{projectKey}/github', { params: { path: tcKey } }),
+  },
+  {
+    op: 'DELETE /api/v1/projects/{projectKey}/github',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.DELETE('/api/v1/projects/{projectKey}/github', { params: { path: tcKey } }),
+  },
+  {
+    op: 'DELETE /api/v1/projects/{projectKey}/github',
+    status: 404,
+    call: (c) => c.DELETE('/api/v1/projects/{projectKey}/github', { params: { path: tcKey } }),
+  },
+  {
+    op: 'DELETE /api/v1/projects/{projectKey}/github',
+    status: 500,
+    setup: fail,
+    call: (c) => c.DELETE('/api/v1/projects/{projectKey}/github', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/github/sync',
+    status: 200,
+    setup: withGitHub(),
+    call: (c) => c.POST('/api/v1/projects/{projectKey}/github/sync', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/github/sync',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.POST('/api/v1/projects/{projectKey}/github/sync', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/github/sync',
+    status: 404,
+    call: (c) => c.POST('/api/v1/projects/{projectKey}/github/sync', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/github/sync',
+    status: 409,
+    setup: withGitHub('acme/shop', ''),
+    call: (c) => c.POST('/api/v1/projects/{projectKey}/github/sync', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/github/sync',
+    status: 502,
+    setup: withGitHub('acme/down'),
+    call: (c) => c.POST('/api/v1/projects/{projectKey}/github/sync', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/github/sync',
+    status: 500,
+    setup: fail,
+    call: (c) => c.POST('/api/v1/projects/{projectKey}/github/sync', { params: { path: tcKey } }),
+  },
+]
+
 const scenarios: Scenario[] = [
+  ...integrationScenarios,
   ...roleScenarios,
   ...apiKeyScenarios,
   ...staleScenarios,

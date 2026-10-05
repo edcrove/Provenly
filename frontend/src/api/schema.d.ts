@@ -1998,7 +1998,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
-            lastDelivery: components["schemas"]["WebhookDelivery"] | null;
+            /** @description The latest delivery; absent before the first one. */
+            lastDelivery?: components["schemas"]["WebhookDelivery"];
         };
         WebhookList: {
             items: components["schemas"]["Webhook"][];

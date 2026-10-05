@@ -87,7 +87,7 @@ type WebhookDTO struct {
 	CreatedBy    string       `json:"createdBy"`
 	CreatedAt    time.Time    `json:"createdAt"`
 	UpdatedAt    time.Time    `json:"updatedAt"`
-	LastDelivery *DeliveryDTO `json:"lastDelivery"`
+	LastDelivery *DeliveryDTO `json:"lastDelivery,omitempty"`
 }
 
 func webhookDTO(w WebhookView) WebhookDTO {

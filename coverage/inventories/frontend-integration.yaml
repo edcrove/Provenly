@@ -144,3 +144,6 @@ targets:
   - id: FE-INT-043
     description: live runs - a running live run shows provisional progress (finished, running, waiting) and each test case's live state, polls, and when the final report arrives reloads as completed with the reconciliation (mismatch kinds, live and final statuses, unknown TC-IDs); a consistent run lists no mismatches; batch runs have no live panel
     surfaces: [src/features/live/LivePanel.tsx, src/features/test-runs/TestRunDetailPage.tsx]
+  - id: FE-INT-044
+    description: project integrations - a maintainer adds a webhook and sees its signing secret once, pings it, pauses and resumes it, and pages its deliveries (status, attempts, answer); connects GitHub Issues (repository, labels, token shown only as a hint), syncs (created/updated), sees a failed sync's error, changes the repository keeping the token, rotates the token and disconnects; an unreadable token, failed writes and a failed read are reported; members and viewers see no integrations
+    surfaces: [src/features/projects/WebhooksSection.tsx, src/features/projects/GitHubSection.tsx, src/features/projects/ProjectMembersPage.tsx]

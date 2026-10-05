@@ -217,6 +217,7 @@ type InsertTestResultsParams struct {
 	DurationMs          pgtype.Int8
 	ErrorMessage        string
 	ErrorDetails        string
+	Attempt             int32
 }
 
 const insertTestRun = `-- name: InsertTestRun :one
@@ -391,7 +392,10 @@ WITH page AS (
     FROM test_runs r
     WHERE r.id IN (SELECT q.test_run_id FROM test_results q WHERE q.id IN (SELECT id FROM page))
 )
-SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at,
+SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at, t.attempt, EXISTS (
+        SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
+          AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
+    ) AS retried,
     r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
     c.expected_count AS run_expected_count, c.result_count AS run_result_count, c.amendment_count AS run_amendment_count
@@ -410,6 +414,7 @@ type ListResultsForTestCaseParams struct {
 
 type ListResultsForTestCaseRow struct {
 	TestResult        TestResult
+	Retried           bool
 	RunProjectID      int64
 	ExternalRunID     string
 	Provider          string
@@ -452,6 +457,8 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 			&i.TestResult.ErrorMessage,
 			&i.TestResult.ErrorDetails,
 			&i.TestResult.CreatedAt,
+			&i.TestResult.Attempt,
+			&i.Retried,
 			&i.RunProjectID,
 			&i.ExternalRunID,
 			&i.Provider,
@@ -479,11 +486,15 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 }
 
 const listRunResults = `-- name: ListRunResults :many
-SELECT id, test_run_id, test_case_id, requested_test_case_id, correlation, test_name, class_name, suite_name, status, duration_ms, error_message, error_details, created_at FROM test_results
-WHERE test_run_id = $1
-  AND ($2::text IS NULL OR status = $2::text)
-  AND ($3::text IS NULL OR correlation = $3::text)
-ORDER BY id
+SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at, t.attempt, EXISTS (
+    SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
+      AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
+) AS retried
+FROM test_results t
+WHERE t.test_run_id = $1
+  AND ($2::text IS NULL OR t.status = $2::text)
+  AND ($3::text IS NULL OR t.correlation = $3::text)
+ORDER BY t.id
 LIMIT $5 OFFSET $4
 `
 
@@ -495,7 +506,13 @@ type ListRunResultsParams struct {
 	PageLimit   int32
 }
 
-func (q *Queries) ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]TestResult, error) {
+type ListRunResultsRow struct {
+	TestResult TestResult
+	Retried    bool
+}
+
+// retried: a later attempt of the same test exists in the run, so this one is not its logical result.
+func (q *Queries) ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]ListRunResultsRow, error) {
 	rows, err := q.db.Query(ctx, listRunResults,
 		arg.TestRunID,
 		arg.Status,
@@ -507,23 +524,25 @@ func (q *Queries) ListRunResults(ctx context.Context, arg ListRunResultsParams) 
 		return nil, err
 	}
 	defer rows.Close()
-	var items []TestResult
+	var items []ListRunResultsRow
 	for rows.Next() {
-		var i TestResult
+		var i ListRunResultsRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.TestRunID,
-			&i.TestCaseID,
-			&i.RequestedTestCaseID,
-			&i.Correlation,
-			&i.TestName,
-			&i.ClassName,
-			&i.SuiteName,
-			&i.Status,
-			&i.DurationMs,
-			&i.ErrorMessage,
-			&i.ErrorDetails,
-			&i.CreatedAt,
+			&i.TestResult.ID,
+			&i.TestResult.TestRunID,
+			&i.TestResult.TestCaseID,
+			&i.TestResult.RequestedTestCaseID,
+			&i.TestResult.Correlation,
+			&i.TestResult.TestName,
+			&i.TestResult.ClassName,
+			&i.TestResult.SuiteName,
+			&i.TestResult.Status,
+			&i.TestResult.DurationMs,
+			&i.TestResult.ErrorMessage,
+			&i.TestResult.ErrorDetails,
+			&i.TestResult.CreatedAt,
+			&i.TestResult.Attempt,
+			&i.Retried,
 		); err != nil {
 			return nil, err
 		}
@@ -536,13 +555,15 @@ func (q *Queries) ListRunResults(ctx context.Context, arg ListRunResultsParams) 
 }
 
 const listSummaryInputs = `-- name: ListSummaryInputs :many
-SELECT test_run_id, test_case_id, 'expected' AS kind, NULL::text AS status FROM test_run_expected_cases
+SELECT test_run_id, test_case_id, 'expected' AS kind, NULL::text AS status, ''::text AS execution, 0 AS attempt
+FROM test_run_expected_cases
 WHERE test_run_id = ANY($1::bigint[])
 UNION ALL
-SELECT test_run_id, test_case_id, 'amended', NULL FROM test_run_amendments
+SELECT test_run_id, test_case_id, 'amended', NULL, '', 0 FROM test_run_amendments
 WHERE test_run_id = ANY($1::bigint[])
 UNION ALL
-SELECT test_run_id, test_case_id::bigint, 'result', status FROM test_results
+SELECT test_run_id, test_case_id::bigint, 'result', status, suite_name || chr(31) || class_name || chr(31) || test_name, attempt
+FROM test_results
 WHERE test_run_id = ANY($1::bigint[]) AND correlation = 'valid'
 ORDER BY 1, 2
 `
@@ -552,10 +573,12 @@ type ListSummaryInputsRow struct {
 	TestCaseID int64
 	Kind       string
 	Status     pgtype.Text
+	Execution  string
+	Attempt    int32
 }
 
-// Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status) of
-// the given runs, in one read.
+// Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status, the
+// test they belong to and their attempt) of the given runs, in one read.
 func (q *Queries) ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]ListSummaryInputsRow, error) {
 	rows, err := q.db.Query(ctx, listSummaryInputs, testRunIds)
 	if err != nil {
@@ -570,6 +593,8 @@ func (q *Queries) ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]
 			&i.TestCaseID,
 			&i.Kind,
 			&i.Status,
+			&i.Execution,
+			&i.Attempt,
 		); err != nil {
 			return nil, err
 		}

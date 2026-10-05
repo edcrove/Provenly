@@ -280,6 +280,23 @@ def main():
     check("20 concurrent amendments: one recorded", f"{codes.count(201)} recorded, {codes.count(409)} conflicts", "1 recorded, 19 conflicts")
     check("amended run is marked", call(base, "GET", f"/test-runs/{rid}")[1].get("amendmentCount"), 1)
 
+    # Retries (prototype feature 7, D1): attempt/retry properties out of range are kept as first attempts with a
+    # warning; Surefire flaky elements become attempts; a huge rerun list is capped at 100 attempts.
+    def attempts(props, inner=""):
+        doc = f'<testsuite name="s"><testcase name="probe-retry"><properties>{props}</properties>{inner}</testcase></testsuite>'
+        st, body = call(base, "POST", "/ingestion/junit?" + q.format(40 + len(results)), raw=doc.encode(), ctype="application/xml")
+        return st, body
+    for props, warn in [('<property name="attempt" value="0"/>', True), ('<property name="attempt" value="-5"/>', True),
+                        ('<property name="retry" value="99999999999999999999"/>', True), ('<property name="attempt" value="1e2"/>', True),
+                        ('<property name="attempt" value="100"/>', False), ('<property name="retry" value="99"/>', False)]:
+        st, body = attempts(props)
+        check(f"ingest {props[16:50]}", st, 201)
+        check(f"{props[16:50]} warns", int(bool(isinstance(body, dict) and body.get("parseErrors"))), int(warn))
+    st, body = attempts("", '<failure message="x"/>' + '<rerunFailure message="again"/>' * 150)
+    check("150 reruns: capped", (st, body.get("persisted") if isinstance(body, dict) else None) == (201, 100), True)
+    st, body = attempts("", '<flakyFailure message="a"/><flakyError message="b"/>')
+    check("flaky elements are attempts", body.get("persisted") if isinstance(body, dict) else st, 3)
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

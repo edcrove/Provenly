@@ -9,6 +9,7 @@ import { resultStatuses, summaryStatuses } from '@/lib/status'
 /** Snapshot-based summary: counts, % of expected, % of executed and execution %. */
 export function RunSummary({ summary }: { summary: TestRunSummary }) {
   const untested = summary.testCases.filter((c) => c.status === 'untested')
+  const flaky = summary.testCases.filter((c) => c.flaky)
   return (
     <div className="grid gap-4">
       <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
@@ -86,10 +87,23 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
       </Table>
       <p className="text-muted-foreground text-xs">
         Each executed TC-ID counts once with its aggregated status (failed &gt; error &gt; skipped &gt;
-        passed). The expected universe is the snapshot of active automated test cases taken when the run was
-        created
+        passed); a retried test counts with its last attempt. The expected universe is the snapshot of active
+        automated test cases taken when the run was created
         {summary.amendedTestCaseIds.length > 0 ? ', plus the test cases a maintainer included later' : ''}.
       </p>
+      {flaky.length > 0 && (
+        <div className="text-sm" data-testid="flaky-cases">
+          <span className="font-medium">Flaky (passed on a retry): </span>
+          {flaky.map((c, i) => (
+            <span key={c.testCaseId}>
+              {i > 0 && ', '}
+              <Link to={`/test-cases/${c.testCaseId}`} className="font-mono underline">
+                {c.testCaseKey}
+              </Link>
+            </span>
+          ))}
+        </div>
+      )}
       {untested.length > 0 && (
         <div className="text-sm">
           <span className="font-medium">Untested: </span>

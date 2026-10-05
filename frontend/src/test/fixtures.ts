@@ -111,6 +111,7 @@ export function testRun(overrides: Partial<TestRun> = {}): TestRun {
       skipped: 0,
       untested: 1,
       passRate: 0,
+      flaky: 0,
     },
     expectedCount: 2,
     resultCount: 3,
@@ -137,6 +138,8 @@ export function testResult(overrides: Partial<TestResult> = {}): TestResult {
     durationMs: 1200,
     errorMessage: '',
     errorDetails: '',
+    attempt: 1,
+    retried: false,
     createdAt: at,
     ...overrides,
   }
@@ -159,10 +162,11 @@ export function summary(overrides: Partial<TestRunSummary> = {}): TestRunSummary
     executionPercent: 50,
     diagnostics: { missing: 1, malformed: 0, unknown: 0, deprecated: 0, wrongProject: 0, total: 1 },
     outsideUniverse: 0,
+    flaky: 0,
     outsideUniverseTestCaseIds: [],
     testCases: [
-      { testCaseId: 153, testCaseKey: 'TC-153', status: 'failed', resultCount: 2 },
-      { testCaseId: 154, testCaseKey: 'TC-154', status: 'untested', resultCount: 0 },
+      { testCaseId: 153, testCaseKey: 'TC-153', status: 'failed', resultCount: 2, flaky: false },
+      { testCaseId: 154, testCaseKey: 'TC-154', status: 'untested', resultCount: 0, flaky: false },
     ],
     ...overrides,
   }

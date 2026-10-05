@@ -68,6 +68,7 @@ type outcomeDTO struct {
 	Skipped  int32   `json:"skipped"`
 	Untested int32   `json:"untested"`
 	PassRate float64 `json:"passRate"`
+	Flaky    int32   `json:"flaky"`
 }
 
 // RunDTO converts a TestRun to its wire form.
@@ -97,6 +98,8 @@ type TestResultDTO struct {
 	ErrorMessage        string       `json:"errorMessage"`
 	ErrorDetails        string       `json:"errorDetails"`
 	CreatedAt           time.Time    `json:"createdAt"`
+	Attempt             int32        `json:"attempt"`
+	Retried             bool         `json:"retried"`
 }
 
 func resultDTO(r TestResult, keys map[int64]string) TestResultDTO {
@@ -110,6 +113,7 @@ func resultDTO(r TestResult, keys map[int64]string) TestResultDTO {
 		ID: r.ID, TestRunID: r.TestRunID, TestCaseID: r.TestCaseID, TestCaseKey: key, RequestedTestCaseID: r.RequestedTestCaseID,
 		Correlation: r.Correlation, TestName: r.TestName, ClassName: r.ClassName, SuiteName: r.SuiteName, Status: r.Status,
 		DurationMs: r.DurationMs, ErrorMessage: r.ErrorMessage, ErrorDetails: r.ErrorDetails, CreatedAt: r.CreatedAt,
+		Attempt: r.Attempt, Retried: r.Retried,
 	}
 }
 
@@ -182,6 +186,7 @@ type testCaseOutcomeDTO struct {
 	TestCaseKey string        `json:"testCaseKey"`
 	Status      SummaryStatus `json:"status"`
 	ResultCount int32         `json:"resultCount"`
+	Flaky       bool          `json:"flaky"`
 }
 
 type summaryDTO struct {
@@ -194,6 +199,7 @@ type summaryDTO struct {
 	ExecutionPercent   float64                `json:"executionPercent"`
 	Diagnostics        diagnosticCountsDTO    `json:"diagnostics"`
 	OutsideUniverse    int32                  `json:"outsideUniverse"`
+	Flaky              int32                  `json:"flaky"`
 	OutsideUniverseIDs []int64                `json:"outsideUniverseTestCaseIds"`
 	TestCases          []testCaseOutcomeDTO   `json:"testCases"`
 	SnapshotTotal      int32                  `json:"snapshotTotal"`
@@ -203,7 +209,7 @@ type summaryDTO struct {
 func toSummaryDTO(s Summary, keys map[int64]string) summaryDTO {
 	cases := make([]testCaseOutcomeDTO, len(s.TestCases))
 	for i, c := range s.TestCases {
-		cases[i] = testCaseOutcomeDTO{TestCaseID: c.TestCaseID, TestCaseKey: keys[c.TestCaseID], Status: c.Status, ResultCount: c.ResultCount}
+		cases[i] = testCaseOutcomeDTO{TestCaseID: c.TestCaseID, TestCaseKey: keys[c.TestCaseID], Status: c.Status, ResultCount: c.ResultCount, Flaky: c.Flaky}
 	}
 	return summaryDTO{
 		TestRunID: s.TestRunID, ExpectedTotal: s.ExpectedTotal, ExecutedTotal: s.ExecutedTotal,
@@ -213,6 +219,7 @@ func toSummaryDTO(s Summary, keys map[int64]string) summaryDTO {
 		ExecutionPercent:   s.ExecutionPercent,
 		Diagnostics:        diagnosticCountsDTO(s.Diagnostics),
 		OutsideUniverse:    s.OutsideUniverse,
+		Flaky:              s.Flaky,
 		OutsideUniverseIDs: s.OutsideUniverseIDs,
 		TestCases:          cases,
 		SnapshotTotal:      s.SnapshotTotal,

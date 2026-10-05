@@ -937,6 +937,11 @@ export interface components {
         RunVerdict: "passed" | "failed" | "incomplete" | "no_tests";
         /** @description Test outcome of a run, from the same computation as its summary. */
         RunOutcome: {
+            /**
+             * Format: int32
+             * @description TC-IDs that passed only on a retry (MVP D1); they count as passed.
+             */
+            flaky: number;
             verdict: components["schemas"]["RunVerdict"];
             /**
              * Format: int32
@@ -1005,6 +1010,13 @@ export interface components {
          */
         Correlation: "valid" | "missing" | "malformed" | "unknown" | "deprecated" | "wrong_project";
         TestResult: {
+            /**
+             * Format: int32
+             * @description Which attempt of its test this result was (1 = first). Read from Surefire flaky/rerun elements or an `attempt`/`retry` testcase property.
+             */
+            attempt: number;
+            /** @description A later attempt of the same test exists in the run, so this result is not the test's logical result. */
+            retried: boolean;
             /** Format: int64 */
             id: number;
             /** Format: int64 */
@@ -1093,6 +1105,8 @@ export interface components {
             total: number;
         };
         TestCaseOutcome: {
+            /** @description One of its tests passed on a retry after failed attempts (MVP D1). */
+            flaky: boolean;
             /** Format: int64 */
             testCaseId: number;
             /** @example CHK-12 */
@@ -1135,6 +1149,11 @@ export interface components {
          *     them into the universe (`amendedTestCaseIds`, DEC-42).
          */
         TestRunSummary: {
+            /**
+             * Format: int32
+             * @description TC-IDs of the universe that passed only on a retry (MVP D1).
+             */
+            flaky: number;
             /**
              * Format: int32
              * @description Size of the snapshot frozen at creation; `expectedTotal` adds the amendments.

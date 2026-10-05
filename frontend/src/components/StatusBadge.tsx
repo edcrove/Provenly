@@ -51,3 +51,32 @@ export function EditedBadge({ amendments }: { amendments: number }) {
     </Badge>
   )
 }
+
+/** Which attempt of its test a result was (D1); "retried" when a later attempt superseded it. */
+export function AttemptBadge({ attempt, retried }: { attempt: number; retried: boolean }) {
+  if (attempt === 1 && !retried) return null
+  return (
+    <Badge
+      variant="outline"
+      data-testid="attempt-badge"
+      title={
+        retried
+          ? 'A later attempt of this test exists: this is not its logical result'
+          : 'The last attempt of this test'
+      }
+    >
+      attempt {attempt}
+      {retried ? ' · retried' : ''}
+    </Badge>
+  )
+}
+
+/** TC-IDs that passed only on a retry (D1): counted as passed, flagged as flaky. */
+export function FlakyBadge({ count }: { count: number }) {
+  if (count === 0) return null
+  return (
+    <Badge variant="outline" data-testid="flaky-badge" title="Passed only on a retry after failed attempts">
+      {count} flaky
+    </Badge>
+  )
+}

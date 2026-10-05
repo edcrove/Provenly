@@ -96,8 +96,8 @@ test.describe('Backend API journeys', () => {
       diagnostics: { missing: 1, malformed: 1, unknown: 1, deprecated: 1, total: 4 },
     })
     expect(summary.testCases).toEqual([
-      { testCaseId: login.id, testCaseKey: login.key, status: 'failed', resultCount: 4 },
-      { testCaseId: logout.id, testCaseKey: logout.key, status: 'untested', resultCount: 0 },
+      { testCaseId: login.id, testCaseKey: login.key, status: 'failed', resultCount: 4, flaky: false },
+      { testCaseId: logout.id, testCaseKey: logout.key, status: 'untested', resultCount: 0, flaky: false },
     ])
     const parseErrors = await (await request.get(`${apiURL}/api/v1/test-runs/${runId}/parse-errors`)).json()
     expect(parseErrors.items).toMatchObject([

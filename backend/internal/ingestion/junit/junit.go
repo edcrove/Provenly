@@ -77,6 +77,9 @@ type Result struct {
 	ErrorMessage string
 	ErrorDetails string
 	Ref          TCRef
+	// Attempt numbers the executions of one test in the run (1 = first). Retries are read only when the report
+	// says so: Surefire <flakyFailure>/<rerunFailure> elements or an attempt/retry property.
+	Attempt int
 }
 
 // Severity of a CaseError.
@@ -126,6 +129,8 @@ type xmlOutcome struct {
 	Message string `xml:"message,attr"`
 	Type    string `xml:"type,attr"`
 	Text    string `xml:",chardata"`
+	// StackTrace is where Surefire puts the details of flaky and rerun attempts.
+	StackTrace string `xml:"stackTrace"`
 }
 
 type xmlCase struct {
@@ -136,6 +141,11 @@ type xmlCase struct {
 	Failures   []xmlOutcome  `xml:"failure"`
 	Errors     []xmlOutcome  `xml:"error"`
 	Skipped    *xmlOutcome   `xml:"skipped"`
+	// Maven Surefire retries: failed attempts before a pass, and failed reruns after a failure.
+	FlakyFailures []xmlOutcome `xml:"flakyFailure"`
+	FlakyErrors   []xmlOutcome `xml:"flakyError"`
+	RerunFailures []xmlOutcome `xml:"rerunFailure"`
+	RerunErrors   []xmlOutcome `xml:"rerunError"`
 	// Nested elements are not valid JUnit: they are reported, not read.
 	NestedSuites []struct{} `xml:"testsuite"`
 	NestedCases  []struct{} `xml:"testcase"`
@@ -154,6 +164,14 @@ var (
 	// A tc-id property is a bare number or <KEY>-<number> with any project key.
 	propertyValue = regexp.MustCompile(`^(?:([A-Za-z][A-Za-z0-9]{1,9})-)?([0-9]+)$`)
 	numericID     = regexp.MustCompile(`^0*([1-9][0-9]{0,17})$`)
+)
+
+// AttemptProperty (1-based) and RetryProperty (0-based, as Playwright counts) number the attempt of a testcase.
+const (
+	AttemptProperty = "attempt"
+	RetryProperty   = "retry"
+	// MaxAttempts bounds the attempts of one test (a larger number is a broken reporter).
+	MaxAttempts = 100
 )
 
 // DefaultProjectKey is the key the name fallback looks for when none is given.
@@ -358,8 +376,11 @@ func walk(rep *Report, s xmlSuite, parent string) {
 			issues = append(issues, warning(index, res.TestName,
 				fmt.Sprintf("testsuite %q declares a tc-id property, which is ignored: declare it on each testcase", s.Name)))
 		}
+		attempts, attemptIssues := expandAttempts(c, res)
 		rep.Errors = append(rep.Errors, issues...)
-		rep.Results = append(rep.Results, res)
+		rep.Errors = append(rep.Errors, attemptIssues...)
+		rep.Received += len(attempts) - 1
+		rep.Results = append(rep.Results, attempts...)
 	}
 	for _, child := range s.Suites {
 		walk(rep, child, suite)
@@ -439,7 +460,71 @@ func outcomeText(o xmlOutcome) (string, string) {
 	if msg == "" {
 		msg = o.Type
 	}
-	return msg, strings.TrimSpace(o.Text)
+	details := strings.TrimSpace(o.Text)
+	if details == "" {
+		details = strings.TrimSpace(o.StackTrace)
+	}
+	return msg, details
+}
+
+// declaredAttempt reads the attempt/retry property of a testcase (0 when absent).
+func declaredAttempt(props []xmlProperty) (int, error) {
+	for _, p := range props {
+		name := strings.ToLower(strings.TrimSpace(p.Name))
+		if name != AttemptProperty && name != RetryProperty {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(p.Value))
+		if name == RetryProperty {
+			n++
+		}
+		if err != nil || n < 1 || n > MaxAttempts {
+			return 0, fmt.Errorf("%s property %q is not a valid attempt (attempt 1..%d, retry 0..%d); read as the first attempt",
+				name, p.Value, MaxAttempts, MaxAttempts-1)
+		}
+		return n, nil
+	}
+	return 0, nil
+}
+
+// expandAttempts turns one testcase into the attempts it reports (D1): Surefire's flaky elements are failed
+// attempts before the final pass; its rerun elements are failed attempts after the first failure. The last
+// attempt is the test's logical result.
+func expandAttempts(c xmlCase, res Result) ([]Result, []CaseError) {
+	var issues []CaseError
+	first, err := declaredAttempt(c.Properties)
+	if err != nil {
+		issues = append(issues, warning(res.Index, res.TestName, err.Error()))
+	}
+	first = max(first, 1)
+	retried := func(status Status, o xmlOutcome) Result {
+		r := res
+		r.Status, r.DurationMs = status, nil
+		r.ErrorMessage, r.ErrorDetails = outcomeText(o)
+		return r
+	}
+	var out []Result
+	for _, o := range c.FlakyFailures {
+		out = append(out, retried(Failed, o))
+	}
+	for _, o := range c.FlakyErrors {
+		out = append(out, retried(Error, o))
+	}
+	out = append(out, res)
+	for _, o := range c.RerunFailures {
+		out = append(out, retried(Failed, o))
+	}
+	for _, o := range c.RerunErrors {
+		out = append(out, retried(Error, o))
+	}
+	if first+len(out)-1 > MaxAttempts {
+		issues = append(issues, warning(res.Index, res.TestName, fmt.Sprintf("more than %d attempts; only the last %d are kept", MaxAttempts, MaxAttempts)))
+		out = out[len(out)-(MaxAttempts-first+1):]
+	}
+	for i := range out {
+		out[i].Attempt = first + i
+	}
+	return out, issues
 }
 
 // outcomesText keeps every <failure> and <error> of a testcase: the message is

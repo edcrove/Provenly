@@ -244,7 +244,7 @@ func correlate(parsed []junit.Result, key string, entries map[int64]catalog.Inge
 		nr := execution.NewResult{
 			TestName: r.TestName, ClassName: r.ClassName, SuiteName: r.SuiteName,
 			Status: execution.ResultStatus(r.Status), DurationMs: r.DurationMs,
-			ErrorMessage: r.ErrorMessage, ErrorDetails: r.ErrorDetails,
+			ErrorMessage: r.ErrorMessage, ErrorDetails: r.ErrorDetails, Attempt: int32(r.Attempt),
 		}
 		if r.Ref.Raw != "" {
 			raw := r.Ref.Raw

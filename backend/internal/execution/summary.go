@@ -4,6 +4,7 @@ import (
 	"math"
 	"slices"
 	"sort"
+	"strconv"
 )
 
 // SummaryStatus is the aggregated status of a TC-ID within a run.
@@ -55,6 +56,8 @@ type TestCaseOutcome struct {
 	TestCaseID  int64
 	Status      SummaryStatus
 	ResultCount int32
+	// Flaky: one of its tests passed on a retry after failed attempts (D1).
+	Flaky bool
 }
 
 // Verdict is the test outcome of a run, derived from its summary.
@@ -76,13 +79,15 @@ type RunOutcome struct {
 	Verdict                                            Verdict
 	Executed, Passed, Failed, Error, Skipped, Untested int32
 	PassRate                                           float64
+	// Flaky counts the TC-IDs that passed only on a retry.
+	Flaky int32
 }
 
 // Outcome derives the run outcome from the summary.
 func (s Summary) Outcome() RunOutcome {
 	o := RunOutcome{
 		Executed: s.ExecutedTotal, Passed: s.Counts.Passed, Failed: s.Counts.Failed, Error: s.Counts.Error,
-		Skipped: s.Counts.Skipped, Untested: s.Counts.Untested, PassRate: s.PercentOfExecuted.Passed,
+		Skipped: s.Counts.Skipped, Untested: s.Counts.Untested, PassRate: s.PercentOfExecuted.Passed, Flaky: s.Flaky,
 	}
 	switch {
 	case s.ExpectedTotal == 0:
@@ -108,6 +113,8 @@ type Summary struct {
 	ExecutionPercent  float64
 	Diagnostics       DiagnosticCounts
 	OutsideUniverse   int32
+	// Flaky counts the TC-IDs of the universe that passed only on a retry (D1).
+	Flaky int32
 	// OutsideUniverseIDs are the distinct TC-IDs behind OutsideUniverse, ascending.
 	OutsideUniverseIDs []int64
 	TestCases          []TestCaseOutcome
@@ -132,7 +139,7 @@ func percent(part, total int32) float64 {
 // (expected), its valid results and its diagnostic results. Valid results for
 // TC-IDs outside the snapshot are counted in OutsideUniverse and excluded.
 func ComputeSummary(runID int64, expected []int64, valid []ValidResult, diagnostics []Diagnostic) Summary {
-	byCase := make(map[int64][]ResultStatus, len(expected))
+	byCase := make(map[int64][]ValidResult, len(expected))
 	for _, id := range expected {
 		byCase[id] = nil
 	}
@@ -147,15 +154,19 @@ func ComputeSummary(runID int64, expected []int64, valid []ValidResult, diagnost
 			}
 			continue
 		}
-		byCase[r.TestCaseID] = append(byCase[r.TestCaseID], r.Status)
+		byCase[r.TestCaseID] = append(byCase[r.TestCaseID], r)
 	}
 	sort.Slice(s.OutsideUniverseIDs, func(i, j int) bool { return s.OutsideUniverseIDs[i] < s.OutsideUniverseIDs[j] })
 	ids := append([]int64(nil), expected...)
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	s.TestCases = make([]TestCaseOutcome, 0, len(ids))
 	for _, id := range ids {
-		agg := Aggregate(byCase[id])
-		s.TestCases = append(s.TestCases, TestCaseOutcome{TestCaseID: id, Status: agg, ResultCount: int32(len(byCase[id]))})
+		statuses, flaky := logical(byCase[id])
+		agg := Aggregate(statuses)
+		s.TestCases = append(s.TestCases, TestCaseOutcome{TestCaseID: id, Status: agg, ResultCount: int32(len(byCase[id])), Flaky: flaky})
+		if flaky {
+			s.Flaky++
+		}
 		switch agg {
 		case Untested:
 			s.Counts.Untested++
@@ -211,3 +222,43 @@ func Summarize(runID int64, in SummaryInputs, diagnostics []Diagnostic) Summary 
 	slices.Sort(s.AmendedIDs)
 	return s
 }
+
+// logical reduces the results of one TC-ID to the logical result of each of its tests (D1): the last attempt
+// wins, and a test that passed after a failed or errored attempt is flaky. Variants (other tests of the TC-ID,
+// e.g. one per browser) stay separate and are aggregated by the caller.
+func logical(results []ValidResult) ([]ResultStatus, bool) {
+	type test struct {
+		last   ValidResult
+		failed bool // an attempt other than the last failed or errored
+	}
+	var order []string
+	tests := map[string]*test{}
+	for i, r := range results {
+		key := r.Execution
+		if key == "" {
+			key = "#" + strconv.Itoa(i) // an execution of its own
+		}
+		t, ok := tests[key]
+		switch {
+		case !ok:
+			tests[key] = &test{last: r}
+			order = append(order, key)
+			continue
+		case r.Attempt >= t.last.Attempt:
+			t.failed = t.failed || bad(t.last.Status)
+			t.last = r
+		default:
+			t.failed = t.failed || bad(r.Status)
+		}
+	}
+	statuses := make([]ResultStatus, len(order))
+	flaky := false
+	for i, key := range order {
+		t := tests[key]
+		statuses[i] = t.last.Status
+		flaky = flaky || (t.last.Status == Passed && t.failed)
+	}
+	return statuses, flaky
+}
+
+func bad(s ResultStatus) bool { return s == Failed || s == Error }

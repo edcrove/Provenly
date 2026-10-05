@@ -121,3 +121,5 @@ targets:
   - id: FE-INT-035
     description: snapshot amendment - a maintainer includes a reported test case in a run with a reason; the run shows an edited badge (detail and list) and the amendment history; refused amendments are reported; members only see "Mark as automated"
     surfaces: [src/features/test-runs/RunAmendments.tsx]
+  - id: FE-INT-036
+    description: retries - a run shows its flaky count (detail and list) and flaky test cases; results and the test case history mark each attempt and the retried ones; single attempts show no marker

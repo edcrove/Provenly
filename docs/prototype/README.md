@@ -21,7 +21,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 4 | API keys for CI, `?project=` ingestion (secrets at rest moved to 18, see P4-6) | MVP D4, D11 | ✅ | proto/04-api-keys |
 | 5 | Optimistic locking (ETag / If-Match) | MVP D7 | ✅ | proto/05-optimistic-locking |
 | 6 | Snapshot amendment per run | DEC-42 | ✅ | proto/06-snapshot-amendment |
-| 7 | Retries, logical result and flaky | MVP D1 | ⏳ | |
+| 7 | Retries, logical result and flaky | MVP D1 | ✅ | proto/07-retries-flaky |
 | 8 | Compressed (gzip) report ingestion | MVP D6 | ⏳ | |
 | 9 | Taxonomy: tags and custom dimensions | Planning #26 | ⏳ | |
 | 10 | Test suites (static and query) and partial-run scope | Planning #27, MVP D2, Incubator | ⏳ | |
@@ -86,6 +86,12 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P6-4 | Visibility | `amendmentCount` on every run (list, detail, history), an "edited" badge, an "Edited after creation" card with the history, and the summary splits "N in the snapshot + M included later" | DEC-42 asks for a visible mark in list, detail and API |
 | P6-5 | No undo | An amendment cannot be removed | Audit trail; a mistaken inclusion is visible with its reason. Revisit with the audit log (feature 20) if needed |
 | P6-6 | Actor | `authz.Guard.Actor` gives the signed-in user; API keys cannot amend | Amendments are human decisions |
+| P7-1 | Detecting retries | Only when the report says so: Surefire `<flakyFailure>`/`<flakyError>` (failed attempts before a pass) and `<rerunFailure>`/`<rerunError>` (attempts after a failure), or an `attempt` (1-based) / `retry` (0-based, Playwright) testcase property. Repeated names without a signal stay variants | Treating every repeated name as a retry would silently turn failed variants into flaky passes in existing reports |
+| P7-2 | Test identity | A test is its suite + class + name within the run; its attempts are numbered 1..100 | Variants (e.g. per browser) have different names and keep aggregating failed > error > skipped > passed (D1) |
+| P7-3 | Logical result | The highest attempt of each test (the later one on ties); a pass after a failed or errored attempt is `passed` and **flaky** | MVP D1, whatever the cause |
+| P7-4 | Storage | Every attempt is stored as a result with `attempt`; `retried` (a later attempt exists) is derived in queries; results stay immutable | Nothing reported is lost; the history shows every attempt |
+| P7-5 | Exposure | `flaky` in run outcome and summary (TC-IDs), `flaky` per summary test case, `attempt` and `retried` per result; UI: flaky badge (list and detail), flaky test cases, attempt markers in results and history | Flaky passes count as passed but stay visible |
+| P7-6 | Limits | Attempts beyond 100 keep the last 100 with a warning; invalid attempt/retry values are first attempts with a warning; Surefire attempt details come from `<stackTrace>`, their duration is unknown | Broken reporters never fail ingestion |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
 ## What each feature does
@@ -190,4 +196,16 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
   amendments: one recorded); contract scenarios both sides; FE-INT-035; BE-E2E-012; FE-E2E-015; probe amendment sweep.
   Also fixed a flaky API key test (feature 4): tampering a key could leave it unchanged when its last character was
   already the replacement.
+
+### 7. Retries, logical result and flaky (MVP D1)
+
+- **Behavior**: retried tests keep every attempt; the last attempt is the test's result; a test that passed only on a
+  retry counts as passed and is marked flaky (run list, run detail, summary, results, history).
+- **API**: `RunOutcome.flaky`, `TestRunSummary.flaky`, `TestCaseOutcome.flaky`, `TestResult.attempt` and `retried`.
+- **Schema**: migration 00019 (`test_results.attempt`, index per test of a run).
+- **Ingestion**: Surefire flaky/rerun elements and `attempt`/`retry` properties (P7-1); the response's `received` counts
+  attempts.
+- **UI**: flaky badge, "Flaky (passed on a retry)" list, attempt badges ("attempt 1 · retried") (screenshot 47).
+- **Tests**: JUnit parser (attempts, properties, limits), summary (`logical`), handler and DTO tests; BE-INT-044;
+  FE-INT-036; BE-E2E-013; FE-E2E-016; probe retry sweep.
 

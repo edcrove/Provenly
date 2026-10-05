@@ -77,6 +77,7 @@ func (r iteratorForInsertTestResults) Values() ([]interface{}, error) {
 		r.rows[0].DurationMs,
 		r.rows[0].ErrorMessage,
 		r.rows[0].ErrorDetails,
+		r.rows[0].Attempt,
 	}, nil
 }
 
@@ -85,5 +86,5 @@ func (r iteratorForInsertTestResults) Err() error {
 }
 
 func (q *Queries) InsertTestResults(ctx context.Context, arg []InsertTestResultsParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"test_results"}, []string{"test_run_id", "test_case_id", "requested_test_case_id", "correlation", "test_name", "class_name", "suite_name", "status", "duration_ms", "error_message", "error_details"}, &iteratorForInsertTestResults{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"test_results"}, []string{"test_run_id", "test_case_id", "requested_test_case_id", "correlation", "test_name", "class_name", "suite_name", "status", "duration_ms", "error_message", "error_details", "attempt"}, &iteratorForInsertTestResults{rows: arg})
 }

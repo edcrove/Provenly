@@ -9,8 +9,8 @@ INSERT INTO test_run_expected_cases (test_run_id, test_case_id)
 SELECT @test_run_id, unnest(@test_case_ids::bigint[]);
 
 -- name: InsertTestResults :copyfrom
-INSERT INTO test_results (test_run_id, test_case_id, requested_test_case_id, correlation, test_name, class_name, suite_name, status, duration_ms, error_message, error_details)
-VALUES (@test_run_id, @test_case_id, @requested_test_case_id, @correlation, @test_name, @class_name, @suite_name, @status, @duration_ms, @error_message, @error_details);
+INSERT INTO test_results (test_run_id, test_case_id, requested_test_case_id, correlation, test_name, class_name, suite_name, status, duration_ms, error_message, error_details, attempt)
+VALUES (@test_run_id, @test_case_id, @requested_test_case_id, @correlation, @test_name, @class_name, @suite_name, @status, @duration_ms, @error_message, @error_details, @attempt);
 
 -- name: GetTestRun :one
 SELECT r.*,
@@ -42,11 +42,16 @@ SELECT count(*) FROM test_runs
 WHERE sqlc.narg('project_ids')::bigint[] IS NULL OR project_id = ANY(sqlc.narg('project_ids')::bigint[]);
 
 -- name: ListRunResults :many
-SELECT * FROM test_results
-WHERE test_run_id = @test_run_id
-  AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
-  AND (sqlc.narg('correlation')::text IS NULL OR correlation = sqlc.narg('correlation')::text)
-ORDER BY id
+-- retried: a later attempt of the same test exists in the run, so this one is not its logical result.
+SELECT sqlc.embed(t), EXISTS (
+    SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
+      AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
+) AS retried
+FROM test_results t
+WHERE t.test_run_id = @test_run_id
+  AND (sqlc.narg('status')::text IS NULL OR t.status = sqlc.narg('status')::text)
+  AND (sqlc.narg('correlation')::text IS NULL OR t.correlation = sqlc.narg('correlation')::text)
+ORDER BY t.id
 LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountRunResults :one
@@ -56,15 +61,17 @@ WHERE test_run_id = @test_run_id
   AND (sqlc.narg('correlation')::text IS NULL OR correlation = sqlc.narg('correlation')::text);
 
 -- name: ListSummaryInputs :many
--- Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status) of
--- the given runs, in one read.
-SELECT test_run_id, test_case_id, 'expected' AS kind, NULL::text AS status FROM test_run_expected_cases
+-- Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status, the
+-- test they belong to and their attempt) of the given runs, in one read.
+SELECT test_run_id, test_case_id, 'expected' AS kind, NULL::text AS status, ''::text AS execution, 0 AS attempt
+FROM test_run_expected_cases
 WHERE test_run_id = ANY(@test_run_ids::bigint[])
 UNION ALL
-SELECT test_run_id, test_case_id, 'amended', NULL FROM test_run_amendments
+SELECT test_run_id, test_case_id, 'amended', NULL, '', 0 FROM test_run_amendments
 WHERE test_run_id = ANY(@test_run_ids::bigint[])
 UNION ALL
-SELECT test_run_id, test_case_id::bigint, 'result', status FROM test_results
+SELECT test_run_id, test_case_id::bigint, 'result', status, suite_name || chr(31) || class_name || chr(31) || test_name, attempt
+FROM test_results
 WHERE test_run_id = ANY(@test_run_ids::bigint[]) AND correlation = 'valid'
 ORDER BY 1, 2;
 
@@ -87,7 +94,10 @@ WITH page AS (
     FROM test_runs r
     WHERE r.id IN (SELECT q.test_run_id FROM test_results q WHERE q.id IN (SELECT id FROM page))
 )
-SELECT sqlc.embed(t),
+SELECT sqlc.embed(t), EXISTS (
+        SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
+          AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
+    ) AS retried,
     r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
     c.expected_count AS run_expected_count, c.result_count AS run_result_count, c.amendment_count AS run_amendment_count

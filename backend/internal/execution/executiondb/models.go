@@ -22,6 +22,7 @@ type TestResult struct {
 	ErrorMessage        string
 	ErrorDetails        string
 	CreatedAt           pgtype.Timestamptz
+	Attempt             int32
 }
 
 type TestRun struct {

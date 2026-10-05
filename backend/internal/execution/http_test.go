@@ -41,7 +41,7 @@ func (s *stubAPI) ListRunResults(_ context.Context, _ int64, f ResultFilter, p p
 	return pagination.Result[TestResult]{Items: []TestResult{sampleResult}, Page: p, Total: 1}, s.err
 }
 func (s *stubAPI) Summary(context.Context, int64) (Summary, error) {
-	return ComputeSummary(3, []int64{153, 154}, []ValidResult{{153, Passed}}, []Diagnostic{{Correlation: CorrelationMissing}}), s.err
+	return ComputeSummary(3, []int64{153, 154}, []ValidResult{{TestCaseID: 153, Status: Passed}}, []Diagnostic{{Correlation: CorrelationMissing}}), s.err
 }
 func (s *stubAPI) ListParseErrors(_ context.Context, _ int64, p pagination.Page) (pagination.Result[ParseError], error) {
 	return pagination.Result[ParseError]{Items: []ParseError{{Index: 2, TestName: "t", Message: "m", Persisted: true, Severity: "warning"}}, Page: p, Total: 1}, s.err
@@ -108,7 +108,7 @@ func TestHandlerHappyPaths(t *testing.T) {
 		assert.Contains(t, rec.Body.String(), want, target)
 	}
 	rec := serve(&stubAPI{}, stubCatalog{}, "/api/v1/test-runs/3/summary")
-	assert.Contains(t, rec.Body.String(), `"testCases":[{"testCaseId":153,"testCaseKey":"TC-153","status":"passed","resultCount":1},{"testCaseId":154,"testCaseKey":"CHK-4","status":"untested","resultCount":0}]`)
+	assert.Contains(t, rec.Body.String(), `"testCases":[{"testCaseId":153,"testCaseKey":"TC-153","status":"passed","resultCount":1,"flaky":false},{"testCaseId":154,"testCaseKey":"CHK-4","status":"untested","resultCount":0,"flaky":false}]`)
 	assert.Contains(t, rec.Body.String(), `"diagnostics":{"missing":1,"malformed":0,"unknown":0,"deprecated":0,"wrongProject":0,"total":1}`)
 }
 

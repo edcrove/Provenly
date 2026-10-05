@@ -27,11 +27,11 @@ func TestAggregatePrecedence(t *testing.T) {
 func TestComputeSummary(t *testing.T) {
 	expected := []int64{5, 1, 2, 3, 4}
 	valid := []ValidResult{
-		{1, Passed}, {1, Failed}, // Chrome=PASS + Firefox=FAIL => failed
-		{2, Passed},
-		{3, Error},
-		{4, Skipped},
-		{99, Passed}, {99, Failed}, {98, Passed}, // valid but outside the snapshot
+		{TestCaseID: 1, Status: Passed}, {TestCaseID: 1, Status: Failed}, // Chrome=PASS + Firefox=FAIL => failed
+		{TestCaseID: 2, Status: Passed},
+		{TestCaseID: 3, Status: Error},
+		{TestCaseID: 4, Status: Skipped},
+		{TestCaseID: 99, Status: Passed}, {TestCaseID: 99, Status: Failed}, {TestCaseID: 98, Status: Passed}, // valid but outside the snapshot
 	}
 	diags := []Diagnostic{
 		{Correlation: CorrelationMissing}, {Correlation: CorrelationMalformed},
@@ -50,22 +50,22 @@ func TestComputeSummary(t *testing.T) {
 	assert.Equal(t, int32(3), s.OutsideUniverse)
 	assert.Equal(t, []int64{98, 99}, s.OutsideUniverseIDs)
 	assert.Equal(t, []TestCaseOutcome{
-		{1, "failed", 2}, {2, "passed", 1}, {3, "error", 1}, {4, "skipped", 1}, {5, Untested, 0},
+		{TestCaseID: 1, Status: "failed", ResultCount: 2}, {TestCaseID: 2, Status: "passed", ResultCount: 1}, {TestCaseID: 3, Status: "error", ResultCount: 1}, {TestCaseID: 4, Status: "skipped", ResultCount: 1}, {TestCaseID: 5, Status: Untested, ResultCount: 0},
 	}, s.TestCases)
 }
 
 func TestComputeSummaryRoundingAndEmpty(t *testing.T) {
-	s := ComputeSummary(1, []int64{1, 2, 3}, []ValidResult{{1, Passed}}, nil)
+	s := ComputeSummary(1, []int64{1, 2, 3}, []ValidResult{{TestCaseID: 1, Status: Passed}}, nil)
 	assert.Equal(t, 33.333333, s.PercentOfExpected.Passed)
 	assert.Equal(t, 66.666667, s.PercentOfExpected.Untested)
 	assert.Equal(t, 100.0, s.PercentOfExecuted.Passed)
 	assert.Equal(t, 33.333333, s.ExecutionPercent)
 
-	thirds := ComputeSummary(3, []int64{1, 2, 3}, []ValidResult{{1, Passed}, {2, Failed}, {3, Error}}, nil)
+	thirds := ComputeSummary(3, []int64{1, 2, 3}, []ValidResult{{TestCaseID: 1, Status: Passed}, {TestCaseID: 2, Status: Failed}, {TestCaseID: 3, Status: Error}}, nil)
 	sum := thirds.PercentOfExecuted.Passed + thirds.PercentOfExecuted.Failed + thirds.PercentOfExecuted.Error
 	assert.InDelta(t, 100, sum, 0.00001, "precise values add up to 100 once rounded for display")
 
-	empty := ComputeSummary(2, nil, []ValidResult{{1, Passed}}, nil)
+	empty := ComputeSummary(2, nil, []ValidResult{{TestCaseID: 1, Status: Passed}}, nil)
 	assert.Equal(t, int32(0), empty.ExpectedTotal)
 	assert.Equal(t, 0.0, empty.ExecutionPercent)
 	assert.Equal(t, 0.0, empty.PercentOfExecuted.Passed)
@@ -107,7 +107,34 @@ func TestOutcomeVerdict(t *testing.T) {
 		assert.Equal(t, c.verdict, o.Verdict, c.name)
 		assert.Equal(t, c.passRate, o.PassRate, c.name)
 	}
-	o := ComputeSummary(1, []int64{1, 2, 3, 4, 5}, []ValidResult{{1, Passed}, {2, Failed}, {3, Error}, {4, Skipped}, {9, Failed}}, nil).Outcome()
+	o := ComputeSummary(1, []int64{1, 2, 3, 4, 5}, []ValidResult{{TestCaseID: 1, Status: Passed}, {TestCaseID: 2, Status: Failed}, {TestCaseID: 3, Status: Error}, {TestCaseID: 4, Status: Skipped}, {TestCaseID: 9, Status: Failed}}, nil).Outcome()
 	assert.Equal(t, RunOutcome{Verdict: VerdictFailed, Executed: 4, Passed: 1, Failed: 1, Error: 1, Skipped: 1, Untested: 1, PassRate: 25}, o,
 		"results outside the snapshot do not count")
+}
+
+// D1: the last attempt of each test is its logical result; a pass after failed attempts is passed and flaky;
+// variants (other tests of the TC-ID) still aggregate failed > error > skipped > passed.
+func TestRetriesAndFlaky(t *testing.T) {
+	r := func(tc int64, exec string, attempt int32, st ResultStatus) ValidResult {
+		return ValidResult{TestCaseID: tc, Execution: exec, Attempt: attempt, Status: st}
+	}
+	s := ComputeSummary(1, []int64{1, 2, 3, 4, 5}, []ValidResult{
+		r(1, "login", 1, Failed), r(1, "login", 2, Passed), // flaky pass
+		r(2, "pay", 2, Failed), r(2, "pay", 1, Passed), // attempts out of order: attempt 2 (failed) is last
+		r(3, "chrome", 1, Error), r(3, "chrome", 2, Passed), r(3, "firefox", 1, Failed), // flaky variant, failing variant
+		r(4, "x", 1, Skipped), r(4, "x", 1, Passed), // same attempt twice: the later one wins
+		r(5, "", 1, Passed), r(5, "", 1, Failed), // no execution identity: separate variants
+	}, nil)
+	got := map[int64]TestCaseOutcome{}
+	for _, c := range s.TestCases {
+		got[c.TestCaseID] = c
+	}
+	assert.Equal(t, TestCaseOutcome{TestCaseID: 1, Status: "passed", ResultCount: 2, Flaky: true}, got[1])
+	assert.Equal(t, TestCaseOutcome{TestCaseID: 2, Status: "failed", ResultCount: 2}, got[2])
+	assert.Equal(t, TestCaseOutcome{TestCaseID: 3, Status: "failed", ResultCount: 3, Flaky: true}, got[3])
+	assert.Equal(t, TestCaseOutcome{TestCaseID: 4, Status: "passed", ResultCount: 2}, got[4])
+	assert.Equal(t, TestCaseOutcome{TestCaseID: 5, Status: "failed", ResultCount: 2}, got[5])
+	assert.Equal(t, int32(2), s.Flaky)
+	assert.Equal(t, int32(2), s.Outcome().Flaky)
+	assert.Equal(t, int32(2), s.Counts.Passed)
 }

@@ -161,7 +161,7 @@ func TestProjects(t *testing.T) {
 func TestAuthentication(t *testing.T) {
 	s := fresh(t)
 	e := anon(t, s, 1<<20)
-	params := strings.NewReplacer("{testCaseId}", "1", "{testRunId}", "1", "{stepId}", "1", "{projectKey}", "TC", "{invitationId}", "1", "{username}", "admin")
+	params := strings.NewReplacer("{testCaseId}", "1", "{testRunId}", "1", "{stepId}", "1", "{projectKey}", "TC", "{invitationId}", "1", "{username}", "admin", "{apiKeyId}", "1")
 	protected := 0
 	for path, item := range doc.Paths.Map() {
 		for method, op := range item.Operations() {
@@ -173,7 +173,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 30, protected, "every operation except health, readiness, sign-in, sign-out, accept and ingestion")
+	assert.Equal(t, 34, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -231,6 +231,50 @@ func TestAuthentication(t *testing.T) {
 	anaAPI.POST("/api/v1/auth/password").WithJSON(map[string]any{"currentPassword": "ana's password", "newPassword": "a brand new password"}).
 		Expect().Status(http.StatusOK).JSON().Object().Value("user").Object().HasValue("username", "ana")
 	anaAPI.GET("/api/v1/auth/me").Expect().Status(http.StatusUnauthorized)
+}
+
+// TestAPIKeys: maintainers manage a project's API keys; CI reports with one into that project only,
+// and a revoked key is refused at once.
+func TestAPIKeys(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	e := anon(t, s, 1<<20)
+	admin.POST("/api/v1/projects").WithJSON(map[string]any{"key": "CHK", "name": "Checkout"}).Expect().Status(http.StatusCreated)
+	created := admin.POST("/api/v1/projects/CHK/api-keys").WithJSON(map[string]any{"name": "GitHub Actions"}).
+		Expect().Status(http.StatusCreated).JSON().Object()
+	created.Value("apiKey").Object().HasValue("status", "active").HasValue("lastUsedAt", nil)
+	key := as(e, created.Value("token").String().Raw())
+	admin.POST("/api/v1/projects/CHK/api-keys").WithJSON(map[string]any{"name": " "}).Expect().Status(http.StatusBadRequest)
+	admin.POST("/api/v1/projects/CHK/api-keys").WithText(`{"name":"x"}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.POST("/api/v1/projects/NOPE/api-keys").WithJSON(map[string]any{"name": "x"}).Expect().Status(http.StatusNotFound)
+
+	// The key's runs land in its project by default; another project is invisible to it; it opens nothing else.
+	ingest(key, "1", 1, `<testsuite><testcase name="t"/></testsuite>`).Expect().Status(http.StatusCreated).
+		JSON().Object().Value("testRun").Object().HasValue("projectId", 2)
+	ingest(key, "2", 1, `<testsuite/>`).WithQuery("project", "TC").Expect().Status(http.StatusNotFound)
+	key.GET("/api/v1/test-runs").Expect().Status(http.StatusUnauthorized)
+	// Found by the probe sweep: a key sent as the session cookie used to be accepted.
+	ingest(e, "5", 1, `<testsuite/>`).WithCookie("provenly_session", created.Value("token").String().Raw()).
+		Expect().Status(http.StatusUnauthorized)
+	admin.GET("/api/v1/projects/CHK/api-keys").Expect().Status(http.StatusOK).JSON().Object().
+		Value("items").Array().Value(0).Object().Value("lastUsedAt").String().NotEmpty()
+	admin.GET("/api/v1/projects/CHK/api-keys").WithQuery("page", 0).Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/projects/NOPE/api-keys").Expect().Status(http.StatusNotFound)
+
+	admin.POST("/api/v1/projects/CHK/api-keys/1/revoke").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "revoked")
+	admin.POST("/api/v1/projects/CHK/api-keys/1/revoke").Expect().Status(http.StatusConflict)
+	admin.POST("/api/v1/projects/CHK/api-keys/99/revoke").Expect().Status(http.StatusNotFound)
+	admin.POST("/api/v1/projects/CHK/api-keys/0/revoke").Expect().Status(http.StatusBadRequest)
+	ingest(key, "3", 1, `<testsuite/>`).Expect().Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
+
+	// Only maintainers manage keys; viewers cannot report runs either.
+	inv := admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "CHK", "role": "viewer"}).Expect().Status(http.StatusCreated).JSON().Object()
+	viewer := as(e, e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "vic",
+		"displayName": "Vic", "password": "vic's password"}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
+	viewer.GET("/api/v1/projects/CHK/api-keys").Expect().Status(http.StatusForbidden)
+	viewer.POST("/api/v1/projects/CHK/api-keys").WithJSON(map[string]any{"name": "x"}).Expect().Status(http.StatusForbidden)
+	viewer.POST("/api/v1/projects/CHK/api-keys/1/revoke").Expect().Status(http.StatusForbidden)
+	ingest(viewer, "4", 1, `<testsuite/>`).WithQuery("project", "CHK").Expect().Status(http.StatusForbidden)
 }
 
 // TestRoles: a member sees only their projects (others are 404) and each role unlocks its operations (else 403).
@@ -453,6 +497,9 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.GET("/api/v1/projects/TC/members").Expect())
 	problem(e.PUT("/api/v1/projects/TC/members/admin").WithJSON(map[string]any{"role": "viewer"}).Expect())
 	problem(e.DELETE("/api/v1/projects/TC/members/admin").Expect())
+	problem(e.GET("/api/v1/projects/TC/api-keys").Expect())
+	problem(e.POST("/api/v1/projects/TC/api-keys").WithJSON(map[string]any{"name": "ci"}).Expect())
+	problem(e.POST("/api/v1/projects/TC/api-keys/1/revoke").Expect())
 	problem(e.POST("/api/v1/auth/password").WithJSON(map[string]any{"currentPassword": "x", "newPassword": "a long password"}).Expect())
 	problem(e.GET("/api/v1/users").Expect())
 	problem(e.GET("/api/v1/invitations").Expect())

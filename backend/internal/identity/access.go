@@ -43,6 +43,9 @@ func (s *Service) RoleIn(ctx context.Context, u User, projectID int64) (authz.Ro
 
 // Require implements authz.Guard.
 func (s *Service) Require(ctx context.Context, projectID int64, minRole authz.Role, notFound error) error {
+	if k, ok := APIKeyFrom(ctx); ok {
+		return keyRequire(k, projectID, minRole, notFound)
+	}
 	u, err := signedIn(ctx)
 	if err != nil {
 		return err

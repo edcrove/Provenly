@@ -28,6 +28,10 @@ type API interface {
 	ListMembers(ctx context.Context, projectID int64, page pagination.Page) (pagination.Result[Member], error)
 	SetMember(ctx context.Context, projectID int64, username, role string) (Member, error)
 	RemoveMember(ctx context.Context, projectID int64, username string) error
+	CreateAPIKey(ctx context.Context, projectID int64, name string) (APIKey, string, error)
+	ListAPIKeys(ctx context.Context, projectID int64, page pagination.Page) (pagination.Result[APIKey], error)
+	RevokeAPIKey(ctx context.Context, projectID, id int64) (APIKey, error)
+	AuthenticateKey(ctx context.Context, token string) (APIKey, error)
 }
 
 // Projects resolves project keys (the catalog module's public interface).
@@ -46,6 +50,37 @@ type memberDTO struct {
 
 func toMemberDTO(m Member) memberDTO {
 	return memberDTO{User: ToUserDTO(m.User), Role: m.Role.String(), Since: m.Since}
+}
+
+type apiKeyDTO struct {
+	ID         int64      `json:"id"`
+	Name       string     `json:"name"`
+	Prefix     string     `json:"prefix"`
+	Status     string     `json:"status"`
+	CreatedBy  int64      `json:"createdBy"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	LastUsedAt *time.Time `json:"lastUsedAt"`
+	RevokedAt  *time.Time `json:"revokedAt"`
+}
+
+func toAPIKeyDTO(k APIKey) apiKeyDTO {
+	status := "active"
+	if k.RevokedAt != nil {
+		status = "revoked"
+	}
+	return apiKeyDTO{
+		ID: k.ID, Name: k.Name, Prefix: k.Prefix, Status: status, CreatedBy: k.CreatedBy, CreatedAt: k.CreatedAt,
+		LastUsedAt: k.LastUsedAt, RevokedAt: k.RevokedAt,
+	}
+}
+
+type createdAPIKeyDTO struct {
+	APIKey apiKeyDTO `json:"apiKey"`
+	Token  string    `json:"token"`
+}
+
+type apiKeyRequest struct {
+	Name string `json:"name"`
 }
 
 type memberRequest struct {
@@ -148,29 +183,67 @@ func (h *Handler) RegisterProtected(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/projects/{projectKey}/members", h.listMembers)
 	mux.HandleFunc("PUT /api/v1/projects/{projectKey}/members/{username}", h.setMember)
 	mux.HandleFunc("DELETE /api/v1/projects/{projectKey}/members/{username}", h.removeMember)
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/api-keys", h.listAPIKeys)
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/api-keys", h.createAPIKey)
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke", h.revokeAPIKey)
 }
 
-// protected is a Router whose routes all require a session.
+// protected is a Router whose routes all require a session (or, with keys, an API key).
 type protected struct {
 	next httpx.Router
 	api  API
+	keys bool
 }
 
 // Protect returns a Router that wraps every route it registers with RequireUser.
 func Protect(r httpx.Router, api API) httpx.Router { return protected{next: r, api: api} }
 
+// ProtectWithKeys returns a Router whose routes accept a session or a project API key
+// (Authorization: Bearer pvk_...): the routes CI calls.
+func ProtectWithKeys(r httpx.Router, api API) httpx.Router {
+	return protected{next: r, api: api, keys: true}
+}
+
 func (p protected) HandleFunc(pattern string, h func(http.ResponseWriter, *http.Request)) {
+	if p.keys {
+		p.next.HandleFunc(pattern, RequireUserOrKey(p.api, h))
+		return
+	}
 	p.next.HandleFunc(pattern, RequireUser(p.api, h))
+}
+
+// RequireUserOrKey accepts a project API key (put in the context) or, like RequireUser, a session.
+// Keys come only in the Authorization header: a cookie is a browser session.
+func RequireUserOrKey(api API, next func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	withUser := RequireUser(api, next)
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := bearerToken(r)
+		if !IsAPIKey(token) {
+			withUser(w, r)
+			return
+		}
+		k, err := api.AuthenticateKey(r.Context(), token)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		next(w, r.WithContext(WithAPIKey(r.Context(), k)))
+	}
+}
+
+// bearerToken reads "Authorization: Bearer <token>" ("" without one).
+func bearerToken(r *http.Request) string {
+	scheme, token, _ := strings.Cut(r.Header.Get("Authorization"), " ")
+	if strings.EqualFold(scheme, "Bearer") {
+		return strings.TrimSpace(token)
+	}
+	return ""
 }
 
 // sessionToken reads "Authorization: Bearer <token>" or, from a browser, the session cookie.
 func sessionToken(r *http.Request) string {
-	if auth := r.Header.Get("Authorization"); auth != "" {
-		scheme, token, _ := strings.Cut(auth, " ")
-		if strings.EqualFold(scheme, "Bearer") {
-			return strings.TrimSpace(token)
-		}
-		return ""
+	if r.Header.Get("Authorization") != "" {
+		return bearerToken(r)
 	}
 	if c, err := r.Cookie(CookieName); err == nil {
 		return c.Value
@@ -413,4 +486,58 @@ func (h *Handler) accept(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setSession(w, r, s)
 	httpx.WriteJSON(w, http.StatusCreated, toSessionDTO(s))
+}
+
+func (h *Handler) listAPIKeys(w http.ResponseWriter, r *http.Request) {
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	id, ok := h.projectID(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.api.ListAPIKeys(r.Context(), id, page)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, toAPIKeyDTO))
+}
+
+func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
+	var req apiKeyRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	id, ok := h.projectID(w, r)
+	if !ok {
+		return
+	}
+	k, token, err := h.api.CreateAPIKey(r.Context(), id, req.Name)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, createdAPIKeyDTO{APIKey: toAPIKeyDTO(k), Token: token})
+}
+
+func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
+	keyID, err := httpx.PathID(r, "apiKeyId")
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	id, ok := h.projectID(w, r)
+	if !ok {
+		return
+	}
+	k, err := h.api.RevokeAPIKey(r.Context(), id, keyID)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toAPIKeyDTO(k))
 }

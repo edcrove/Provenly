@@ -21,11 +21,13 @@ import (
 	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/ingestion/junit"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 )
 
 // Catalog is what ingestion needs from the catalog module.
 type Catalog interface {
 	ProjectByKey(ctx context.Context, key string) (catalog.Project, error)
+	ProjectByID(ctx context.Context, id int64) (catalog.Project, error)
 	IngestionView(ctx context.Context, projectID int64, numbers []int64) (catalog.IngestionView, error)
 }
 
@@ -36,9 +38,17 @@ type Recorder interface {
 	ParseErrors(ctx context.Context, runID int64) ([]execution.ParseError, error)
 }
 
+// Access authorizes reports (the identity module, through authz).
+type Access interface {
+	// Require checks the caller holds at least minRole in the project (an API key: its own project).
+	Require(ctx context.Context, projectID int64, minRole authz.Role, notFound error) error
+	// KeyProject returns the project of the API key that authenticated the request, if any.
+	KeyProject(ctx context.Context) (int64, bool)
+}
+
 // RunMeta is the CI metadata sent with a report.
 type RunMeta struct {
-	// ProjectKey is the project the run belongs to (default TC).
+	// ProjectKey is the project the run belongs to (default: the API key's project, else TC).
 	ProjectKey    string
 	Provider      string
 	ProviderRunID string
@@ -98,10 +108,28 @@ var (
 type Service struct {
 	catalog  Catalog
 	recorder Recorder
+	access   Access
 }
 
 // NewService builds a Service.
-func NewService(c Catalog, r Recorder) *Service { return &Service{catalog: c, recorder: r} }
+func NewService(c Catalog, r Recorder, a Access) *Service {
+	return &Service{catalog: c, recorder: r, access: a}
+}
+
+// project resolves the run's project and checks the caller may report into it: members (and
+// administrators) with a session, or an API key of that project. A project the caller cannot
+// see is "not found", like an unknown one.
+func (s *Service) project(ctx context.Context, key string) (catalog.Project, error) {
+	if id, ok := s.access.KeyProject(ctx); ok && key == "" {
+		return s.catalog.ProjectByID(ctx, id)
+	}
+	key = cmp.Or(key, catalog.DefaultProjectKey)
+	p, err := s.catalog.ProjectByKey(ctx, key)
+	if err != nil {
+		return p, err
+	}
+	return p, s.access.Require(ctx, p.ID, authz.RoleMember, apperr.NotFound("project %s not found", key))
+}
 
 // ValidateMeta checks the run metadata that forms the externalRunId.
 func ValidateMeta(m RunMeta) error {
@@ -125,7 +153,7 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	if err := ValidateMeta(meta); err != nil {
 		return Outcome{}, err
 	}
-	project, err := s.catalog.ProjectByKey(ctx, cmp.Or(meta.ProjectKey, catalog.DefaultProjectKey))
+	project, err := s.project(ctx, meta.ProjectKey)
 	if err != nil {
 		return Outcome{}, err
 	}

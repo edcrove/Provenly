@@ -309,6 +309,11 @@ test('UI flows', async ({ page }) => {
   await page.getByRole('button', { name: 'Add member' }).click()
   await expect(page.getByTestId('member-carla')).toBeVisible()
   await shot(page, 'project-members')
+  // CI API keys (prototype feature 4): the key is shown once, with the CI step that uses it.
+  await page.getByLabel('Key name').fill('GitHub Actions')
+  await page.getByRole('button', { name: 'Create API key' }).click()
+  await expect(page.getByTestId('api-key-token')).toBeVisible()
+  await shot(page, 'project-api-keys')
   await page.getByRole('button', { name: 'Sign out' }).click()
   await expect(page).toHaveURL(/\/login$/)
   await page.getByLabel('Username').fill('carla')

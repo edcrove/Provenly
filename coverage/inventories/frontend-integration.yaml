@@ -113,3 +113,6 @@ targets:
   - id: FE-INT-032
     description: an invitation can grant a project role, shown in the invitation list
     surfaces: [src/features/auth/UsersPage.tsx]
+  - id: FE-INT-033
+    description: project API keys - a maintainer creates a key (shown once with the CI step), lists them by page with last use, revokes one; failures are shown where they happen; members and viewers do not see keys
+    surfaces: [src/features/projects/ApiKeysSection.tsx]

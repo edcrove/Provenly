@@ -42,20 +42,21 @@ func TestHandlerWiring(t *testing.T) {
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 		assert.Equal(t, http.StatusUnauthorized, rec.Code, target)
 	}
-	// Sign-in, accepting an invitation and ingestion are public: validation runs first.
+	// Sign-in and accepting an invitation are public: validation runs first.
 	for _, target := range []string{"/api/v1/auth/login", "/api/v1/invitations/accept"} {
 		rec = httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, target, nil))
 		assert.Equal(t, http.StatusUnsupportedMediaType, rec.Code, target)
 	}
+	// Ingestion needs an API key or a session.
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/ingestion/junit", nil))
-	assert.Equal(t, http.StatusUnsupportedMediaType, rec.Code)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
 func TestRoutePatterns(t *testing.T) {
 	patterns := RoutePatterns()
-	assert.Len(t, patterns, 36)
+	assert.Len(t, patterns, 39)
 	assert.Contains(t, patterns, "POST /api/v1/invitations/accept")
 	assert.Contains(t, patterns, "PATCH /api/v1/projects/{projectKey}")
 	assert.Contains(t, patterns, "GET /readyz")

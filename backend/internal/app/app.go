@@ -42,10 +42,11 @@ func NewServices(pool *pgxpool.Pool, now func() time.Time) Services {
 // NewServicesWith wires the modules with an explicit identity configuration.
 func NewServicesWith(pool *pgxpool.Pool, now func() time.Time, idcfg identity.Config) Services {
 	cat := catalog.NewService(catalogpg.NewStore(pool))
+	ids := identity.NewService(identitypg.NewStore(pool), now, idcfg)
 	exe := execution.NewService(executionpg.NewStore(pool), now)
 	return Services{
-		Catalog: cat, Execution: exe, Ingestion: ingestion.NewService(cat, exe),
-		Identity: identity.NewService(identitypg.NewStore(pool), now, idcfg), Now: now, Ready: pool.Ping,
+		Catalog: cat, Execution: exe, Ingestion: ingestion.NewService(cat, exe, ids),
+		Identity: ids, Now: now, Ready: pool.Ping,
 	}
 }
 
@@ -83,8 +84,8 @@ func register(r httpx.Router, s Services, maxIngestBytes int64) {
 	})
 	ids := identity.NewHandler(s.Identity, s.Catalog, s.Now)
 	ids.RegisterPublic(r)
-	// Ingestion stays open until CI API keys exist (prototype feature 4).
-	ingestion.NewHandler(s.Ingestion, maxIngestBytes).Register(r)
+	// CI reports with a project API key; people with a session.
+	ingestion.NewHandler(s.Ingestion, maxIngestBytes).Register(identity.ProtectWithKeys(r, s.Identity))
 	// Every other API route needs a session.
 	p := identity.Protect(r, s.Identity)
 	ids.RegisterProtected(p)

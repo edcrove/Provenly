@@ -11,6 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAPIKeys = `-- name: CountAPIKeys :one
+SELECT count(*) FROM api_keys WHERE project_id = $1
+`
+
+func (q *Queries) CountAPIKeys(ctx context.Context, projectID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countAPIKeys, projectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countInvitations = `-- name: CountInvitations :one
 SELECT count(*) FROM invitations
 `
@@ -42,6 +53,43 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const createAPIKey = `-- name: CreateAPIKey :one
+INSERT INTO api_keys (project_id, name, prefix, token_sha256, created_by)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, project_id, name, prefix, token_sha256, created_by, created_at, last_used_at, revoked_at
+`
+
+type CreateAPIKeyParams struct {
+	ProjectID   int64
+	Name        string
+	Prefix      string
+	TokenSha256 []byte
+	CreatedBy   int64
+}
+
+func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error) {
+	row := q.db.QueryRow(ctx, createAPIKey,
+		arg.ProjectID,
+		arg.Name,
+		arg.Prefix,
+		arg.TokenSha256,
+		arg.CreatedBy,
+	)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Prefix,
+		&i.TokenSha256,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
 }
 
 const createInvitation = `-- name: CreateInvitation :one
@@ -143,6 +191,53 @@ func (q *Queries) DeleteMember(ctx context.Context, arg DeleteMemberParams) (int
 	return result.RowsAffected(), nil
 }
 
+const getAPIKey = `-- name: GetAPIKey :one
+SELECT id, project_id, name, prefix, token_sha256, created_by, created_at, last_used_at, revoked_at FROM api_keys WHERE id = $1 AND project_id = $2
+`
+
+type GetAPIKeyParams struct {
+	ID        int64
+	ProjectID int64
+}
+
+func (q *Queries) GetAPIKey(ctx context.Context, arg GetAPIKeyParams) (ApiKey, error) {
+	row := q.db.QueryRow(ctx, getAPIKey, arg.ID, arg.ProjectID)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Prefix,
+		&i.TokenSha256,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const getAPIKeyByToken = `-- name: GetAPIKeyByToken :one
+SELECT id, project_id, name, prefix, token_sha256, created_by, created_at, last_used_at, revoked_at FROM api_keys WHERE token_sha256 = $1
+`
+
+func (q *Queries) GetAPIKeyByToken(ctx context.Context, tokenSha256 []byte) (ApiKey, error) {
+	row := q.db.QueryRow(ctx, getAPIKeyByToken, tokenSha256)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Prefix,
+		&i.TokenSha256,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const getInvitation = `-- name: GetInvitation :one
 SELECT id, token_sha256, email, note, created_by, created_at, expires_at, accepted_at, accepted_user_id, revoked_at, project_id, project_role FROM invitations WHERE id = $1
 `
@@ -221,6 +316,46 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listAPIKeys = `-- name: ListAPIKeys :many
+SELECT id, project_id, name, prefix, token_sha256, created_by, created_at, last_used_at, revoked_at FROM api_keys WHERE project_id = $1 ORDER BY id DESC LIMIT $3 OFFSET $2
+`
+
+type ListAPIKeysParams struct {
+	ProjectID  int64
+	PageOffset int32
+	PageLimit  int32
+}
+
+func (q *Queries) ListAPIKeys(ctx context.Context, arg ListAPIKeysParams) ([]ApiKey, error) {
+	rows, err := q.db.Query(ctx, listAPIKeys, arg.ProjectID, arg.PageOffset, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ApiKey
+	for rows.Next() {
+		var i ApiKey
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Name,
+			&i.Prefix,
+			&i.TokenSha256,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listInvitations = `-- name: ListInvitations :many
@@ -422,6 +557,35 @@ func (q *Queries) MarkInvitationAccepted(ctx context.Context, arg MarkInvitation
 	return err
 }
 
+const revokeAPIKey = `-- name: RevokeAPIKey :one
+UPDATE api_keys SET revoked_at = now()
+WHERE id = $1 AND project_id = $2 AND revoked_at IS NULL
+RETURNING id, project_id, name, prefix, token_sha256, created_by, created_at, last_used_at, revoked_at
+`
+
+type RevokeAPIKeyParams struct {
+	ID        int64
+	ProjectID int64
+}
+
+// No row when the key does not exist in the project or is already revoked.
+func (q *Queries) RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (ApiKey, error) {
+	row := q.db.QueryRow(ctx, revokeAPIKey, arg.ID, arg.ProjectID)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Name,
+		&i.Prefix,
+		&i.TokenSha256,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const revokeInvitation = `-- name: RevokeInvitation :one
 UPDATE invitations SET revoked_at = now()
 WHERE id = $1 AND accepted_at IS NULL AND revoked_at IS NULL
@@ -472,6 +636,17 @@ func (q *Queries) SetPasswordHash(ctx context.Context, arg SetPasswordHashParams
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const touchAPIKey = `-- name: TouchAPIKey :exec
+UPDATE api_keys SET last_used_at = now()
+WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')
+`
+
+// Records a use at most once a minute: a busy CI does not write on every report.
+func (q *Queries) TouchAPIKey(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, touchAPIKey, id)
+	return err
 }
 
 const upsertMember = `-- name: UpsertMember :one

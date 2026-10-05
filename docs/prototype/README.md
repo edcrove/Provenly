@@ -18,7 +18,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 1 | Projects and per-project TC keys (`CHK-12`) | MVP D9, D10 | ✅ | proto/01-projects |
 | 2 | Users, login (JWT) and invitations | MVP D13, DEC-30 | ✅ | proto/02-auth |
 | 3 | Roles and project membership (Admin, Maintainer, Member, Viewer) | MVP D12 | ✅ | proto/03-roles |
-| 4 | API keys for CI, `?project=` ingestion, secrets at rest | MVP D4, D11 | ⏳ | |
+| 4 | API keys for CI, `?project=` ingestion (secrets at rest moved to 18, see P4-6) | MVP D4, D11 | ✅ | proto/04-api-keys |
 | 5 | Optimistic locking (ETag / If-Match) | MVP D7 | ⏳ | |
 | 6 | Snapshot amendment per run | DEC-42 | ⏳ | |
 | 7 | Retries, logical result and flaky | MVP D1 | ⏳ | |
@@ -32,7 +32,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 15 | Live runs: execution sessions, live events, reconciliation | Trello Live Streaming, Planning #9 | ⏳ | |
 | 16 | Playwright reporter (`@provenly/playwright-reporter`) | Trello, DEC-15 | ⏳ | |
 | 17 | OpenTelemetry basic instrumentation | Trello, DEC-11 | ⏳ | |
-| 18 | Export sink (webhooks) and GitHub connector | Planning #3, #21, Incubator | ⏳ | |
+| 18 | Export sink (webhooks) and GitHub connector, secrets at rest | Planning #3, #21, Incubator, MVP D4 | ⏳ | |
 | 19 | MCP server (agent interface) | Incubator, DEC-10 | ⏳ | |
 | 20 | Audit log | Incubator (Project & Authorization) | ⏳ | |
 | 21 | Release pipeline, self-hosting guide, dogfooding, public readiness | Trello phase 4 | ⏳ | |
@@ -67,6 +67,13 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P3-5 | Joining a project | An invitation may carry a project and role, applied in the same transaction that creates the account; afterwards administrators or the project's maintainers add members by username | One link onboards someone into the right project |
 | P3-6 | Ingestion | Still public; runs are attributed by `?project=` (feature 4 binds CI keys to a project) | Same reason as P2-7 |
 | P3-7 | UI | Each project carries `myRole`; the UI hides actions the role cannot do (Edit, Deprecate, New test case, Rename, member controls) and the API still enforces them | Hidden-but-enforced: the UI is a convenience, the API is the rule |
+| P4-1 | CI authentication | Project API keys `pvk_<8 hex>_<43 base64url>` sent as `Authorization: Bearer`; only the SHA-256 is stored, the key is shown once | High-entropy random keys need no slow hash; the public prefix tells keys apart in lists and logs |
+| P4-2 | Key scope | A key belongs to one project and only opens ingestion; it reports into its project only (another project is 404), and its project is the default `project` | Least privilege: a leaked CI secret cannot read data or touch other projects; no extra parameter in CI |
+| P4-3 | Who manages keys | Maintainers and administrators of the project create, list and revoke keys; revocation is immediate; keys are never deleted | Keys are project configuration; history of who created which key is kept |
+| P4-4 | People reporting | Ingestion also accepts a session with the `member` role (viewers 403) | Manual uploads, scripts and the demo seed keep working; same rule as creating test cases |
+| P4-5 | Last use | `lastUsedAt` written at most once a minute | Lets maintainers spot unused keys without a write per report |
+| P4-6 | Secrets at rest (D4) | Moved to feature 18 (webhooks / GitHub), the first feature that stores a secret Provenly must read back | API keys and invitations are hashed, never encrypted; envelope encryption without a consumer would be untested code |
+| P4-7 | Key transport | Keys are read only from the `Authorization` header, never from the session cookie | Found by the probe: a key placed in the cookie was accepted; cookies are browser sessions |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
 ## What each feature does
@@ -128,4 +135,19 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **Tests**: authz and identity unit tests, handler authorization tests in catalog and execution, BE-INT-039..040
   (membership invariants and filtered lists), contract role scenarios for every role-gated operation on both sides,
   FE-INT-030..032, BE-E2E-009, FE-E2E-012.
+
+### 4. CI API keys
+
+- **Behavior**: ingestion needs a project API key (CI) or a session with the `member` role. A key reports into its own
+  project (the default `project`), opens no other route and stops working the moment it is revoked.
+- **API**: `GET/POST /projects/{key}/api-keys`, `POST /projects/{key}/api-keys/{id}/revoke`; `ingestJUnitReport` declares
+  `apiKeyAuth`, 401 and 403.
+- **Schema**: migration 00016 (`api_keys`: digest only, unique prefix, protection trigger: no deletes, only last use and
+  one revocation change).
+- **UI**: an API keys section on the project page for maintainers: create (key shown once with a ready-to-paste CI step),
+  list with last use, revoke (screenshot 44).
+- **Scripts**: the README walkthrough and the smoke test report with an API key (through nginx).
+- **Tests**: identity and ingestion unit tests (key format, revocation, scope, cookie regression), BE-INT-041,
+  contract scenarios on both sides, FE-INT-033, BE-E2E-010, FE-E2E-013, probe API key sweep. The probe found keys
+  accepted from the session cookie (P4-7); fixed with unit and contract regressions.
 

@@ -14,10 +14,11 @@ info:
       (1..100, default 20) and returns `items` plus `page`, `pageSize`,
       `totalItems` and `totalPages`.
     - Authentication: every operation needs a session except health, readiness,
-      sign-in, sign-out, accepting an invitation and (until CI API keys exist)
-      ingestion. A session is the token returned by sign-in, sent as
-      `Authorization: Bearer <token>` or, from a browser, the HttpOnly
-      `provenly_session` cookie set by sign-in. Without one the answer is 401.
+      sign-in, sign-out and accepting an invitation. A session is the token
+      returned by sign-in, sent as `Authorization: Bearer <token>` or, from a
+      browser, the HttpOnly `provenly_session` cookie set by sign-in. Without one
+      the answer is 401. CI reports runs with a project API key instead
+      (`Authorization: Bearer pvk_...`), which opens ingestion only.
     - Roles: administrators see and do everything. Everyone else works in the
       projects they are members of, as `maintainer` (manages the project, its
       members and deprecations), `member` (creates and edits test cases and
@@ -468,6 +469,98 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/api-keys:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [projects]
+      operationId: listApiKeys
+      summary: List the project's API keys, newest first (maintainers and administrators)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of API keys (never the keys themselves)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [projects]
+      operationId: createApiKey
+      summary: Create an API key for CI to report runs into this project (maintainers and administrators)
+      description: The key is returned once and never stored; only its digest is kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+      responses:
+        "201":
+          description: The key and its token (shown only now)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedApiKey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - name: apiKeyId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      tags: [projects]
+      operationId: revokeApiKey
+      summary: Revoke an API key at once (maintainers and administrators)
+      responses:
+        "200":
+          description: The revoked key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -934,10 +1027,16 @@ paths:
     post:
       tags: [ingestion]
       operationId: ingestJUnitReport
-      security: []
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+        - cookieAuth: []
       summary: Ingest one complete JUnit XML report (batch) for a CI run attempt
       description: |
-        The run belongs to `project` (default `TC`): its expected universe is that
+        CI authenticates with a project API key; people with a session need the
+        `member` role in the project. A key reports into its own project only: it is
+        the default `project`, and any other project answers 404.
+        The run belongs to `project` (default: the API key's project, else `TC`): its expected universe is that
         project's, the testcase-name fallback only reads `<project>-<n>`, and a
         `tc-id` property with another project's key is a `wrong_project` diagnostic.
         `externalRunId` = `{provider}:{runId}:{runAttempt}`, unique per project. Re-sending the same
@@ -952,7 +1051,7 @@ paths:
         - name: project
           in: query
           required: false
-          description: Key of the project the run belongs to (default `TC`).
+          description: Key of the project the run belongs to (default the API key's project, else `TC`).
           schema:
             type: string
             pattern: "^[A-Z][A-Z0-9]{1,9}$"
@@ -1038,6 +1137,10 @@ paths:
                 $ref: "#/components/schemas/IngestionResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "413":
@@ -1057,6 +1160,10 @@ components:
       type: apiKey
       in: cookie
       name: provenly_session
+    apiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: pvk_ project API key
   parameters:
     Username:
       name: username
@@ -1501,6 +1608,74 @@ components:
       properties:
         role:
           $ref: "#/components/schemas/ProjectRole"
+
+    ApiKey:
+      type: object
+      additionalProperties: false
+      required: [id, name, prefix, status, createdBy, createdAt, lastUsedAt, revokedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        prefix:
+          type: string
+          description: First characters of the key, to tell keys apart (the key itself is never shown again).
+          pattern: "^pvk_[0-9a-f]{8}$"
+        status:
+          type: string
+          enum: [active, revoked]
+        createdBy:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last report made with the key (recorded at most once a minute).
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ApiKeyPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ApiKey"
+
+    CreateApiKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: What the key is for (e.g. the CI pipeline); 1 to 100 characters.
+          example: GitHub Actions
+
+    CreatedApiKey:
+      type: object
+      additionalProperties: false
+      required: [apiKey, token]
+      properties:
+        apiKey:
+          $ref: "#/components/schemas/ApiKey"
+        token:
+          type: string
+          description: "The key: send it as `Authorization: Bearer <token>`. Shown only once."
+          pattern: "^pvk_[0-9a-f]{8}_[A-Za-z0-9_-]{43}$"
 
     CreatedInvitation:
       type: object

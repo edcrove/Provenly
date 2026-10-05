@@ -88,7 +88,11 @@ curl -s -b cookies.txt -X POST localhost:8080/api/v1/test-cases \
   -d '{"title":"User can log in","expectedResult":"Dashboard is shown","automated":true}'
 # => {"id":8,"key":"TC-8",...}   (use the returned id below; the demo data already holds TC-1..TC-7)
 
-# 2. CI sends the JUnit report of run 42, attempt 1 (two results for the same TC: Chrome PASS, Firefox FAIL)
+# 2. A maintainer creates an API key for CI (shown once; store it as a CI secret)
+KEY=$(curl -s -b cookies.txt -X POST localhost:8080/api/v1/projects/TC/api-keys \
+  -H 'Content-Type: application/json' -d '{"name":"README CI"}' | sed -E 's/.*"token":"([^"]+)".*/\1/')
+
+# 3. CI sends the JUnit report of run 42, attempt 1 (two results for the same TC: Chrome PASS, Firefox FAIL)
 cat > report.xml <<'XML'
 <testsuites><testsuite name="auth" timestamp="2026-09-28T10:00:00">
   <testcase name="login chrome"><properties><property name="tc-id" value="8"/></properties></testcase>
@@ -96,11 +100,12 @@ cat > report.xml <<'XML'
   <testcase name="test without id"/>
 </testsuite></testsuites>
 XML
-curl -s -X POST -H 'Content-Type: application/xml' --data-binary @report.xml \
+curl -s -X POST -H "Authorization: Bearer $KEY" -H 'Content-Type: application/xml' --data-binary @report.xml \
   'localhost:8080/api/v1/ingestion/junit?provider=github&runId=42&runAttempt=1&branch=main&commit=abc123'
 # => 201, created=true, testRun.id=6, diagnostics=[missing TC-ID]. Re-sending the same attempt returns 200.
+# The key's project is the default; it can only report runs, and only into its project.
 
-# 3. Summary (snapshot universe, aggregated failed > error > skipped > passed, 3 percentages) and history
+# 4. Summary (snapshot universe, aggregated failed > error > skipped > passed, 3 percentages) and history
 curl -s -b cookies.txt localhost:8080/api/v1/test-runs/6/summary
 curl -s -b cookies.txt localhost:8080/api/v1/test-cases/8/results
 ```

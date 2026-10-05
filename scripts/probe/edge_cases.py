@@ -214,6 +214,32 @@ def main():
     check("removed member: project invisible", call(base, "GET", f"/test-cases/{mine}", headers=as_viewer)[0], 404)
     check("remove again", call(base, "DELETE", f"/projects/{key}/members/{viewer_name}")[0], 404)
 
+    # API keys (prototype feature 4): malformed, unknown and revoked keys are 401s; a key reports into its project
+    # only and opens no other route; names are validated; ids and keys never reach the database malformed.
+    st, created = call(base, "POST", f"/projects/{key}/api-keys", {"name": "probe ci"})
+    check("create an API key", st, 201)
+    token = created.get("token", "") if isinstance(created, dict) else ""
+    as_key = {"Authorization": "Bearer " + token}
+    ingest_q = "/ingestion/junit?" + q.format(20)
+    for name, hdr in [("no key", {"Authorization": ""}), ("pvk_ alone", {"Authorization": "Bearer pvk_"}),
+                      ("truncated key", {"Authorization": "Bearer " + token[:-1]}), ("key + NUL", {"Authorization": "Bearer " + token[:-1] + "%00"}),
+                      ("huge key", {"Authorization": "Bearer pvk_" + "a" * 4000}), ("key as cookie", {"Authorization": "", "Cookie": "provenly_session=" + token})]:
+        check(f"ingest with {name}", call(base, "POST", ingest_q, raw=xml, ctype="application/xml", headers=hdr)[0], 401)
+    check("ingest with a key", call(base, "POST", ingest_q, raw=xml, ctype="application/xml", headers=as_key)[0], 201)
+    check("key into another project", call(base, "POST", "/ingestion/junit?" + q.format(21) + "&project=TC", raw=xml, ctype="application/xml", headers=as_key)[0], 404)
+    for method, path in [("GET", "/test-runs"), ("GET", "/auth/me"), ("GET", f"/projects/{key}/api-keys"), ("POST", "/test-cases")]:
+        check(f"key on {method} {path}", call(base, method, path, {} if method == "POST" else None, headers=as_key)[0], 401)
+    for body, exp in [({"name": ""}, 400), ({"name": "  "}, 400), ({"name": "n" * 101}, 400), ({"name": "a\u0000"}, 400), ({}, 400), ({"name": "ñ" * 100}, 201)]:
+        check(f"create key {str(body)[:30]}", call(base, "POST", f"/projects/{key}/api-keys", body)[0], exp)
+    check("create key text/plain", call(base, "POST", f"/projects/{key}/api-keys", raw=b'{"name":"x"}', ctype="text/plain")[0], 415)
+    for kid, exp in [("0", 400), ("-1", 400), ("abc", 400), ("9223372036854775808", 400), ("9223372036854775807", 404)]:
+        check(f"revoke key {kid}", call(base, "POST", f"/projects/{key}/api-keys/{kid}/revoke")[0], exp)
+    check("viewer lists keys", call(base, "GET", f"/projects/{key}/api-keys", headers=as_viewer)[0], 404)
+    kid = created.get("apiKey", {}).get("id", 0) if isinstance(created, dict) else 0
+    check("revoke the key", call(base, "POST", f"/projects/{key}/api-keys/{kid}/revoke")[0], 200)
+    check("revoke it again", call(base, "POST", f"/projects/{key}/api-keys/{kid}/revoke")[0], 409)
+    check("revoked key", call(base, "POST", "/ingestion/junit?" + q.format(22), raw=xml, ctype="application/xml", headers=as_key)[0], 401)
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

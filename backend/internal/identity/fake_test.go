@@ -12,6 +12,8 @@ import (
 // fakeRepo is an in-memory Repository; errs makes a method fail.
 type fakeRepo struct {
 	members     map[[2]int64]Member
+	keys        map[int64]APIKey
+	nextKey     int64
 	users       map[int64]User
 	invitations map[int64]Invitation
 	nextUser    int64
@@ -23,7 +25,7 @@ type fakeRepo struct {
 }
 
 func newFakeRepo(now func() time.Time) *fakeRepo {
-	return &fakeRepo{members: map[[2]int64]Member{}, users: map[int64]User{}, invitations: map[int64]Invitation{}, errs: map[string]error{}, now: now}
+	return &fakeRepo{keys: map[int64]APIKey{}, members: map[[2]int64]Member{}, users: map[int64]User{}, invitations: map[int64]Invitation{}, errs: map[string]error{}, now: now}
 }
 
 func (f *fakeRepo) fail(method string) error { return f.errs[method] }
@@ -264,4 +266,84 @@ func (f *fakeRepo) DeleteMember(_ context.Context, projectID, userID int64) (boo
 	_, ok := f.members[[2]int64{projectID, userID}]
 	delete(f.members, [2]int64{projectID, userID})
 	return ok, nil
+}
+
+func (f *fakeRepo) CreateAPIKey(_ context.Context, k NewAPIKey) (APIKey, error) {
+	if err := f.fail("CreateAPIKey"); err != nil {
+		return APIKey{}, err
+	}
+	f.nextKey++
+	key := APIKey{ID: f.nextKey, ProjectID: k.ProjectID, Name: k.Name, Prefix: k.Prefix, TokenSHA256: k.TokenSHA256, CreatedBy: k.CreatedBy, CreatedAt: f.now()}
+	f.keys[key.ID] = key
+	return key, nil
+}
+
+func (f *fakeRepo) ListAPIKeys(_ context.Context, projectID int64, limit, offset int32) ([]APIKey, error) {
+	if err := f.fail("ListAPIKeys"); err != nil {
+		return nil, err
+	}
+	var out []APIKey
+	for _, k := range f.keys {
+		if k.ProjectID == projectID {
+			out = append(out, k)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
+	return window(out, limit, offset), nil
+}
+
+func (f *fakeRepo) CountAPIKeys(ctx context.Context, projectID int64) (int64, error) {
+	if err := f.fail("CountAPIKeys"); err != nil {
+		return 0, err
+	}
+	all, _ := f.ListAPIKeys(ctx, projectID, 1<<30, 0)
+	return int64(len(all)), nil
+}
+
+func (f *fakeRepo) GetAPIKey(_ context.Context, projectID, id int64) (APIKey, error) {
+	if err := f.fail("GetAPIKey"); err != nil {
+		return APIKey{}, err
+	}
+	k, ok := f.keys[id]
+	if !ok || k.ProjectID != projectID {
+		return APIKey{}, ErrNotFound
+	}
+	return k, nil
+}
+
+func (f *fakeRepo) GetAPIKeyByToken(_ context.Context, digest []byte) (APIKey, error) {
+	if err := f.fail("GetAPIKeyByToken"); err != nil {
+		return APIKey{}, err
+	}
+	for _, k := range f.keys {
+		if bytes.Equal(k.TokenSHA256, digest) {
+			return k, nil
+		}
+	}
+	return APIKey{}, ErrNotFound
+}
+
+func (f *fakeRepo) RevokeAPIKey(ctx context.Context, projectID, id int64) (APIKey, error) {
+	if err := f.fail("RevokeAPIKey"); err != nil {
+		return APIKey{}, err
+	}
+	k, err := f.GetAPIKey(ctx, projectID, id)
+	if err != nil || k.RevokedAt != nil {
+		return APIKey{}, ErrNotFound
+	}
+	now := f.now()
+	k.RevokedAt = &now
+	f.keys[id] = k
+	return k, nil
+}
+
+func (f *fakeRepo) TouchAPIKey(_ context.Context, id int64) error {
+	if err := f.fail("TouchAPIKey"); err != nil {
+		return err
+	}
+	k := f.keys[id]
+	now := f.now()
+	k.LastUsedAt = &now
+	f.keys[id] = k
+	return nil
 }

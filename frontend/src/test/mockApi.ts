@@ -1,6 +1,7 @@
 import { http, HttpResponse, type JsonBodyType } from 'msw'
 
 import type {
+  ApiKey,
   Invitation,
   ParseError,
   Project,
@@ -29,6 +30,8 @@ export interface MockDb {
   invitationTokens: Record<string, number>
   /** Project roles of non-admin users. */
   members: { projectId: number; userId: number; role: MemberRole; since: string }[]
+  /** CI API keys by project id. */
+  apiKeys: (ApiKey & { projectId: number })[]
   /** The signed-in user's id (the session cookie), or null when signed out. */
   session: number | null
   projects: Project[]
@@ -54,6 +57,7 @@ export function seed(): MockDb {
     invitationTokens: {},
     session: 1,
     members: [],
+    apiKeys: [],
     projects: [project()],
     testCases: [tc, testCase({ id: 154, title: 'Logout works' })],
     steps: [
@@ -227,6 +231,20 @@ function projectFilter(url: URL): Project | undefined | Response {
   return db.projects.find((p) => p.key === key) ?? notFound(`project ${key}`)
 }
 
+/** The wire form of a mock API key (the project is in the URL). */
+function withoutProject({ projectId, ...k }: MockDb['apiKeys'][number]): ApiKey {
+  void projectId
+  return k
+}
+
+/** A project the signed-in user maintains (or administers), like the server: else 400, 404 or 403. */
+function maintainedProject(raw: string | readonly string[] | undefined): Project | Response {
+  if (!KEY.test(String(raw))) return validation('projectKey', 'must be a project key')
+  const p = db.projects.find((x) => x.key === raw)
+  if (!p) return notFound(`project ${String(raw)}`)
+  return requireRole(p.id, 'maintainer', () => notFound(`project ${String(raw)}`)) ?? p
+}
+
 const stepsOf = (tcId: number) =>
   db.steps.filter((s) => s.testCaseId === tcId).sort((a, b) => a.position - b.position)
 
@@ -276,6 +294,58 @@ export const handlers = [
       db.members = db.members.filter((m) => !(m.projectId === p.id && m.userId === u?.id))
       if (db.members.length === before) return notFound(`member ${String(params.username)}`)
       return new HttpResponse(null, { status: 204 })
+    }),
+  ),
+  http.get(
+    `${BASE}/projects/:projectKey/api-keys`,
+    guard(({ params, request }) => {
+      const p = maintainedProject(params.projectKey)
+      if (p instanceof Response) return p
+      const items = db.apiKeys
+        .filter((k) => k.projectId === p.id)
+        .sort((a, b) => b.id - a.id)
+        .map(withoutProject)
+      return respond(pageOf(new URL(request.url), items))
+    }),
+  ),
+  http.post(
+    `${BASE}/projects/:projectKey/api-keys`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const p = maintainedProject(params.projectKey)
+        if (p instanceof Response) return p
+        const name = String((await readBody(request))?.name ?? '').trim()
+        if (!name || name.length > 100) return validation('name', 'must be 1 to 100 characters')
+        const id = db.nextId++
+        const hex = id.toString(16).padStart(8, '0')
+        const key = {
+          id,
+          projectId: p.id,
+          name,
+          prefix: `pvk_${hex}`,
+          status: 'active' as const,
+          createdBy: db.session!,
+          createdAt: now(),
+          lastUsedAt: null,
+          revokedAt: null,
+        }
+        db.apiKeys.push(key)
+        return respond({ apiKey: withoutProject(key), token: `pvk_${hex}_${'k'.repeat(43)}` }, 201)
+      }),
+    ),
+  ),
+  http.post(
+    `${BASE}/projects/:projectKey/api-keys/:apiKeyId/revoke`,
+    guard(({ params }) => {
+      const id = pathId(params.apiKeyId)
+      if (id === undefined) return validation('apiKeyId', 'must be a positive integer')
+      const p = maintainedProject(params.projectKey)
+      if (p instanceof Response) return p
+      const k = db.apiKeys.find((x) => x.id === id && x.projectId === p.id)
+      if (!k) return notFound(`API key ${id}`)
+      if (k.revokedAt) return problem(409, 'conflict', `API key ${id} is already revoked`)
+      Object.assign(k, { status: 'revoked', revokedAt: now() })
+      return respond(withoutProject(k))
     }),
   ),
   http.post(

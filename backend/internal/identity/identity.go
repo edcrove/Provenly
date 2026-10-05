@@ -57,6 +57,28 @@ type Member struct {
 	Since time.Time
 }
 
+// APIKey lets CI report runs into one project. Only a digest of the key is stored.
+type APIKey struct {
+	ID          int64
+	ProjectID   int64
+	Name        string
+	Prefix      string
+	TokenSHA256 []byte
+	CreatedBy   int64
+	CreatedAt   time.Time
+	LastUsedAt  *time.Time
+	RevokedAt   *time.Time
+}
+
+// NewAPIKey is the content of an API key to create.
+type NewAPIKey struct {
+	ProjectID   int64
+	Name        string
+	Prefix      string
+	TokenSHA256 []byte
+	CreatedBy   int64
+}
+
 // Status of the invitation at time now.
 func (i Invitation) Status(now time.Time) InvitationStatus {
 	switch {
@@ -124,6 +146,15 @@ type Repository interface {
 	UpsertMember(ctx context.Context, projectID, userID int64, role authz.Role) error
 	// DeleteMember reports whether the user was a member.
 	DeleteMember(ctx context.Context, projectID, userID int64) (bool, error)
+	CreateAPIKey(ctx context.Context, k NewAPIKey) (APIKey, error)
+	ListAPIKeys(ctx context.Context, projectID int64, limit, offset int32) ([]APIKey, error)
+	CountAPIKeys(ctx context.Context, projectID int64) (int64, error)
+	GetAPIKey(ctx context.Context, projectID, id int64) (APIKey, error)
+	GetAPIKeyByToken(ctx context.Context, digest []byte) (APIKey, error)
+	// RevokeAPIKey returns ErrNotFound when the key does not exist in the project or is already revoked.
+	RevokeAPIKey(ctx context.Context, projectID, id int64) (APIKey, error)
+	// TouchAPIKey records a use (at most once a minute).
+	TouchAPIKey(ctx context.Context, id int64) error
 }
 
 type userKey struct{}
@@ -131,6 +162,19 @@ type userKey struct{}
 // WithUser returns a context carrying the authenticated user.
 func WithUser(ctx context.Context, u User) context.Context {
 	return context.WithValue(ctx, userKey{}, u)
+}
+
+type apiKeyKey struct{}
+
+// WithAPIKey returns a context authenticated by an API key (no user).
+func WithAPIKey(ctx context.Context, k APIKey) context.Context {
+	return context.WithValue(ctx, apiKeyKey{}, k)
+}
+
+// APIKeyFrom returns the API key that authenticated the request, if any.
+func APIKeyFrom(ctx context.Context) (APIKey, bool) {
+	k, ok := ctx.Value(apiKeyKey{}).(APIKey)
+	return k, ok
 }
 
 // UserFrom returns the authenticated user of the request, if any.

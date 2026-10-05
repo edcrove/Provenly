@@ -16,6 +16,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/catalog"
 	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 )
 
 var errBoom = errors.New("boom")
@@ -37,6 +38,32 @@ func (f *fakeCatalog) ProjectByKey(_ context.Context, key string) (catalog.Proje
 	}
 	return catalog.Project{ID: id, Key: key}, f.projectErr
 }
+
+// ProjectByID answers 2 as CHK and every other id as TC.
+func (f *fakeCatalog) ProjectByID(_ context.Context, id int64) (catalog.Project, error) {
+	if id == 2 {
+		return catalog.Project{ID: 2, Key: "CHK"}, f.projectErr
+	}
+	return catalog.Project{ID: id, Key: "TC"}, f.projectErr
+}
+
+// fakeAccess allows everything unless denied lists the project; key is the API key's project (0: a session).
+type fakeAccess struct {
+	key    int64
+	denied map[int64]error
+}
+
+func (a fakeAccess) Require(_ context.Context, projectID int64, _ authz.Role, notFound error) error {
+	if err, ok := a.denied[projectID]; ok {
+		if err == nil {
+			return notFound
+		}
+		return err
+	}
+	return nil
+}
+
+func (a fakeAccess) KeyProject(context.Context) (int64, bool) { return a.key, a.key != 0 }
 
 // IngestionView answers each known number with an id equal to the number (as in the default project).
 func (f *fakeCatalog) IngestionView(_ context.Context, projectID int64, numbers []int64) (catalog.IngestionView, error) {
@@ -113,7 +140,7 @@ func TestIngestCorrelatesEveryResult(t *testing.T) {
 		{TestName: "unknown TC-404", Correlation: execution.CorrelationUnknown, RequestedTestCaseID: strPtr("TC-404")},
 		{TestName: "deprecated TC-2", Correlation: execution.CorrelationDeprecated, RequestedTestCaseID: strPtr("TC-2")},
 	}}
-	out, err := NewService(cat, rec).IngestJUnit(context.Background(), meta, strings.NewReader(report))
+	out, err := NewService(cat, rec, fakeAccess{}).IngestJUnit(context.Background(), meta, strings.NewReader(report))
 	require.NoError(t, err)
 
 	assert.True(t, out.Created)
@@ -154,7 +181,7 @@ func strPtr(s string) *string { return &s }
 
 func TestIngestReplayAndEmptyParseErrors(t *testing.T) {
 	rec := &fakeRecorder{created: false, storedPE: []execution.ParseError{{Index: 1, Message: "stored"}}}
-	out, err := NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
+	out, err := NewService(&fakeCatalog{}, rec, fakeAccess{}).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
 	require.NoError(t, err)
 	assert.False(t, out.Created)
 	assert.Equal(t, rec.storedPE, out.ParseErrors, "a replay reports the parse errors stored at creation")
@@ -163,19 +190,19 @@ func TestIngestReplayAndEmptyParseErrors(t *testing.T) {
 	assert.Len(t, rec.gotRun.ReportSHA256, 64)
 
 	rec.storedDigest = "digest-of-another-report"
-	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
+	out, err = NewService(&fakeCatalog{}, rec, fakeAccess{}).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
 	require.NoError(t, err)
 	assert.Equal(t, []string{ReportDiffersWarning}, out.Warnings)
 
 	rec.storedDigest, rec.storedStatus = "", execution.RunInterrupted
-	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
+	out, err = NewService(&fakeCatalog{}, rec, fakeAccess{}).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
 	require.NoError(t, err)
 	assert.Equal(t, []string{`status "completed" differs from "interrupted", recorded for this attempt; it was not applied`}, out.Warnings)
 }
 
 func TestIngestWarnsWhenAReplayCarriesOtherMetadata(t *testing.T) {
 	rec := &fakeRecorder{created: false, storedMeta: &[3]string{"ci", "release", "def"}}
-	out, err := NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
+	out, err := NewService(&fakeCatalog{}, rec, fakeAccess{}).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		`branch "main" differs from "release", recorded for this attempt; it was not applied`,
@@ -183,24 +210,24 @@ func TestIngestWarnsWhenAReplayCarriesOtherMetadata(t *testing.T) {
 	}, out.Warnings)
 
 	rec.created = true
-	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
+	out, err = NewService(&fakeCatalog{}, rec, fakeAccess{}).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
 	require.NoError(t, err)
 	assert.Empty(t, out.Warnings, "a new run records the metadata it was sent")
 }
 
 func TestIngestWarnsWhenTheSuiteTimestampIsLaterThanIngestion(t *testing.T) {
 	rec := &fakeRecorder{created: true} // the execution module left startedAt unknown
-	out, err := NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta,
+	out, err := NewService(&fakeCatalog{}, rec, fakeAccess{}).IngestJUnit(context.Background(), meta,
 		strings.NewReader(`<testsuite name="s" timestamp="2099-01-01T00:00:00Z"/>`))
 	require.NoError(t, err)
 	assert.Equal(t, []string{"the report's suite timestamp 2099-01-01T00:00:00Z is later than the ingestion; startedAt is left unknown (clock skew, or a local time written without a zone)"}, out.Warnings)
 
-	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta,
+	out, err = NewService(&fakeCatalog{}, rec, fakeAccess{}).IngestJUnit(context.Background(), meta,
 		strings.NewReader(`<testsuite name="s" timestamp="2026-02-30T10:00:00"/>`))
 	require.NoError(t, err)
 	assert.Equal(t, []string{`suite timestamp "2026-02-30T10:00:00" could not be read; it does not set startedAt`}, out.Warnings)
 	rec.created = false
-	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta,
+	out, err = NewService(&fakeCatalog{}, rec, fakeAccess{}).IngestJUnit(context.Background(), meta,
 		strings.NewReader(`<testsuite name="s" timestamp="2026-02-30T10:00:00"/>`))
 	require.NoError(t, err)
 	assert.Empty(t, out.Warnings, "a replay is not applied, so its report raises no notices")
@@ -208,7 +235,7 @@ func TestIngestWarnsWhenTheSuiteTimestampIsLaterThanIngestion(t *testing.T) {
 
 	kept := time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC)
 	rec.storedStart = &kept
-	out, err = NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), meta,
+	out, err = NewService(&fakeCatalog{}, rec, fakeAccess{}).IngestJUnit(context.Background(), meta,
 		strings.NewReader(`<testsuite name="s" timestamp="2026-09-28T10:00:00Z"/>`))
 	require.NoError(t, err)
 	assert.Empty(t, out.Warnings)
@@ -218,7 +245,7 @@ func TestIngestPassesTheReportedRunStatus(t *testing.T) {
 	rec := &fakeRecorder{created: true}
 	m := meta
 	m.Status = execution.RunCancelled
-	out, err := NewService(&fakeCatalog{}, rec).IngestJUnit(context.Background(), m, strings.NewReader(`<testsuite name="s"/>`))
+	out, err := NewService(&fakeCatalog{}, rec, fakeAccess{}).IngestJUnit(context.Background(), m, strings.NewReader(`<testsuite name="s"/>`))
 	require.NoError(t, err)
 	assert.Equal(t, execution.RunCancelled, rec.gotRun.Status)
 	assert.Equal(t, execution.RunCancelled, out.Run.Status)
@@ -255,25 +282,25 @@ func TestValidateMeta(t *testing.T) {
 
 func TestIngestErrors(t *testing.T) {
 	ctx := context.Background()
-	_, err := NewService(&fakeCatalog{}, &fakeRecorder{}).IngestJUnit(ctx, RunMeta{}, strings.NewReader(report))
+	_, err := NewService(&fakeCatalog{}, &fakeRecorder{}, fakeAccess{}).IngestJUnit(ctx, RunMeta{}, strings.NewReader(report))
 	assert.Error(t, err)
 
-	_, err = NewService(&fakeCatalog{}, &fakeRecorder{}).IngestJUnit(ctx, meta, strings.NewReader("<nope"))
+	_, err = NewService(&fakeCatalog{}, &fakeRecorder{}, fakeAccess{}).IngestJUnit(ctx, meta, strings.NewReader("<nope"))
 	e, ok := apperr.As(err)
 	require.True(t, ok)
 	assert.Equal(t, apperr.KindInvalidDocument, e.Kind)
 
 	tooLarge := &http.MaxBytesError{Limit: 1}
-	_, err = NewService(&fakeCatalog{}, &fakeRecorder{}).IngestJUnit(ctx, meta, errReader{tooLarge})
+	_, err = NewService(&fakeCatalog{}, &fakeRecorder{}, fakeAccess{}).IngestJUnit(ctx, meta, errReader{tooLarge})
 	assert.ErrorAs(t, err, &tooLarge, "read errors (e.g. body too large) are returned as is")
 
-	_, err = NewService(&fakeCatalog{viewErr: errBoom}, &fakeRecorder{}).IngestJUnit(ctx, meta, strings.NewReader(report))
+	_, err = NewService(&fakeCatalog{viewErr: errBoom}, &fakeRecorder{}, fakeAccess{}).IngestJUnit(ctx, meta, strings.NewReader(report))
 	assert.ErrorIs(t, err, errBoom)
-	_, err = NewService(&fakeCatalog{}, &fakeRecorder{recordErr: errBoom}).IngestJUnit(ctx, meta, strings.NewReader(report))
+	_, err = NewService(&fakeCatalog{}, &fakeRecorder{recordErr: errBoom}, fakeAccess{}).IngestJUnit(ctx, meta, strings.NewReader(report))
 	assert.ErrorIs(t, err, errBoom)
-	_, err = NewService(&fakeCatalog{}, &fakeRecorder{diagErr: errBoom}).IngestJUnit(ctx, meta, strings.NewReader(report))
+	_, err = NewService(&fakeCatalog{}, &fakeRecorder{diagErr: errBoom}, fakeAccess{}).IngestJUnit(ctx, meta, strings.NewReader(report))
 	assert.ErrorIs(t, err, errBoom)
-	_, err = NewService(&fakeCatalog{}, &fakeRecorder{parseErr: errBoom}).IngestJUnit(ctx, meta, strings.NewReader(report))
+	_, err = NewService(&fakeCatalog{}, &fakeRecorder{parseErr: errBoom}, fakeAccess{}).IngestJUnit(ctx, meta, strings.NewReader(report))
 	assert.ErrorIs(t, err, errBoom)
 }
 
@@ -289,7 +316,7 @@ var _ io.Reader = errReader{}
 func TestIngestIntoAProject(t *testing.T) {
 	cat := &fakeCatalog{universe: []int64{5}, statuses: map[int64]catalog.Status{5: catalog.StatusActive, 7: catalog.StatusActive}}
 	rec := &fakeRecorder{created: true}
-	svc := NewService(cat, rec)
+	svc := NewService(cat, rec, fakeAccess{})
 	m := meta
 	m.ProjectKey = "CHK"
 	xml := `<testsuite name="s">
@@ -328,6 +355,38 @@ func TestIngestIntoAProject(t *testing.T) {
 
 	m.ProjectKey = "chk"
 	assert.Error(t, ValidateMeta(m), "the key is validated before any lookup")
+}
+
+// Who may report: an API key reports into its own project (the default when ?project= is
+// absent); people need the member role; a project the caller cannot see is "not found".
+func TestIngestAccess(t *testing.T) {
+	ctx := context.Background()
+	report := `<testsuite><testcase name="t"/></testsuite>`
+	cat := &fakeCatalog{}
+	rec := &fakeRecorder{created: true}
+
+	_, err := NewService(cat, rec, fakeAccess{key: 2}).IngestJUnit(ctx, meta, strings.NewReader(report))
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), rec.gotRun.ProjectID, "a key's runs go to its project")
+
+	m := meta
+	m.ProjectKey = "CHK"
+	_, err = NewService(cat, rec, fakeAccess{key: 2}).IngestJUnit(ctx, m, strings.NewReader(report))
+	require.NoError(t, err, "naming the key's own project is fine")
+
+	_, err = NewService(cat, rec, fakeAccess{key: 2, denied: map[int64]error{1: nil}}).IngestJUnit(ctx, func() RunMeta { m := meta; m.ProjectKey = "TC"; return m }(), strings.NewReader(report))
+	e, ok := apperr.As(err)
+	require.True(t, ok)
+	assert.Equal(t, apperr.KindNotFound, e.Kind)
+	assert.Equal(t, "project TC not found", e.Message, "another project looks unknown")
+
+	forbidden := apperr.Forbidden("needs member")
+	_, err = NewService(cat, rec, fakeAccess{denied: map[int64]error{1: forbidden}}).IngestJUnit(ctx, meta, strings.NewReader(report))
+	assert.Equal(t, forbidden, err, "a viewer cannot report")
+
+	cat.projectErr = errBoom
+	_, err = NewService(cat, rec, fakeAccess{key: 2}).IngestJUnit(ctx, meta, strings.NewReader(report))
+	assert.ErrorIs(t, err, errBoom)
 }
 
 func TestWrongProjectDiagnosticMessage(t *testing.T) {

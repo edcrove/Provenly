@@ -16,7 +16,18 @@ type Config struct {
 	LogLevel       slog.Level
 	MaxIngestBytes int64
 	AutoMigrate    bool
+	// JWTSecret signs session tokens; nil means a random one per start (not allowed in prod).
+	JWTSecret []byte
+	// AdminUsername and AdminPassword create the first administrator when there are no users.
+	AdminUsername string
+	AdminPassword string
 }
+
+// DemoAdminPassword is the published password of the local demo administrator; prod refuses it.
+const DemoAdminPassword = "provenly-demo"
+
+// minSecretBytes is the shortest accepted PROVENLY_JWT_SECRET (HS256 key size).
+const minSecretBytes = 32
 
 // Load reads configuration through getenv (os.Getenv in production).
 func Load(getenv func(string) string) (Config, error) {
@@ -45,6 +56,21 @@ func Load(getenv func(string) string) (Config, error) {
 			return Config{}, fmt.Errorf("PROVENLY_AUTO_MIGRATE must be a boolean, got %q", raw)
 		}
 		cfg.AutoMigrate = b
+	}
+	if secret := getenv("PROVENLY_JWT_SECRET"); secret != "" {
+		if len(secret) < minSecretBytes {
+			return Config{}, fmt.Errorf("PROVENLY_JWT_SECRET must be at least %d bytes", minSecretBytes)
+		}
+		cfg.JWTSecret = []byte(secret)
+	} else if cfg.Env == "prod" {
+		return Config{}, fmt.Errorf("PROVENLY_JWT_SECRET is required in prod (at least %d bytes)", minSecretBytes)
+	}
+	cfg.AdminUsername, cfg.AdminPassword = getenv("PROVENLY_ADMIN_USERNAME"), getenv("PROVENLY_ADMIN_PASSWORD")
+	if (cfg.AdminUsername == "") != (cfg.AdminPassword == "") {
+		return Config{}, fmt.Errorf("PROVENLY_ADMIN_USERNAME and PROVENLY_ADMIN_PASSWORD must be set together")
+	}
+	if cfg.Env == "prod" && cfg.AdminPassword == DemoAdminPassword {
+		return Config{}, fmt.Errorf("PROVENLY_ADMIN_PASSWORD is the public demo password: set your own in prod")
 	}
 	return cfg, nil
 }

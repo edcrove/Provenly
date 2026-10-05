@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/edcrove/provenly/backend/internal/app"
+	"github.com/edcrove/provenly/backend/internal/identity"
 	"github.com/edcrove/provenly/backend/internal/platform/config"
 	"github.com/edcrove/provenly/backend/internal/platform/postgres"
 	"github.com/edcrove/provenly/backend/internal/platform/server"
@@ -82,6 +83,16 @@ func run(ctx context.Context, args []string, d Deps) error {
 	if err != nil {
 		return err
 	}
-	handler := app.NewHandler(app.NewServices(pool, time.Now), cfg.MaxIngestBytes)
-	return d.Serve(ctx, l, handler)
+	secret := cfg.JWTSecret
+	if secret == nil {
+		slog.WarnContext(ctx, "PROVENLY_JWT_SECRET is not set: using a random secret, sessions end when the API restarts")
+		secret = identity.RandomSecret()
+	}
+	services := app.NewServicesWith(pool, time.Now, identity.DefaultConfig(secret))
+	if cfg.AdminUsername != "" {
+		if err := services.Identity.Bootstrap(ctx, cfg.AdminUsername, cfg.AdminPassword); err != nil {
+			return err
+		}
+	}
+	return d.Serve(ctx, l, app.NewHandler(services, cfg.MaxIngestBytes))
 }

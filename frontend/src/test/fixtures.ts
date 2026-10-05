@@ -1,6 +1,43 @@
-import type { Project, TestCase, TestResult, TestRun, TestRunSummary, TestStep } from '@/api/client'
+import type {
+  Invitation,
+  Project,
+  TestCase,
+  TestResult,
+  TestRun,
+  TestRunSummary,
+  TestStep,
+  User,
+} from '@/api/client'
 
 const at = '2026-09-28T10:00:00Z'
+
+export function user(overrides: Partial<User> = {}): User {
+  return {
+    id: 1,
+    username: 'admin',
+    displayName: 'Ada Admin',
+    email: null,
+    isAdmin: true,
+    createdAt: at,
+    ...overrides,
+  }
+}
+
+export function invitation(overrides: Partial<Invitation> = {}): Invitation {
+  return {
+    id: 1,
+    email: null,
+    note: '',
+    status: 'pending',
+    createdBy: 1,
+    createdAt: at,
+    expiresAt: '2026-10-05T10:00:00Z',
+    acceptedAt: null,
+    acceptedUserId: null,
+    revokedAt: null,
+    ...overrides,
+  }
+}
 
 export function project(overrides: Partial<Project> = {}): Project {
   return {

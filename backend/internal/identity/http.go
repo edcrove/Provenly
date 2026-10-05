@@ -1,0 +1,294 @@
+package identity
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/edcrove/provenly/backend/internal/platform/httpx"
+	"github.com/edcrove/provenly/backend/internal/platform/pagination"
+)
+
+// CookieName is the browser session cookie (HttpOnly, SameSite=Strict).
+const CookieName = "provenly_session"
+
+// API is what the REST adapter needs from the identity module.
+type API interface {
+	Login(ctx context.Context, username, password string) (Session, error)
+	Authenticate(ctx context.Context, token string) (User, error)
+	ChangePassword(ctx context.Context, u User, current, next string) (Session, error)
+	ListUsers(ctx context.Context, actor User, page pagination.Page) (pagination.Result[User], error)
+	CreateInvitation(ctx context.Context, actor User, in CreateInvitationInput) (Invitation, string, error)
+	ListInvitations(ctx context.Context, actor User, page pagination.Page) (pagination.Result[Invitation], error)
+	RevokeInvitation(ctx context.Context, actor User, id int64) (Invitation, error)
+	AcceptInvitation(ctx context.Context, in AcceptInput) (Session, error)
+}
+
+// UserDTO is the wire form of User (never the password hash).
+type UserDTO struct {
+	ID          int64     `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"displayName"`
+	Email       *string   `json:"email"`
+	IsAdmin     bool      `json:"isAdmin"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// ToUserDTO converts a User to its wire form.
+func ToUserDTO(u User) UserDTO {
+	return UserDTO{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, IsAdmin: u.IsAdmin, CreatedAt: u.CreatedAt}
+}
+
+type sessionDTO struct {
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	User      UserDTO   `json:"user"`
+}
+
+type invitationDTO struct {
+	ID             int64            `json:"id"`
+	Email          *string          `json:"email"`
+	Note           string           `json:"note"`
+	Status         InvitationStatus `json:"status"`
+	CreatedBy      int64            `json:"createdBy"`
+	CreatedAt      time.Time        `json:"createdAt"`
+	ExpiresAt      time.Time        `json:"expiresAt"`
+	AcceptedAt     *time.Time       `json:"acceptedAt"`
+	AcceptedUserID *int64           `json:"acceptedUserId"`
+	RevokedAt      *time.Time       `json:"revokedAt"`
+}
+
+type createdInvitationDTO struct {
+	Invitation invitationDTO `json:"invitation"`
+	Token      string        `json:"token"`
+}
+
+type loginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type passwordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
+type invitationRequest struct {
+	Email *string `json:"email"`
+	Note  string  `json:"note"`
+}
+
+type acceptRequest struct {
+	Token       string  `json:"token"`
+	Username    string  `json:"username"`
+	DisplayName string  `json:"displayName"`
+	Email       *string `json:"email"`
+	Password    string  `json:"password"`
+}
+
+// Handler is the REST adapter of the identity module.
+type Handler struct {
+	api API
+	now func() time.Time
+}
+
+// NewHandler builds a Handler.
+func NewHandler(api API, now func() time.Time) *Handler { return &Handler{api: api, now: now} }
+
+// RegisterPublic mounts the routes that work without a session.
+func (h *Handler) RegisterPublic(mux httpx.Router) {
+	mux.HandleFunc("POST /api/v1/auth/login", h.login)
+	mux.HandleFunc("POST /api/v1/auth/logout", h.logout)
+	mux.HandleFunc("POST /api/v1/invitations/accept", h.accept)
+}
+
+// RegisterProtected mounts the routes that need a session (wrap mux with Protect).
+func (h *Handler) RegisterProtected(mux httpx.Router) {
+	mux.HandleFunc("GET /api/v1/auth/me", h.me)
+	mux.HandleFunc("POST /api/v1/auth/password", h.changePassword)
+	mux.HandleFunc("GET /api/v1/users", h.listUsers)
+	mux.HandleFunc("GET /api/v1/invitations", h.listInvitations)
+	mux.HandleFunc("POST /api/v1/invitations", h.createInvitation)
+	mux.HandleFunc("POST /api/v1/invitations/{invitationId}/revoke", h.revokeInvitation)
+}
+
+// protected is a Router whose routes all require a session.
+type protected struct {
+	next httpx.Router
+	api  API
+}
+
+// Protect returns a Router that wraps every route it registers with RequireUser.
+func Protect(r httpx.Router, api API) httpx.Router { return protected{next: r, api: api} }
+
+func (p protected) HandleFunc(pattern string, h func(http.ResponseWriter, *http.Request)) {
+	p.next.HandleFunc(pattern, RequireUser(p.api, h))
+}
+
+// sessionToken reads "Authorization: Bearer <token>" or, from a browser, the session cookie.
+func sessionToken(r *http.Request) string {
+	if auth := r.Header.Get("Authorization"); auth != "" {
+		scheme, token, _ := strings.Cut(auth, " ")
+		if strings.EqualFold(scheme, "Bearer") {
+			return strings.TrimSpace(token)
+		}
+		return ""
+	}
+	if c, err := r.Cookie(CookieName); err == nil {
+		return c.Value
+	}
+	return ""
+}
+
+// RequireUser answers 401 unless the request carries a valid session; the user is put in the context.
+func RequireUser(api API, next func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		u, err := api.Authenticate(r.Context(), sessionToken(r))
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		next(w, r.WithContext(WithUser(r.Context(), u)))
+	}
+}
+
+func secure(r *http.Request) bool {
+	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+func (h *Handler) setSession(w http.ResponseWriter, r *http.Request, s Session) {
+	http.SetCookie(w, &http.Cookie{
+		Name: CookieName, Value: s.Token, Path: "/", Expires: s.ExpiresAt, MaxAge: int(s.ExpiresAt.Sub(h.now()).Seconds()),
+		HttpOnly: true, Secure: secure(r), SameSite: http.SameSiteStrictMode,
+	})
+}
+
+func toSessionDTO(s Session) sessionDTO {
+	return sessionDTO{Token: s.Token, ExpiresAt: s.ExpiresAt, User: ToUserDTO(s.User)}
+}
+
+func (h *Handler) toInvitationDTO(i Invitation) invitationDTO {
+	return invitationDTO{
+		ID: i.ID, Email: i.Email, Note: i.Note, Status: i.Status(h.now()), CreatedBy: i.CreatedBy, CreatedAt: i.CreatedAt,
+		ExpiresAt: i.ExpiresAt, AcceptedAt: i.AcceptedAt, AcceptedUserID: i.AcceptedUserID, RevokedAt: i.RevokedAt,
+	}
+}
+
+func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
+	var req loginRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	s, err := h.api.Login(r.Context(), req.Username, req.Password)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	h.setSession(w, r, s)
+	httpx.WriteJSON(w, http.StatusOK, toSessionDTO(s))
+}
+
+func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name: CookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: secure(r), SameSite: http.SameSiteStrictMode,
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
+	u, _ := UserFrom(r.Context())
+	httpx.WriteJSON(w, http.StatusOK, ToUserDTO(u))
+}
+
+func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
+	var req passwordRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	u, _ := UserFrom(r.Context())
+	s, err := h.api.ChangePassword(r.Context(), u, req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	h.setSession(w, r, s)
+	httpx.WriteJSON(w, http.StatusOK, toSessionDTO(s))
+}
+
+func (h *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	u, _ := UserFrom(r.Context())
+	res, err := h.api.ListUsers(r.Context(), u, page)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, ToUserDTO))
+}
+
+func (h *Handler) listInvitations(w http.ResponseWriter, r *http.Request) {
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	u, _ := UserFrom(r.Context())
+	res, err := h.api.ListInvitations(r.Context(), u, page)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, h.toInvitationDTO))
+}
+
+func (h *Handler) createInvitation(w http.ResponseWriter, r *http.Request) {
+	var req invitationRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	u, _ := UserFrom(r.Context())
+	inv, token, err := h.api.CreateInvitation(r.Context(), u, CreateInvitationInput(req))
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, createdInvitationDTO{Invitation: h.toInvitationDTO(inv), Token: token})
+}
+
+func (h *Handler) revokeInvitation(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.PathID(r, "invitationId")
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	u, _ := UserFrom(r.Context())
+	inv, err := h.api.RevokeInvitation(r.Context(), u, id)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, h.toInvitationDTO(inv))
+}
+
+func (h *Handler) accept(w http.ResponseWriter, r *http.Request) {
+	var req acceptRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	s, err := h.api.AcceptInvitation(r.Context(), AcceptInput(req))
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	h.setSession(w, r, s)
+	httpx.WriteJSON(w, http.StatusCreated, toSessionDTO(s))
+}

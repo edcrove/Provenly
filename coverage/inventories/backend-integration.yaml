@@ -72,3 +72,9 @@ targets:
     description: the projects migration keeps every existing test case as TC-<id>, continues the TC counter after the highest id and assigns existing runs to TC
   - id: BE-INT-035
     description: a project key lookup that fails after the test case query succeeded is reported as an error, never as a test case without key
+  - id: BE-INT-036
+    description: the first administrator is bootstrapped once; sign-in, session tokens and password changes (which sign other sessions out) work against Postgres; the database rejects invalid usernames, blank names, unhashed passwords, duplicates, deletes and username changes
+  - id: BE-INT-037
+    description: invitations store only the token digest, list newest first, are accepted once, revoke only while pending, and the database forbids deleting them or changing a settled one
+  - id: BE-INT-038
+    description: concurrent acceptances of one link create exactly one account, and one username is taken once across links

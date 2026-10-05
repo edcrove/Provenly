@@ -322,8 +322,8 @@ describe('FE-INT-018 Test Case UI robustness', () => {
       renderRoute(`/test-cases/${id}`)
       expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
       await waitFor(() => expect(document.title).toBe('Page not found · Provenly'))
-      // Only the header's project switcher talks to the API.
-      expect(requests.filter((u) => !u.includes('/api/v1/projects'))).toEqual([])
+      // Only the shell (who is signed in, the project switcher) talks to the API.
+      expect(requests.filter((u) => !/\/api\/v1\/(projects|auth\/me)/.test(u))).toEqual([])
       server.events.removeAllListeners()
     },
   )

@@ -43,11 +43,24 @@ exceptions:
     reviewBy: "2026-12-31"
     link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
     status: approved
+  - id: EXC-BE-UNIT-006
+    gate: backend-unit
+    layer: unit
+    side: backend
+    target: internal/identity/identitydb/**
+    reason: sqlc-generated query code; it has no logic of its own and only runs against a real database.
+    category: generated-code
+    evidence: backend-integration gate targets BE-INT-Q:identity.*.
+    owner: edcrove
+    createdAt: "2026-10-05"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved
   - id: EXC-BE-UNIT-003
     gate: backend-unit
     layer: unit
     side: backend
-    target: internal/{catalog,execution}/postgres/**
+    target: internal/{catalog,execution,identity}/postgres/**
     reason: PostgreSQL repository adapters (thin mapping over sqlc); their behavior is persistence, verified against real Postgres.
     category: other-layer
     evidence: backend-integration gate (BE-INT-002..017) plus integration code-coverage evidence.
@@ -158,7 +171,7 @@ exceptions:
     gate: backend-consolidated
     layer: consolidated
     side: backend
-    target: internal/{catalog,execution}/{catalog,execution}db/*.sql.go
+    target: internal/{catalog,execution,identity}/{catalog,execution,identity}db/*.sql.go
     reason: >-
       rows.Scan / rows.Err error branches of sqlc-generated :many queries. They only run when the database fails in
       the middle of streaming a result set after the query itself succeeded, which cannot be reproduced

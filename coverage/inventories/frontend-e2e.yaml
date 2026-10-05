@@ -20,3 +20,5 @@ targets:
     description: run pages load without console errors or failed requests, and a result expands its full error details (every failure, stack trace)
   - id: FE-E2E-010
     description: create a project, work inside it (lists narrowed, new test case numbered with its key), read its run with its own keys, and go back to every project
+  - id: FE-E2E-011
+    description: sign in from a fresh browser (back to the page asked for), invite someone, they join from the link in another browser and sign out

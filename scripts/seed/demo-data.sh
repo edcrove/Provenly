@@ -6,7 +6,10 @@
 set -euo pipefail
 api="${1:-http://localhost:8080}/api/v1"
 
-json() { curl -fsS -H 'Content-Type: application/json' "$@"; }
+# shellcheck source=../lib/session.sh
+source "$(dirname "$0")/../lib/session.sh"
+jar=$(provenly_login "${1:-http://localhost:8080}")
+json() { curl -fsS -b "$jar" -H 'Content-Type: application/json' "$@"; }
 tc() { # title automated [expectedResult] -> TC-ID
   json -X POST "$api/test-cases" -d "{\"title\":\"$1\",\"automated\":$2,\"expectedResult\":\"${3:-}\"}" |
     sed -n 's/^{"id":\([0-9]*\).*/\1/p'

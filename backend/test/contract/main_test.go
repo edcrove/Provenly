@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -26,7 +27,10 @@ import (
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/edcrove/provenly/backend/internal/app"
+	"github.com/edcrove/provenly/backend/internal/identity"
 	"github.com/edcrove/provenly/backend/test/testdb"
 )
 
@@ -136,8 +140,15 @@ func (v validatingTransport) RoundTrip(req *http.Request) (*http.Response, error
 	return resp, nil
 }
 
-// api returns an httpexpect client for a backend built on the given services.
+// api returns an httpexpect client, signed in as the bootstrapped administrator,
+// for a backend built on the given services.
 func api(t *testing.T, s app.Services, maxIngest int64) *httpexpect.Expect {
+	t.Helper()
+	return as(anon(t, s, maxIngest), adminToken(t))
+}
+
+// anon returns an httpexpect client without a session.
+func anon(t *testing.T, s app.Services, maxIngest int64) *httpexpect.Expect {
 	t.Helper()
 	srv := httptest.NewServer(app.NewHandler(s, maxIngest))
 	t.Cleanup(srv.Close)
@@ -148,13 +159,38 @@ func api(t *testing.T, s app.Services, maxIngest int64) *httpexpect.Expect {
 	})
 }
 
+// as sends every request of e with the given session token.
+func as(e *httpexpect.Expect, token string) *httpexpect.Expect {
+	return e.Builder(func(r *httpexpect.Request) { r.WithHeader("Authorization", "Bearer "+token) })
+}
+
+// The administrator every fresh database starts with, and the secret its sessions are signed with.
+const adminUser, adminPassword = "admin", "correct horse"
+
+func identityConfig() identity.Config {
+	cfg := identity.DefaultConfig([]byte(strings.Repeat("k", 32)))
+	cfg.BcryptCost = bcrypt.MinCost
+	return cfg
+}
+
+// adminToken signs in as the administrator of the current database.
+func adminToken(t *testing.T) string {
+	t.Helper()
+	s := app.NewServicesWith(db.Pool, time.Now, identityConfig())
+	sess, err := s.Identity.Login(context.Background(), adminUser, adminPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sess.Token
+}
+
 // offContract serves the same API without the contract validation, to check
 // requests the contract does not define (e.g. that no method can edit a run).
 func offContract(t *testing.T, s app.Services) *httpexpect.Expect {
 	t.Helper()
 	srv := httptest.NewServer(app.NewHandler(s, 1<<20))
 	t.Cleanup(srv.Close)
-	return httpexpect.WithConfig(httpexpect.Config{BaseURL: srv.URL, Reporter: httpexpect.NewRequireReporter(t)})
+	return as(httpexpect.WithConfig(httpexpect.Config{BaseURL: srv.URL, Reporter: httpexpect.NewRequireReporter(t)}), adminToken(t))
 }
 
 func fresh(t *testing.T) app.Services {
@@ -162,5 +198,9 @@ func fresh(t *testing.T) app.Services {
 	if err := db.Reset(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	return app.NewServices(db.Pool, time.Now)
+	s := app.NewServicesWith(db.Pool, time.Now, identityConfig())
+	if err := s.Identity.Bootstrap(context.Background(), adminUser, adminPassword); err != nil {
+		t.Fatal(err)
+	}
+	return s
 }

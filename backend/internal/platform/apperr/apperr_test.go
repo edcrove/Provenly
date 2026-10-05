@@ -31,6 +31,13 @@ func TestConstructors(t *testing.T) {
 	assert.Equal(t, KindConflict, c.Kind)
 	assert.Equal(t, "project CHK exists", c.Message)
 
+	u, ok := As(Unauthorized("sign in"))
+	require.True(t, ok)
+	assert.Equal(t, KindUnauthorized, u.Kind)
+	f, ok := As(Forbidden("admins only"))
+	require.True(t, ok)
+	assert.Equal(t, KindForbidden, f.Kind)
+
 	_, ok = As(errors.New("plain"))
 	assert.False(t, ok)
 }

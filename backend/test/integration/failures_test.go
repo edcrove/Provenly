@@ -13,6 +13,8 @@ import (
 	catalogpg "github.com/edcrove/provenly/backend/internal/catalog/postgres"
 	"github.com/edcrove/provenly/backend/internal/execution"
 	executionpg "github.com/edcrove/provenly/backend/internal/execution/postgres"
+	"github.com/edcrove/provenly/backend/internal/identity"
+	identitypg "github.com/edcrove/provenly/backend/internal/identity/postgres"
 	"github.com/edcrove/provenly/backend/internal/platform/postgres"
 )
 
@@ -27,6 +29,7 @@ func TestPersistenceFailures(t *testing.T) {
 		pool.Close()
 		cat := catalogpg.NewStore(pool)
 		exe := executionpg.NewStore(pool)
+		idn := identitypg.NewStore(pool)
 		str := func(s string) *string { return &s }
 		status := catalog.StatusActive
 
@@ -67,6 +70,21 @@ func TestPersistenceFailures(t *testing.T) {
 				return err
 			},
 
+			"identity.InTx":                   func() error { return idn.InTx(ctx, func(identity.Repository) error { return nil }) },
+			"identity.CountUsers":             func() error { _, err := idn.CountUsers(ctx); return err },
+			"identity.CreateUser":             func() error { _, err := idn.CreateUser(ctx, identity.NewUser{}); return err },
+			"identity.GetUser":                func() error { _, err := idn.GetUser(ctx, 1); return err },
+			"identity.GetUserByUsername":      func() error { _, err := idn.GetUserByUsername(ctx, "x"); return err },
+			"identity.ListUsers":              func() error { _, err := idn.ListUsers(ctx, 10, 0); return err },
+			"identity.SetPasswordHash":        func() error { _, err := idn.SetPasswordHash(ctx, 1, "$2a$x"); return err },
+			"identity.CreateInvitation":       func() error { _, err := idn.CreateInvitation(ctx, identity.NewInvitation{}); return err },
+			"identity.ListInvitations":        func() error { _, err := idn.ListInvitations(ctx, 10, 0); return err },
+			"identity.CountInvitations":       func() error { _, err := idn.CountInvitations(ctx); return err },
+			"identity.GetInvitation":          func() error { _, err := idn.GetInvitation(ctx, 1); return err },
+			"identity.LockInvitationByToken":  func() error { _, err := idn.LockInvitationByToken(ctx, []byte("x")); return err },
+			"identity.MarkInvitationAccepted": func() error { return idn.MarkInvitationAccepted(ctx, 1, 1) },
+			"identity.RevokeInvitation":       func() error { _, err := idn.RevokeInvitation(ctx, 1); return err },
+
 			"execution.InTx":                     func() error { return exe.InTx(ctx, func(execution.Repository) error { return nil }) },
 			"execution.InsertTestRun":            func() error { _, _, err := exe.InsertTestRun(ctx, execution.InsertRunParams{}); return err },
 			"execution.GetTestRunIDByExternalID": func() error { _, err := exe.GetTestRunIDByExternalID(ctx, 1, "x"); return err },
@@ -90,6 +108,7 @@ func TestPersistenceFailures(t *testing.T) {
 			assert.Error(t, err, name)
 			assert.NotErrorIs(t, err, catalog.ErrNotFound, name)
 			assert.NotErrorIs(t, err, execution.ErrNotFound, name)
+			assert.NotErrorIs(t, err, identity.ErrNotFound, name)
 		}
 		assert.Error(t, postgres.Migrate(ctx, pool, "up"), "migrations report a closed pool")
 	})

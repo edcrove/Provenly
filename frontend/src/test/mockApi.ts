@@ -1,8 +1,10 @@
 import { http, HttpResponse, type JsonBodyType } from 'msw'
 
 import type {
+  Invitation,
   ParseError,
   Project,
+  User,
   TestCase,
   TestCaseResult,
   TestResult,
@@ -11,7 +13,7 @@ import type {
   TestStep,
 } from '@/api/client'
 
-import { project, summary, testCase, testResult, testRun, testStep } from './fixtures'
+import { invitation, project, summary, testCase, testResult, testRun, testStep, user } from './fixtures'
 
 /**
  * In-memory implementation of the Provenly REST API for MSW. It is used by the
@@ -19,6 +21,13 @@ import { project, summary, testCase, testResult, testRun, testStep } from './fix
  * validated against api/openapi.yaml by the Contract tests.
  */
 export interface MockDb {
+  users: User[]
+  passwords: Record<string, string>
+  invitations: Invitation[]
+  /** Tokens of the invitations created in this mock, by invitation id. */
+  invitationTokens: Record<string, number>
+  /** The signed-in user's id (the session cookie), or null when signed out. */
+  session: number | null
   projects: Project[]
   testCases: TestCase[]
   steps: TestStep[]
@@ -26,14 +35,21 @@ export interface MockDb {
   results: TestResult[]
   summaries: Record<number, TestRunSummary>
   parseErrors: Record<number, ParseError[]>
-  /** When true every handler answers 500 (server failure). */
+  /** When true every handler answers 500 (server failure), except who is signed in. */
   failing: boolean
+  /** When true "who is signed in" answers 500 too. */
+  failingMe: boolean
   nextId: number
 }
 
 export function seed(): MockDb {
   const tc = testCase()
   return {
+    users: [user()],
+    passwords: { admin: 'correct horse' },
+    invitations: [],
+    invitationTokens: {},
+    session: 1,
     projects: [project()],
     testCases: [tc, testCase({ id: 154, title: 'Logout works' })],
     steps: [
@@ -61,6 +77,7 @@ export function seed(): MockDb {
     summaries: { 7: summary() },
     parseErrors: {},
     failing: false,
+    failingMe: false,
     nextId: 1000,
   }
 }
@@ -84,6 +101,8 @@ const problem = (
 
 const statusText: Record<number, string> = {
   400: 'Bad Request',
+  401: 'Unauthorized',
+  403: 'Forbidden',
   404: 'Not Found',
   409: 'Conflict',
   415: 'Unsupported Media Type',
@@ -125,10 +144,24 @@ const BASE = '*/api/v1'
 type Handler = Parameters<typeof http.get>[1]
 
 /** Wraps a handler with the shared failure switch. */
-const guard =
+/** Wraps a handler that works without a session (sign-in, sign-out, accepting an invitation). */
+const publicGuard =
   (fn: Handler): Handler =>
   (info) =>
     db.failing ? problem(500, 'internal_error', 'an unexpected error occurred') : fn(info)
+
+/** Wraps a handler that needs a session, like every other API operation. */
+const guard =
+  (fn: Handler): Handler =>
+  (info) =>
+    db.session === null && !db.failing
+      ? problem(401, 'unauthorized', 'sign in to continue')
+      : publicGuard(fn)(info)
+
+const currentUser = () => db.users.find((u) => u.id === db.session)!
+const session = (u: User) => ({ token: `token-${u.id}`, expiresAt: '2026-10-05T22:00:00Z', user: u })
+const forbidden = () => problem(403, 'forbidden', 'only administrators can manage users and invitations')
+const USERNAME = /^[a-z0-9][a-z0-9._-]{2,31}$/
 
 /** Wraps a handler whose request body is JSON: other content types answer 415 like the server. */
 const jsonGuard =
@@ -173,6 +206,138 @@ const stepsOf = (tcId: number) =>
   db.steps.filter((s) => s.testCaseId === tcId).sort((a, b) => a.position - b.position)
 
 export const handlers = [
+  http.post(
+    `${BASE}/auth/login`,
+    publicGuard(
+      jsonGuard(async ({ request }) => {
+        const body = await readBody(request)
+        if (!body) return validation('body', 'must be a JSON object')
+        const username = String(body.username ?? '')
+          .trim()
+          .toLowerCase()
+        const u = db.users.find((x) => x.username === username)
+        if (!u || db.passwords[username] !== body?.password)
+          return problem(401, 'unauthorized', 'invalid username or password')
+        db.session = u.id
+        return respond(session(u))
+      }),
+    ),
+  ),
+  http.post(
+    `${BASE}/auth/logout`,
+    publicGuard(() => {
+      db.session = null
+      return new HttpResponse(null, { status: 204 })
+    }),
+  ),
+  // Who is signed in keeps answering while db.failing breaks the pages' own requests.
+  http.get(`${BASE}/auth/me`, () => {
+    if (db.failingMe) return problem(500, 'internal_error', 'an unexpected error occurred')
+    return db.session === null ? problem(401, 'unauthorized', 'sign in to continue') : respond(currentUser())
+  }),
+  http.post(
+    `${BASE}/auth/password`,
+    guard(
+      jsonGuard(async ({ request }) => {
+        const body = await readBody(request)
+        const u = currentUser()
+        const next = String(body?.newPassword ?? '')
+        if (next.length < 10) return validation('newPassword', 'must be at least 10 characters')
+        if (db.passwords[u.username] !== body?.currentPassword)
+          return validation('currentPassword', 'is not your current password')
+        db.passwords[u.username] = next
+        return respond(session(u))
+      }),
+    ),
+  ),
+  http.get(
+    `${BASE}/users`,
+    guard(({ request }) =>
+      currentUser().isAdmin ? respond(pageOf(new URL(request.url), db.users)) : forbidden(),
+    ),
+  ),
+  http.get(
+    `${BASE}/invitations`,
+    guard(({ request }) =>
+      currentUser().isAdmin
+        ? respond(
+            pageOf(
+              new URL(request.url),
+              [...db.invitations].sort((a, b) => b.id - a.id),
+            ),
+          )
+        : forbidden(),
+    ),
+  ),
+  http.post(
+    `${BASE}/invitations`,
+    guard(
+      jsonGuard(async ({ request }) => {
+        if (!currentUser().isAdmin) return forbidden()
+        const body = await readBody(request)
+        const email = typeof body?.email === 'string' && body.email.trim() ? body.email.trim() : null
+        if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+          return validation('email', 'must be an email address')
+        const inv = invitation({
+          id: ++db.nextId,
+          email,
+          note: String(body?.note ?? '').trim(),
+          createdBy: currentUser().id,
+          createdAt: now(),
+        })
+        const token = `invite-${inv.id}`
+        db.invitations.push(inv)
+        db.invitationTokens[token] = inv.id
+        return respond({ invitation: inv, token }, 201)
+      }),
+    ),
+  ),
+  http.post(
+    `${BASE}/invitations/accept`,
+    publicGuard(
+      jsonGuard(async ({ request }) => {
+        const body = await readBody(request)
+        const username = String(body?.username ?? '')
+          .trim()
+          .toLowerCase()
+        const password = String(body?.password ?? '')
+        if (!USERNAME.test(username)) return validation('username', 'must be 3 to 32 lower-case letters')
+        if (password.length < 10) return validation('password', 'must be at least 10 characters')
+        const inv = db.invitations.find((i) => i.id === db.invitationTokens[String(body?.token ?? '')])
+        if (!inv || inv.status !== 'pending')
+          return problem(404, 'not_found', 'invitation not found, expired, revoked or already used')
+        if (db.users.some((u) => u.username === username))
+          return problem(409, 'conflict', `username ${username} is taken`)
+        const u = user({
+          id: ++db.nextId,
+          username,
+          displayName: String(body?.displayName ?? '').trim(),
+          email: (body?.email as string | null) || inv.email,
+          isAdmin: false,
+          createdAt: now(),
+        })
+        db.users.push(u)
+        db.passwords[username] = password
+        Object.assign(inv, { status: 'accepted', acceptedAt: now(), acceptedUserId: u.id })
+        db.session = u.id
+        return respond(session(u), 201)
+      }),
+    ),
+  ),
+  http.post(
+    `${BASE}/invitations/:invitationId/revoke`,
+    guard(({ params }) => {
+      if (!currentUser().isAdmin) return forbidden()
+      const id = pathId(params.invitationId)
+      if (id === undefined) return validation('invitationId', 'must be a positive integer')
+      const inv = db.invitations.find((i) => i.id === id)
+      if (!inv) return notFound(`invitation ${id}`)
+      if (inv.status !== 'pending')
+        return problem(409, 'conflict', `invitation ${id} was already accepted or revoked`)
+      Object.assign(inv, { status: 'revoked', revokedAt: now() })
+      return respond(inv)
+    }),
+  ),
   http.get(
     `${BASE}/projects`,
     guard(({ request }) =>

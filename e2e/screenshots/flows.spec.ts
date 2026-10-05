@@ -35,8 +35,15 @@ const tc = (name: string, id: number | string, body = '', time = '1.284') =>
   `<testcase name="${name}" classname="web" time="${time}"><properties><property name="tc-id" value="${id}"/></properties>${body}</testcase>`
 const fail = (msg: string) => `<failure message="${msg}">Error: ${msg}\n    at checkout.spec.ts:42</failure>`
 
-test('UI flows', async ({ page, request }) => {
+test('UI flows', async ({ page }) => {
   test.setTimeout(120_000)
+  // Sign in as the bootstrapped administrator; page.request shares the browser's session cookie.
+  await page.goto('/test-cases')
+  await page.getByLabel('Username').fill('admin')
+  await page.getByLabel('Password').fill('e2e admin password')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page).toHaveURL(/\/test-cases$/)
+  const request = page.request
 
   // Empty states.
   await page.goto('/test-cases')
@@ -264,4 +271,30 @@ test('UI flows', async ({ page, request }) => {
   await expect(page.getByRole('link', { name: 'CHK-1' }).first()).toBeVisible()
   await shot(page, 'test-run-in-project')
   expect(pay).toBeGreaterThan(0)
+
+  // Accounts (prototype feature 2): users and invitations, account, joining by link and signing in.
+  await page.goto('/users')
+  await page.getByLabel('Email (optional)').fill('carla@example.com')
+  await page.getByLabel('Note (optional)').fill('QA team')
+  await page.getByRole('button', { name: 'Create invitation link' }).click()
+  const link = (await page.getByTestId('invitation-link').textContent())!
+  await shot(page, 'users-and-invitations')
+  await page.goto('/account')
+  await shot(page, 'account')
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await expect(page).toHaveURL(/\/login$/)
+  await page.goto(link.replace(/^https?:\/\/[^/]+/, ''))
+  await page.getByLabel('Username').fill('carla')
+  await page.getByLabel('Display name').fill('Carla Gómez')
+  await page.getByLabel('Password', { exact: true }).fill('carla password')
+  await page.getByLabel('Repeat password').fill('carla password')
+  await shot(page, 'accept-invitation')
+  await page.getByRole('button', { name: 'Create account' }).click()
+  await expect(page.getByTestId('current-user')).toHaveText('Carla Gómez')
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByLabel('Username').fill('carla')
+  await page.getByLabel('Password').fill('wrong password')
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page.getByRole('alert')).toBeVisible()
+  await shot(page, 'sign-in-error')
 })

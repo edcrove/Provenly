@@ -6,17 +6,19 @@ page/offset overflow, invalid ids, NUL / invalid UTF-8 text, Content-Type, empty
 repeated query params, cross-resource ids, double submit and concurrency limits.
 
 Usage: scripts/probe/edge_cases.py [--base http://localhost:8080]
+Signs in as PROVENLY_ADMIN_USERNAME / PROVENLY_ADMIN_PASSWORD (default: the demo administrator).
 Exit 1 when any request returns 5xx or a status other than the expected one.
 It creates its own data (test cases prefixed "probe-"), so point it at a disposable DB.
 """
-import argparse, json, subprocess, sys, tempfile, threading, time, urllib.error, urllib.parse, urllib.request
+import argparse, json, os, subprocess, sys, tempfile, threading, time, urllib.error, urllib.parse, urllib.request
 
 results = []
+session = {}  # Authorization header of the signed-in administrator, sent with every call
 
 
 def call(base, method, path, body=None, raw=None, ctype="application/json", headers=None):
     data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
-    headers = {**({"Content-Type": ctype} if data is not None and ctype else {}), **(headers or {})}
+    headers = {**({"Content-Type": ctype} if data is not None and ctype else {}), **session, **(headers or {})}
     req = urllib.request.Request(base + path, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
@@ -54,6 +56,25 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://localhost:8080")
     base = ap.parse_args().base.rstrip("/") + "/api/v1"
+
+    # Sessions (prototype feature 2): every probe below runs signed in; anonymous and broken credentials get 401.
+    admin = {"username": os.environ.get("PROVENLY_ADMIN_USERNAME", "admin"), "password": os.environ.get("PROVENLY_ADMIN_PASSWORD", "provenly-demo")}
+    st, body = call(base, "POST", "/auth/login", admin)
+    if st != 200:
+        sys.exit(f"cannot sign in as {admin['username']} ({st}): is the API up at {base}?")
+    for name, hdr in [("no session", {}), ("garbage bearer", {"Authorization": "Bearer x.y.z"}), ("basic auth", {"Authorization": "Basic YWRtaW46eA=="}),
+                      ("alg none", {"Authorization": "Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIiwiaXNzIjoicHJvdmVubHkifQ."}),
+                      ("cookie garbage", {"Cookie": "provenly_session=%00"})]:
+        check(f"GET /test-cases with {name}", call(base, "GET", "/test-cases", headers={"Authorization": "", **hdr} if hdr else {"Authorization": ""})[0], 401)
+    for creds, exp in [({"username": "admin", "password": "wrong"}, 401), ({"username": "nobody-here", "password": "x" * 20}, 401),
+                       ({"username": "admin\u0000", "password": "x"}, 401), ({"username": "a" * 10000, "password": "p" * 100000}, 401),
+                       ({"username": "admin"}, 401), ({"user": "admin"}, 400)]:
+        check(f"login {str(creds)[:40]}", call(base, "POST", "/auth/login", creds)[0], exp)
+    check("login text/plain", call(base, "POST", "/auth/login", raw=b"{}", ctype="text/plain")[0], 415)
+    check("accept unknown invitation", call(base, "POST", "/invitations/accept", {"token": "nope", "username": "probe_x", "displayName": "x", "password": "a long password"})[0], 404)
+    check("accept with NUL", call(base, "POST", "/invitations/accept", {"token": "t\u0000", "username": "probe_x", "displayName": "x\u0000", "password": "a long password"})[0], 400)
+    check("revoke id 0", call(base, "POST", "/invitations/0/revoke", headers={"Authorization": "Bearer " + body["token"]})[0], 400)
+    session["Authorization"] = "Bearer " + body["token"]
 
     st, tc = call(base, "POST", "/test-cases", {"title": "probe-a", "automated": True})
     if st != 201:

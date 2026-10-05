@@ -8,12 +8,15 @@ package integration
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/edcrove/provenly/backend/internal/app"
+	"github.com/edcrove/provenly/backend/internal/identity"
 	"github.com/edcrove/provenly/backend/test/testdb"
 )
 
@@ -31,7 +34,14 @@ func fresh(t *testing.T) (app.Services, context.Context) {
 	t.Helper()
 	ctx := context.Background()
 	require.NoError(t, db.Reset(ctx))
-	return app.NewServices(db.Pool, time.Now), ctx
+	return app.NewServicesWith(db.Pool, time.Now, testIdentity()), ctx
+}
+
+// testIdentity is the production identity configuration with the cheapest bcrypt cost.
+func testIdentity() identity.Config {
+	cfg := identity.DefaultConfig([]byte(strings.Repeat("k", 32)))
+	cfg.BcryptCost = bcrypt.MinCost
+	return cfg
 }
 
 func ptr[T any](v T) *T { return &v }

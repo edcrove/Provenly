@@ -15,3 +15,5 @@ targets:
     description: result history across runs and snapshot stability after catalog changes
   - id: BE-E2E-007
     description: projects through the public API - per-project numbering, ingestion with ?project= (its universe, wrong_project for another project's key), externalRunId unique per project, run filter and summary keys
+  - id: BE-E2E-008
+    description: accounts through the public API - 401 without a session, wrong passwords, an invitation accepted once, bearer sessions, admin-only user listing and a password change that signs the old session out

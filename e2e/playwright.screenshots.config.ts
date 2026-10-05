@@ -5,6 +5,8 @@ import { defineConfig } from '@playwright/test'
 const root = path.resolve(import.meta.dirname, '..')
 const apiPort = process.env.E2E_API_PORT ?? '8082'
 const webPort = process.env.E2E_WEB_PORT ?? '4174'
+const adminUsername = 'admin'
+const adminPassword = 'e2e admin password'
 const databaseUrl =
   process.env.PROVENLY_DATABASE_URL ?? 'postgres://provenly:provenly@localhost:5439/provenly_e2e?sslmode=disable'
 
@@ -35,6 +37,10 @@ export default defineConfig({
         PROVENLY_HTTP_ADDR: `:${apiPort}`,
         PROVENLY_AUTO_MIGRATE: 'true',
         PROVENLY_LOG_LEVEL: 'warn',
+        // The administrator every journey signs in as (created on the empty E2E database).
+        PROVENLY_ADMIN_USERNAME: adminUsername,
+        PROVENLY_ADMIN_PASSWORD: adminPassword,
+        PROVENLY_JWT_SECRET: 'e2e-only-session-signing-secret-0123456789',
       },
     },
     {

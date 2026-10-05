@@ -45,7 +45,7 @@ st, runs = call("GET", "/test-runs?pageSize=100")
 check("no duplicate run", sum(r["externalRunId"] == "github:42:1" for r in runs["items"]), 1)
 st, s = call("GET", "/test-runs/6/summary")
 tc8 = [t for t in s["testCases"] if t["testCaseId"] == 8]
-check("TC-8 PASS+FAIL aggregated as failed", tc8, [{"testCaseId": 8, "testCaseKey": "TC-8", "status": "failed", "resultCount": 2}])
+check("TC-8 PASS+FAIL aggregated as failed", tc8, [{"testCaseId": 8, "testCaseKey": "TC-8", "status": "failed", "resultCount": 2, "flaky": False}])
 check("executed / untested", (s["executedTotal"], s["counts"]["untested"]), (1, s["expectedTotal"] - 1))
 check("missing TC-ID diagnostic", s["diagnostics"]["missing"], 1)
 st, h = call("GET", "/test-cases/8/results")

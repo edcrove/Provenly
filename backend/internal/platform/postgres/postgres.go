@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -15,10 +16,14 @@ import (
 
 // Open creates a pgx pool and verifies connectivity.
 func Open(ctx context.Context, url string) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, url)
+	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
+	// Every query is an OpenTelemetry span of the request or job that ran it.
+	cfg.ConnConfig.Tracer = otelpgx.NewTracer()
+	// NewWithConfig only fails on a config ParseConfig rejects; connecting is checked by the ping.
+	pool, _ := pgxpool.NewWithConfig(ctx, cfg)
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("ping database: %w", err)

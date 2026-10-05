@@ -18,6 +18,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/platform/config"
 	"github.com/edcrove/provenly/backend/internal/platform/postgres"
 	"github.com/edcrove/provenly/backend/internal/platform/server"
+	"github.com/edcrove/provenly/backend/internal/platform/telemetry"
 )
 
 // Deps are the side-effecting operations of the CLI, injectable for tests.
@@ -28,13 +29,15 @@ type Deps struct {
 	Migrate func(ctx context.Context, pool *pgxpool.Pool, command string) error
 	Listen  func(addr string) (net.Listener, error)
 	Serve   func(ctx context.Context, l net.Listener, h http.Handler) error
+	// Exporter builds the OpenTelemetry span exporter when an OTLP endpoint is configured.
+	Exporter telemetry.Exporter
 }
 
 // DefaultDeps are the production dependencies.
 func DefaultDeps(getenv func(string) string, stderr io.Writer) Deps {
 	return Deps{
 		Getenv: getenv, Stderr: stderr,
-		OpenDB: postgres.Open, Migrate: postgres.Migrate,
+		OpenDB: postgres.Open, Migrate: postgres.Migrate, Exporter: telemetry.OTLP,
 		Listen: func(addr string) (net.Listener, error) { return net.Listen("tcp", addr) },
 		Serve: func(ctx context.Context, l net.Listener, h http.Handler) error {
 			return server.Run(ctx, l, h, server.ShutdownTimeout)
@@ -65,7 +68,12 @@ func run(ctx context.Context, args []string, d Deps) error {
 	if err != nil {
 		return err
 	}
-	slog.SetDefault(slog.New(slog.NewJSONHandler(d.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel})))
+	slog.SetDefault(slog.New(telemetry.LogHandler{Handler: slog.NewJSONHandler(d.Stderr, &slog.HandlerOptions{Level: cfg.LogLevel})}))
+	shutdown, err := telemetry.Setup(ctx, cfg.Env, cfg.OTLPExport, d.Exporter)
+	if err != nil {
+		return fmt.Errorf("opentelemetry: %w", err)
+	}
+	defer func() { _ = shutdown(context.WithoutCancel(ctx)) }()
 	pool, err := d.OpenDB(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err

@@ -45,3 +45,5 @@ targets:
     description: live runs through the public API - a live run starts with its snapshot (a repeated start returns it), takes streamed events idempotently by event id (duplicates counted, invalid events 400), shows provisional progress; its JUnit report completes it with the final results and the reconciliation names the test that started but never finished live; events after completion are 409
   - id: BE-E2E-022
     description: the Playwright reporter against the real API with a project API key - it starts a live run, streams the tests' events (TC-IDs from the title and from a tag, attempts on retries) and sends the final JUnit report with every attempt; the run completes as live, passed with one flaky test, consistent with its events, keeping both attempts of the retried test
+  - id: BE-E2E-023
+    description: OpenTelemetry through the public API - responses carry X-Trace-Id; a W3C traceparent sent by the caller is continued (health and a JUnit ingestion keep the caller's trace id); requests without one get a new trace

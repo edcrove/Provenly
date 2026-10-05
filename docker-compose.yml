@@ -28,6 +28,8 @@ x-app-env: &app-env
   PROVENLY_LOG_LEVEL: ${PROVENLY_LOG_LEVEL:-info}
   PROVENLY_MAX_INGEST_BYTES: ${PROVENLY_MAX_INGEST_BYTES:-10485760}
   PROVENLY_JWT_SECRET: ${PROVENLY_JWT_SECRET:-}
+  # OpenTelemetry: set an OTLP/HTTP endpoint (e.g. http://collector:4318) to export traces.
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
   # The demo administrator when the env file does not say (an empty value, as in prod.env.example, means none).
   PROVENLY_ADMIN_USERNAME: ${PROVENLY_ADMIN_USERNAME-admin}
   PROVENLY_ADMIN_PASSWORD: ${PROVENLY_ADMIN_PASSWORD-provenly-demo}

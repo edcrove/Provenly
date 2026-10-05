@@ -108,3 +108,5 @@ targets:
     description: project quality on a real database - automation rate over active test cases; never-executed and stale (older than staleDays) test cases, never first; flaky counts per test case over the latest window runs (a final failure is not flaky, manual re-tests never are), narrowed by window
   - id: BE-INT-053
     description: live runs on a real database - a live run starts with its snapshot (a retried start returns it), takes events idempotently by event id while running, shows provisional states; the final JUnit report completes it once (status, digest, results; replays change nothing) and the reconciliation reports what the events missed; the database refuses events of finished or batch runs, edits and deletes of events, and changing a digest once set
+  - id: BE-INT-054
+    description: OpenTelemetry on a real database - a JUnit ingestion is one trace whose root span carries the run id, created flag and result count, with a parse span and the database queries (otelpgx) as spans of the same trace; a failed ingestion's span has an error status

@@ -21,6 +21,9 @@ type Config struct {
 	// AdminUsername and AdminPassword create the first administrator when there are no users.
 	AdminUsername string
 	AdminPassword string
+	// OTLPExport is true when an OpenTelemetry OTLP endpoint is configured (OTEL_EXPORTER_OTLP_ENDPOINT or
+	// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT): spans are then exported.
+	OTLPExport bool
 }
 
 // DemoAdminPassword is the published password of the local demo administrator; prod refuses it.
@@ -36,6 +39,7 @@ func Load(getenv func(string) string) (Config, error) {
 		HTTPAddr:       valueOr(getenv("PROVENLY_HTTP_ADDR"), ":8080"),
 		DatabaseURL:    getenv("PROVENLY_DATABASE_URL"),
 		MaxIngestBytes: 10 << 20,
+		OTLPExport:     getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" || getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != "",
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("PROVENLY_DATABASE_URL is required")

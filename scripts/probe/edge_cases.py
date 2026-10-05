@@ -570,6 +570,23 @@ def main():
     check("reconciled after the report", lv.get("reconciliation") if isinstance(lv, dict) else st, "mismatch")
     check("events after the report", call(base, "POST", evs, {"events": [{**ev, "eventId": "late"}]})[0], 409)
 
+    # Tracing (prototype feature 17): every response through the proxy names its trace; a caller's traceparent is
+    # continued; malformed traceparents are ignored (a new trace), never an error.
+    def trace_of(path, traceparent=None):
+        req = urllib.request.Request(base + path, headers={**session, **({"traceparent": traceparent} if traceparent else {})})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                return r.status, r.headers.get("X-Trace-Id", "")
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers.get("X-Trace-Id", "")
+    tid = "4bf92f3577b34da6a3ce929d0e0e4736"
+    check("traceparent is continued", "%s %s" % trace_of("/test-cases", f"00-{tid}-00f067aa0ba902b7-01"), f"200 {tid}")
+    for tp in ["garbage", "00-00000000000000000000000000000000-00f067aa0ba902b7-01", "00-" + "z" * 32 + "-00f067aa0ba902b7-01", "x" * 5000]:
+        st, got = trace_of("/test-cases", tp)
+        check(f"malformed traceparent {tp[:30]}", f"{st} {len(got)} {got != tid}", "200 32 True")
+    st, got = trace_of("/nope-route")
+    check("unrouted requests are traced too", f"{st} {len(got)}", "404 32")
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

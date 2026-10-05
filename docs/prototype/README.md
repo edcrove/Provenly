@@ -31,7 +31,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 14 | Quality dashboard (trends, flaky, coverage) | Incubator (Quality Intelligence) | ✅ | proto/14-dashboard |
 | 15 | Live runs: execution sessions, live events, reconciliation | Trello Live Streaming, Planning #9 | ✅ | proto/15-live-runs |
 | 16 | Playwright reporter (`@provenly/playwright-reporter`) | Trello, DEC-15 | ✅ | proto/16-playwright-reporter |
-| 17 | OpenTelemetry basic instrumentation | Trello, DEC-11 | ⏳ | |
+| 17 | OpenTelemetry basic instrumentation | Trello, DEC-11 | ✅ | proto/17-otel |
 | 18 | Export sink (webhooks) and GitHub connector, secrets at rest | Planning #3, #21, Incubator, MVP D4 | ⏳ | |
 | 19 | MCP server (agent interface) | Incubator, DEC-10 | ⏳ | |
 | 20 | Audit log | Incubator (Project & Authorization) | ⏳ | |
@@ -145,6 +145,10 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P16-4 | Resilience | Provenly unreachable never fails the test run: a failed live start or event batch is logged and the final report is still sent (3 tries on network errors and 5xx; 4xx is logged, not retried) | Reporting must not turn a green build red |
 | P16-5 | Configuration | `PROVENLY_URL`, `PROVENLY_API_KEY`, optional `PROVENLY_PROJECT`/`PROVENLY_SUITE`; run identity from `GITHUB_*` on GitHub Actions, else `local` and a timestamp; options override all; no URL means no-op | Zero configuration in CI beyond the key; local runs stay silent |
 | P16-6 | Quality and dogfooding | Own CI job with 100% statement/branch/function/line thresholds; BE-E2E-022 drives it against the real API; Provenly's own E2E journeys load it (inactive unless `PROVENLY_URL` is set). Publishing to npm is left to feature 21 | Same bar as the product; dogfooding ready without coupling CI to a running instance |
+| P17-1 | Spans | The OTel SDK is always on: every request is a span named after its route (`GET /api/v1/test-runs/{testRunId}`, method only when unrouted), every database query a child span (otelpgx), and JUnit ingestion a span with run id, created flag and result count plus a parse span; W3C `traceparent` is continued | The card's "requests, ingestion and DB access produce useful spans"; route names keep cardinality bounded |
+| P17-2 | Export | Spans leave the process only when `OTEL_EXPORTER_OTLP_ENDPOINT` (or the traces-specific variable) is set, over OTLP/HTTP with the standard `OTEL_EXPORTER_OTLP_*` settings; a bad exporter configuration stops startup | No collector needed for the demo; standard variables work with any backend (Jaeger, Tempo, Honeycomb…) |
+| P17-3 | Logs | Every log record written in a request carries `trace_id` and `span_id` (slog handler); every response carries `X-Trace-Id` | Logs and traces correlate; a user can quote the trace id in a bug report |
+| P17-4 | Not now | No metrics, no test result ↔ trace link (the ingestion's trace id is in its logs; a `trace_id` column can come later), no collector in docker compose | Card: "leave room to associate traceId/spanId to TestResult later"; metrics need a decision on what to measure |
 | P12-6 | UI | A Requirements page (list with coverage, native creation and external registration), a requirement page (covering test cases, latest results, link/unlink, archive) and "Requirements" on the test case page | Traceability is visible from both sides |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
@@ -318,6 +322,16 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: new manual run page, manual execution panel on the run page, running/manual badges (screenshots 56–57).
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
+
+### 17. OpenTelemetry basic instrumentation (DEC-11)
+
+- **Behavior**: requests, ingestion and database queries are traced; logs carry trace and span ids; responses carry
+  `X-Trace-Id` and continue a caller's `traceparent`. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to export the spans.
+- **Code**: `internal/platform/telemetry` (setup, middleware, log handler), otelpgx on the pool, ingestion spans,
+  `OTEL_EXPORTER_OTLP_ENDPOINT` passed through docker compose.
+- **Tests**: unit (setup with and without export, route-named spans, propagation, log correlation, CLI startup with an
+  exporter and with a broken one), BE-INT-054 (ingestion and its queries are one trace), contract (X-Trace-Id and
+  propagation), BE-E2E-023, probe tracing sweep (through the proxy, malformed traceparents).
 
 ### 16. Playwright reporter (DEC-15)
 

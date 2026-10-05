@@ -189,7 +189,7 @@ exceptions:
     gate: backend-consolidated
     layer: consolidated
     side: backend
-    target: internal/platform/postgres/postgres.go:35
+    target: internal/platform/postgres/postgres.go:40
     reason: goose.SetDialect("postgres") error branch; the dialect is a constant that goose always supports.
     category: not-reachable
     evidence: Migrations run in BE-INT-001, BE-INT-015 and every E2E run.

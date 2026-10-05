@@ -18,6 +18,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/ingestion"
 	"github.com/edcrove/provenly/backend/internal/insights"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
+	"github.com/edcrove/provenly/backend/internal/platform/telemetry"
 )
 
 // Services exposes the application layer of every module, so REST and future
@@ -66,7 +67,7 @@ const readyTimeout = 2 * time.Second
 func NewHandler(s Services, maxIngestBytes int64) http.Handler {
 	mux := http.NewServeMux()
 	register(mux, s, maxIngestBytes)
-	return httpx.Recover(httpx.AccessLog(httpx.Routes(mux)))
+	return httpx.Recover(telemetry.Middleware(httpx.AccessLog(httpx.Routes(mux))))
 }
 
 // RoutePatterns lists every route the API registers ("METHOD /path"), so tests

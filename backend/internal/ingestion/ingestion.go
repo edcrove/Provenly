@@ -17,11 +17,16 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/edcrove/provenly/backend/internal/catalog"
 	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/ingestion/junit"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
+	"github.com/edcrove/provenly/backend/internal/platform/telemetry"
 )
 
 // Catalog is what ingestion needs from the catalog module.
@@ -154,8 +159,24 @@ func ValidateMeta(m RunMeta) error {
 	return v.Err()
 }
 
-// IngestJUnit ingests one complete JUnit XML report as a batch.
-func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader) (Outcome, error) {
+// IngestJUnit ingests one complete JUnit XML report as a batch. It is one span with child spans for parsing,
+// correlation and recording; the outcome is on the span (run id, results, whether it was created).
+func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader) (out Outcome, err error) {
+	ctx, span := telemetry.Tracer("ingestion").Start(ctx, "ingestion.junit", trace.WithAttributes(
+		attribute.String("provenly.project", meta.ProjectKey), attribute.String("provenly.provider", meta.Provider),
+		attribute.String("provenly.run_id", meta.ProviderRunID), attribute.Int("provenly.run_attempt", int(meta.RunAttempt))))
+	defer func() {
+		span.SetAttributes(attribute.Int64("provenly.test_run.id", out.Run.ID), attribute.Bool("provenly.created", out.Created),
+			attribute.Int("provenly.results", out.Persisted))
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
+	return s.ingestJUnit(ctx, meta, body)
+}
+
+func (s *Service) ingestJUnit(ctx context.Context, meta RunMeta, body io.Reader) (Outcome, error) {
 	if err := ValidateMeta(meta); err != nil {
 		return Outcome{}, err
 	}
@@ -176,7 +197,9 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	}
 	digest := sha256.Sum256(raw)
 	reportSHA := hex.EncodeToString(digest[:])
+	_, parse := telemetry.Tracer("ingestion").Start(ctx, "ingestion.junit.parse", trace.WithAttributes(attribute.Int("provenly.bytes", len(raw))))
 	report, err := junit.ParseWith(bytes.NewReader(raw), junit.Options{Charset: meta.Charset, ProjectKey: project.Key})
+	parse.End()
 	if err != nil {
 		return Outcome{}, apperr.InvalidDocument("%s", err.Error())
 	}

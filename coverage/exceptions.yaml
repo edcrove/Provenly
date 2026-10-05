@@ -224,3 +224,16 @@ exceptions:
     reviewBy: "2026-12-31"
     link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
     status: approved
+  - id: EXC-BE-CONS-004
+    gate: backend-consolidated
+    layer: consolidated
+    side: backend
+    target: internal/integrations/integrationsdb/db.go:29
+    reason: sqlc-generated Queries.WithTx; the integrations store needs no transaction (every write is one statement), so nothing calls it.
+    category: not-reachable
+    evidence: Every integrations query runs against Postgres (BE-INT-Q:integrations.*, BE-INT-055, BE-INT-056).
+    owner: edcrove
+    createdAt: "2026-10-05"
+    reviewBy: "2026-12-31"
+    link: https://trello.com/c/GYvVe5Jx/27-coverage-measurement-exceptions-framework
+    status: approved

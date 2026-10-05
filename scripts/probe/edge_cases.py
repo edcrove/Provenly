@@ -10,7 +10,7 @@ Signs in as PROVENLY_ADMIN_USERNAME / PROVENLY_ADMIN_PASSWORD (default: the demo
 Exit 1 when any request returns 5xx or a status other than the expected one.
 It creates its own data (test cases prefixed "probe-"), so point it at a disposable DB.
 """
-import argparse, json, os, subprocess, sys, tempfile, threading, time, urllib.error, urllib.parse, urllib.request
+import argparse, gzip, json, os, subprocess, sys, tempfile, threading, time, urllib.error, urllib.parse, urllib.request
 
 results = []
 session = {}  # Authorization header of the signed-in administrator, sent with every call
@@ -148,7 +148,14 @@ def main():
     no_decl = '<testsuite name="s"><testcase name="caf\xe9"/></testsuite>'.encode("latin-1")
     check("ingest charset=ISO-8859-1 header", call(base, "POST", "/ingestion/junit?" + q.format(8), raw=no_decl, ctype="application/xml; charset=ISO-8859-1")[0], 201)
     check("ingest charset=shift_jis", call(base, "POST", "/ingestion/junit?" + q.format(9), raw=b"<testsuite/>", ctype="application/xml; charset=shift_jis")[0], 415)
-    check("ingest gzip body", call(base, "POST", "/ingestion/junit?" + q.format(9), raw=b"\x1f\x8b", ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 415)
+    # gzip (prototype feature 8, D6): the limit applies to the decompressed report; broken streams are 400s.
+    gz = lambda b: gzip.compress(b)
+    check("ingest broken gzip", call(base, "POST", "/ingestion/junit?" + q.format(9), raw=b"\x1f\x8b", ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 400)
+    check("ingest gzip report", call(base, "POST", "/ingestion/junit?" + q.format(50), raw=gz(b'<testsuite><testcase name="gz"/></testsuite>'), ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 201)
+    check("ingest x-gzip report", call(base, "POST", "/ingestion/junit?" + q.format(51), raw=gz(b'<testsuite/>'), ctype="application/xml", headers={"Content-Encoding": "x-gzip"})[0], 201)
+    check("ingest gzip bomb (64 MB of spaces)", call(base, "POST", "/ingestion/junit?" + q.format(52), raw=gz(b" " * (64 << 20)), ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 413)
+    check("ingest truncated gzip", call(base, "POST", "/ingestion/junit?" + q.format(53), raw=gz(b'<testsuite/>')[:15], ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 400)
+    check("ingest br body", call(base, "POST", "/ingestion/junit?" + q.format(9), raw=b"<testsuite/>", ctype="application/xml", headers={"Content-Encoding": "br"})[0], 415)
     st, body = call(base, "POST", "/ingestion/junit", raw=b"<testsuite/>", ctype="application/xml")
     check("ingest without parameters lists every error", len(body.get("errors", [])) if isinstance(body, dict) else -1, 3)
     st, body = oversized(base + "/ingestion/junit?" + q.format(10), 12 * 1024 * 1024)

@@ -38,3 +38,5 @@ targets:
     description: a maintainer creates a static suite and adds a test case in the UI; CI reports a run for the suite; the suite's runs link shows it and the run page shows the suite badge and its verdict
   - id: FE-E2E-019
     description: a tester starts a manual run from the run list, records a failure with a note and the failed step, re-tests it as passed and completes the run; the run shows the passed verdict and the recorded note
+  - id: FE-E2E-020
+    description: a member writes a requirement in the UI (numbered R-1, not covered), links a test case (not run); CI reports it failing and the requirement shows failing coverage; the test case page lists the requirement it covers with its coverage

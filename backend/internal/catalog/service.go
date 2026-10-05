@@ -29,6 +29,8 @@ var ProjectKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 // module for REST handlers, other modules and future interfaces (MCP).
 type Service struct {
 	repo Repository
+	// results reads latest results for requirement coverage (nil: nothing has run).
+	results ResultReader
 }
 
 // NewService builds a Service.

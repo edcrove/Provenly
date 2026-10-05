@@ -28,6 +28,7 @@ type fakeRepo struct {
 	// suites by project; members of static suites by suite id.
 	suites  map[int64][]Suite
 	members map[int64][]int64
+	reqs    []Requirement
 }
 
 func newFakeRepo() *fakeRepo {
@@ -660,4 +661,97 @@ func (f *fakeRepo) ProjectCaseIDs(_ context.Context, projectID int64, ids []int6
 		}
 	}
 	return out, nil
+}
+
+func (f *fakeRepo) ListRequirements(_ context.Context, projectID int64, testCaseID *int64) ([]Requirement, error) {
+	if err := f.fail("ListRequirements"); err != nil {
+		return nil, err
+	}
+	out := []Requirement{}
+	for i := len(f.reqs) - 1; i >= 0; i-- {
+		r := f.reqs[i]
+		if r.ProjectID == projectID && (testCaseID == nil || slices.Contains(r.TestCaseIDs, *testCaseID)) {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) GetRequirement(_ context.Context, projectID, id int64) (Requirement, error) {
+	if err := f.fail("GetRequirement"); err != nil {
+		return Requirement{}, err
+	}
+	for _, r := range f.reqs {
+		if r.ProjectID == projectID && r.ID == id {
+			return r, nil
+		}
+	}
+	return Requirement{}, ErrNotFound
+}
+
+func (f *fakeRepo) NextNativeRequirementNumber(_ context.Context, projectID int64) (int64, error) {
+	if err := f.fail("NextNativeRequirementNumber"); err != nil {
+		return 0, err
+	}
+	n := int64(0)
+	for _, r := range f.reqs {
+		if r.ProjectID == projectID && r.Provider == ProviderProvenly {
+			n++
+		}
+	}
+	return n + 1, nil
+}
+
+func (f *fakeRepo) UpsertRequirement(_ context.Context, projectID int64, in RequirementInput, sync bool, syncedAt *time.Time) (int64, bool, bool, error) {
+	if err := f.fail("UpsertRequirement"); err != nil {
+		return 0, false, false, err
+	}
+	for i, r := range f.reqs {
+		if r.ProjectID == projectID && r.Provider == in.Provider && r.ExternalID == in.ExternalID {
+			if !sync {
+				return 0, false, false, nil
+			}
+			r.Title, r.Description, r.URL, r.ProviderStatus, r.LastSyncedAt = in.Title, in.Description, in.URL, in.ProviderStatus, syncedAt
+			f.reqs[i] = r
+			return r.ID, false, true, nil
+		}
+	}
+	f.ids++
+	f.reqs = append(f.reqs, Requirement{ID: f.ids, ProjectID: projectID, Provider: in.Provider, ExternalID: in.ExternalID, Title: in.Title,
+		Description: in.Description, URL: in.URL, ProviderStatus: in.ProviderStatus, LastSyncedAt: syncedAt, CreatedAt: f.now, UpdatedAt: f.now, TestCaseIDs: []int64{}})
+	return f.ids, true, true, nil
+}
+
+func (f *fakeRepo) UpdateRequirement(_ context.Context, projectID, id int64, in UpdateRequirementInput) error {
+	if err := f.fail("UpdateRequirement"); err != nil {
+		return err
+	}
+	for i := range f.reqs {
+		r := &f.reqs[i]
+		if r.ProjectID == projectID && r.ID == id {
+			for _, p := range []struct {
+				v   *string
+				dst *string
+			}{{in.Description, &r.Description}, {in.URL, &r.URL}, {in.ProviderStatus, &r.ProviderStatus}} {
+				if p.v != nil {
+					*p.dst = *p.v
+				}
+			}
+			f.archive(&r.ArchivedAt, UpdateDimensionInput{Name: in.Title, Archived: in.Archived}, &r.Title)
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
+func (f *fakeRepo) SetRequirementTestCases(_ context.Context, requirementID, _ int64, ids []int64) error {
+	if err := f.fail("SetRequirementTestCases"); err != nil {
+		return err
+	}
+	for i := range f.reqs {
+		if f.reqs[i].ID == requirementID {
+			f.reqs[i].TestCaseIDs = slices.Clone(ids)
+		}
+	}
+	return nil
 }

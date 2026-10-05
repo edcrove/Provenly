@@ -26,7 +26,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 9 | Taxonomy: tags and custom dimensions | Planning #26 | ✅ | proto/09-taxonomy |
 | 10 | Test suites (static and query) and partial-run scope | Planning #27, MVP D2, Incubator | ✅ | proto/10-suites |
 | 11 | Manual execution (manual runs, step results) | MVP D3, Planning #4, Incubator | ✅ | proto/11-manual-execution |
-| 12 | Requirements and requirement ↔ test traceability | Incubator (Requirements Federation) | ⏳ | |
+| 12 | Requirements and requirement ↔ test traceability | Incubator (Requirements Federation) | ✅ | proto/12-requirements |
 | 13 | Issues, known issues and issue verification | Incubator, Planning #8 | ⏳ | |
 | 14 | Quality dashboard (trends, flaky, coverage) | Incubator (Quality Intelligence) | ⏳ | |
 | 15 | Live runs: execution sessions, live events, reconciliation | Trello Live Streaming, Planning #9 | ⏳ | |
@@ -117,6 +117,12 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P11-4 | Details | A result carries a note (shown as the error message), the failed step (only for failed/blocked) and who recorded it; "Blocked" in the UI is the `error` status | No per-step result table in the prototype: the failed step and the note cover the need; per-step results can come later |
 | P11-5 | Integrity | The database lets results into a run only in its creating transaction or while a manual (or live) run is running; a finished run keeps its status; mode and starter are part of the run's immutable identity | The same "results are the source of truth" rule as CI (findings 10) |
 | P11-6 | Permissions | Members start, record and finish; viewers read; manual runs need a session (API keys only report CI runs) | Manual execution is a person's work |
+| P12-1 | Model | Requirements are **federated**, not migrated: native ones (written in Provenly, numbered `R-<n>` per project) or mirrors of Jira / GitHub / Azure DevOps items keyed by provider + external id, with title, description, link and the status in the source | Incubator "Requirements Federation": teams keep their tool of record; Provenly only adds the test side |
+| P12-2 | Sync | Read-only, push-based import (`POST .../requirements/import`, up to 500 items, maintainers): creates or updates by external id and stamps `lastSyncedAt`; Provenly never writes back and does not poll the tools (no credentials stored) | A connector or CI job can push from any tool without Provenly holding third-party secrets; pull connectors can come with feature 18 |
+| P12-3 | Traceability | Many-to-many links between requirements and test cases of the same project, replaced as a set (`PUT .../test-cases`), editable by members | Simple to reason about and idempotent; the UI links and unlinks one at a time on top of it |
+| P12-4 | Coverage | Computed on read from the **latest result** of each covering test case (its logical status in the latest run with a valid result): failing if any failed/errored, passing if all passed, not run if none has results, partial otherwise, uncovered without links | Always current, no stored aggregate to keep in sync; the latest result is what a release decision looks at |
+| P12-5 | Lifecycle | Requirements are archived, never deleted; provider and external id never change (database trigger); native numbers come from a per-project counter and are never reused | Same identity guarantees as test cases |
+| P12-6 | UI | A Requirements page (list with coverage, native creation and external registration), a requirement page (covering test cases, latest results, link/unlink, archive) and "Requirements" on the test case page | Traceability is visible from both sides |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
 ## What each feature does
@@ -289,3 +295,19 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: new manual run page, manual execution panel on the run page, running/manual badges (screenshots 56–57).
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
+
+### 12. Requirements and traceability (Incubator: Requirements Federation)
+
+- **Behavior**: a project's requirements are written in Provenly (`R-1`, `R-2`…) or mirrored from Jira, GitHub or
+  Azure DevOps by their id there. Members link test cases to them; each requirement shows its coverage from the latest
+  result of every covering test case (not covered, not run, failing, partially passing, passing). The test case page
+  lists the requirements it covers. Maintainers (or a CI job with their session) push imports; re-imports update
+  title, description, link and status in the source and keep links.
+- **API**: `GET/POST /projects/{key}/requirements` (`?testCase=` narrows to what a test case covers),
+  `POST .../requirements/import`, `GET/PATCH .../requirements/{id}`, `PUT .../requirements/{id}/test-cases`.
+- **Data**: migration 00024 (`requirements`, `requirement_test_cases`, `projects.next_requirement_number`; a trigger
+  keeps provider and external id immutable and forbids deletes).
+- **UI**: Requirements page, requirement page, covered requirements on the test case page (screenshots 58–60).
+- **Tests**: unit (catalog service and handlers, coverage rules, `LatestStatuses`, frontend helpers), BE-INT-049 and
+  BE-INT-050 (concurrent numbering), backend and frontend contract, FE-INT-040, BE-E2E-018, FE-E2E-020, probe
+  requirements sweep (inputs, imports, links, concurrency).

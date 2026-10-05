@@ -360,3 +360,22 @@ func (s *Service) FinishRun(ctx context.Context, runID int64, status RunStatus) 
 	})
 	return out, err
 }
+
+// LatestStatuses returns the status each test case had in the latest run with a result for it (its logical status
+// there: last attempts, variants aggregated failed > error > skipped > passed); test cases without results are absent.
+func (s *Service) LatestStatuses(ctx context.Context, testCaseIDs []int64) (map[int64]string, error) {
+	rows, err := s.repo.ListLatestResults(ctx, testCaseIDs)
+	if err != nil {
+		return nil, err
+	}
+	byCase := map[int64][]ValidResult{}
+	for _, r := range rows {
+		byCase[r.TestCaseID] = append(byCase[r.TestCaseID], r)
+	}
+	out := make(map[int64]string, len(byCase))
+	for id, results := range byCase {
+		statuses, _ := logical(results)
+		out[id] = string(Aggregate(statuses))
+	}
+	return out, nil
+}

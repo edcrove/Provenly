@@ -11,6 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addRequirementLinks = `-- name: AddRequirementLinks :exec
+INSERT INTO requirement_test_cases (requirement_id, project_id, test_case_id)
+SELECT $1, $2, unnest($3::bigint[])
+ON CONFLICT DO NOTHING
+`
+
+type AddRequirementLinksParams struct {
+	RequirementID int64
+	ProjectID     int64
+	TestCaseIds   []int64
+}
+
+func (q *Queries) AddRequirementLinks(ctx context.Context, arg AddRequirementLinksParams) error {
+	_, err := q.db.Exec(ctx, addRequirementLinks, arg.RequirementID, arg.ProjectID, arg.TestCaseIds)
+	return err
+}
+
 const addSuiteCases = `-- name: AddSuiteCases :exec
 INSERT INTO test_suite_cases (suite_id, project_id, test_case_id)
 SELECT $1, $2, unnest($3::bigint[])
@@ -195,7 +212,7 @@ const createProject = `-- name: CreateProject :one
 INSERT INTO projects (key, name, description)
 VALUES ($1, $2, $3)
 ON CONFLICT (key) DO NOTHING
-RETURNING id, key, name, description, next_number, created_at, updated_at
+RETURNING id, key, name, description, next_number, created_at, updated_at, next_requirement_number
 `
 
 type CreateProjectParams struct {
@@ -215,6 +232,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.NextNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NextRequirementNumber,
 	)
 	return i, err
 }
@@ -332,6 +350,20 @@ func (q *Queries) CreateTestStep(ctx context.Context, arg CreateTestStepParams) 
 	return i, err
 }
 
+const deleteRequirementLinks = `-- name: DeleteRequirementLinks :exec
+DELETE FROM requirement_test_cases WHERE requirement_id = $1 AND NOT (test_case_id = ANY(coalesce($2::bigint[], '{}')))
+`
+
+type DeleteRequirementLinksParams struct {
+	RequirementID int64
+	Keep          []int64
+}
+
+func (q *Queries) DeleteRequirementLinks(ctx context.Context, arg DeleteRequirementLinksParams) error {
+	_, err := q.db.Exec(ctx, deleteRequirementLinks, arg.RequirementID, arg.Keep)
+	return err
+}
+
 const deleteSuiteCases = `-- name: DeleteSuiteCases :exec
 DELETE FROM test_suite_cases WHERE suite_id = $1 AND NOT (test_case_id = ANY(coalesce($2::bigint[], '{}')))
 `
@@ -409,7 +441,7 @@ func (q *Queries) DeprecateTestCase(ctx context.Context, id int64) (TestCase, er
 }
 
 const getProject = `-- name: GetProject :one
-SELECT id, key, name, description, next_number, created_at, updated_at FROM projects WHERE id = $1
+SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number FROM projects WHERE id = $1
 `
 
 func (q *Queries) GetProject(ctx context.Context, id int64) (Project, error) {
@@ -423,12 +455,13 @@ func (q *Queries) GetProject(ctx context.Context, id int64) (Project, error) {
 		&i.NextNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NextRequirementNumber,
 	)
 	return i, err
 }
 
 const getProjectByKey = `-- name: GetProjectByKey :one
-SELECT id, key, name, description, next_number, created_at, updated_at FROM projects WHERE key = $1
+SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number FROM projects WHERE key = $1
 `
 
 func (q *Queries) GetProjectByKey(ctx context.Context, key string) (Project, error) {
@@ -442,6 +475,54 @@ func (q *Queries) GetProjectByKey(ctx context.Context, key string) (Project, err
 		&i.NextNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NextRequirementNumber,
+	)
+	return i, err
+}
+
+const getRequirement = `-- name: GetRequirement :one
+SELECT r.id, r.project_id, r.provider, r.external_id, r.title, r.description, r.url, r.provider_status, r.archived_at, r.last_synced_at, r.created_at, r.updated_at, coalesce((SELECT array_agg(l.test_case_id ORDER BY l.test_case_id) FROM requirement_test_cases l WHERE l.requirement_id = r.id), '{}')::bigint[] AS test_case_ids
+FROM requirements r WHERE r.project_id = $1 AND r.id = $2
+`
+
+type GetRequirementParams struct {
+	ProjectID int64
+	ID        int64
+}
+
+type GetRequirementRow struct {
+	ID             int64
+	ProjectID      int64
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	Url            string
+	ProviderStatus string
+	ArchivedAt     pgtype.Timestamptz
+	LastSyncedAt   pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	TestCaseIds    []int64
+}
+
+func (q *Queries) GetRequirement(ctx context.Context, arg GetRequirementParams) (GetRequirementRow, error) {
+	row := q.db.QueryRow(ctx, getRequirement, arg.ProjectID, arg.ID)
+	var i GetRequirementRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Provider,
+		&i.ExternalID,
+		&i.Title,
+		&i.Description,
+		&i.Url,
+		&i.ProviderStatus,
+		&i.ArchivedAt,
+		&i.LastSyncedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TestCaseIds,
 	)
 	return i, err
 }
@@ -696,7 +777,7 @@ func (q *Queries) ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDs
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, key, name, description, next_number, created_at, updated_at FROM projects
+SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number FROM projects
 WHERE $1::bigint[] IS NULL OR id = ANY($1::bigint[])
 ORDER BY key LIMIT $3 OFFSET $2
 `
@@ -725,6 +806,71 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 			&i.NextNumber,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NextRequirementNumber,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRequirements = `-- name: ListRequirements :many
+SELECT r.id, r.project_id, r.provider, r.external_id, r.title, r.description, r.url, r.provider_status, r.archived_at, r.last_synced_at, r.created_at, r.updated_at, coalesce((SELECT array_agg(l.test_case_id ORDER BY l.test_case_id) FROM requirement_test_cases l WHERE l.requirement_id = r.id), '{}')::bigint[] AS test_case_ids
+FROM requirements r
+WHERE r.project_id = $1
+  AND ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM requirement_test_cases x WHERE x.requirement_id = r.id AND x.test_case_id = $2::bigint))
+ORDER BY r.id DESC
+`
+
+type ListRequirementsParams struct {
+	ProjectID  int64
+	TestCaseID pgtype.Int8
+}
+
+type ListRequirementsRow struct {
+	ID             int64
+	ProjectID      int64
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	Url            string
+	ProviderStatus string
+	ArchivedAt     pgtype.Timestamptz
+	LastSyncedAt   pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	TestCaseIds    []int64
+}
+
+// A project's requirements (optionally only those a test case covers), newest first, with their linked test cases.
+func (q *Queries) ListRequirements(ctx context.Context, arg ListRequirementsParams) ([]ListRequirementsRow, error) {
+	rows, err := q.db.Query(ctx, listRequirements, arg.ProjectID, arg.TestCaseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRequirementsRow
+	for rows.Next() {
+		var i ListRequirementsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Provider,
+			&i.ExternalID,
+			&i.Title,
+			&i.Description,
+			&i.Url,
+			&i.ProviderStatus,
+			&i.ArchivedAt,
+			&i.LastSyncedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.TestCaseIds,
 		); err != nil {
 			return nil, err
 		}
@@ -1084,6 +1230,21 @@ func (q *Queries) LockTestCase(ctx context.Context, id int64) (int64, error) {
 	return version, err
 }
 
+const nextNativeRequirementNumber = `-- name: NextNativeRequirementNumber :one
+UPDATE projects SET next_requirement_number = next_requirement_number + 1
+WHERE id = $1
+RETURNING (next_requirement_number - 1)::bigint AS number
+`
+
+// Takes the next R-<n> of a project's native requirements from its counter (the row lock serializes concurrent
+// creations; numbers are never reused).
+func (q *Queries) NextNativeRequirementNumber(ctx context.Context, projectID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextNativeRequirementNumber, projectID)
+	var number int64
+	err := row.Scan(&number)
+	return number, err
+}
+
 const reactivateTestCase = `-- name: ReactivateTestCase :one
 UPDATE test_cases SET
     status        = 'active',
@@ -1249,7 +1410,7 @@ UPDATE projects SET
     description = coalesce($2, description),
     updated_at  = now()
 WHERE key = $3
-RETURNING id, key, name, description, next_number, created_at, updated_at
+RETURNING id, key, name, description, next_number, created_at, updated_at, next_requirement_number
 `
 
 type UpdateProjectParams struct {
@@ -1269,8 +1430,48 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.NextNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NextRequirementNumber,
 	)
 	return i, err
+}
+
+const updateRequirement = `-- name: UpdateRequirement :one
+UPDATE requirements SET
+    title           = coalesce($1, title),
+    description     = coalesce($2, description),
+    url             = coalesce($3, url),
+    provider_status = coalesce($4, provider_status),
+    archived_at     = CASE WHEN $5::boolean IS NULL THEN archived_at
+                           WHEN $5::boolean THEN coalesce(archived_at, now())
+                           ELSE NULL END,
+    updated_at      = now()
+WHERE project_id = $6 AND id = $7
+RETURNING id
+`
+
+type UpdateRequirementParams struct {
+	Title          pgtype.Text
+	Description    pgtype.Text
+	Url            pgtype.Text
+	ProviderStatus pgtype.Text
+	Archived       pgtype.Bool
+	ProjectID      int64
+	ID             int64
+}
+
+func (q *Queries) UpdateRequirement(ctx context.Context, arg UpdateRequirementParams) (int64, error) {
+	row := q.db.QueryRow(ctx, updateRequirement,
+		arg.Title,
+		arg.Description,
+		arg.Url,
+		arg.ProviderStatus,
+		arg.Archived,
+		arg.ProjectID,
+		arg.ID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const updateSuite = `-- name: UpdateSuite :one
@@ -1392,5 +1593,51 @@ func (q *Queries) UpdateTestStep(ctx context.Context, arg UpdateTestStepParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const upsertRequirement = `-- name: UpsertRequirement :one
+INSERT INTO requirements (project_id, provider, external_id, title, description, url, provider_status, last_synced_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (project_id, provider, external_id) DO UPDATE SET
+    title = EXCLUDED.title, description = EXCLUDED.description, url = EXCLUDED.url,
+    provider_status = EXCLUDED.provider_status, last_synced_at = EXCLUDED.last_synced_at, updated_at = now()
+WHERE $9::boolean
+RETURNING id, (xmax = 0)::boolean AS created
+`
+
+type UpsertRequirementParams struct {
+	ProjectID      int64
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	Url            string
+	ProviderStatus string
+	LastSyncedAt   pgtype.Timestamptz
+	Sync           bool
+}
+
+type UpsertRequirementRow struct {
+	ID      int64
+	Created bool
+}
+
+// Creates a requirement, or (when sync is true) updates the mirrored one with the same provider and external id.
+// xmax = 0 tells a fresh insert from an update.
+func (q *Queries) UpsertRequirement(ctx context.Context, arg UpsertRequirementParams) (UpsertRequirementRow, error) {
+	row := q.db.QueryRow(ctx, upsertRequirement,
+		arg.ProjectID,
+		arg.Provider,
+		arg.ExternalID,
+		arg.Title,
+		arg.Description,
+		arg.Url,
+		arg.ProviderStatus,
+		arg.LastSyncedAt,
+		arg.Sync,
+	)
+	var i UpsertRequirementRow
+	err := row.Scan(&i.ID, &i.Created)
 	return i, err
 }

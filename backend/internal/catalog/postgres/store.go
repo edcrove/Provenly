@@ -585,3 +585,71 @@ func (s *Store) ProjectCaseIDs(ctx context.Context, projectID int64, ids []int64
 	found, err := s.q.ListProjectCaseIDs(ctx, catalogdb.ListProjectCaseIDsParams{ProjectID: projectID, Ids: ids})
 	return nonNil(found), err
 }
+
+func toRequirement(r catalogdb.ListRequirementsRow) catalog.Requirement {
+	return catalog.Requirement{
+		ID: r.ID, ProjectID: r.ProjectID, Provider: r.Provider, ExternalID: r.ExternalID, Title: r.Title, Description: r.Description,
+		URL: r.Url, ProviderStatus: r.ProviderStatus, ArchivedAt: timePtr(r.ArchivedAt), LastSyncedAt: timePtr(r.LastSyncedAt),
+		CreatedAt: r.CreatedAt.Time, UpdatedAt: r.UpdatedAt.Time, TestCaseIDs: nonNil(r.TestCaseIds),
+	}
+}
+
+// ListRequirements implements catalog.Repository.
+func (s *Store) ListRequirements(ctx context.Context, projectID int64, testCaseID *int64) ([]catalog.Requirement, error) {
+	rows, err := s.q.ListRequirements(ctx, catalogdb.ListRequirementsParams{ProjectID: projectID, TestCaseID: int8Arg(testCaseID)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]catalog.Requirement, len(rows))
+	for i, r := range rows {
+		out[i] = toRequirement(r)
+	}
+	return out, nil
+}
+
+// GetRequirement implements catalog.Repository.
+func (s *Store) GetRequirement(ctx context.Context, projectID, id int64) (catalog.Requirement, error) {
+	r, err := s.q.GetRequirement(ctx, catalogdb.GetRequirementParams{ProjectID: projectID, ID: id})
+	return toRequirement(catalogdb.ListRequirementsRow(r)), notFound(err)
+}
+
+// NextNativeRequirementNumber implements catalog.Repository.
+func (s *Store) NextNativeRequirementNumber(ctx context.Context, projectID int64) (int64, error) {
+	return s.q.NextNativeRequirementNumber(ctx, projectID)
+}
+
+// UpsertRequirement implements catalog.Repository.
+func (s *Store) UpsertRequirement(ctx context.Context, projectID int64, in catalog.RequirementInput, sync bool, syncedAt *time.Time) (int64, bool, bool, error) {
+	r, err := s.q.UpsertRequirement(ctx, catalogdb.UpsertRequirementParams{
+		ProjectID: projectID, Provider: in.Provider, ExternalID: in.ExternalID, Title: in.Title, Description: in.Description,
+		Url: in.URL, ProviderStatus: in.ProviderStatus, LastSyncedAt: timestamptzArg(syncedAt), Sync: sync,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, false, nil
+	}
+	return r.ID, r.Created, err == nil, err
+}
+
+// UpdateRequirement implements catalog.Repository.
+func (s *Store) UpdateRequirement(ctx context.Context, projectID, id int64, in catalog.UpdateRequirementInput) error {
+	_, err := s.q.UpdateRequirement(ctx, catalogdb.UpdateRequirementParams{
+		ProjectID: projectID, ID: id, Title: text(in.Title), Description: text(in.Description), Url: text(in.URL),
+		ProviderStatus: text(in.ProviderStatus), Archived: boolArg(in.Archived),
+	})
+	return notFound(err)
+}
+
+// SetRequirementTestCases implements catalog.Repository.
+func (s *Store) SetRequirementTestCases(ctx context.Context, requirementID, projectID int64, ids []int64) error {
+	if err := s.q.DeleteRequirementLinks(ctx, catalogdb.DeleteRequirementLinksParams{RequirementID: requirementID, Keep: ids}); err != nil {
+		return err
+	}
+	return s.q.AddRequirementLinks(ctx, catalogdb.AddRequirementLinksParams{RequirementID: requirementID, ProjectID: projectID, TestCaseIds: nonNil(ids)})
+}
+
+func timestamptzArg(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
+}

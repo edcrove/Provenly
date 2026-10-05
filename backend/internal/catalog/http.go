@@ -40,6 +40,12 @@ type API interface {
 	CreateSuite(ctx context.Context, projectID int64, in SuiteInput) (Suite, error)
 	UpdateSuite(ctx context.Context, projectID int64, key string, in UpdateSuiteInput) (Suite, error)
 	SetSuiteCases(ctx context.Context, projectID int64, key string, ids []int64) (Suite, error)
+	Requirements(ctx context.Context, projectID int64, testCaseID *int64) ([]RequirementView, error)
+	Requirement(ctx context.Context, projectID, id int64) (RequirementView, error)
+	CreateRequirement(ctx context.Context, projectID int64, in RequirementInput) (RequirementView, error)
+	ImportRequirements(ctx context.Context, projectID int64, provider string, items []RequirementInput) (ImportResult, error)
+	UpdateRequirement(ctx context.Context, projectID, id int64, in UpdateRequirementInput) (RequirementView, error)
+	SetRequirementTestCases(ctx context.Context, projectID, id int64, ids []int64) (RequirementView, error)
 }
 
 // ProjectKeyMessage is the validation message of a malformed project key.
@@ -277,6 +283,12 @@ func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/projects/{projectKey}/suites/{suiteKey}", h.getSuite)
 	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/suites/{suiteKey}", h.updateSuite)
 	mux.HandleFunc("PUT /api/v1/projects/{projectKey}/suites/{suiteKey}/cases", h.setSuiteCases)
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/requirements", h.listRequirements)
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/requirements", h.createRequirement)
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/requirements/import", h.importRequirements)
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/requirements/{requirementId}", h.getRequirement)
+	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/requirements/{requirementId}", h.updateRequirement)
+	mux.HandleFunc("PUT /api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases", h.setRequirementTestCases)
 	mux.HandleFunc("GET /api/v1/test-cases", h.list)
 	mux.HandleFunc("POST /api/v1/test-cases", h.create)
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}", h.onTestCase(authz.RoleViewer, h.get))

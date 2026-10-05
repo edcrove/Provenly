@@ -35,3 +35,5 @@ targets:
     description: suites through the public API - a query and a static suite are created; a run reported with ?suite= expects only the suite (no untested, other results outside the universe) and names its suite; runs and test cases filter by suite; archived suites take no runs (409) and unknown ones are 404
   - id: BE-E2E-017
     description: manual execution through the public API - a manual run expects the manual test cases, takes a failure (note, failed step) and a passing re-test (attempt 2, not flaky), completes as passed and then refuses results; the test case history shows both results
+  - id: BE-E2E-018
+    description: requirements through the public API - a native requirement is numbered R-1; a Jira import creates then updates by external id and marks it synced; linking test cases moves coverage from uncovered to not_run, failing (a failed latest result) and passing (the re-run); requirements filter by test case; duplicates are 409, foreign test cases 400, unknown ids 404

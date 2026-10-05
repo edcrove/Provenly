@@ -30,6 +30,9 @@ type Querier interface {
 	IsInUniverse(ctx context.Context, arg IsInUniverseParams) (pgtype.Bool, error)
 	ListAmendments(ctx context.Context, arg ListAmendmentsParams) ([]TestRunAmendment, error)
 	ListDiagnosticResults(ctx context.Context, testRunID int64) ([]ListDiagnosticResultsRow, error)
+	// The valid results of each given test case in the latest run that has one for it (status, test and attempt), to
+	// read its latest status (requirement coverage).
+	ListLatestResults(ctx context.Context, testCaseIds []int64) ([]ListLatestResultsRow, error)
 	ListParseErrors(ctx context.Context, arg ListParseErrorsParams) ([]ListParseErrorsRow, error)
 	// The page is chosen first (index on test_case_id, id DESC) and each run's counts
 	// are computed once, not for every row skipped by OFFSET or repeated per result.

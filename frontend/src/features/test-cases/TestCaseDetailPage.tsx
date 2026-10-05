@@ -24,6 +24,8 @@ import { classificationLabels, formatTags, updateBody } from '@/lib/taxonomy'
 import { useProjectRole } from '@/features/projects/useProjectRole'
 import { can } from '@/lib/roles'
 
+import { CoveredRequirements } from '@/features/requirements/CoveredRequirements'
+
 import { StepsEditor } from './StepsEditor'
 import { TestCaseForm, type TestCaseFormValues } from './TestCaseForm'
 import { TestCaseHistory } from './TestCaseHistory'
@@ -176,6 +178,16 @@ function Definition({ tc }: { tc: TestCase }) {
             <h3 className="font-medium">Steps</h3>
             <StepsEditor testCaseId={tc.id} readOnly={!canEdit} />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle as="h2">Requirements</CardTitle>
+          <CardDescription>What this test case verifies.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CoveredRequirements projectKey={tc.projectKey} testCaseId={tc.id} />
         </CardContent>
       </Card>
 

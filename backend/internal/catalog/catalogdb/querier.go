@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	AddRequirementLinks(ctx context.Context, arg AddRequirementLinksParams) error
 	AddSuiteCases(ctx context.Context, arg AddSuiteCasesParams) error
 	AddTestCaseTags(ctx context.Context, arg AddTestCaseTagsParams) error
 	ClearTestCaseClassification(ctx context.Context, arg ClearTestCaseClassificationParams) error
@@ -26,6 +27,7 @@ type Querier interface {
 	// project does not exist.
 	CreateTestCase(ctx context.Context, arg CreateTestCaseParams) (TestCase, error)
 	CreateTestStep(ctx context.Context, arg CreateTestStepParams) (TestStep, error)
+	DeleteRequirementLinks(ctx context.Context, arg DeleteRequirementLinksParams) error
 	// Removes the members not in keep (all of them when keep is empty).
 	DeleteSuiteCases(ctx context.Context, arg DeleteSuiteCasesParams) error
 	// Removes the tags not in keep (all of them when keep is empty).
@@ -34,6 +36,7 @@ type Querier interface {
 	DeprecateTestCase(ctx context.Context, id int64) (TestCase, error)
 	GetProject(ctx context.Context, id int64) (Project, error)
 	GetProjectByKey(ctx context.Context, key string) (Project, error)
+	GetRequirement(ctx context.Context, arg GetRequirementParams) (GetRequirementRow, error)
 	GetSuite(ctx context.Context, arg GetSuiteParams) (GetSuiteRow, error)
 	GetTestCase(ctx context.Context, id int64) (TestCase, error)
 	ListAllTestSteps(ctx context.Context, testCaseID int64) ([]TestStep, error)
@@ -48,6 +51,8 @@ type Querier interface {
 	ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDsParams) ([]int64, error)
 	// project_ids NULL means every project (administrators); otherwise only those.
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
+	// A project's requirements (optionally only those a test case covers), newest first, with their linked test cases.
+	ListRequirements(ctx context.Context, arg ListRequirementsParams) ([]ListRequirementsRow, error)
 	ListSuiteCaseIDs(ctx context.Context, suiteID int64) ([]int64, error)
 	// A project's suites by key, with the number of test cases a static suite lists.
 	ListSuites(ctx context.Context, projectID int64) ([]ListSuitesRow, error)
@@ -64,6 +69,9 @@ type Querier interface {
 	ListTestSteps(ctx context.Context, arg ListTestStepsParams) ([]TestStep, error)
 	// Locks the test case (and its steps' order) until the transaction ends; returns its current version.
 	LockTestCase(ctx context.Context, id int64) (int64, error)
+	// Takes the next R-<n> of a project's native requirements from its counter (the row lock serializes concurrent
+	// creations; numbers are never reused).
+	NextNativeRequirementNumber(ctx context.Context, projectID int64) (int64, error)
 	ReactivateTestCase(ctx context.Context, id int64) (TestCase, error)
 	// Sets the value of one dimension; unchanged when it already has that value (so the version does not advance).
 	SetTestCaseClassification(ctx context.Context, arg SetTestCaseClassificationParams) error
@@ -72,9 +80,13 @@ type Querier interface {
 	UpdateDimension(ctx context.Context, arg UpdateDimensionParams) (ClassificationDimension, error)
 	UpdateDimensionValue(ctx context.Context, arg UpdateDimensionValueParams) (ClassificationValue, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
+	UpdateRequirement(ctx context.Context, arg UpdateRequirementParams) (int64, error)
 	UpdateSuite(ctx context.Context, arg UpdateSuiteParams) (int64, error)
 	UpdateTestCase(ctx context.Context, arg UpdateTestCaseParams) (TestCase, error)
 	UpdateTestStep(ctx context.Context, arg UpdateTestStepParams) (TestStep, error)
+	// Creates a requirement, or (when sync is true) updates the mirrored one with the same provider and external id.
+	// xmax = 0 tells a fresh insert from an update.
+	UpsertRequirement(ctx context.Context, arg UpsertRequirementParams) (UpsertRequirementRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

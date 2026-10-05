@@ -293,3 +293,54 @@ ON CONFLICT DO NOTHING;
 -- name: ListProjectCaseIDs :many
 -- Which of the given ids are test cases of the project.
 SELECT id FROM test_cases WHERE project_id = @project_id AND id = ANY(@ids::bigint[]) ORDER BY id;
+
+-- name: ListRequirements :many
+-- A project's requirements (optionally only those a test case covers), newest first, with their linked test cases.
+SELECT r.*, coalesce((SELECT array_agg(l.test_case_id ORDER BY l.test_case_id) FROM requirement_test_cases l WHERE l.requirement_id = r.id), '{}')::bigint[] AS test_case_ids
+FROM requirements r
+WHERE r.project_id = @project_id
+  AND (sqlc.narg('test_case_id')::bigint IS NULL OR EXISTS (SELECT 1 FROM requirement_test_cases x WHERE x.requirement_id = r.id AND x.test_case_id = sqlc.narg('test_case_id')::bigint))
+ORDER BY r.id DESC;
+
+-- name: GetRequirement :one
+SELECT r.*, coalesce((SELECT array_agg(l.test_case_id ORDER BY l.test_case_id) FROM requirement_test_cases l WHERE l.requirement_id = r.id), '{}')::bigint[] AS test_case_ids
+FROM requirements r WHERE r.project_id = @project_id AND r.id = @id;
+
+-- name: NextNativeRequirementNumber :one
+-- Takes the next R-<n> of a project's native requirements from its counter (the row lock serializes concurrent
+-- creations; numbers are never reused).
+UPDATE projects SET next_requirement_number = next_requirement_number + 1
+WHERE id = @project_id
+RETURNING (next_requirement_number - 1)::bigint AS number;
+
+-- name: UpsertRequirement :one
+-- Creates a requirement, or (when sync is true) updates the mirrored one with the same provider and external id.
+-- xmax = 0 tells a fresh insert from an update.
+INSERT INTO requirements (project_id, provider, external_id, title, description, url, provider_status, last_synced_at)
+VALUES (@project_id, @provider, @external_id, @title, @description, @url, @provider_status, sqlc.narg('last_synced_at'))
+ON CONFLICT (project_id, provider, external_id) DO UPDATE SET
+    title = EXCLUDED.title, description = EXCLUDED.description, url = EXCLUDED.url,
+    provider_status = EXCLUDED.provider_status, last_synced_at = EXCLUDED.last_synced_at, updated_at = now()
+WHERE @sync::boolean
+RETURNING id, (xmax = 0)::boolean AS created;
+
+-- name: UpdateRequirement :one
+UPDATE requirements SET
+    title           = coalesce(sqlc.narg('title'), title),
+    description     = coalesce(sqlc.narg('description'), description),
+    url             = coalesce(sqlc.narg('url'), url),
+    provider_status = coalesce(sqlc.narg('provider_status'), provider_status),
+    archived_at     = CASE WHEN sqlc.narg('archived')::boolean IS NULL THEN archived_at
+                           WHEN sqlc.narg('archived')::boolean THEN coalesce(archived_at, now())
+                           ELSE NULL END,
+    updated_at      = now()
+WHERE project_id = @project_id AND id = @id
+RETURNING id;
+
+-- name: DeleteRequirementLinks :exec
+DELETE FROM requirement_test_cases WHERE requirement_id = @requirement_id AND NOT (test_case_id = ANY(coalesce(@keep::bigint[], '{}')));
+
+-- name: AddRequirementLinks :exec
+INSERT INTO requirement_test_cases (requirement_id, project_id, test_case_id)
+SELECT @requirement_id, @project_id, unnest(@test_case_ids::bigint[])
+ON CONFLICT DO NOTHING;

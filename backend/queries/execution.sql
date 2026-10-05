@@ -157,3 +157,12 @@ RETURNING *;
 
 -- name: FinishTestRun :exec
 UPDATE test_runs SET status = @status, completed_at = now() WHERE id = @id AND status = 'running';
+
+-- name: ListLatestResults :many
+-- The valid results of each given test case in the latest run that has one for it (status, test and attempt), to
+-- read its latest status (requirement coverage).
+SELECT t.test_case_id::bigint AS test_case_id, t.status, (t.suite_name || chr(31) || t.class_name || chr(31) || t.test_name)::text AS execution, t.attempt
+FROM test_results t
+WHERE t.correlation = 'valid' AND t.test_case_id = ANY(@test_case_ids::bigint[])
+  AND t.test_run_id = (SELECT max(x.test_run_id) FROM test_results x WHERE x.test_case_id = t.test_case_id AND x.correlation = 'valid')
+ORDER BY t.test_case_id, t.id;

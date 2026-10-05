@@ -45,6 +45,8 @@ func NewServicesWith(pool *pgxpool.Pool, now func() time.Time, idcfg identity.Co
 	cat := catalog.NewService(catalogpg.NewStore(pool))
 	ids := identity.NewService(identitypg.NewStore(pool), now, idcfg)
 	exe := execution.NewService(executionpg.NewStore(pool), now)
+	// Requirement coverage reads the latest results through the catalog's port.
+	cat.SetResults(exe)
 	return Services{
 		Catalog: cat, Execution: exe, Ingestion: ingestion.NewService(cat, exe, ids),
 		Manual:   ingestion.NewManual(cat, exe, ids),

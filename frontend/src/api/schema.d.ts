@@ -462,6 +462,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/requirements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        /** The project's requirements with their coverage, newest first (anyone who can see the project) */
+        get: operations["listRequirements"];
+        put?: never;
+        /** Add a native requirement (numbered R-n) or register one of an external tool by its id (members) */
+        post: operations["createRequirement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/requirements/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mirror requirements of an external tool (read-only sync, by external id; maintainers) */
+        post: operations["importRequirements"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/requirements/{requirementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        /** A requirement with the latest status of each covering test case */
+        get: operations["getRequirement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit, archive or restore a requirement (members) */
+        patch: operations["updateRequirement"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the test cases that cover a requirement (members) */
+        put: operations["setRequirementTestCases"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-cases": {
         parameters: {
             query?: never;
@@ -1396,6 +1480,98 @@ export interface components {
             /** @enum {string} */
             status: "completed" | "cancelled";
         };
+        Requirement: {
+            /** Format: int64 */
+            id: number;
+            provider: components["schemas"]["RequirementProvider"];
+            /**
+             * @description The requirement's id in its provider (R-n for native ones). Never changes.
+             * @example PAY-123
+             */
+            externalId: string;
+            title: string;
+            description: string;
+            url: string;
+            /** @description The status in the provider, as mirrored (free text). */
+            providerStatus: string;
+            /** Format: date-time */
+            archivedAt: string | null;
+            /**
+             * Format: date-time
+             * @description When an import last mirrored it (null for native requirements).
+             */
+            lastSyncedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            testCaseIds: number[];
+            coverage: components["schemas"]["Coverage"];
+        };
+        /** @enum {string} */
+        RequirementProvider: "provenly" | "jira" | "github" | "azure_devops";
+        /** @description From the latest result of each covering test case (its logical status in the latest run with a result). */
+        Coverage: {
+            /** @enum {string} */
+            status: "uncovered" | "not_run" | "failing" | "partial" | "passing";
+            /** Format: int32 */
+            linked: number;
+            /** Format: int32 */
+            passed: number;
+            /**
+             * Format: int32
+             * @description Failed or errored in their latest result.
+             */
+            failed: number;
+            /**
+             * Format: int32
+             * @description Without a result yet, or skipped.
+             */
+            notRun: number;
+            testCases: {
+                /** Format: int64 */
+                testCaseId: number;
+                /** @enum {string|null} */
+                status: "passed" | "failed" | "error" | "skipped" | null;
+            }[];
+        };
+        RequirementList: {
+            items: components["schemas"]["Requirement"][];
+        };
+        CreateRequirementRequest: {
+            provider?: components["schemas"]["RequirementProvider"];
+            /** @description Required for external providers; native ones are numbered by Provenly. */
+            externalId?: string;
+            title: string;
+            description?: string;
+            url?: string;
+            providerStatus?: string;
+        };
+        ImportRequirementsRequest: {
+            /** @enum {string} */
+            provider: "jira" | "github" | "azure_devops";
+            items: {
+                externalId: string;
+                title: string;
+                description?: string;
+                url?: string;
+                providerStatus?: string;
+            }[];
+        };
+        ImportResult: {
+            created: number;
+            updated: number;
+        };
+        UpdateRequirementRequest: {
+            title?: string;
+            description?: string;
+            url?: string;
+            providerStatus?: string;
+            archived?: boolean;
+        };
+        RequirementLinksRequest: {
+            testCaseIds: number[];
+        };
         TestRunPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["TestRun"][];
         };
@@ -1745,6 +1921,7 @@ export interface components {
         ProjectKey: string;
         /** @example risk */
         DimensionKey: string;
+        RequirementId: number;
         /** @example smoke */
         SuiteKey: string;
         /** @example critical */
@@ -2673,6 +2850,199 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Suite"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listRequirements: {
+        parameters: {
+            query?: {
+                /** @description Only the requirements this test case covers. */
+                testCase?: number;
+            };
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The requirements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createRequirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRequirementRequest"];
+            };
+        };
+        responses: {
+            /** @description The requirement */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requirement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    importRequirements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportRequirementsRequest"];
+            };
+        };
+        responses: {
+            /** @description What the import created and updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getRequirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The requirement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requirement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateRequirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRequirementRequest"];
+            };
+        };
+        responses: {
+            /** @description The requirement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requirement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    setRequirementTestCases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                requirementId: components["parameters"]["RequirementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequirementLinksRequest"];
+            };
+        };
+        responses: {
+            /** @description The requirement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requirement"];
                 };
             };
             400: components["responses"]["BadRequest"];

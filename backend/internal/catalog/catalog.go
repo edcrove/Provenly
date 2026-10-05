@@ -153,6 +153,51 @@ type ListFilter struct {
 	Automated *bool
 }
 
+// Requirement providers: native requirements are written in Provenly; the others mirror an external tool.
+const (
+	ProviderProvenly    = "provenly"
+	ProviderJira        = "jira"
+	ProviderGitHub      = "github"
+	ProviderAzureDevOps = "azure_devops"
+)
+
+// Requirement is something a project must satisfy, native or mirrored from an external tool, and the test cases
+// that cover it. Provider and external id never change; requirements are archived, never deleted.
+type Requirement struct {
+	ID             int64
+	ProjectID      int64
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	URL            string
+	ProviderStatus string
+	ArchivedAt     *time.Time
+	LastSyncedAt   *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	TestCaseIDs    []int64
+}
+
+// RequirementInput is a new (or, when imported, mirrored) requirement.
+type RequirementInput struct {
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	URL            string
+	ProviderStatus string
+}
+
+// UpdateRequirementInput holds the requirement fields to change; nil means unchanged.
+type UpdateRequirementInput struct {
+	Title          *string
+	Description    *string
+	URL            *string
+	ProviderStatus *string
+	Archived       *bool
+}
+
 // SuiteKind tells how a suite selects its test cases.
 type SuiteKind string
 
@@ -320,6 +365,18 @@ type Repository interface {
 	SetSuiteCases(ctx context.Context, suiteID, projectID int64, ids []int64) error
 	// ProjectCaseIDs returns which of ids are test cases of the project.
 	ProjectCaseIDs(ctx context.Context, projectID int64, ids []int64) ([]int64, error)
+
+	// ListRequirements returns a project's requirements, newest first (only those testCaseID covers when set).
+	ListRequirements(ctx context.Context, projectID int64, testCaseID *int64) ([]Requirement, error)
+	GetRequirement(ctx context.Context, projectID, id int64) (Requirement, error)
+	// NextNativeRequirementNumber returns the n of the next native R-<n>.
+	NextNativeRequirementNumber(ctx context.Context, projectID int64) (int64, error)
+	// UpsertRequirement creates a requirement or, with sync, updates the mirrored one; ok=false when it existed
+	// and sync is false. created tells an insert from an update.
+	UpsertRequirement(ctx context.Context, projectID int64, in RequirementInput, sync bool, syncedAt *time.Time) (id int64, created, ok bool, err error)
+	UpdateRequirement(ctx context.Context, projectID, id int64, in UpdateRequirementInput) error
+	// SetRequirementTestCases replaces the test cases that cover a requirement.
+	SetRequirementTestCases(ctx context.Context, requirementID, projectID int64, ids []int64) error
 
 	// InTx runs fn inside one database transaction.
 	InTx(ctx context.Context, fn func(Repository) error) error

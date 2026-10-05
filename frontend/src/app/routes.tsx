@@ -6,6 +6,8 @@ import { LoginPage } from '@/features/auth/LoginPage'
 import { UsersPage } from '@/features/auth/UsersPage'
 import { ProjectMembersPage } from '@/features/projects/ProjectMembersPage'
 import { ProjectsPage } from '@/features/projects/ProjectsPage'
+import { RequirementDetailPage } from '@/features/requirements/RequirementDetailPage'
+import { RequirementsPage } from '@/features/requirements/RequirementsPage'
 import { SuiteDetailPage } from '@/features/suites/SuiteDetailPage'
 import { SuitesPage } from '@/features/suites/SuitesPage'
 import { NewManualRunPage } from '@/features/manual/NewManualRunPage'
@@ -33,6 +35,8 @@ export const routes: RouteObject[] = [
       { path: 'test-cases/new', element: <NewTestCasePage /> },
       { path: 'test-cases/:testCaseId', element: <TestCaseDetailPage /> },
       { path: 'suites', element: <SuitesPage /> },
+      { path: 'requirements', element: <RequirementsPage /> },
+      { path: 'requirements/:projectKey/:requirementId', element: <RequirementDetailPage /> },
       { path: 'suites/:projectKey/:suiteKey', element: <SuiteDetailPage /> },
       { path: 'test-runs', element: <TestRunListPage /> },
       { path: 'test-runs/manual', element: <NewManualRunPage /> },

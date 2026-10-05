@@ -309,6 +309,8 @@ test.describe('Frontend UI journeys', () => {
     await page.getByLabel('Current project').selectOption('')
     await page.getByRole('link', { name: 'Test Cases' }).click()
     await expect(page).toHaveURL(/\/test-cases$/)
+    // The run page links the test case too: wait until it is gone before looking it up in the list.
+    await expect(page.getByTestId('result-row')).toHaveCount(0)
     await expect(page.getByRole('link', { name: `${key}-1` })).toBeVisible()
   })
 })

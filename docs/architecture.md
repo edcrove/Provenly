@@ -95,6 +95,14 @@ their keys or moving a dimension. A trigger on `projects` seeds the built-in dim
 writes advance the test case version through the same trigger as steps, so they follow If-Match. The catalog
 service resolves keys to ids and validates them (archived values only when already current).
 
+## Suites and partial runs (prototype feature 10, MVP D2)
+
+`test_suites` (static or query) and `test_suite_cases` belong to the catalog. Ingestion resolves `?suite=` through
+`catalog.Service.SuiteSelection` (active automated test cases the suite selects; archived suites are a 409) and
+intersects it with the expected universe read in the same snapshot as the correlation; the run stores the suite's
+key and name (`test_runs.suite_key/suite_name`, immutable). Summaries need no change: results outside the suite are
+outside the universe, as before.
+
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its

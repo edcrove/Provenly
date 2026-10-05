@@ -25,12 +25,16 @@ type fakeRepo struct {
 	locks int
 	dims  map[int64][]Dimension
 	ids   int64
+	// suites by project; members of static suites by suite id.
+	suites  map[int64][]Suite
+	members map[int64][]int64
 }
 
 func newFakeRepo() *fakeRepo {
 	f := &fakeRepo{
 		projects: map[int64]Project{}, nextNum: map[int64]int64{},
 		cases: map[int64]TestCase{}, steps: map[int64][]TestStep{}, errs: map[string]error{}, dims: map[int64][]Dimension{},
+		suites: map[int64][]Suite{}, members: map[int64][]int64{},
 		now: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
 	}
 	_, _ = f.CreateProject(context.Background(), CreateProjectInput{Key: DefaultProjectKey, Name: "Default"})
@@ -93,7 +97,8 @@ func (f *fakeRepo) filtered(lf ListFilter) []TestCase {
 	var out []TestCase
 	for _, tc := range f.cases {
 		if (lf.Status == nil || tc.Status == *lf.Status) && (lf.ProjectIDs == nil || slices.Contains(lf.ProjectIDs, tc.ProjectID)) &&
-			(lf.Tag == nil || slices.Contains(tc.Tags, *lf.Tag)) && classifiedAs(tc, lf.Classified) {
+			(lf.Tag == nil || slices.Contains(tc.Tags, *lf.Tag)) && classifiedAs(tc, lf.Classified) &&
+			(lf.SuiteID == nil || slices.Contains(f.members[*lf.SuiteID], tc.ID)) && (lf.Automated == nil || tc.Automated == *lf.Automated) {
 			out = append(out, tc)
 		}
 	}
@@ -550,4 +555,109 @@ func (f *fakeRepo) SetClassification(_ context.Context, testCaseID, projectID, d
 		f.cases[testCaseID] = tc
 	}
 	return nil
+}
+
+func (f *fakeRepo) ListTestCaseIDs(_ context.Context, lf ListFilter) ([]int64, error) {
+	if err := f.fail("ListTestCaseIDs"); err != nil {
+		return nil, err
+	}
+	ids := []int64{}
+	for _, tc := range f.filtered(lf) {
+		ids = append(ids, tc.ID)
+	}
+	slices.Sort(ids)
+	return ids, nil
+}
+
+func (f *fakeRepo) ListSuites(_ context.Context, projectID int64) ([]Suite, error) {
+	if err := f.fail("ListSuites"); err != nil {
+		return nil, err
+	}
+	out := slices.Clone(f.suites[projectID])
+	for i := range out {
+		out[i].CaseCount = int32(len(f.members[out[i].ID]))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out, nil
+}
+
+func (f *fakeRepo) suite(projectID int64, key string) *Suite {
+	for i := range f.suites[projectID] {
+		if f.suites[projectID][i].Key == key {
+			return &f.suites[projectID][i]
+		}
+	}
+	return nil
+}
+
+func (f *fakeRepo) GetSuite(_ context.Context, projectID int64, key string) (Suite, error) {
+	if err := f.fail("GetSuite"); err != nil {
+		return Suite{}, err
+	}
+	su := f.suite(projectID, key)
+	if su == nil {
+		return Suite{}, ErrNotFound
+	}
+	out := *su
+	out.CaseIDs = slices.Clone(f.members[su.ID])
+	if out.CaseIDs == nil {
+		out.CaseIDs = []int64{}
+	}
+	out.CaseCount = int32(len(out.CaseIDs))
+	return out, nil
+}
+
+func (f *fakeRepo) CreateSuite(_ context.Context, projectID int64, in SuiteInput) (int64, error) {
+	if err := f.fail("CreateSuite"); err != nil {
+		return 0, err
+	}
+	if f.suite(projectID, in.Key) != nil {
+		return 0, ErrConflict
+	}
+	f.ids++
+	f.suites[projectID] = append(f.suites[projectID], Suite{ID: f.ids, ProjectID: projectID, Key: in.Key, Name: in.Name,
+		Description: in.Description, Kind: in.Kind, Query: in.Query, CreatedAt: f.now, UpdatedAt: f.now})
+	return f.ids, nil
+}
+
+func (f *fakeRepo) UpdateSuite(_ context.Context, projectID int64, key string, in UpdateSuiteInput) (int64, error) {
+	if err := f.fail("UpdateSuite"); err != nil {
+		return 0, err
+	}
+	su := f.suite(projectID, key)
+	if su == nil {
+		return 0, ErrNotFound
+	}
+	if in.Name != nil {
+		su.Name = *in.Name
+	}
+	if in.Description != nil {
+		su.Description = *in.Description
+	}
+	if in.Query != nil {
+		su.Query = *in.Query
+	}
+	f.archive(&su.ArchivedAt, UpdateDimensionInput{Archived: in.Archived}, &su.Name)
+	return su.ID, nil
+}
+
+func (f *fakeRepo) SetSuiteCases(_ context.Context, suiteID, _ int64, ids []int64) error {
+	if err := f.fail("SetSuiteCases"); err != nil {
+		return err
+	}
+	f.members[suiteID] = slices.Clone(ids)
+	return nil
+}
+
+func (f *fakeRepo) ProjectCaseIDs(_ context.Context, projectID int64, ids []int64) ([]int64, error) {
+	if err := f.fail("ProjectCaseIDs"); err != nil {
+		return nil, err
+	}
+	out := []int64{}
+	for _, id := range ids {
+		if tc, ok := f.cases[id]; ok && tc.ProjectID == projectID {
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }

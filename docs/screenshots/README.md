@@ -57,3 +57,6 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 50 | Editing a test case's tags and classification (one value per dimension) | `50-test-case-classification-form.png` |
 | 51 | A classified and tagged test case | `51-test-case-classified.png` |
 | 52 | The project's test cases filtered by classification (Risk: Critical) | `52-test-cases-filtered-by-classification.png` |
+| 53 | Suites of a project: a query suite (by tag) and a static one, and the form to create more | `53-suites.png` |
+| 54 | A static suite with its listed test case, the CI hint and the link to its runs | `54-suite-static.png` |
+| 55 | A partial run reported for the smoke suite: only the suite was expected (no untested noise) | `55-test-run-for-suite.png` |

@@ -29,6 +29,8 @@ type Catalog interface {
 	ProjectByKey(ctx context.Context, key string) (catalog.Project, error)
 	ProjectByID(ctx context.Context, id int64) (catalog.Project, error)
 	IngestionView(ctx context.Context, projectID int64, numbers []int64) (catalog.IngestionView, error)
+	// SuiteSelection resolves a suite to the active automated test cases it selects (archived suites: 409).
+	SuiteSelection(ctx context.Context, projectID int64, key string) (catalog.Suite, []int64, error)
 }
 
 // Recorder is what ingestion needs from the execution module.
@@ -60,6 +62,9 @@ type RunMeta struct {
 	Status execution.RunStatus
 	// Charset is the Content-Type charset of the report, if any: it overrides the XML declaration.
 	Charset string
+	// SuiteKey is the suite the run executed (MVP D2): its selection is the expected universe. Empty: the project's
+	// active automated test cases.
+	SuiteKey string
 }
 
 // Diagnostic explains why a result has no valid TC-ID.
@@ -145,6 +150,7 @@ func ValidateMeta(m RunMeta) error {
 	v.CheckText("commit", m.Commit)
 	v.Check(m.Status == "" || slices.Contains(execution.ExecutionStatuses, m.Status), "status", "must be one of completed, interrupted, cancelled")
 	v.Check(m.ProjectKey == "" || catalog.ProjectKeyPattern.MatchString(m.ProjectKey), "project", catalog.ProjectKeyMessage)
+	v.Check(m.SuiteKey == "" || catalog.SuiteKeyPattern.MatchString(m.SuiteKey), "suite", catalog.SuiteKeyMessage)
 	return v.Err()
 }
 
@@ -156,6 +162,13 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	project, err := s.project(ctx, meta.ProjectKey)
 	if err != nil {
 		return Outcome{}, err
+	}
+	var suite catalog.Suite
+	var selection []int64
+	if meta.SuiteKey != "" {
+		if suite, selection, err = s.catalog.SuiteSelection(ctx, project.ID, meta.SuiteKey); err != nil {
+			return Outcome{}, err
+		}
 	}
 	raw, err := io.ReadAll(body)
 	if err != nil {
@@ -181,6 +194,10 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	}
 	results := correlate(report.Results, project.Key, view.Entries)
 	expected := view.Expected
+	if meta.SuiteKey != "" {
+		// The suite's selection, among the test cases expected in the same snapshot as the correlation.
+		expected = intersect(view.Expected, selection)
+	}
 	parseErrors := make([]execution.ParseError, len(report.Errors))
 	for i, e := range report.Errors {
 		parseErrors[i] = execution.ParseError{Index: int32(e.Index), TestName: e.TestName, Message: e.Message, Persisted: e.Persisted, Severity: string(e.Severity)}
@@ -188,7 +205,7 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	run, created, err := s.recorder.RecordRun(ctx, execution.NewRun{
 		ProjectID: project.ID, Provider: meta.Provider, ProviderRunID: meta.ProviderRunID, RunAttempt: meta.RunAttempt,
 		Pipeline: meta.Pipeline, Branch: meta.Branch, Commit: meta.Commit, StartedAt: report.StartedAt,
-		ReportSHA256: reportSHA, Status: meta.Status,
+		ReportSHA256: reportSHA, Status: meta.Status, SuiteKey: suite.Key, SuiteName: suite.Name,
 	}, expected, results, parseErrors)
 	if err != nil {
 		return Outcome{}, err
@@ -219,7 +236,7 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 		out.Warnings = append(out.Warnings, fmt.Sprintf(StatusDiffersWarning, requested, run.Status))
 	}
 	if !created {
-		for _, f := range [][3]string{{"pipeline", meta.Pipeline, run.Pipeline}, {"branch", meta.Branch, run.Branch}, {"commit", meta.Commit, run.Commit}} {
+		for _, f := range [][3]string{{"pipeline", meta.Pipeline, run.Pipeline}, {"branch", meta.Branch, run.Branch}, {"commit", meta.Commit, run.Commit}, {"suite", meta.SuiteKey, run.SuiteKey}} {
 			if f[1] != f[2] {
 				out.Warnings = append(out.Warnings, fmt.Sprintf(MetadataDiffersWarning, f[0], f[1], f[2]))
 			}
@@ -232,6 +249,21 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 		out.Warnings = append(out.Warnings, fmt.Sprintf(FutureStartWarning, report.StartedAt.Format(time.RFC3339)))
 	}
 	return out, nil
+}
+
+// intersect returns the ids of a (ascending) that are also in b, ascending.
+func intersect(a, b []int64) []int64 {
+	in := make(map[int64]bool, len(b))
+	for _, id := range b {
+		in[id] = true
+	}
+	out := []int64{}
+	for _, id := range a {
+		if in[id] {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // ownProject tells whether a reference points into the run's project: a bare

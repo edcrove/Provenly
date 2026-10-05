@@ -148,6 +148,63 @@ type ListFilter struct {
 	Tag        *string
 	// Classified holds dimension:value pairs that must all hold.
 	Classified []string
+	// SuiteID narrows to the test cases a static suite lists.
+	SuiteID   *int64
+	Automated *bool
+}
+
+// SuiteKind tells how a suite selects its test cases.
+type SuiteKind string
+
+// Suite kinds.
+const (
+	// SuiteKindStatic lists its test cases explicitly.
+	SuiteKindStatic SuiteKind = "static"
+	// SuiteKindQuery selects the test cases matching a tag and classification query ("smart" suite).
+	SuiteKindQuery SuiteKind = "query"
+)
+
+// SuiteQuery is the selection of a query suite: a tag and dimension:value pairs, all must hold.
+type SuiteQuery struct {
+	Tag        *string
+	Classified []string
+}
+
+// Suite is a named selection of a project's test cases. A run reported for a suite expects its active automated
+// test cases. Suites are archived, never deleted; key, project and kind never change.
+type Suite struct {
+	ID          int64
+	ProjectID   int64
+	Key         string
+	Name        string
+	Description string
+	Kind        SuiteKind
+	Query       SuiteQuery
+	ArchivedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	// CaseCount is the number of test cases a static suite lists (0 for query suites).
+	CaseCount int32
+	// CaseIDs are the test cases a static suite lists, ascending (filled when reading one suite).
+	CaseIDs []int64
+}
+
+// SuiteInput is a new suite.
+type SuiteInput struct {
+	Key         string
+	Name        string
+	Description string
+	Kind        SuiteKind
+	Query       SuiteQuery
+	TestCaseIDs []int64
+}
+
+// UpdateSuiteInput holds the suite fields to change; nil means unchanged.
+type UpdateSuiteInput struct {
+	Name        *string
+	Description *string
+	Query       *SuiteQuery
+	Archived    *bool
 }
 
 // Dimension is a project's classification axis (feature, risk, ...) with its controlled values.
@@ -251,6 +308,18 @@ type Repository interface {
 	SetTags(ctx context.Context, testCaseID int64, tags []string) error
 	// SetClassification sets (valueID > 0) or clears (valueID 0) the value of one dimension of a test case.
 	SetClassification(ctx context.Context, testCaseID, projectID, dimensionID, valueID int64) error
+
+	// ListTestCaseIDs returns the ids of every test case the filter selects, ascending.
+	ListTestCaseIDs(ctx context.Context, f ListFilter) ([]int64, error)
+	ListSuites(ctx context.Context, projectID int64) ([]Suite, error)
+	// GetSuite returns a suite with its listed test cases (static suites).
+	GetSuite(ctx context.Context, projectID int64, key string) (Suite, error)
+	CreateSuite(ctx context.Context, projectID int64, in SuiteInput) (int64, error)
+	UpdateSuite(ctx context.Context, projectID int64, key string, in UpdateSuiteInput) (int64, error)
+	// SetSuiteCases replaces the test cases a static suite lists.
+	SetSuiteCases(ctx context.Context, suiteID, projectID int64, ids []int64) error
+	// ProjectCaseIDs returns which of ids are test cases of the project.
+	ProjectCaseIDs(ctx context.Context, projectID int64, ids []int64) ([]int64, error)
 
 	// InTx runs fn inside one database transaction.
 	InTx(ctx context.Context, fn func(Repository) error) error

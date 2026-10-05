@@ -31,6 +31,8 @@ WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
       JOIN classification_values v ON v.id = c.value_id
       WHERE c.test_case_id = test_cases.id AND d.key || ':' || v.key = ANY(@classified::text[])
   ) = cardinality(@classified::text[]))
+  AND (sqlc.narg('suite_id')::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = sqlc.narg('suite_id')::bigint AND m.test_case_id = test_cases.id))
+  AND (sqlc.narg('automated')::boolean IS NULL OR automated = sqlc.narg('automated')::boolean)
 ORDER BY id DESC
 LIMIT @page_limit OFFSET @page_offset;
 
@@ -44,7 +46,25 @@ WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
       JOIN classification_dimensions d ON d.id = c.dimension_id
       JOIN classification_values v ON v.id = c.value_id
       WHERE c.test_case_id = test_cases.id AND d.key || ':' || v.key = ANY(@classified::text[])
-  ) = cardinality(@classified::text[]));
+  ) = cardinality(@classified::text[]))
+  AND (sqlc.narg('suite_id')::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = sqlc.narg('suite_id')::bigint AND m.test_case_id = test_cases.id))
+  AND (sqlc.narg('automated')::boolean IS NULL OR automated = sqlc.narg('automated')::boolean);
+
+-- name: ListTestCaseIDs :many
+-- The ids of every test case the filters select (a suite's selection for a run), ascending.
+SELECT id FROM test_cases
+WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
+  AND (sqlc.narg('project_ids')::bigint[] IS NULL OR project_id = ANY(sqlc.narg('project_ids')::bigint[]))
+  AND (sqlc.narg('tag')::text IS NULL OR EXISTS (SELECT 1 FROM test_case_tags t WHERE t.test_case_id = test_cases.id AND t.tag = sqlc.narg('tag')::text))
+  AND (coalesce(cardinality(@classified::text[]), 0) = 0 OR (
+      SELECT count(*) FROM test_case_classifications c
+      JOIN classification_dimensions d ON d.id = c.dimension_id
+      JOIN classification_values v ON v.id = c.value_id
+      WHERE c.test_case_id = test_cases.id AND d.key || ':' || v.key = ANY(@classified::text[])
+  ) = cardinality(@classified::text[]))
+  AND (sqlc.narg('suite_id')::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = sqlc.narg('suite_id')::bigint AND m.test_case_id = test_cases.id))
+  AND (sqlc.narg('automated')::boolean IS NULL OR automated = sqlc.narg('automated')::boolean)
+ORDER BY id;
 
 -- name: UpdateTestCase :one
 UPDATE test_cases SET
@@ -229,3 +249,47 @@ WHERE test_case_classifications.value_id <> EXCLUDED.value_id;
 
 -- name: ClearTestCaseClassification :exec
 DELETE FROM test_case_classifications WHERE test_case_id = @test_case_id AND dimension_id = @dimension_id;
+
+-- name: ListSuites :many
+-- A project's suites by key, with the number of test cases a static suite lists.
+SELECT s.*, (SELECT count(*) FROM test_suite_cases c WHERE c.suite_id = s.id)::int AS case_count
+FROM test_suites s WHERE s.project_id = @project_id ORDER BY s.key;
+
+-- name: GetSuite :one
+SELECT s.*, (SELECT count(*) FROM test_suite_cases c WHERE c.suite_id = s.id)::int AS case_count
+FROM test_suites s WHERE s.project_id = @project_id AND s.key = @key;
+
+-- name: CreateSuite :one
+INSERT INTO test_suites (project_id, key, name, description, kind, query_tag, query_classified)
+VALUES (@project_id, @key, @name, @description, @kind, sqlc.narg('query_tag'), @query_classified)
+ON CONFLICT (project_id, key) DO NOTHING
+RETURNING id;
+
+-- name: UpdateSuite :one
+UPDATE test_suites SET
+    name             = coalesce(sqlc.narg('name'), name),
+    description      = coalesce(sqlc.narg('description'), description),
+    query_tag        = CASE WHEN @set_query::boolean THEN sqlc.narg('query_tag') ELSE query_tag END,
+    query_classified = CASE WHEN @set_query::boolean THEN @query_classified::text[] ELSE query_classified END,
+    archived_at      = CASE WHEN sqlc.narg('archived')::boolean IS NULL THEN archived_at
+                            WHEN sqlc.narg('archived')::boolean THEN coalesce(archived_at, now())
+                            ELSE NULL END,
+    updated_at       = now()
+WHERE project_id = @project_id AND key = @key
+RETURNING id;
+
+-- name: ListSuiteCaseIDs :many
+SELECT test_case_id FROM test_suite_cases WHERE suite_id = @suite_id ORDER BY test_case_id;
+
+-- name: DeleteSuiteCases :exec
+-- Removes the members not in keep (all of them when keep is empty).
+DELETE FROM test_suite_cases WHERE suite_id = @suite_id AND NOT (test_case_id = ANY(coalesce(@keep::bigint[], '{}')));
+
+-- name: AddSuiteCases :exec
+INSERT INTO test_suite_cases (suite_id, project_id, test_case_id)
+SELECT @suite_id, @project_id, unnest(@test_case_ids::bigint[])
+ON CONFLICT DO NOTHING;
+
+-- name: ListProjectCaseIDs :many
+-- Which of the given ids are test cases of the project.
+SELECT id FROM test_cases WHERE project_id = @project_id AND id = ANY(@ids::bigint[]) ORDER BY id;

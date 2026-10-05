@@ -5,7 +5,7 @@ import { useTestRun, useTestRunSummary } from '@/api/queries'
 import { NotFoundPage } from '@/app/NotFoundPage'
 import { QueryState } from '@/components/QueryState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { EditedBadge, ExecutionBadge, FlakyBadge, VerdictBadge } from '@/components/StatusBadge'
+import { EditedBadge, ExecutionBadge, FlakyBadge, SuiteBadge, VerdictBadge } from '@/components/StatusBadge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { formatDateTime, formatPercent } from '@/lib/format'
@@ -59,6 +59,7 @@ export function TestRunDetailPage() {
             <VerdictBadge verdict={r.outcome.verdict} />
             <EditedBadge amendments={r.amendmentCount} />
             <FlakyBadge count={r.outcome.flaky} />
+            <SuiteBadge suite={r.suite} />
             {isInterruptedRun(r.executionStatus) ? <ExecutionBadge status={r.executionStatus} /> : null}
             <span className="text-muted-foreground text-sm" data-testid="run-pass-rate">
               {r.outcome.executed > 0

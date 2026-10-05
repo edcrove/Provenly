@@ -75,7 +75,20 @@ func TestPersistenceFailures(t *testing.T) {
 				_, err := cat.UpdateDimensionValue(ctx, 1, "x", catalog.UpdateDimensionInput{Name: str("x")})
 				return err
 			},
-			"catalog.SetTags":             func() error { return cat.SetTags(ctx, 1, []string{"a"}) },
+			"catalog.SetTags":         func() error { return cat.SetTags(ctx, 1, []string{"a"}) },
+			"catalog.ListTestCaseIDs": func() error { _, err := cat.ListTestCaseIDs(ctx, catalog.ListFilter{}); return err },
+			"catalog.ListSuites":      func() error { _, err := cat.ListSuites(ctx, 1); return err },
+			"catalog.GetSuite":        func() error { _, err := cat.GetSuite(ctx, 1, "s"); return err },
+			"catalog.CreateSuite": func() error {
+				_, err := cat.CreateSuite(ctx, 1, catalog.SuiteInput{Key: "s", Name: "s", Kind: catalog.SuiteKindStatic})
+				return err
+			},
+			"catalog.UpdateSuite": func() error {
+				_, err := cat.UpdateSuite(ctx, 1, "s", catalog.UpdateSuiteInput{Name: str("x")})
+				return err
+			},
+			"catalog.SetSuiteCases":       func() error { return cat.SetSuiteCases(ctx, 1, 1, []int64{1}) },
+			"catalog.ProjectCaseIDs":      func() error { _, err := cat.ProjectCaseIDs(ctx, 1, []int64{1}); return err },
 			"catalog.SetClassification":   func() error { return cat.SetClassification(ctx, 1, 1, 1, 1) },
 			"catalog.ClearClassification": func() error { return cat.SetClassification(ctx, 1, 1, 1, 0) },
 			"catalog.CreateProject": func() error {
@@ -128,8 +141,8 @@ func TestPersistenceFailures(t *testing.T) {
 			"execution.ListParseErrors":          func() error { _, err := exe.ListParseErrors(ctx, 1, 10, 0); return err },
 			"execution.CountParseErrors":         func() error { _, err := exe.CountParseErrors(ctx, 1); return err },
 			"execution.GetTestRun":               func() error { _, err := exe.GetTestRun(ctx, 1); return err },
-			"execution.ListTestRuns":             func() error { _, err := exe.ListTestRuns(ctx, nil, 10, 0); return err },
-			"execution.CountTestRuns":            func() error { _, err := exe.CountTestRuns(ctx, nil); return err },
+			"execution.ListTestRuns":             func() error { _, err := exe.ListTestRuns(ctx, execution.RunFilter{}, 10, 0); return err },
+			"execution.CountTestRuns":            func() error { _, err := exe.CountTestRuns(ctx, execution.RunFilter{}); return err },
 			"execution.ListRunResults":           func() error { _, err := exe.ListRunResults(ctx, 1, execution.ResultFilter{}, 10, 0); return err },
 			"execution.CountRunResults":          func() error { _, err := exe.CountRunResults(ctx, 1, execution.ResultFilter{}); return err },
 			"execution.ListSummaryInputs":        func() error { _, err := exe.ListSummaryInputs(ctx, []int64{1}); return err },

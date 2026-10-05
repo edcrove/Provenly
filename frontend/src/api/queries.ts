@@ -18,7 +18,9 @@ import {
   type AcceptInvitationRequest,
   type CreateInvitationRequest,
   type CreateProjectRequest,
+  type CreateSuiteRequest,
   type CreateTestCaseRequest,
+  type UpdateSuiteRequest,
   type UpdateDimensionRequest,
   type UpdateProjectRequest,
   type UpdateTestCaseRequest,
@@ -269,21 +271,82 @@ export interface TestCaseFilter {
   project?: string
   tag?: string
   classification?: string
+  /** A suite of `project`. */
+  suite?: string
+  pageSize?: number
 }
 
 export function useTestCases(page: number, filter: TestCaseFilter = {}) {
-  const { status, project, tag, classification } = filter
-  const key = [...keys.testCases, 'list', project, status, tag, classification, page]
+  const { status, project, tag, classification, suite, pageSize } = filter
+  const key = [...keys.testCases, 'list', project, status, tag, classification, suite, pageSize, page]
   return useQuery({
     queryKey: key,
     placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/test-cases', {
-          params: { query: { page, status, project, tag, classification } },
+          params: { query: { page, pageSize, status, project, tag, classification, suite } },
         }),
       ),
   })
+}
+
+export function useSuites(projectKey: string) {
+  return useQuery({
+    queryKey: [...keys.projects, projectKey, 'suites'],
+    enabled: projectKey !== '',
+    queryFn: async () =>
+      unwrap(await api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } })),
+  })
+}
+
+export function useSuite(projectKey: string, suiteKey: string) {
+  return useQuery({
+    queryKey: [...keys.projects, projectKey, 'suites', suiteKey],
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/projects/{projectKey}/suites/{suiteKey}', {
+          params: { path: { projectKey, suiteKey } },
+        }),
+      ),
+  })
+}
+
+export function useSuiteMutations(projectKey: string) {
+  const qc = useQueryClient()
+  const onSettled = async () => {
+    await qc.invalidateQueries({ queryKey: [...keys.projects, projectKey, 'suites'] })
+    await qc.invalidateQueries({ queryKey: keys.testCases })
+  }
+  return {
+    create: useExclusiveMutation({
+      mutationFn: async (body: CreateSuiteRequest) =>
+        unwrap(
+          await api.POST('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } }, body }),
+        ),
+      onSettled,
+    }),
+    update: useExclusiveMutation({
+      mutationFn: async ({ suiteKey, ...body }: UpdateSuiteRequest & { suiteKey: string }) =>
+        unwrap(
+          await api.PATCH('/api/v1/projects/{projectKey}/suites/{suiteKey}', {
+            params: { path: { projectKey, suiteKey } },
+            body,
+          }),
+        ),
+      onSettled,
+    }),
+    setCases: useExclusiveMutation({
+      mutationFn: async ({ suiteKey, testCaseIds }: { suiteKey: string; testCaseIds: number[] }) =>
+        unwrap(
+          await api.PUT('/api/v1/projects/{projectKey}/suites/{suiteKey}/cases', {
+            params: { path: { projectKey, suiteKey } },
+            body: { testCaseIds },
+          }),
+        ),
+      onSettled,
+    }),
+  }
 }
 
 export function useDimensions(projectKey: string, enabled = true) {
@@ -501,11 +564,13 @@ export function useTestCaseHistory(id: number, page: number) {
   })
 }
 
-export function useTestRuns(page: number, project?: string) {
+export function useTestRuns(page: number, project?: string, suite?: string) {
+  const key = [...keys.testRuns, 'list', project, suite, page]
   return useQuery({
-    queryKey: [...keys.testRuns, 'list', project, page],
-    placeholderData: (prev, q) => previousPage([...keys.testRuns, 'list', project, page], prev, q?.queryKey),
-    queryFn: async () => unwrap(await api.GET('/api/v1/test-runs', { params: { query: { page, project } } })),
+    queryKey: key,
+    placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
+    queryFn: async () =>
+      unwrap(await api.GET('/api/v1/test-runs', { params: { query: { page, project, suite } } })),
   })
 }
 

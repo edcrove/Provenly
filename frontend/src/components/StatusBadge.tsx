@@ -52,6 +52,20 @@ export function EditedBadge({ amendments }: { amendments: number }) {
   )
 }
 
+/** The suite a run was reported for (a partial run, MVP D2). */
+export function SuiteBadge({ suite }: { suite: { key: string; name: string } | null }) {
+  if (!suite) return null
+  return (
+    <Badge
+      variant="secondary"
+      data-testid="suite-badge"
+      title={`Suite ${suite.key}: only its test cases were expected`}
+    >
+      suite: {suite.name}
+    </Badge>
+  )
+}
+
 /** Which attempt of its test a result was (D1); "retried" when a later attempt superseded it. */
 export function AttemptBadge({ attempt, retried }: { attempt: number; retried: boolean }) {
   if (attempt === 1 && !retried) return null

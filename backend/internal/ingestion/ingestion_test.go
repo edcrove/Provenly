@@ -28,6 +28,15 @@ type fakeCatalog struct {
 	projectErr error
 	askedIDs   []int64
 	gotProject int64
+	// selection is what any suite selects; suiteErr fails the suite lookup.
+	selection []int64
+	suiteErr  error
+	gotSuite  string
+}
+
+func (f *fakeCatalog) SuiteSelection(_ context.Context, _ int64, key string) (catalog.Suite, []int64, error) {
+	f.gotSuite = key
+	return catalog.Suite{Key: key, Name: "Suite " + key}, f.selection, f.suiteErr
 }
 
 // ProjectByKey answers CHK as project 2 and every other key as project 1.
@@ -94,6 +103,8 @@ type fakeRecorder struct {
 	storedMeta *[3]string
 	// storedStart simulates the startedAt the execution module kept.
 	storedStart *time.Time
+	// storedSuite simulates the suite recorded for an existing run.
+	storedSuite *string
 }
 
 func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []int64, rs []execution.NewResult, pe []execution.ParseError) (execution.TestRun, bool, error) {
@@ -107,9 +118,13 @@ func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []
 	if f.storedMeta != nil {
 		recorded = *f.storedMeta
 	}
+	suite := run.SuiteKey
+	if f.storedSuite != nil {
+		suite = *f.storedSuite
+	}
 	return execution.TestRun{ID: 1, ExternalRunID: execution.ExternalRunID(run.Provider, run.ProviderRunID, run.RunAttempt),
 		Pipeline: recorded[0], Branch: recorded[1], Commit: recorded[2], StartedAt: f.storedStart,
-		ResultCount: int32(len(rs)), ReportSHA256: digest, Status: status}, f.created, f.recordErr
+		ResultCount: int32(len(rs)), ReportSHA256: digest, Status: status, SuiteKey: suite}, f.created, f.recordErr
 }
 
 func (f *fakeRecorder) Diagnostics(context.Context, int64) ([]execution.Diagnostic, error) {
@@ -394,3 +409,38 @@ func TestWrongProjectDiagnosticMessage(t *testing.T) {
 	msg := diagnosticMessage(execution.Diagnostic{Correlation: execution.CorrelationWrongProject, RequestedTestCaseID: &webRef})
 	assert.Contains(t, msg, `"WEB-5" belongs to another project`)
 }
+
+// MVP D2: a run reported for a suite expects the suite's selection among the active automated test cases; results
+// outside it stay valid but outside the universe. The run records the suite, and a replay naming another suite warns.
+func TestIngestForSuite(t *testing.T) {
+	cat := &fakeCatalog{universe: []int64{153, 154, 155}, selection: []int64{154, 155, 999}, statuses: map[int64]catalog.Status{153: catalog.StatusActive}}
+	rec := &fakeRecorder{created: true}
+	m := meta
+	m.SuiteKey = "smoke"
+	out, err := NewService(cat, rec, fakeAccess{}).IngestJUnit(context.Background(), m, strings.NewReader(report))
+	require.NoError(t, err)
+	assert.Equal(t, "smoke", cat.gotSuite)
+	assert.Equal(t, []int64{154, 155}, rec.gotExp, "999 is not active and automated in the snapshot")
+	assert.Equal(t, "smoke", rec.gotRun.SuiteKey)
+	assert.Equal(t, "Suite smoke", rec.gotRun.SuiteName)
+	for _, w := range out.Warnings {
+		assert.NotContains(t, w, "suite \"", "the same suite does not warn")
+	}
+
+	rec = &fakeRecorder{storedSuite: ptrTo("")}
+	out, err = NewService(cat, rec, fakeAccess{}).IngestJUnit(context.Background(), m, strings.NewReader(report))
+	require.NoError(t, err)
+	assert.Contains(t, out.Warnings, `suite "smoke" differs from "", recorded for this attempt; it was not applied`)
+
+	cat.suiteErr = apperr.Conflict("suite smoke is archived")
+	_, err = NewService(cat, &fakeRecorder{}, fakeAccess{}).IngestJUnit(context.Background(), m, strings.NewReader(report))
+	assert.ErrorContains(t, err, "archived")
+
+	m.SuiteKey = "Smoke"
+	_, err = NewService(cat, &fakeRecorder{}, fakeAccess{}).IngestJUnit(context.Background(), m, strings.NewReader(report))
+	e, ok := apperr.As(err)
+	require.True(t, ok)
+	assert.Equal(t, "suite", e.Fields[0].Field)
+}
+
+func ptrTo[T any](v T) *T { return &v }

@@ -190,7 +190,8 @@ func (s *Store) LockTestCase(ctx context.Context, id int64) (int64, error) {
 // ListTestCases implements catalog.Repository.
 func (s *Store) ListTestCases(ctx context.Context, f catalog.ListFilter, limit, offset int32) ([]catalog.TestCase, error) {
 	rows, err := s.q.ListTestCases(ctx, catalogdb.ListTestCasesParams{
-		Status: statusText(f.Status), ProjectIds: f.ProjectIDs, Tag: text(f.Tag), Classified: f.Classified, PageLimit: limit, PageOffset: offset,
+		Status: statusText(f.Status), ProjectIds: f.ProjectIDs, Tag: text(f.Tag), Classified: f.Classified,
+		SuiteID: int8Arg(f.SuiteID), Automated: boolArg(f.Automated), PageLimit: limit, PageOffset: offset,
 	})
 	if err != nil {
 		return nil, err
@@ -208,6 +209,7 @@ func (s *Store) ListTestCases(ctx context.Context, f catalog.ListFilter, limit, 
 func (s *Store) CountTestCases(ctx context.Context, f catalog.ListFilter) (int64, error) {
 	return s.q.CountTestCases(ctx, catalogdb.CountTestCasesParams{
 		Status: statusText(f.Status), ProjectIds: f.ProjectIDs, Tag: text(f.Tag), Classified: f.Classified,
+		SuiteID: int8Arg(f.SuiteID), Automated: boolArg(f.Automated),
 	})
 }
 
@@ -483,4 +485,103 @@ func (s *Store) SetClassification(ctx context.Context, testCaseID, projectID, di
 	return s.q.SetTestCaseClassification(ctx, catalogdb.SetTestCaseClassificationParams{
 		TestCaseID: testCaseID, ProjectID: projectID, DimensionID: dimensionID, ValueID: valueID,
 	})
+}
+
+func int8Arg(v *int64) pgtype.Int8 {
+	if v == nil {
+		return pgtype.Int8{}
+	}
+	return pgtype.Int8{Int64: *v, Valid: true}
+}
+
+func nonNil[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
+}
+
+// ListTestCaseIDs implements catalog.Repository.
+func (s *Store) ListTestCaseIDs(ctx context.Context, f catalog.ListFilter) ([]int64, error) {
+	ids, err := s.q.ListTestCaseIDs(ctx, catalogdb.ListTestCaseIDsParams{
+		Status: statusText(f.Status), ProjectIds: f.ProjectIDs, Tag: text(f.Tag), Classified: f.Classified,
+		SuiteID: int8Arg(f.SuiteID), Automated: boolArg(f.Automated),
+	})
+	return nonNil(ids), err
+}
+
+func toSuite(r catalogdb.ListSuitesRow) catalog.Suite {
+	su := catalog.Suite{
+		ID: r.ID, ProjectID: r.ProjectID, Key: r.Key, Name: r.Name, Description: r.Description, Kind: catalog.SuiteKind(r.Kind),
+		Query:      catalog.SuiteQuery{Classified: nonNil(r.QueryClassified)},
+		ArchivedAt: timePtr(r.ArchivedAt), CreatedAt: r.CreatedAt.Time, UpdatedAt: r.UpdatedAt.Time, CaseCount: r.CaseCount,
+	}
+	if r.QueryTag.Valid {
+		su.Query.Tag = &r.QueryTag.String
+	}
+	return su
+}
+
+// ListSuites implements catalog.Repository.
+func (s *Store) ListSuites(ctx context.Context, projectID int64) ([]catalog.Suite, error) {
+	rows, err := s.q.ListSuites(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]catalog.Suite, len(rows))
+	for i, r := range rows {
+		out[i] = toSuite(r)
+	}
+	return out, nil
+}
+
+// GetSuite implements catalog.Repository.
+func (s *Store) GetSuite(ctx context.Context, projectID int64, key string) (catalog.Suite, error) {
+	r, err := s.q.GetSuite(ctx, catalogdb.GetSuiteParams{ProjectID: projectID, Key: key})
+	if err != nil {
+		return catalog.Suite{}, notFound(err)
+	}
+	su := toSuite(catalogdb.ListSuitesRow(r))
+	ids, err := s.q.ListSuiteCaseIDs(ctx, su.ID)
+	su.CaseIDs = nonNil(ids)
+	return su, err
+}
+
+// CreateSuite implements catalog.Repository.
+func (s *Store) CreateSuite(ctx context.Context, projectID int64, in catalog.SuiteInput) (int64, error) {
+	id, err := s.q.CreateSuite(ctx, catalogdb.CreateSuiteParams{
+		ProjectID: projectID, Key: in.Key, Name: in.Name, Description: in.Description, Kind: string(in.Kind),
+		QueryTag: text(in.Query.Tag), QueryClassified: nonNil(in.Query.Classified),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, catalog.ErrConflict
+	}
+	return id, err
+}
+
+// UpdateSuite implements catalog.Repository.
+func (s *Store) UpdateSuite(ctx context.Context, projectID int64, key string, in catalog.UpdateSuiteInput) (int64, error) {
+	params := catalogdb.UpdateSuiteParams{
+		ProjectID: projectID, Key: key, Name: text(in.Name), Description: text(in.Description), Archived: boolArg(in.Archived),
+		QueryClassified: []string{},
+	}
+	if in.Query != nil {
+		params.SetQuery, params.QueryTag, params.QueryClassified = true, text(in.Query.Tag), nonNil(in.Query.Classified)
+	}
+	id, err := s.q.UpdateSuite(ctx, params)
+	return id, notFound(err)
+}
+
+// SetSuiteCases implements catalog.Repository.
+func (s *Store) SetSuiteCases(ctx context.Context, suiteID, projectID int64, ids []int64) error {
+	if err := s.q.DeleteSuiteCases(ctx, catalogdb.DeleteSuiteCasesParams{SuiteID: suiteID, Keep: ids}); err != nil {
+		return err
+	}
+	return s.q.AddSuiteCases(ctx, catalogdb.AddSuiteCasesParams{SuiteID: suiteID, ProjectID: projectID, TestCaseIds: nonNil(ids)})
+}
+
+// ProjectCaseIDs implements catalog.Repository.
+func (s *Store) ProjectCaseIDs(ctx context.Context, projectID int64, ids []int64) ([]int64, error) {
+	found, err := s.q.ListProjectCaseIDs(ctx, catalogdb.ListProjectCaseIDsParams{ProjectID: projectID, Ids: ids})
+	return nonNil(found), err
 }

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { useProjects, useTestRuns } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
-import { EditedBadge, ExecutionBadge, FlakyBadge, VerdictBadge } from '@/components/StatusBadge'
+import { EditedBadge, ExecutionBadge, FlakyBadge, SuiteBadge, VerdictBadge } from '@/components/StatusBadge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -15,7 +15,9 @@ export function TestRunListPage() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
   const { project } = useCurrentProject()
-  const query = useTestRuns(page, project || undefined)
+  // ?suite=<key>: the runs of one suite (linked from the suite page).
+  const suite = params.get('suite') ?? ''
+  const query = useTestRuns(page, project || undefined, suite || undefined)
   const projects = useProjects()
   const projectKey = (id: number) => projects.data?.items.find((p) => p.id === id)?.key ?? '—'
   return (
@@ -25,6 +27,14 @@ export function TestRunListPage() {
         <CardTitle as="h1" className="text-xl">
           Test Runs
         </CardTitle>
+        {suite ? (
+          <p className="text-muted-foreground text-sm" data-testid="suite-filter">
+            Runs of suite <span className="font-mono">{suite}</span> ·{' '}
+            <Link to="/test-runs" className="underline">
+              All runs
+            </Link>
+          </p>
+        ) : null}
       </CardHeader>
       <CardContent>
         <QueryState query={query}>
@@ -69,6 +79,7 @@ export function TestRunListPage() {
                           <VerdictBadge verdict={run.outcome.verdict} />
                           <EditedBadge amendments={run.amendmentCount} />
                           <FlakyBadge count={run.outcome.flaky} />
+                          <SuiteBadge suite={run.suite} />
                         </div>
                       </TableCell>
                       <TableCell className="tabular-nums" data-testid="pass-rate">
@@ -98,7 +109,9 @@ export function TestRunListPage() {
                 page={data.page}
                 totalPages={data.totalPages}
                 totalItems={data.totalItems}
-                onPageChange={(p, replace) => setParams({ page: String(p) }, { replace })}
+                onPageChange={(p, replace) =>
+                  setParams(suite ? { suite, page: String(p) } : { page: String(p) }, { replace })
+                }
               />
             </>
           )}

@@ -93,7 +93,7 @@ func toRun(r runRow) execution.TestRun {
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.CommitSha,
 		Status: execution.RunStatus(r.Status), ExpectedCount: r.ExpectedCount + r.AmendmentCount, ResultCount: r.ResultCount,
 		AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt.Time, StartedAt: timePtr(r.StartedAt), CompletedAt: timePtr(r.CompletedAt),
-		ReportSHA256: r.ReportSha256,
+		ReportSHA256: r.ReportSha256, SuiteKey: r.SuiteKey.String, SuiteName: r.SuiteName.String,
 	}
 }
 
@@ -112,6 +112,7 @@ func (s *Store) InsertTestRun(ctx context.Context, p execution.InsertRunParams) 
 		ProjectID: p.ProjectID, ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID, RunAttempt: p.RunAttempt,
 		Pipeline: p.Pipeline, Branch: p.Branch, CommitSha: p.Commit, Status: string(p.Status),
 		StartedAt: timestamptz(p.StartedAt), CompletedAt: timestamptz(&p.CompletedAt), ReportSha256: p.ReportSHA256,
+		SuiteKey: optionalText(p.SuiteKey), SuiteName: optionalText(p.SuiteName),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
@@ -195,15 +196,15 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 		TestRun: executiondb.TestRun{
 			ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 			RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
-			CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, ReportSha256: r.ReportSha256,
+			CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, ReportSha256: r.ReportSha256, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName,
 		},
 		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount,
 	}), nil
 }
 
 // ListTestRuns implements execution.Repository.
-func (s *Store) ListTestRuns(ctx context.Context, projectIDs []int64, limit, offset int32) ([]execution.TestRun, error) {
-	rows, err := s.q.ListTestRuns(ctx, executiondb.ListTestRunsParams{ProjectIds: projectIDs, PageLimit: limit, PageOffset: offset})
+func (s *Store) ListTestRuns(ctx context.Context, f execution.RunFilter, limit, offset int32) ([]execution.TestRun, error) {
+	rows, err := s.q.ListTestRuns(ctx, executiondb.ListTestRunsParams{ProjectIds: f.ProjectIDs, SuiteKey: filterText(f.SuiteKey), PageLimit: limit, PageOffset: offset})
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +214,7 @@ func (s *Store) ListTestRuns(ctx context.Context, projectIDs []int64, limit, off
 			TestRun: executiondb.TestRun{
 				ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 				RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
-				CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,
+				CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName,
 			},
 			ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount,
 		})
@@ -222,8 +223,13 @@ func (s *Store) ListTestRuns(ctx context.Context, projectIDs []int64, limit, off
 }
 
 // CountTestRuns implements execution.Repository.
-func (s *Store) CountTestRuns(ctx context.Context, projectIDs []int64) (int64, error) {
-	return s.q.CountTestRuns(ctx, projectIDs)
+func (s *Store) CountTestRuns(ctx context.Context, f execution.RunFilter) (int64, error) {
+	return s.q.CountTestRuns(ctx, executiondb.CountTestRunsParams{ProjectIds: f.ProjectIDs, SuiteKey: filterText(f.SuiteKey)})
+}
+
+// optionalText is NULL for an empty string.
+func optionalText(s string) pgtype.Text {
+	return pgtype.Text{String: s, Valid: s != ""}
 }
 
 // ListRunResults implements execution.Repository.

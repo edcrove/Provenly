@@ -22,6 +22,7 @@ type stubAPI struct {
 	getErr      error
 	gotFilter   ResultFilter
 	gotProjects []int64
+	gotSuite    *string
 	gotAmend    []any
 }
 
@@ -32,8 +33,8 @@ var sampleResult = TestResult{ID: 8, TestRunID: 3, TestCaseID: ptr(int64(153)), 
 	Correlation: CorrelationValid, TestName: "login", Status: Passed, DurationMs: ptr(int64(12))}
 
 func (s *stubAPI) GetRun(context.Context, int64) (TestRun, error) { return sampleRun, s.getErr }
-func (s *stubAPI) ListRuns(_ context.Context, projectIDs []int64, p pagination.Page) (pagination.Result[TestRun], error) {
-	s.gotProjects = projectIDs
+func (s *stubAPI) ListRuns(_ context.Context, f RunFilter, p pagination.Page) (pagination.Result[TestRun], error) {
+	s.gotProjects, s.gotSuite = f.ProjectIDs, f.SuiteKey
 	return pagination.Result[TestRun]{Items: []TestRun{sampleRun}, Page: p, Total: 1}, s.err
 }
 func (s *stubAPI) ListRunResults(_ context.Context, _ int64, f ResultFilter, p pagination.Page) (pagination.Result[TestResult], error) {
@@ -238,4 +239,21 @@ type actorless struct{ stubGuard }
 
 func (actorless) Actor(context.Context) (authz.Actor, error) {
 	return authz.Actor{}, apperr.Unauthorized("sign in to continue")
+}
+
+// A run carries the suite it was reported for; ?suite=<key> narrows the run list (MVP D2).
+func TestHandlerSuite(t *testing.T) {
+	api := &stubAPI{}
+	rec := serve(api, stubCatalog{}, "/api/v1/test-runs?suite=smoke")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, ptr("smoke"), api.gotSuite)
+	assert.Contains(t, rec.Body.String(), `"suite":null`)
+	serve(api, stubCatalog{}, "/api/v1/test-runs")
+	assert.Nil(t, api.gotSuite)
+	for _, q := range []string{"suite=", "suite=Smoke", "suite=-x"} {
+		assert.Equal(t, http.StatusBadRequest, serve(api, stubCatalog{}, "/api/v1/test-runs?"+q).Code, q)
+	}
+	run := sampleRun
+	run.SuiteKey, run.SuiteName = "smoke", "Smoke"
+	assert.Equal(t, &SuiteRefDTO{Key: "smoke", Name: "Smoke"}, RunDTO(run).Suite)
 }

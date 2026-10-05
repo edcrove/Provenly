@@ -191,7 +191,7 @@ func TestExecutionPersistence(t *testing.T) {
 			}
 		}
 		assert.Equal(t, 1, n, "exactly one request creates the run")
-		runs, err := s.Execution.ListRuns(ctx, nil, pagination.Default())
+		runs, err := s.Execution.ListRuns(ctx, execution.RunFilter{}, pagination.Default())
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), runs.Total)
 		assert.Equal(t, int32(1), runs.Items[0].ResultCount)
@@ -228,7 +228,7 @@ func TestExecutionPersistence(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int32(1), old.ResultCount)
 
-		runs, err := s.Execution.ListRuns(ctx, nil, pagination.Page{Number: 1, Size: 1})
+		runs, err := s.Execution.ListRuns(ctx, execution.RunFilter{}, pagination.Page{Number: 1, Size: 1})
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), runs.Total)
 		assert.Equal(t, second.Run.ID, runs.Items[0].ID, "newest first")
@@ -365,7 +365,7 @@ func TestExecutionPersistence(t *testing.T) {
 			start := time.Now()
 			_, err := s.Execution.History(ctx, tc.ID, pagination.Page{Number: page, Size: 20})
 			require.NoError(t, err)
-			_, err = s.Execution.ListRuns(ctx, nil, pagination.Page{Number: page, Size: 20})
+			_, err = s.Execution.ListRuns(ctx, execution.RunFilter{}, pagination.Page{Number: page, Size: 20})
 			require.NoError(t, err)
 			return time.Since(start)
 		}
@@ -551,7 +551,7 @@ func TestExecutionPersistence(t *testing.T) {
 			assert.Equal(t, int32(1), it.Run.ExpectedCount)
 		}
 		assert.Equal(t, "browser 249", first.Items[0].Result.TestName, "newest first")
-		runs, err := s.Execution.ListRuns(ctx, nil, pagination.Page{Number: 2, Size: 2})
+		runs, err := s.Execution.ListRuns(ctx, execution.RunFilter{}, pagination.Page{Number: 2, Size: 2})
 		require.NoError(t, err)
 		require.Len(t, runs.Items, 1)
 		assert.Equal(t, "github:700:1", runs.Items[0].ExternalRunID)

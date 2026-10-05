@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	AddSuiteCases(ctx context.Context, arg AddSuiteCasesParams) error
 	AddTestCaseTags(ctx context.Context, arg AddTestCaseTagsParams) error
 	ClearTestCaseClassification(ctx context.Context, arg ClearTestCaseClassificationParams) error
 	CloseTestStepGap(ctx context.Context, arg CloseTestStepGapParams) error
@@ -19,17 +20,21 @@ type Querier interface {
 	// Appended after the dimension's last value; no row when the key already exists in the dimension.
 	CreateDimensionValue(ctx context.Context, arg CreateDimensionValueParams) (ClassificationValue, error)
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
+	CreateSuite(ctx context.Context, arg CreateSuiteParams) (int64, error)
 	// The number comes from the project's counter in the same statement: numbers
 	// are assigned per project, in order, and never reused. No row when the
 	// project does not exist.
 	CreateTestCase(ctx context.Context, arg CreateTestCaseParams) (TestCase, error)
 	CreateTestStep(ctx context.Context, arg CreateTestStepParams) (TestStep, error)
+	// Removes the members not in keep (all of them when keep is empty).
+	DeleteSuiteCases(ctx context.Context, arg DeleteSuiteCasesParams) error
 	// Removes the tags not in keep (all of them when keep is empty).
 	DeleteTestCaseTags(ctx context.Context, arg DeleteTestCaseTagsParams) error
 	DeleteTestStep(ctx context.Context, arg DeleteTestStepParams) (int32, error)
 	DeprecateTestCase(ctx context.Context, id int64) (TestCase, error)
 	GetProject(ctx context.Context, id int64) (Project, error)
 	GetProjectByKey(ctx context.Context, key string) (Project, error)
+	GetSuite(ctx context.Context, arg GetSuiteParams) (GetSuiteRow, error)
 	GetTestCase(ctx context.Context, id int64) (TestCase, error)
 	ListAllTestSteps(ctx context.Context, testCaseID int64) ([]TestStep, error)
 	ListDimensionValues(ctx context.Context, projectID int64) ([]ClassificationValue, error)
@@ -39,10 +44,17 @@ type Querier interface {
 	// and the status of the referenced numbers come from the same snapshot: a
 	// deprecation committed during an ingestion cannot put a TC in one and not the other.
 	ListIngestionView(ctx context.Context, arg ListIngestionViewParams) ([]ListIngestionViewRow, error)
+	// Which of the given ids are test cases of the project.
+	ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDsParams) ([]int64, error)
 	// project_ids NULL means every project (administrators); otherwise only those.
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
+	ListSuiteCaseIDs(ctx context.Context, suiteID int64) ([]int64, error)
+	// A project's suites by key, with the number of test cases a static suite lists.
+	ListSuites(ctx context.Context, projectID int64) ([]ListSuitesRow, error)
 	// The classification of the given test cases as dimension and value keys.
 	ListTestCaseClassifications(ctx context.Context, ids []int64) ([]ListTestCaseClassificationsRow, error)
+	// The ids of every test case the filters select (a suite's selection for a run), ascending.
+	ListTestCaseIDs(ctx context.Context, arg ListTestCaseIDsParams) ([]int64, error)
 	// The identity (project and number) of the given test cases, for display.
 	ListTestCaseKeys(ctx context.Context, ids []int64) ([]ListTestCaseKeysRow, error)
 	ListTestCaseTags(ctx context.Context, ids []int64) ([]TestCaseTag, error)
@@ -60,6 +72,7 @@ type Querier interface {
 	UpdateDimension(ctx context.Context, arg UpdateDimensionParams) (ClassificationDimension, error)
 	UpdateDimensionValue(ctx context.Context, arg UpdateDimensionValueParams) (ClassificationValue, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
+	UpdateSuite(ctx context.Context, arg UpdateSuiteParams) (int64, error)
 	UpdateTestCase(ctx context.Context, arg UpdateTestCaseParams) (TestCase, error)
 	UpdateTestStep(ctx context.Context, arg UpdateTestStepParams) (TestStep, error)
 }

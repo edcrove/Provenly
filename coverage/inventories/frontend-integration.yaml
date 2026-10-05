@@ -126,3 +126,6 @@ targets:
   - id: FE-INT-037
     description: taxonomy - maintainers add dimensions and values and archive or restore them (duplicates reported), viewers only read; a test case is created and edited with tags and a classification (only changed dimensions sent, archived values only when current, field errors on tags and dimensions); the list shows tags and filters by tag and, within a project, by classification
     surfaces: [src/features/projects/ClassificationSection.tsx, src/features/test-cases/TestCaseForm.tsx, src/features/test-cases/TestCaseListPage.tsx]
+  - id: FE-INT-038
+    description: suites - the page asks for a project, lists its suites and creates query suites (tag and classification) and static ones; a static suite adds and removes test cases, a query suite shows its matches; archive and restore; failures are reported; viewers only read; unknown suites are not found; runs show their suite (badge, list filter linked from the suite)
+    surfaces: [src/features/suites/SuitesPage.tsx, src/features/suites/SuiteDetailPage.tsx, src/features/test-runs/TestRunListPage.tsx, src/components/StatusBadge.tsx]

@@ -11,6 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addSuiteCases = `-- name: AddSuiteCases :exec
+INSERT INTO test_suite_cases (suite_id, project_id, test_case_id)
+SELECT $1, $2, unnest($3::bigint[])
+ON CONFLICT DO NOTHING
+`
+
+type AddSuiteCasesParams struct {
+	SuiteID     int64
+	ProjectID   int64
+	TestCaseIds []int64
+}
+
+func (q *Queries) AddSuiteCases(ctx context.Context, arg AddSuiteCasesParams) error {
+	_, err := q.db.Exec(ctx, addSuiteCases, arg.SuiteID, arg.ProjectID, arg.TestCaseIds)
+	return err
+}
+
 const addTestCaseTags = `-- name: AddTestCaseTags :exec
 INSERT INTO test_case_tags (test_case_id, tag)
 SELECT $1, unnest($2::text[])
@@ -79,6 +96,8 @@ WHERE ($1::text IS NULL OR status = $1::text)
       JOIN classification_values v ON v.id = c.value_id
       WHERE c.test_case_id = test_cases.id AND d.key || ':' || v.key = ANY($4::text[])
   ) = cardinality($4::text[]))
+  AND ($5::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = $5::bigint AND m.test_case_id = test_cases.id))
+  AND ($6::boolean IS NULL OR automated = $6::boolean)
 `
 
 type CountTestCasesParams struct {
@@ -86,6 +105,8 @@ type CountTestCasesParams struct {
 	ProjectIds []int64
 	Tag        pgtype.Text
 	Classified []string
+	SuiteID    pgtype.Int8
+	Automated  pgtype.Bool
 }
 
 func (q *Queries) CountTestCases(ctx context.Context, arg CountTestCasesParams) (int64, error) {
@@ -94,6 +115,8 @@ func (q *Queries) CountTestCases(ctx context.Context, arg CountTestCasesParams) 
 		arg.ProjectIds,
 		arg.Tag,
 		arg.Classified,
+		arg.SuiteID,
+		arg.Automated,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -196,6 +219,38 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 	return i, err
 }
 
+const createSuite = `-- name: CreateSuite :one
+INSERT INTO test_suites (project_id, key, name, description, kind, query_tag, query_classified)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (project_id, key) DO NOTHING
+RETURNING id
+`
+
+type CreateSuiteParams struct {
+	ProjectID       int64
+	Key             string
+	Name            string
+	Description     string
+	Kind            string
+	QueryTag        pgtype.Text
+	QueryClassified []string
+}
+
+func (q *Queries) CreateSuite(ctx context.Context, arg CreateSuiteParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createSuite,
+		arg.ProjectID,
+		arg.Key,
+		arg.Name,
+		arg.Description,
+		arg.Kind,
+		arg.QueryTag,
+		arg.QueryClassified,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const createTestCase = `-- name: CreateTestCase :one
 WITH n AS (
     UPDATE projects SET next_number = next_number + 1
@@ -275,6 +330,21 @@ func (q *Queries) CreateTestStep(ctx context.Context, arg CreateTestStepParams) 
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteSuiteCases = `-- name: DeleteSuiteCases :exec
+DELETE FROM test_suite_cases WHERE suite_id = $1 AND NOT (test_case_id = ANY(coalesce($2::bigint[], '{}')))
+`
+
+type DeleteSuiteCasesParams struct {
+	SuiteID int64
+	Keep    []int64
+}
+
+// Removes the members not in keep (all of them when keep is empty).
+func (q *Queries) DeleteSuiteCases(ctx context.Context, arg DeleteSuiteCasesParams) error {
+	_, err := q.db.Exec(ctx, deleteSuiteCases, arg.SuiteID, arg.Keep)
+	return err
 }
 
 const deleteTestCaseTags = `-- name: DeleteTestCaseTags :exec
@@ -372,6 +442,51 @@ func (q *Queries) GetProjectByKey(ctx context.Context, key string) (Project, err
 		&i.NextNumber,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getSuite = `-- name: GetSuite :one
+SELECT s.id, s.project_id, s.key, s.name, s.description, s.kind, s.query_tag, s.query_classified, s.archived_at, s.created_at, s.updated_at, (SELECT count(*) FROM test_suite_cases c WHERE c.suite_id = s.id)::int AS case_count
+FROM test_suites s WHERE s.project_id = $1 AND s.key = $2
+`
+
+type GetSuiteParams struct {
+	ProjectID int64
+	Key       string
+}
+
+type GetSuiteRow struct {
+	ID              int64
+	ProjectID       int64
+	Key             string
+	Name            string
+	Description     string
+	Kind            string
+	QueryTag        pgtype.Text
+	QueryClassified []string
+	ArchivedAt      pgtype.Timestamptz
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+	CaseCount       int32
+}
+
+func (q *Queries) GetSuite(ctx context.Context, arg GetSuiteParams) (GetSuiteRow, error) {
+	row := q.db.QueryRow(ctx, getSuite, arg.ProjectID, arg.Key)
+	var i GetSuiteRow
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Key,
+		&i.Name,
+		&i.Description,
+		&i.Kind,
+		&i.QueryTag,
+		&i.QueryClassified,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CaseCount,
 	)
 	return i, err
 }
@@ -550,6 +665,36 @@ func (q *Queries) ListIngestionView(ctx context.Context, arg ListIngestionViewPa
 	return items, nil
 }
 
+const listProjectCaseIDs = `-- name: ListProjectCaseIDs :many
+SELECT id FROM test_cases WHERE project_id = $1 AND id = ANY($2::bigint[]) ORDER BY id
+`
+
+type ListProjectCaseIDsParams struct {
+	ProjectID int64
+	Ids       []int64
+}
+
+// Which of the given ids are test cases of the project.
+func (q *Queries) ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listProjectCaseIDs, arg.ProjectID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjects = `-- name: ListProjects :many
 SELECT id, key, name, description, next_number, created_at, updated_at FROM projects
 WHERE $1::bigint[] IS NULL OR id = ANY($1::bigint[])
@@ -591,6 +736,84 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 	return items, nil
 }
 
+const listSuiteCaseIDs = `-- name: ListSuiteCaseIDs :many
+SELECT test_case_id FROM test_suite_cases WHERE suite_id = $1 ORDER BY test_case_id
+`
+
+func (q *Queries) ListSuiteCaseIDs(ctx context.Context, suiteID int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listSuiteCaseIDs, suiteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var test_case_id int64
+		if err := rows.Scan(&test_case_id); err != nil {
+			return nil, err
+		}
+		items = append(items, test_case_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSuites = `-- name: ListSuites :many
+SELECT s.id, s.project_id, s.key, s.name, s.description, s.kind, s.query_tag, s.query_classified, s.archived_at, s.created_at, s.updated_at, (SELECT count(*) FROM test_suite_cases c WHERE c.suite_id = s.id)::int AS case_count
+FROM test_suites s WHERE s.project_id = $1 ORDER BY s.key
+`
+
+type ListSuitesRow struct {
+	ID              int64
+	ProjectID       int64
+	Key             string
+	Name            string
+	Description     string
+	Kind            string
+	QueryTag        pgtype.Text
+	QueryClassified []string
+	ArchivedAt      pgtype.Timestamptz
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+	CaseCount       int32
+}
+
+// A project's suites by key, with the number of test cases a static suite lists.
+func (q *Queries) ListSuites(ctx context.Context, projectID int64) ([]ListSuitesRow, error) {
+	rows, err := q.db.Query(ctx, listSuites, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSuitesRow
+	for rows.Next() {
+		var i ListSuitesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Key,
+			&i.Name,
+			&i.Description,
+			&i.Kind,
+			&i.QueryTag,
+			&i.QueryClassified,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CaseCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTestCaseClassifications = `-- name: ListTestCaseClassifications :many
 SELECT c.test_case_id, d.key AS dimension, v.key AS value
 FROM test_case_classifications c
@@ -620,6 +843,59 @@ func (q *Queries) ListTestCaseClassifications(ctx context.Context, ids []int64) 
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTestCaseIDs = `-- name: ListTestCaseIDs :many
+SELECT id FROM test_cases
+WHERE ($1::text IS NULL OR status = $1::text)
+  AND ($2::bigint[] IS NULL OR project_id = ANY($2::bigint[]))
+  AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM test_case_tags t WHERE t.test_case_id = test_cases.id AND t.tag = $3::text))
+  AND (coalesce(cardinality($4::text[]), 0) = 0 OR (
+      SELECT count(*) FROM test_case_classifications c
+      JOIN classification_dimensions d ON d.id = c.dimension_id
+      JOIN classification_values v ON v.id = c.value_id
+      WHERE c.test_case_id = test_cases.id AND d.key || ':' || v.key = ANY($4::text[])
+  ) = cardinality($4::text[]))
+  AND ($5::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = $5::bigint AND m.test_case_id = test_cases.id))
+  AND ($6::boolean IS NULL OR automated = $6::boolean)
+ORDER BY id
+`
+
+type ListTestCaseIDsParams struct {
+	Status     pgtype.Text
+	ProjectIds []int64
+	Tag        pgtype.Text
+	Classified []string
+	SuiteID    pgtype.Int8
+	Automated  pgtype.Bool
+}
+
+// The ids of every test case the filters select (a suite's selection for a run), ascending.
+func (q *Queries) ListTestCaseIDs(ctx context.Context, arg ListTestCaseIDsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listTestCaseIDs,
+		arg.Status,
+		arg.ProjectIds,
+		arg.Tag,
+		arg.Classified,
+		arg.SuiteID,
+		arg.Automated,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -694,8 +970,10 @@ WHERE ($1::text IS NULL OR status = $1::text)
       JOIN classification_values v ON v.id = c.value_id
       WHERE c.test_case_id = test_cases.id AND d.key || ':' || v.key = ANY($4::text[])
   ) = cardinality($4::text[]))
+  AND ($5::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = $5::bigint AND m.test_case_id = test_cases.id))
+  AND ($6::boolean IS NULL OR automated = $6::boolean)
 ORDER BY id DESC
-LIMIT $6 OFFSET $5
+LIMIT $8 OFFSET $7
 `
 
 type ListTestCasesParams struct {
@@ -703,6 +981,8 @@ type ListTestCasesParams struct {
 	ProjectIds []int64
 	Tag        pgtype.Text
 	Classified []string
+	SuiteID    pgtype.Int8
+	Automated  pgtype.Bool
 	PageOffset int32
 	PageLimit  int32
 }
@@ -715,6 +995,8 @@ func (q *Queries) ListTestCases(ctx context.Context, arg ListTestCasesParams) ([
 		arg.ProjectIds,
 		arg.Tag,
 		arg.Classified,
+		arg.SuiteID,
+		arg.Automated,
 		arg.PageOffset,
 		arg.PageLimit,
 	)
@@ -989,6 +1271,47 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateSuite = `-- name: UpdateSuite :one
+UPDATE test_suites SET
+    name             = coalesce($1, name),
+    description      = coalesce($2, description),
+    query_tag        = CASE WHEN $3::boolean THEN $4 ELSE query_tag END,
+    query_classified = CASE WHEN $3::boolean THEN $5::text[] ELSE query_classified END,
+    archived_at      = CASE WHEN $6::boolean IS NULL THEN archived_at
+                            WHEN $6::boolean THEN coalesce(archived_at, now())
+                            ELSE NULL END,
+    updated_at       = now()
+WHERE project_id = $7 AND key = $8
+RETURNING id
+`
+
+type UpdateSuiteParams struct {
+	Name            pgtype.Text
+	Description     pgtype.Text
+	SetQuery        bool
+	QueryTag        pgtype.Text
+	QueryClassified []string
+	Archived        pgtype.Bool
+	ProjectID       int64
+	Key             string
+}
+
+func (q *Queries) UpdateSuite(ctx context.Context, arg UpdateSuiteParams) (int64, error) {
+	row := q.db.QueryRow(ctx, updateSuite,
+		arg.Name,
+		arg.Description,
+		arg.SetQuery,
+		arg.QueryTag,
+		arg.QueryClassified,
+		arg.Archived,
+		arg.ProjectID,
+		arg.Key,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const updateTestCase = `-- name: UpdateTestCase :one

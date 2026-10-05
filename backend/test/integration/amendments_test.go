@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/edcrove/provenly/backend/internal/catalog"
+	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
@@ -57,7 +58,7 @@ func TestAmendments(t *testing.T) {
 		run, _ := s.Execution.GetRun(ctx, runID)
 		assert.Equal(t, int32(1), run.AmendmentCount)
 		assert.Equal(t, int32(2), run.ExpectedCount)
-		runs, _ := s.Execution.ListRuns(ctx, nil, pagination.Default())
+		runs, _ := s.Execution.ListRuns(ctx, execution.RunFilter{}, pagination.Default())
 		assert.Equal(t, int32(1), runs.Items[0].AmendmentCount)
 		hist, _ := s.Execution.History(ctx, manual.ID, pagination.Default())
 		assert.Equal(t, int32(1), hist.Items[0].Run.AmendmentCount)

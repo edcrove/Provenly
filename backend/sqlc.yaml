@@ -8,6 +8,7 @@ sql:
       - migrations/00012_projects.sql
       - migrations/00017_test_case_versions.sql
       - migrations/00020_taxonomy.sql
+      - migrations/00021_suites.sql
     queries: queries/catalog.sql
     gen:
       go:
@@ -27,6 +28,7 @@ sql:
       - migrations/00013_run_projects.sql
       - migrations/00018_run_amendments.sql
       - migrations/00019_result_attempts.sql
+      - migrations/00022_run_suites.sql
     queries: queries/execution.sql
     gen:
       go:

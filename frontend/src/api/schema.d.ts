@@ -396,6 +396,72 @@ export interface paths {
         patch: operations["updateDimensionValue"];
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/suites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        /** List the project's suites by key (anyone who can see the project) */
+        get: operations["listSuites"];
+        put?: never;
+        /** Create a static or query suite (maintainers and administrators) */
+        post: operations["createSuite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/suites/{suiteKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example smoke */
+                suiteKey: components["parameters"]["SuiteKey"];
+            };
+            cookie?: never;
+        };
+        /** A suite with the test cases a static suite lists */
+        get: operations["getSuite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename, re-query, archive or restore a suite (maintainers and administrators) */
+        patch: operations["updateSuite"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/suites/{suiteKey}/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example smoke */
+                suiteKey: components["parameters"]["SuiteKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the test cases a static suite lists (maintainers and administrators) */
+        put: operations["setSuiteCases"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-cases": {
         parameters: {
             query?: never;
@@ -1129,6 +1195,11 @@ export interface components {
             passRate: number;
         };
         TestRun: {
+            /** @description The suite the run was reported for, as named then (null - the project's automated catalog). */
+            suite: {
+                key: string;
+                name: string;
+            } | null;
             /**
              * Format: int32
              * @description Amendments of the universe after creation (DEC-42); more than 0 marks the run as edited.
@@ -1162,6 +1233,69 @@ export interface components {
             startedAt?: string | null;
             /** Format: date-time */
             completedAt?: string | null;
+        };
+        SuiteQuery: {
+            /** @description Only test cases with this tag (normalized like tags). */
+            tag?: string | null;
+            /** @description dimension:value pairs that must all hold. */
+            classification?: string[];
+        };
+        Suite: {
+            /**
+             * @description Never changes; CI reports a run for the suite with `?suite=<key>`.
+             * @example smoke
+             */
+            key: string;
+            name: string;
+            description: string;
+            /**
+             * @description static lists its test cases; query selects them by tag and classification. Never changes.
+             * @enum {string}
+             */
+            kind: "static" | "query";
+            /** @description The selection of a query suite (null for static suites). */
+            query: {
+                tag: string | null;
+                classification: string[];
+            } | null;
+            /**
+             * Format: date-time
+             * @description Archived suites keep their runs but receive no new ones (409).
+             */
+            archivedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /**
+             * Format: int32
+             * @description Test cases a static suite lists (0 for query suites).
+             */
+            caseCount: number;
+            /** @description The test cases a static suite lists (when reading one suite). */
+            testCaseIds?: number[];
+        };
+        SuiteList: {
+            items: components["schemas"]["Suite"][];
+        };
+        CreateSuiteRequest: {
+            key: string;
+            name: string;
+            description?: string;
+            /** @enum {string} */
+            kind: "static" | "query";
+            query?: components["schemas"]["SuiteQuery"];
+            testCaseIds?: number[];
+        };
+        UpdateSuiteRequest: {
+            name?: string;
+            description?: string;
+            query?: components["schemas"]["SuiteQuery"];
+            archived?: boolean;
+        };
+        SuiteCasesRequest: {
+            /** @description Every test case the static suite lists (replaces them). */
+            testCaseIds: number[];
         };
         TestRunPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["TestRun"][];
@@ -1505,6 +1639,8 @@ export interface components {
         ProjectKey: string;
         /** @example risk */
         DimensionKey: string;
+        /** @example smoke */
+        SuiteKey: string;
         /** @example critical */
         ValueKey: string;
         /**
@@ -2281,6 +2417,166 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    listSuites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The suites */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuiteList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createSuite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSuiteRequest"];
+            };
+        };
+        responses: {
+            /** @description The suite */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getSuite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example smoke */
+                suiteKey: components["parameters"]["SuiteKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The suite */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateSuite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example smoke */
+                suiteKey: components["parameters"]["SuiteKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSuiteRequest"];
+            };
+        };
+        responses: {
+            /** @description The suite */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    setSuiteCases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example smoke */
+                suiteKey: components["parameters"]["SuiteKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuiteCasesRequest"];
+            };
+        };
+        responses: {
+            /** @description The suite */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     listTestCases: {
         parameters: {
             query?: {
@@ -2299,6 +2595,8 @@ export interface operations {
                  * @example risk:critical,feature:payments
                  */
                 classification?: string;
+                /** @description Only the test cases of this suite of `project` (needs `project`; not combined with tag or classification). */
+                suite?: string;
             };
             header?: never;
             path?: never;
@@ -2722,6 +3020,8 @@ export interface operations {
                  * @example CHK
                  */
                 project?: components["parameters"]["ProjectFilter"];
+                /** @description Only runs reported for the suite with this key. */
+                suite?: string;
             };
             header?: never;
             path?: never;
@@ -2926,6 +3226,13 @@ export interface operations {
                  * @example CHK
                  */
                 project?: string;
+                /**
+                 * @description Key of the suite the run executed (partial run): the expected universe is the suite's active automated
+                 *     test cases instead of the whole project's; results outside it stay valid but outside the universe. An
+                 *     unknown suite is 404, an archived one 409.
+                 * @example smoke
+                 */
+                suite?: string;
                 /** @example github */
                 provider: string;
                 /** @example 9876543210 */
@@ -2983,6 +3290,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];

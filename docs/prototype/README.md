@@ -24,7 +24,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 7 | Retries, logical result and flaky | MVP D1 | ✅ | proto/07-retries-flaky |
 | 8 | Compressed (gzip) report ingestion | MVP D6 | ✅ | proto/08-gzip-ingestion |
 | 9 | Taxonomy: tags and custom dimensions | Planning #26 | ✅ | proto/09-taxonomy |
-| 10 | Test suites (static and query) and partial-run scope | Planning #27, MVP D2, Incubator | ⏳ | |
+| 10 | Test suites (static and query) and partial-run scope | Planning #27, MVP D2, Incubator | ✅ | proto/10-suites |
 | 11 | Manual execution (manual runs, step results) | MVP D3, Planning #4, Incubator | ⏳ | |
 | 12 | Requirements and requirement ↔ test traceability | Incubator (Requirements Federation) | ⏳ | |
 | 13 | Issues, known issues and issue verification | Incubator, Planning #8 | ⏳ | |
@@ -104,6 +104,13 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P9-6 | Filters | `GET /test-cases?tag=` and `?classification=dim:value,...` (up to 10 pairs, all must hold); the UI offers the classification filter only within a project | AND is what Smart Suites (feature 10) need; dimensions are per project |
 | P9-7 | Permissions | Viewers read dimensions; maintainers add, rename and archive dimensions and values; members classify and tag the test cases they can edit | Taxonomy shapes reporting for the whole project (maintainer), classifying is everyday editing (member) |
 | P9-8 | Deferred | Reporter metadata suggesting a classification goes to feature 16 (Playwright reporter); reporting by dimension to feature 14; dynamic suites to feature 10 | Never overwrite human classification without a policy (Planning #26) |
+| P10-1 | Model | A suite belongs to a project and is **static** (an explicit list of test cases, at most 1000) or **query** (a tag and dimension:value pairs that must all hold, at most 10); kind and key never change | Planning #26/#27 Static vs Smart suites; a query suite follows the catalog as it is classified |
+| P10-2 | Partial runs (D2) | CI names the suite with `?suite=<key>` on ingestion: the expected universe is the suite's **active automated** test cases at that moment (snapshotted like before); results outside it are valid but outside the universe | Answers D2 ("a smoke run of 10 of 100 TCs must not show 90 untested") with the existing snapshot model |
+| P10-3 | Run identity | The run keeps the suite's key and name of that moment (immutable like the rest of its identity); renaming the suite later does not rewrite history; runs filter by `?suite=` | Runs historically conserve their selection (Planning #26 invariant) |
+| P10-4 | Lifecycle | Suites are archived, never deleted; an archived suite takes no new runs (409) and an unknown one is 404, so a CI typo never silently becomes a full run | Fail loudly instead of reporting against the wrong universe |
+| P10-5 | Membership | Static members may be deprecated or manual (they simply drop out of the expected universe); members must be of the suite's project; the list `?project=&suite=` shows members or matches | Keeps the suite definition stable while the catalog changes |
+| P10-6 | Permissions | Viewers read suites; maintainers create, edit, archive and change members | Suites define what CI runs count; same level as taxonomy (P9-7) |
+| P10-7 | Not now | Nested suites, suite templates and per-suite reporting (feature 14 reports by suite through `?suite=`); a run for several suites at once is not supported (one key per run) | Keep the model minimal for the prototype |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
 ## What each feature does
@@ -245,3 +252,20 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
   on the test case; tags column and tag/classification filters on the list (screenshots 49–52).
 - **Tests**: unit (service, handlers, helpers), BE-INT-045, backend and frontend contract, FE-INT-037, BE-E2E-015,
   FE-E2E-017, probe taxonomy sweep (keys, names, limits, filters, concurrent creations).
+
+### 10. Test suites and partial runs (Planning #27, MVP D2)
+
+- **Behavior**: a project defines static suites (a list of test cases) and query suites (tag + classification). CI
+  reports a run for a suite with `?suite=<key>`: only the suite's active automated test cases are expected, so a smoke
+  run has no untested noise; other results stay valid but outside the universe. The run shows its suite; runs and
+  test cases filter by suite. Archived suites take no runs.
+- **API**: `GET/POST /projects/{key}/suites`, `GET/PATCH /projects/{key}/suites/{suiteKey}`,
+  `PUT /projects/{key}/suites/{suiteKey}/cases`; `suite` query parameter on ingestion, `GET /test-runs` and
+  `GET /test-cases` (with `project`); `suite` on the run.
+- **Data**: migrations 00021 (`test_suites`, `test_suite_cases` with composite keys to the project; triggers: no
+  delete, key/kind/project immutable, members only for static suites) and 00022 (`test_runs.suite_key/suite_name`,
+  part of the run's immutable identity).
+- **UI**: Suites page (per current project) with creation; suite page with members or matches, add/remove, archive,
+  the CI hint and the runs link; suite badge on runs (screenshots 53–55).
+- **Tests**: unit (service, handlers, ingestion, execution filter), BE-INT-047, backend and frontend contract,
+  FE-INT-038, BE-E2E-016, FE-E2E-018, probe suites sweep.

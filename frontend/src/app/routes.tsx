@@ -4,6 +4,7 @@ import { AcceptInvitePage } from '@/features/auth/AcceptInvitePage'
 import { AccountPage } from '@/features/auth/AccountPage'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { UsersPage } from '@/features/auth/UsersPage'
+import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { IssueDetailPage } from '@/features/issues/IssueDetailPage'
 import { IssuesPage } from '@/features/issues/IssuesPage'
 import { ProjectMembersPage } from '@/features/projects/ProjectMembersPage'
@@ -39,6 +40,7 @@ export const routes: RouteObject[] = [
       { path: 'suites', element: <SuitesPage /> },
       { path: 'requirements', element: <RequirementsPage /> },
       { path: 'requirements/:projectKey/:requirementId', element: <RequirementDetailPage /> },
+      { path: 'dashboard', element: <DashboardPage /> },
       { path: 'issues', element: <IssuesPage /> },
       { path: 'issues/:projectKey/:issueId', element: <IssueDetailPage /> },
       { path: 'suites/:projectKey/:suiteKey', element: <SuiteDetailPage /> },

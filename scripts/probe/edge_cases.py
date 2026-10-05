@@ -516,6 +516,19 @@ def main():
     [t.join() for t in threads]
     check("20 concurrent native issues: distinct I-n", len(set(codes)), 20)
 
+    # Quality (prototype feature 14): bounds are validated before any lookup; counts add up.
+    quality = f"/projects/{key}/quality"
+    for qs, exp in [("", 200), ("staleDays=1&window=1", 200), ("staleDays=365&window=200", 200), ("staleDays=0", 400),
+                    ("staleDays=366", 400), ("staleDays=", 400), ("staleDays=1.5", 400), ("window=201", 400), ("window=-1", 400),
+                    ("window=9999999999", 400), ("window=%00", 400)]:
+        check(f"quality ?{qs}", call(base, "GET", f"{quality}?{qs}")[0], exp)
+    for path, exp in [("/projects/bad/quality", 400), ("/projects/NOPE99/quality", 404)]:
+        check(f"GET {path}", call(base, "GET", path)[0], exp)
+    st, q = call(base, "GET", quality)
+    tcs = q.get("testCases", {}) if isinstance(q, dict) else {}
+    check("quality: active = automated + manual", tcs.get("active") == tcs.get("automated", -1) + tcs.get("manual", -1), True)
+    check("removed member reads quality", call(base, "GET", quality, headers=as_viewer)[0], 404)
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

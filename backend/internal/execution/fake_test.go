@@ -19,6 +19,7 @@ type fakeRepo struct {
 	errs     map[string]error
 	// summaryReads records the run ids of every ListSummaryInputs call.
 	summaryReads [][]int64
+	flaky        []FlakyCount
 }
 
 func newFakeRepo() *fakeRepo {
@@ -386,6 +387,34 @@ func (f *fakeRepo) ListLatestConclusive(_ context.Context, ids []int64) ([]Concl
 				break
 			}
 		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) ListLastExecuted(_ context.Context, ids []int64) (map[int64]time.Time, error) {
+	if err := f.errs["ListLastExecuted"]; err != nil {
+		return nil, err
+	}
+	out := map[int64]time.Time{}
+	for runID, rs := range f.results {
+		for _, r := range rs {
+			if r.TestCaseID != nil && slices.Contains(ids, *r.TestCaseID) && r.Correlation == CorrelationValid {
+				if at := f.runs[runID].CreatedAt; at.After(out[*r.TestCaseID]) {
+					out[*r.TestCaseID] = at
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) ListFlakyCounts(_ context.Context, _ int64, _, limit int32) ([]FlakyCount, error) {
+	if err := f.errs["ListFlakyCounts"]; err != nil {
+		return nil, err
+	}
+	out := slices.Clone(f.flaky)
+	if len(out) > int(limit) {
+		out = out[:limit]
 	}
 	return out, nil
 }

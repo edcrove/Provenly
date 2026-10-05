@@ -133,6 +133,14 @@ failed > error > skipped > passed rules as summaries), and the base matrix of DE
 the issue takes the worst link (reopen > known_issue > unverified > not_reproducible > validated_fixed). The run page
 splits its failures into known issues (linked to an open issue) and new failures.
 
+## Insights (prototype feature 14)
+
+`internal/insights` is a read-only orchestrator like ingestion: it owns no tables. `GET /projects/{key}/quality`
+checks project access (identity), reads the active automated and manual test cases (`catalog.Service.Selection`),
+when each last executed (execution query `ListLastExecuted`) and how many of the latest runs each was flaky in
+(`ListFlakyCounts`: last attempt passed after a failed or errored one, manual re-tests excluded). The dashboard page
+combines it with the run list (trend), requirement coverage and issue verification, which stay in their modules.
+
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its

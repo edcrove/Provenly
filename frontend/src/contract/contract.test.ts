@@ -1756,6 +1756,34 @@ const issueScenarios: Scenario[] = [
   ).map((sc) => ({ ...sc, setup: sc.setup ? () => (withIssue(), sc.setup!()) : withIssue })),
 ]
 
+const qualityScenarios: Scenario[] = [
+  {
+    op: 'GET /api/v1/projects/{projectKey}/quality',
+    status: 200,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/quality', {
+        params: { path: tcKey, query: { staleDays: 30, window: 50 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/quality',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/quality', { params: { path: tcKey, query: { staleDays: 366 } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/quality',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/quality', { params: { path: chk } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/quality',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/quality', { params: { path: tcKey } }),
+  },
+]
+
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 type AnyCall = (path: string, init: object) => Promise<Result>
 const anyPath = {
@@ -1804,6 +1832,7 @@ const scenarios: Scenario[] = [
   ...manualScenarios,
   ...requirementScenarios,
   ...issueScenarios,
+  ...qualityScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
   // Projects

@@ -288,8 +288,10 @@ test.describe('Frontend UI journeys', () => {
     await page.getByLabel('Key').fill(key)
     await page.getByLabel('Name').fill('E2E UI project')
     await page.getByRole('button', { name: 'Create project' }).click()
-    await expect(page.getByTestId(`project-${key}`)).toContainText('E2E UI project')
+    // The project list is paginated by key and other journeys create projects too: check the new one where it is
+    // always visible, as the current project.
     await expect(page.getByLabel('Current project')).toHaveValue(key)
+    await expect(page.getByLabel('Current project').locator('option:checked')).toContainText('E2E UI project')
 
     await page.getByRole('link', { name: 'Test Cases' }).click()
     await expect(page.getByText(`No test cases yet in ${key}.`)).toBeVisible()
@@ -309,6 +311,8 @@ test.describe('Frontend UI journeys', () => {
     await page.getByLabel('Current project').selectOption('')
     await page.getByRole('link', { name: 'Test Cases' }).click()
     await expect(page).toHaveURL(/\/test-cases$/)
+    // The run page links the test case too: wait until it is gone before looking it up in the list.
+    await expect(page.getByTestId('result-row')).toHaveCount(0)
     await expect(page.getByRole('link', { name: `${key}-1` })).toBeVisible()
   })
 })

@@ -186,3 +186,29 @@ WITH last_attempts AS (
 SELECT DISTINCT ON (p.test_case_id) p.test_case_id::bigint AS test_case_id, p.test_run_id, p.status::text AS status
 FROM per_run p WHERE p.status <> 'skipped'
 ORDER BY p.test_case_id, p.test_run_id DESC;
+
+-- name: ListLastExecuted :many
+-- When each given test case last had a valid result (the creation time of its latest run with one).
+SELECT t.test_case_id::bigint AS test_case_id, max(r.created_at)::timestamptz AS last_executed_at
+FROM test_results t JOIN test_runs r ON r.id = t.test_run_id
+WHERE t.correlation = 'valid' AND t.test_case_id = ANY(@test_case_ids::bigint[])
+GROUP BY t.test_case_id;
+
+-- name: ListFlakyCounts :many
+-- In a project's latest runs, how many runs each test case was flaky in: one of its tests passed on its last attempt
+-- after a failed or errored one. Manual re-tests are never flaky.
+WITH runs AS (
+    SELECT id FROM test_runs WHERE project_id = @project_id ORDER BY id DESC LIMIT @window_runs
+), tests AS (
+    SELECT t.test_case_id, t.test_run_id,
+        (array_agg(t.status ORDER BY t.attempt DESC, t.id DESC))[1] AS last_status,
+        bool_or(t.status IN ('failed', 'error')) AS any_failure
+    FROM test_results t
+    WHERE t.test_run_id IN (SELECT id FROM runs) AND t.correlation = 'valid' AND t.class_name <> 'provenly-manual'
+    GROUP BY t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name
+)
+SELECT x.test_case_id::bigint AS test_case_id, count(DISTINCT x.test_run_id)::int AS flaky_runs
+FROM tests x WHERE x.last_status = 'passed' AND x.any_failure
+GROUP BY x.test_case_id
+ORDER BY flaky_runs DESC, x.test_case_id
+LIMIT @max_items;

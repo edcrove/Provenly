@@ -30,6 +30,11 @@ type Querier interface {
 	IsInUniverse(ctx context.Context, arg IsInUniverseParams) (pgtype.Bool, error)
 	ListAmendments(ctx context.Context, arg ListAmendmentsParams) ([]TestRunAmendment, error)
 	ListDiagnosticResults(ctx context.Context, testRunID int64) ([]ListDiagnosticResultsRow, error)
+	// In a project's latest runs, how many runs each test case was flaky in: one of its tests passed on its last attempt
+	// after a failed or errored one. Manual re-tests are never flaky.
+	ListFlakyCounts(ctx context.Context, arg ListFlakyCountsParams) ([]ListFlakyCountsRow, error)
+	// When each given test case last had a valid result (the creation time of its latest run with one).
+	ListLastExecuted(ctx context.Context, testCaseIds []int64) ([]ListLastExecutedRow, error)
 	// For each given test case, its latest run with a conclusive logical status (passed, failed or error; skipped runs are
 	// inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test,
 	// aggregated failed > error > skipped > passed, as in summaries.

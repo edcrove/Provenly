@@ -138,3 +138,6 @@ targets:
   - id: FE-INT-041
     description: issues - the list asks for a project, shows each issue's state and verification, filters by state and adds native and tracker issues (a duplicate is reported); the issue page shows each test's conclusive evidence and run, an inconclusive latest run, closes and reopens (verification follows), links and unlinks, and reports failures; the test case page lists its issues; viewers only read; a run splits its failures into known issues and new failures
     surfaces: [src/features/issues/IssuesPage.tsx, src/features/issues/IssueDetailPage.tsx, src/features/issues/LinkedIssues.tsx, src/features/issues/RunKnownIssues.tsx, src/features/test-cases/TestCaseDetailPage.tsx, src/features/test-runs/TestRunDetailPage.tsx]
+  - id: FE-INT-042
+    description: quality dashboard - asks for a project; shows the latest run, the pass-rate trend (each bar links to its run), automation rate, test cases never or not recently executed and flaky test cases, re-reading them when the stale period or the run window changes; breaks requirement coverage (archived ones excluded) and issue verification down; empty projects and failing reads say so
+    surfaces: [src/features/dashboard/DashboardPage.tsx]

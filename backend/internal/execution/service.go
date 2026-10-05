@@ -393,3 +393,14 @@ func (s *Service) LatestConclusive(ctx context.Context, testCaseIDs []int64) (ma
 	}
 	return statuses, runs, nil
 }
+
+// LastExecuted returns when each test case last had a valid result; test cases never executed are absent.
+func (s *Service) LastExecuted(ctx context.Context, testCaseIDs []int64) (map[int64]time.Time, error) {
+	return s.repo.ListLastExecuted(ctx, testCaseIDs)
+}
+
+// FlakyCounts returns the test cases that were flaky in a project's latest window runs, most flaky first, at most
+// limit of them.
+func (s *Service) FlakyCounts(ctx context.Context, projectID int64, window, limit int32) ([]FlakyCount, error) {
+	return s.repo.ListFlakyCounts(ctx, projectID, window, limit)
+}

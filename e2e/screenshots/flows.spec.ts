@@ -479,5 +479,10 @@ test('UI flows', async ({ page }) => {
   await page.goto(`/test-runs/${manualRunId}`)
   await expect(page.getByTestId('run-known-issues')).toBeVisible()
   await shot(page, 'test-run-known-issues')
+  // Quality dashboard (prototype feature 14): CHK with its runs, requirements, issues, manual and flaky test cases.
+  await page.goto('/dashboard')
+  await expect(page.getByTestId('automation-rate')).toBeVisible()
+  await expect(page.getByTestId('coverage-breakdown')).toBeVisible()
+  await shot(page, 'dashboard')
   await page.getByLabel('Current project').selectOption('')
 })

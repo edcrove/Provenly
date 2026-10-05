@@ -202,6 +202,13 @@ returns. A 2xx answer writes one `audit_events` row (actor, method + route patte
 the response; the write never fails the request. MCP and live events are skipped. A trigger makes the table
 append-only.
 
+## Releases and sign-in throttle (prototype feature 21)
+
+`identity.Service.Login` consults an in-memory throttle keyed by the normalized username before checking the
+password (so a locked account costs no bcrypt), counts `invalid username or password` answers and clears on success;
+`apperr.KindTooManyRequests` maps to 429 `too_many_requests`. Release images are built by `release.yml` with
+`VERSION` stamped into `app.Version`.
+
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its

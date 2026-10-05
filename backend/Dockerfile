@@ -24,9 +24,11 @@ EXPOSE 8080
 CMD ["air", "-c", ".air.toml"]
 
 FROM base AS build
+# The release version (a tag such as v0.2.0), reported by the API to MCP clients and in its startup log.
+ARG VERSION=dev
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/provenly ./cmd/provenly
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/edcrove/provenly/backend/internal/app.Version=${VERSION}" -o /out/provenly ./cmd/provenly
 
 FROM alpine:3 AS runtime
 RUN addgroup -S provenly && adduser -S -G provenly provenly

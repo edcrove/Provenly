@@ -4,11 +4,42 @@
   "description": "Playwright reporter for Provenly: streams a live run while tests execute and sends the final JUnit report with each test's TC-ID",
   "license": "Apache-2.0",
   "type": "module",
-  "main": "src/index.ts",
-  "files": ["src/index.ts"],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/edcrove/provenly.git",
+    "directory": "reporters/playwright"
+  },
+  "keywords": [
+    "playwright",
+    "reporter",
+    "provenly",
+    "junit",
+    "test-management"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "vitest run --coverage"
+    "test": "vitest run --coverage",
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

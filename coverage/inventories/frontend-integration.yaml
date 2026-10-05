@@ -153,3 +153,6 @@ targets:
   - id: FE-INT-046
     description: audit log - an administrator reads who changed what (users and API keys, route, path, project), pages, filters by project (normalized) and actor and sees an empty result; other users have no Audit link and are refused
     surfaces: [src/features/audit/AuditPage.tsx, src/app/Layout.tsx]
+  - id: FE-INT-047
+    description: sign-in throttle - after five failed sign-ins the login page shows that the username is locked and for how long
+    surfaces: [src/features/auth/LoginPage.tsx]

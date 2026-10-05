@@ -66,11 +66,17 @@ def main():
                       ("alg none", {"Authorization": "Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIiwiaXNzIjoicHJvdmVubHkifQ."}),
                       ("cookie garbage", {"Cookie": "provenly_session=%00"})]:
         check(f"GET /test-cases with {name}", call(base, "GET", "/test-cases", headers={"Authorization": "", **hdr} if hdr else {"Authorization": ""})[0], 401)
-    for creds, exp in [({"username": "admin", "password": "wrong"}, 401), ({"username": "nobody-here", "password": "x" * 20}, 401),
+    # Wrong passwords never target the administrator: five failures lock a username for 15 minutes (feature 21).
+    for creds, exp in [({"username": "nobody-here", "password": "x" * 20}, 401),
                        ({"username": "admin\u0000", "password": "x"}, 401), ({"username": "a" * 10000, "password": "p" * 100000}, 401),
-                       ({"username": "admin"}, 401), ({"user": "admin"}, 400)]:
+                       ({"username": "nobody-else"}, 401), ({"user": "admin"}, 400)]:
         check(f"login {str(creds)[:40]}", call(base, "POST", "/auth/login", creds)[0], exp)
     check("login text/plain", call(base, "POST", "/auth/login", raw=b"{}", ctype="text/plain")[0], 415)
+    locked = f"probe-lock-{int(time.time() * 1000)}"
+    codes = [call(base, "POST", "/auth/login", {"username": locked, "password": "wrong"}, headers={"Authorization": ""})[0] for _ in range(6)]
+    check("five failed sign-ins lock the username", " ".join(map(str, codes)), "401 401 401 401 401 429")
+    st, body429 = call(base, "POST", "/auth/login", {"username": locked.upper(), "password": "wrong"}, headers={"Authorization": ""})
+    check("the lock ignores case and says how long", f"{st} {'try again in' in str(body429)}", "429 True")
     check("accept unknown invitation", call(base, "POST", "/invitations/accept", {"token": "nope", "username": "probe_x", "displayName": "x", "password": "a long password"})[0], 404)
     check("accept with NUL", call(base, "POST", "/invitations/accept", {"token": "t\u0000", "username": "probe_x", "displayName": "x\u0000", "password": "a long password"})[0], 400)
     check("revoke id 0", call(base, "POST", "/invitations/0/revoke", headers={"Authorization": "Bearer " + body["token"]})[0], 400)

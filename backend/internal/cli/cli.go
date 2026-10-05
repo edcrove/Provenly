@@ -88,6 +88,7 @@ func run(ctx context.Context, args []string, d Deps) error {
 			return err
 		}
 	}
+	slog.InfoContext(ctx, "starting provenly", "version", app.Version, "env", cfg.Env)
 	l, err := d.Listen(cfg.HTTPAddr)
 	if err != nil {
 		return err

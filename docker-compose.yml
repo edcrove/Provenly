@@ -20,7 +20,7 @@ x-api-build: &api-build
   context: ./backend
   target: runtime
   secrets: [extra_ca]
-  args: { EXTRA_CA_ID: "${EXTRA_CA_ID:-none}" }
+  args: { EXTRA_CA_ID: "${EXTRA_CA_ID:-none}", VERSION: "${IMAGE_TAG:-dev}" }
 
 x-app-env: &app-env
   PROVENLY_ENV: ${PROVENLY_ENV:-demo}
@@ -70,7 +70,7 @@ services:
     restart: "no"
 
   migrate:
-    image: provenly-api:${IMAGE_TAG:-local}
+    image: ${IMAGE_PREFIX:-}provenly-api:${IMAGE_TAG:-local}
     build: *api-build
     command: ["migrate", "up"]
     environment: *app-env
@@ -80,7 +80,7 @@ services:
     restart: "no"
 
   api:
-    image: provenly-api:${IMAGE_TAG:-local}
+    image: ${IMAGE_PREFIX:-}provenly-api:${IMAGE_TAG:-local}
     build: *api-build
     environment: *app-env
     ports:
@@ -91,7 +91,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: provenly-web:${IMAGE_TAG:-local}
+    image: ${IMAGE_PREFIX:-}provenly-web:${IMAGE_TAG:-local}
     build:
       context: ./frontend
       target: runtime

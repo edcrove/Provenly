@@ -548,6 +548,14 @@ const authScenarios: Scenario[] = [
   },
   {
     op: 'POST /api/v1/auth/login',
+    status: 429,
+    setup: () => {
+      db.loginFailures.admin = 5
+    },
+    call: (c) => c.POST('/api/v1/auth/login', { body: login }),
+  },
+  {
+    op: 'POST /api/v1/auth/login',
     status: 401,
     call: (c) => c.POST('/api/v1/auth/login', { body: { ...login, password: 'wrong password' } }),
   },

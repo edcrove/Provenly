@@ -55,11 +55,16 @@ type Config struct {
 	InvitationTTL time.Duration
 	// BcryptCost is the password hashing cost.
 	BcryptCost int
+	// LoginMaxFailures failed sign-ins of one username within LoginWindow lock it until the window passes
+	// (0 disables the throttle).
+	LoginMaxFailures int
+	LoginWindow      time.Duration
 }
 
 // DefaultConfig returns production lifetimes with the given secret.
 func DefaultConfig(secret []byte) Config {
-	return Config{Secret: secret, SessionTTL: 12 * time.Hour, InvitationTTL: 7 * 24 * time.Hour, BcryptCost: 12}
+	return Config{Secret: secret, SessionTTL: 12 * time.Hour, InvitationTTL: 7 * 24 * time.Hour, BcryptCost: 12,
+		LoginMaxFailures: 5, LoginWindow: 15 * time.Minute}
 }
 
 // RandomSecret returns a fresh 32-byte signing secret (sessions do not survive a restart).
@@ -96,17 +101,18 @@ type AcceptInput struct {
 
 // Service implements the identity use cases.
 type Service struct {
-	repo  Repository
-	now   func() time.Time
-	cfg   Config
-	dummy []byte
+	repo     Repository
+	now      func() time.Time
+	cfg      Config
+	dummy    []byte
+	throttle *throttle
 }
 
 // NewService builds the identity service.
 func NewService(repo Repository, now func() time.Time, cfg Config) *Service {
 	// A hash to compare against when the username does not exist, so a failed sign-in takes the same time.
 	dummy, _ := bcrypt.GenerateFromPassword([]byte("provenly-timing-equalizer"), cfg.BcryptCost)
-	return &Service{repo: repo, now: now, cfg: cfg, dummy: dummy}
+	return &Service{repo: repo, now: now, cfg: cfg, dummy: dummy, throttle: newThrottle(cfg.LoginMaxFailures, cfg.LoginWindow)}
 }
 
 // Bootstrap creates the first administrator when there are no users yet; afterwards it does nothing.
@@ -137,6 +143,20 @@ func (s *Service) Bootstrap(ctx context.Context, username, password string) erro
 // Login checks a username and password and issues a session.
 func (s *Service) Login(ctx context.Context, username, password string) (Session, error) {
 	username = normalizeUsername(username)
+	if err := s.throttle.check(username, s.now()); err != nil {
+		return Session{}, err
+	}
+	session, err := s.login(ctx, username, password)
+	switch {
+	case err == nil:
+		s.throttle.succeed(username)
+	case errors.Is(err, errBadCredentials):
+		s.throttle.fail(username, s.now())
+	}
+	return session, err
+}
+
+func (s *Service) login(ctx context.Context, username, password string) (Session, error) {
 	var u User
 	err := ErrNotFound
 	// A username no account can have (NUL, invalid UTF-8, too long) is not looked up.

@@ -26,6 +26,7 @@ const (
 	CodeUnsupportedMediaType = "unsupported_media_type"
 	CodeServiceUnavailable   = "service_unavailable"
 	CodeUpstream             = "upstream_error"
+	CodeTooManyRequests      = "too_many_requests"
 	CodeInternal             = "internal_error"
 )
 
@@ -93,6 +94,9 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 			return
 		case apperr.KindUpstream:
 			WriteProblem(w, http.StatusBadGateway, CodeUpstream, e.Message)
+			return
+		case apperr.KindTooManyRequests:
+			WriteProblem(w, http.StatusTooManyRequests, CodeTooManyRequests, e.Message)
 			return
 		case apperr.KindValidation:
 			fields := make([]FieldError, len(e.Fields))

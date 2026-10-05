@@ -40,6 +40,8 @@ type NewEvent struct {
 	// Status is the outcome of a test.finished event.
 	Status     *ResultStatus
 	OccurredAt time.Time
+	// Attempt is the test's attempt (1 = first; a retry is the next one).
+	Attempt int32
 }
 
 // Event is a stored live event.
@@ -141,6 +143,52 @@ func liveState(expected []int64, events []Event) (Live, map[int64][]Event) {
 	return live, byCase
 }
 
+// liveStatus aggregates the live outcome of a test case's tests: each test (by name) counts with its last finished
+// attempt, and the worst wins (failed > error > skipped > passed), as in run summaries. duplicate tells that one
+// attempt of one test finished more than once; unfinished that a test started without finishing.
+func liveStatus(events []Event) (status string, duplicate, unfinished bool) {
+	type test struct {
+		started  bool
+		finished map[int32]int
+		last     int32
+		status   ResultStatus
+	}
+	tests := map[string]*test{}
+	var names []string
+	for _, e := range events {
+		t := tests[e.TestName]
+		if t == nil {
+			t = &test{finished: map[int32]int{}}
+			tests[e.TestName] = t
+			names = append(names, e.TestName)
+		}
+		if e.Type == EventTestStarted {
+			t.started = true
+			continue
+		}
+		t.finished[e.Attempt]++
+		if t.finished[e.Attempt] > 1 {
+			duplicate = true
+		}
+		if e.Attempt >= t.last {
+			t.last, t.status = e.Attempt, *e.Status
+		}
+	}
+	var statuses []ResultStatus
+	for _, n := range names {
+		t := tests[n]
+		if len(t.finished) == 0 {
+			unfinished = true
+			continue
+		}
+		statuses = append(statuses, t.status)
+	}
+	if len(statuses) > 0 {
+		status = string(Aggregate(statuses))
+	}
+	return status, duplicate, unfinished
+}
+
 // reconcile compares the live events of each test case with its final aggregated status ("" when the report has
 // no result for it) and lists the disagreements, by test case id.
 func reconcile(byCase map[int64][]Event, final map[int64]string, events []Event) []Mismatch {
@@ -156,18 +204,10 @@ func reconcile(byCase map[int64][]Event, final map[int64]string, events []Event)
 	slices.Sort(ids)
 	out := []Mismatch{}
 	for _, id := range ids {
-		var finished []Event
-		for _, e := range byCase[id] {
-			if e.Type == EventTestFinished {
-				finished = append(finished, e)
-			}
-		}
+		status, duplicate, unfinished := liveStatus(byCase[id])
 		tc := id
-		m := Mismatch{TestCaseID: &tc, FinalStatus: final[id]}
-		if len(finished) > 0 {
-			m.LiveStatus = string(*finished[len(finished)-1].Status)
-		}
-		if len(finished) > 1 {
+		m := Mismatch{TestCaseID: &tc, FinalStatus: final[id], LiveStatus: status}
+		if duplicate {
 			d := m
 			d.Kind = MismatchDuplicate
 			out = append(out, d)
@@ -175,7 +215,7 @@ func reconcile(byCase map[int64][]Event, final map[int64]string, events []Event)
 		switch {
 		case len(byCase[id]) == 0:
 			m.Kind = MismatchFinalOnly
-		case len(finished) == 0:
+		case unfinished:
 			m.Kind = MismatchStartedNotFinished
 		case m.FinalStatus == "":
 			m.Kind = MismatchLiveOnly

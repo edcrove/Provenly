@@ -91,7 +91,7 @@ func TestLiveEvents(t *testing.T) {
 	at := liveNow.Add(-time.Minute)
 	res, err := l.RecordEvents(ctx, 5, []EventInput{
 		{EventID: "e1", Sequence: 1, Type: execution.EventTestStarted, TestName: "pay", TestCase: "CHK-3", OccurredAt: &at},
-		{EventID: "e2", Sequence: 2, Type: execution.EventTestFinished, TestName: "pay", TestCase: "3", Status: execution.Failed},
+		{EventID: "e2", Sequence: 2, Type: execution.EventTestFinished, TestName: "pay", TestCase: "3", Status: execution.Failed, Attempt: 2},
 		{EventID: "e3", Sequence: 3, Type: execution.EventTestFinished, TestName: "x", TestCase: "WEB-3", Status: execution.Passed},
 		{EventID: "e4", Sequence: 4, Type: execution.EventTestStarted, TestCase: "CHK-99"},
 		{EventID: "e5", Sequence: 5, Type: execution.EventRunFinished},
@@ -105,6 +105,8 @@ func TestLiveEvents(t *testing.T) {
 	assert.Equal(t, at, rec.events[0].OccurredAt)
 	assert.Equal(t, liveNow, rec.events[1].OccurredAt)
 	assert.Equal(t, execution.Failed, *rec.events[1].Status)
+	assert.Equal(t, int32(1), rec.events[0].Attempt, "default attempt")
+	assert.Equal(t, int32(2), rec.events[1].Attempt)
 	assert.Nil(t, rec.events[2].TestCaseID, "another project's TC-ID")
 	assert.Equal(t, "WEB-3", *rec.events[2].RequestedTestCaseID)
 	assert.Nil(t, rec.events[3].TestCaseID, "unknown")
@@ -119,6 +121,8 @@ func TestLiveEvents(t *testing.T) {
 		{many, "events"},
 		{[]EventInput{{EventID: "bad id", Type: execution.EventRunFinished}}, "events[0].eventId"},
 		{[]EventInput{{EventID: "a", Sequence: -1, Type: execution.EventRunFinished}}, "events[0].sequence"},
+		{[]EventInput{{EventID: "a", Type: execution.EventRunFinished, Attempt: 101}}, "events[0].attempt"},
+		{[]EventInput{{EventID: "a", Type: execution.EventRunFinished, Attempt: -1}}, "events[0].attempt"},
 		{[]EventInput{{EventID: "a", Type: "test.paused"}}, "events[0].type"},
 		{[]EventInput{{EventID: "a", Type: execution.EventTestFinished}}, "events[0].status"},
 		{[]EventInput{{EventID: "a", Type: execution.EventTestStarted, Status: execution.Passed}}, "events[0].status"},

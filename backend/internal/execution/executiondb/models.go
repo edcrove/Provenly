@@ -70,6 +70,7 @@ type TestRunEvent struct {
 	Status              pgtype.Text
 	OccurredAt          pgtype.Timestamptz
 	ReceivedAt          pgtype.Timestamptz
+	Attempt             int32
 }
 
 type TestRunExpectedCase struct {

@@ -4096,6 +4096,12 @@ components:
               occurredAt:
                 type: string
                 format: date-time
+              attempt:
+                type: integer
+                format: int32
+                minimum: 1
+                maximum: 100
+                description: The test's attempt (default 1); a retry is the next attempt, not a duplicate.
 
     LiveEventsResult:
       type: object

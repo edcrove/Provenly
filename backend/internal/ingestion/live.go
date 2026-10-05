@@ -30,6 +30,8 @@ type EventInput struct {
 	TestCase   string
 	Status     execution.ResultStatus
 	OccurredAt *time.Time
+	// Attempt is the test's attempt (default 1; a retry is the next one).
+	Attempt int32
 }
 
 // LiveRecorder is what live runs need from the execution module.
@@ -94,6 +96,7 @@ func validateEvents(events []EventInput) error {
 		f := fmt.Sprintf("events[%d].", i)
 		v.Check(eventIDPattern.MatchString(e.EventID), f+"eventId", "must match "+eventIDPattern.String())
 		v.Check(e.Sequence >= 0, f+"sequence", "must be >= 0")
+		v.Check(e.Attempt >= 0 && e.Attempt <= execution.MaxAttempts, f+"attempt", "must be 1 to 100")
 		v.Check(slices.Contains(execution.EventTypes, e.Type), f+"type", "must be one of test.started, test.finished, step.started, step.completed, run.finished")
 		v.Check(utf8.RuneCountInString(e.TestName) <= 1000, f+"testName", "must be at most 1000 characters")
 		v.CheckText(f+"testName", e.TestName)
@@ -139,7 +142,7 @@ func (l *Live) RecordEvents(ctx context.Context, runID int64, events []EventInpu
 	}
 	out := make([]execution.NewEvent, len(events))
 	for i, e := range events {
-		ne := execution.NewEvent{EventID: e.EventID, Sequence: e.Sequence, Type: e.Type, TestName: e.TestName, OccurredAt: l.now()}
+		ne := execution.NewEvent{EventID: e.EventID, Sequence: e.Sequence, Type: e.Type, TestName: e.TestName, OccurredAt: l.now(), Attempt: max(e.Attempt, 1)}
 		if e.OccurredAt != nil {
 			ne.OccurredAt = *e.OccurredAt
 		}

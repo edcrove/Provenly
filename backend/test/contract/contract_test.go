@@ -1195,6 +1195,8 @@ func TestLiveRuns(t *testing.T) {
 		Expect().Status(http.StatusOK).JSON().Object().IsEqual(map[string]any{"accepted": 0, "duplicates": 1})
 	admin.POST("/api/v1/test-runs/" + id + "/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "x", "sequence": 1, "type": "test.finished"}}}).
 		Expect().Status(http.StatusBadRequest)
+	admin.POST("/api/v1/test-runs/" + id + "/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "x", "sequence": 1, "type": "run.finished", "attempt": 101}}}).
+		Expect().Status(http.StatusBadRequest)
 	admin.POST("/api/v1/test-runs/" + id + "/events").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
 	admin.POST("/api/v1/test-runs/987654/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "x", "sequence": 1, "type": "run.finished"}}}).Expect().Status(http.StatusNotFound)
 	key.POST("/api/v1/test-runs/" + id + "/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "x", "sequence": 1, "type": "run.finished"}}}).Expect().Status(http.StatusNotFound)

@@ -154,3 +154,25 @@ func TestLiveRuns(t *testing.T) {
 	_, err = svc.StartRun(ctx, start, nil)
 	assert.ErrorIs(t, err, errBoom)
 }
+
+// Retries are new attempts, not duplicates; variants of one test case aggregate like summaries.
+func TestLiveStatus(t *testing.T) {
+	at := func(name string, attempt int32, typ EventType, status ResultStatus) Event {
+		e := Event{NewEvent: ev(name, 0, typ, 1, status)}
+		e.TestName, e.Attempt = name, attempt
+		return e
+	}
+	status, dup, unfinished := liveStatus([]Event{at("a", 1, EventTestStarted, ""), at("a", 1, EventTestFinished, Failed), at("a", 2, EventTestStarted, ""), at("a", 2, EventTestFinished, Passed)})
+	assert.Equal(t, "passed", status)
+	assert.False(t, dup)
+	assert.False(t, unfinished)
+	status, dup, _ = liveStatus([]Event{at("chrome", 1, EventTestFinished, Passed), at("firefox", 1, EventTestFinished, Skipped), at("firefox", 1, EventTestFinished, Skipped)})
+	assert.Equal(t, "skipped", status)
+	assert.True(t, dup)
+	status, _, unfinished = liveStatus([]Event{at("a", 1, EventTestFinished, Passed), at("b", 1, EventTestStarted, "")})
+	assert.Equal(t, "passed", status)
+	assert.True(t, unfinished)
+	status, _, unfinished = liveStatus([]Event{at("b", 1, EventTestStarted, "")})
+	assert.Equal(t, "", status)
+	assert.True(t, unfinished)
+}

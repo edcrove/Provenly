@@ -218,8 +218,8 @@ SELECT count(*)::int FROM test_run_events WHERE test_run_id = @test_run_id;
 
 -- name: InsertRunEvent :execrows
 -- Appends one live event; an event id already received for the run is a duplicate delivery and is skipped (0 rows).
-INSERT INTO test_run_events (test_run_id, event_id, sequence, event_type, test_name, requested_test_case_id, test_case_id, status, occurred_at)
-VALUES (@test_run_id, @event_id, @sequence, @event_type, @test_name, sqlc.narg('requested_test_case_id'), sqlc.narg('test_case_id'), sqlc.narg('status'), @occurred_at)
+INSERT INTO test_run_events (test_run_id, event_id, sequence, event_type, test_name, requested_test_case_id, test_case_id, status, occurred_at, attempt)
+VALUES (@test_run_id, @event_id, @sequence, @event_type, @test_name, sqlc.narg('requested_test_case_id'), sqlc.narg('test_case_id'), sqlc.narg('status'), @occurred_at, @attempt)
 ON CONFLICT (test_run_id, event_id) DO NOTHING;
 
 -- name: ListRunEvents :many

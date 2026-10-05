@@ -471,7 +471,7 @@ func (s *Store) InsertRunEvent(ctx context.Context, runID int64, e execution.New
 	p := executiondb.InsertRunEventParams{
 		TestRunID: runID, EventID: e.EventID, Sequence: e.Sequence, EventType: string(e.Type), TestName: e.TestName,
 		RequestedTestCaseID: filterText(e.RequestedTestCaseID), TestCaseID: int8Arg(e.TestCaseID), Status: filterText(e.Status),
-		OccurredAt: pgtype.Timestamptz{Time: e.OccurredAt, Valid: true},
+		OccurredAt: pgtype.Timestamptz{Time: e.OccurredAt, Valid: true}, Attempt: e.Attempt,
 	}
 	n, err := s.q.InsertRunEvent(ctx, p)
 	return n == 1, err
@@ -487,7 +487,7 @@ func (s *Store) ListRunEvents(ctx context.Context, runID int64) ([]execution.Eve
 	for i, r := range rows {
 		e := execution.Event{ID: r.ID, ReceivedAt: r.ReceivedAt.Time, NewEvent: execution.NewEvent{
 			EventID: r.EventID, Sequence: r.Sequence, Type: execution.EventType(r.EventType), TestName: r.TestName,
-			OccurredAt: r.OccurredAt.Time,
+			OccurredAt: r.OccurredAt.Time, Attempt: r.Attempt,
 		}}
 		e.RequestedTestCaseID, e.TestCaseID = textPtr(r.RequestedTestCaseID), int8Ptr(r.TestCaseID)
 		if r.Status.Valid {

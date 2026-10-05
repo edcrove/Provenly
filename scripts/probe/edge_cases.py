@@ -550,6 +550,7 @@ def main():
                       ({"events": [{**ev, "type": "test.finished"}]}, 400), ({"events": [{**ev, "status": "passed"}]}, 400),
                       ({"events": [{**ev, "testName": "n" * 1001}]}, 400), ({"events": [{**ev, "testName": "a\u0000"}]}, 400),
                       ({"events": [{**ev, "occurredAt": "yesterday"}]}, 400), ({"events": [{**ev, "unknown": 1}]}, 400),
+                      ({"events": [{**ev, "attempt": 101}]}, 400), ({"events": [{**ev, "attempt": -1}]}, 400), ({"events": [{**ev, "attempt": "2"}]}, 400),
                       ({"events": [{**ev, "testCase": "TC-99999999"}]}, 200)]:
         check(f"events {str(body)[:50]}", call(base, "POST", evs, body)[0], exp)
     check("events text/plain", call(base, "POST", evs, raw=b"{}", ctype="text/plain")[0], 415)

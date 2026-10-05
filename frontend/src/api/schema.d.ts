@@ -1904,6 +1904,11 @@ export interface components {
                 status?: "passed" | "failed" | "error" | "skipped";
                 /** Format: date-time */
                 occurredAt?: string;
+                /**
+                 * Format: int32
+                 * @description The test's attempt (default 1); a retry is the next attempt, not a duplicate.
+                 */
+                attempt?: number;
             }[];
         };
         LiveEventsResult: {

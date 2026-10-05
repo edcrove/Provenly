@@ -319,8 +319,8 @@ type InsertParseErrorsParams struct {
 }
 
 const insertRunEvent = `-- name: InsertRunEvent :execrows
-INSERT INTO test_run_events (test_run_id, event_id, sequence, event_type, test_name, requested_test_case_id, test_case_id, status, occurred_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO test_run_events (test_run_id, event_id, sequence, event_type, test_name, requested_test_case_id, test_case_id, status, occurred_at, attempt)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 ON CONFLICT (test_run_id, event_id) DO NOTHING
 `
 
@@ -334,6 +334,7 @@ type InsertRunEventParams struct {
 	TestCaseID          pgtype.Int8
 	Status              pgtype.Text
 	OccurredAt          pgtype.Timestamptz
+	Attempt             int32
 }
 
 // Appends one live event; an event id already received for the run is a duplicate delivery and is skipped (0 rows).
@@ -348,6 +349,7 @@ func (q *Queries) InsertRunEvent(ctx context.Context, arg InsertRunEventParams) 
 		arg.TestCaseID,
 		arg.Status,
 		arg.OccurredAt,
+		arg.Attempt,
 	)
 	if err != nil {
 		return 0, err
@@ -837,7 +839,7 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 }
 
 const listRunEvents = `-- name: ListRunEvents :many
-SELECT id, test_run_id, event_id, sequence, event_type, test_name, requested_test_case_id, test_case_id, status, occurred_at, received_at FROM test_run_events WHERE test_run_id = $1 ORDER BY sequence, id
+SELECT id, test_run_id, event_id, sequence, event_type, test_name, requested_test_case_id, test_case_id, status, occurred_at, received_at, attempt FROM test_run_events WHERE test_run_id = $1 ORDER BY sequence, id
 `
 
 func (q *Queries) ListRunEvents(ctx context.Context, testRunID int64) ([]TestRunEvent, error) {
@@ -861,6 +863,7 @@ func (q *Queries) ListRunEvents(ctx context.Context, testRunID int64) ([]TestRun
 			&i.Status,
 			&i.OccurredAt,
 			&i.ReceivedAt,
+			&i.Attempt,
 		); err != nil {
 			return nil, err
 		}

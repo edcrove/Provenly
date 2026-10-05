@@ -46,6 +46,7 @@ type eventRequest struct {
 	TestCase   string                 `json:"testCase"`
 	Status     execution.ResultStatus `json:"status"`
 	OccurredAt *time.Time             `json:"occurredAt"`
+	Attempt    int32                  `json:"attempt"`
 }
 
 type eventsRequest struct {

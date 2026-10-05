@@ -37,6 +37,7 @@ Project rename (OpenTestHub → Provenly): DEC-39.
    **Accepted by Ed (2026-09-30) — DEC-42, pending implementation (Trello card).** An amended run must carry a
    visible "edited" mark (run list, run detail and API) with the amendment history, so an amended summary is never
    mistaken for the original snapshot.
+   **Prototype:** implemented on `prototype/full-product` (feature 6, `docs/prototype/README.md` P6-1..P6-6).
 3. **Deprecated TC-IDs in results.** Following "testCaseId when the TC-ID is valid", results that reference a
    deprecated test case keep only `requestedTestCaseId` + `correlation=deprecated`; they are therefore not listed in
    that test case's history.

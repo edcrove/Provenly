@@ -2,6 +2,7 @@ package execution
 
 import (
 	"math"
+	"slices"
 	"sort"
 )
 
@@ -110,6 +111,10 @@ type Summary struct {
 	// OutsideUniverseIDs are the distinct TC-IDs behind OutsideUniverse, ascending.
 	OutsideUniverseIDs []int64
 	TestCases          []TestCaseOutcome
+	// SnapshotTotal is the size of the snapshot frozen at creation; ExpectedTotal adds the amendments.
+	SnapshotTotal int32
+	// AmendedIDs are the TC-IDs added to the universe after creation (DEC-42), ascending.
+	AmendedIDs []int64
 }
 
 // percentPrecision keeps 6 decimals: clients sum the precise values and round
@@ -131,7 +136,7 @@ func ComputeSummary(runID int64, expected []int64, valid []ValidResult, diagnost
 	for _, id := range expected {
 		byCase[id] = nil
 	}
-	s := Summary{TestRunID: runID, ExpectedTotal: int32(len(expected)), OutsideUniverseIDs: []int64{}}
+	s := Summary{TestRunID: runID, ExpectedTotal: int32(len(expected)), SnapshotTotal: int32(len(expected)), OutsideUniverseIDs: []int64{}, AmendedIDs: []int64{}}
 	outside := map[int64]bool{}
 	for _, r := range valid {
 		if _, ok := byCase[r.TestCaseID]; !ok {
@@ -194,5 +199,15 @@ func ComputeSummary(runID int64, expected []int64, valid []ValidResult, diagnost
 		}
 	}
 	s.Diagnostics.Total = int32(len(diagnostics))
+	return s
+}
+
+// Summarize computes a run's summary over its universe (snapshot plus amendments) and records which TC-IDs were
+// amended in, so an amended summary is never mistaken for the original snapshot (DEC-42).
+func Summarize(runID int64, in SummaryInputs, diagnostics []Diagnostic) Summary {
+	s := ComputeSummary(runID, in.Universe(), in.Valid, diagnostics)
+	s.SnapshotTotal = int32(len(in.Expected))
+	s.AmendedIDs = append(s.AmendedIDs, in.Amended...)
+	slices.Sort(s.AmendedIDs)
 	return s
 }

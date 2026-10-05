@@ -24,6 +24,7 @@ sql:
       - migrations/00006_run_report_digest.sql
       - migrations/00007_run_execution_status.sql
       - migrations/00013_run_projects.sql
+      - migrations/00018_run_amendments.sql
     queries: queries/execution.sql
     gen:
       go:

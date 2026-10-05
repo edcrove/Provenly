@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
@@ -278,4 +279,83 @@ func TestRunsArePerProject(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), res.Total)
 	assert.Equal(t, second.ID, res.Items[0].ID)
+}
+
+// DEC-42: a TC-ID with valid results outside the snapshot can be amended into the run's universe; the snapshot is
+// kept, the summary and outcome count it, the run is marked as edited and the amendment records who and why.
+func TestAmend(t *testing.T) {
+	svc, repo, ctx := setup()
+	r, _, err := svc.RecordRun(ctx, run(1), []int64{1}, []NewResult{valid(1, Passed, "a"), valid(5, Failed, "b"), valid(5, Passed, "c")}, nil)
+	require.NoError(t, err)
+	admin := authz.Actor{ID: 9, Username: "ana"}
+
+	before, _ := svc.Summary(ctx, r.ID)
+	assert.Equal(t, []int64{5}, before.OutsideUniverseIDs)
+
+	a, err := svc.Amend(ctx, r.ID, 5, "  it was marked manual by mistake ", admin)
+	require.NoError(t, err)
+	assert.Equal(t, Amendment{ID: 1, TestRunID: r.ID, TestCaseID: 5, AmendedBy: 9, AmendedByUsername: "ana",
+		Reason: "it was marked manual by mistake", CreatedAt: a.CreatedAt}, a)
+
+	s, err := svc.Summary(ctx, r.ID)
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), s.ExpectedTotal)
+	assert.Equal(t, int32(1), s.SnapshotTotal, "the snapshot is unchanged")
+	assert.Equal(t, []int64{5}, s.AmendedIDs)
+	assert.Empty(t, s.OutsideUniverseIDs)
+	assert.Equal(t, int32(1), s.Counts.Failed)
+	got, _ := svc.GetRun(ctx, r.ID)
+	assert.Equal(t, int32(1), got.AmendmentCount)
+	assert.Equal(t, int32(2), got.ExpectedCount)
+	assert.Equal(t, VerdictFailed, got.Outcome.Verdict, "the outcome follows the amended universe")
+
+	page, err := svc.ListAmendments(ctx, r.ID, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), page.Total)
+
+	for _, c := range []struct {
+		tc     int64
+		reason string
+		kind   apperr.Kind
+	}{
+		{5, "again", apperr.KindConflict}, {1, "in the snapshot", apperr.KindConflict}, {7, "no results", apperr.KindValidation},
+		{5, " ", apperr.KindValidation}, {5, string(make([]rune, 501)), apperr.KindValidation}, {5, "a\x00", apperr.KindValidation},
+		{0, "x", apperr.KindValidation},
+	} {
+		_, err := svc.Amend(ctx, r.ID, c.tc, c.reason, admin)
+		assert.Equal(t, c.kind, kindOf(t, err), "%d %q", c.tc, c.reason)
+	}
+	_, err = svc.Amend(ctx, 99, 5, "x", admin)
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
+	_, err = svc.ListAmendments(ctx, 99, pagination.Default())
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
+
+	// A concurrent amendment of the same TC-ID (the unique row already exists) is a conflict, not a duplicate.
+	r2, _, _ := svc.RecordRun(ctx, run(2), nil, []NewResult{valid(5, Passed, "b")}, nil)
+	repo.errs["InsertAmendment"] = ErrConflict
+	_, err = svc.Amend(ctx, r2.ID, 5, "x", admin)
+	assert.Equal(t, apperr.KindConflict, kindOf(t, err))
+	delete(repo.errs, "InsertAmendment")
+
+	for method, call := range map[string]func() error{
+		"ListSummaryInputs": func() error { _, err := svc.Amend(ctx, r.ID, 7, "x", admin); return err },
+		"InsertAmendment": func() error {
+			r3, _, _ := svc.RecordRun(ctx, run(3), nil, []NewResult{valid(8, Passed, "z")}, nil)
+			_, err := svc.Amend(ctx, r3.ID, 8, "x", admin)
+			return err
+		},
+		"ListAmendments":  func() error { _, err := svc.ListAmendments(ctx, r.ID, pagination.Default()); return err },
+		"CountAmendments": func() error { _, err := svc.ListAmendments(ctx, r.ID, pagination.Default()); return err },
+	} {
+		repo.errs[method] = errBoom
+		assert.ErrorIs(t, call(), errBoom, method)
+		delete(repo.errs, method)
+	}
+}
+
+func kindOf(t *testing.T, err error) apperr.Kind {
+	t.Helper()
+	e, ok := apperr.As(err)
+	require.True(t, ok, "%v", err)
+	return e.Kind
 }

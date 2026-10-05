@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ type stubAPI struct {
 	getErr      error
 	gotFilter   ResultFilter
 	gotProjects []int64
+	gotAmend    []any
 }
 
 var sampleRun = TestRun{ID: 3, ExternalRunID: "github:1:1", Provider: "github", ProviderRunID: "1", RunAttempt: 1,
@@ -46,6 +48,17 @@ func (s *stubAPI) ListParseErrors(_ context.Context, _ int64, p pagination.Page)
 }
 func (s *stubAPI) History(_ context.Context, _ int64, p pagination.Page) (pagination.Result[HistoryEntry], error) {
 	return pagination.Result[HistoryEntry]{Items: []HistoryEntry{{Result: sampleResult, Run: sampleRun}}, Page: p, Total: 1}, s.err
+}
+
+var sampleAmendment = Amendment{ID: 1, TestRunID: 3, TestCaseID: 154, AmendedBy: 1, AmendedByUsername: "admin", Reason: "was manual",
+	CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+
+func (s *stubAPI) Amend(_ context.Context, runID, testCaseID int64, reason string, by authz.Actor) (Amendment, error) {
+	s.gotAmend = []any{runID, testCaseID, reason, by}
+	return sampleAmendment, s.err
+}
+func (s *stubAPI) ListAmendments(_ context.Context, _ int64, p pagination.Page) (pagination.Result[Amendment], error) {
+	return pagination.Result[Amendment]{Items: []Amendment{sampleAmendment}, Page: p, Total: 1}, s.err
 }
 
 type stubCatalog struct{ err, projectErr, keysErr error }
@@ -167,4 +180,62 @@ func TestHandlerAuthorization(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, serveAs(memberOf(nil), api, stubCatalog{}, "/api/v1/test-runs?project=CHK").Code)
 	broken := stubGuard{err: errors.New("db down")}
 	assert.Equal(t, http.StatusInternalServerError, serveAs(broken, api, stubCatalog{}, "/api/v1/test-runs").Code)
+}
+
+func serveBody(guard authz.Guard, api API, cat TestCaseChecker, method, target, body string) *httptest.ResponseRecorder {
+	mux := http.NewServeMux()
+	NewHandler(api, cat, guard).Register(mux)
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+// DEC-42 over HTTP: maintainers amend a run (the actor is recorded), anyone who sees the run lists the amendments,
+// and runs and summaries say whether and how the universe was edited.
+func TestHandlerAmendments(t *testing.T) {
+	api := &stubAPI{}
+	rec := serveBody(adminGuard, api, stubCatalog{}, "POST", "/api/v1/test-runs/3/amendments", `{"testCaseId":154,"reason":"was manual"}`)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), `"testCaseKey":"CHK-4"`)
+	assert.Contains(t, rec.Body.String(), `"amendedByUsername":"admin"`)
+	assert.Equal(t, []any{int64(3), int64(154), "was manual", authz.Actor{ID: 1, Username: "admin"}}, api.gotAmend)
+	assert.Contains(t, serve(api, stubCatalog{}, "/api/v1/test-runs/3/amendments").Body.String(), `"totalItems":1`)
+	assert.Contains(t, serve(api, stubCatalog{}, "/api/v1/test-runs/3").Body.String(), `"amendmentCount":0`)
+	assert.Contains(t, serve(api, stubCatalog{}, "/api/v1/test-runs/3/summary").Body.String(), `"snapshotTotal":2,"amendedTestCaseIds":[]`)
+
+	viewer := memberOf(map[int64]authz.Role{sampleRun.ProjectID: authz.RoleMember})
+	assert.Equal(t, http.StatusForbidden, serveBody(viewer, api, stubCatalog{}, "POST", "/api/v1/test-runs/3/amendments", `{"testCaseId":154,"reason":"x"}`).Code)
+	assert.Equal(t, http.StatusOK, serveBody(viewer, api, stubCatalog{}, "GET", "/api/v1/test-runs/3/amendments", "").Code)
+
+	for _, c := range []struct {
+		api          API
+		cat          stubCatalog
+		guard        authz.Guard
+		method, path string
+		body         string
+		want         int
+	}{
+		{api, stubCatalog{}, adminGuard, "POST", "/api/v1/test-runs/x/amendments", `{}`, 400},
+		{api, stubCatalog{}, adminGuard, "POST", "/api/v1/test-runs/3/amendments", "", 415},
+		{api, stubCatalog{}, adminGuard, "GET", "/api/v1/test-runs/x/amendments", "", 400},
+		{api, stubCatalog{}, adminGuard, "GET", "/api/v1/test-runs/3/amendments?page=0", "", 400},
+		{&stubAPI{err: apperr.Conflict("already")}, stubCatalog{}, adminGuard, "POST", "/api/v1/test-runs/3/amendments", `{}`, 409},
+		{&stubAPI{err: apperr.NotFound("gone")}, stubCatalog{}, adminGuard, "GET", "/api/v1/test-runs/3/amendments", "", 404},
+		{api, stubCatalog{keysErr: errors.New("db down")}, adminGuard, "POST", "/api/v1/test-runs/3/amendments", `{}`, 500},
+		{api, stubCatalog{keysErr: errors.New("db down")}, adminGuard, "GET", "/api/v1/test-runs/3/amendments", "", 500},
+		{api, stubCatalog{}, actorless{adminGuard}, "POST", "/api/v1/test-runs/3/amendments", `{}`, 401},
+	} {
+		assert.Equal(t, c.want, serveBody(c.guard, c.api, c.cat, c.method, c.path, c.body).Code, c.method+" "+c.path)
+	}
+}
+
+// actorless authorizes like its guard but has no signed-in person (e.g. an API key).
+type actorless struct{ stubGuard }
+
+func (actorless) Actor(context.Context) (authz.Actor, error) {
+	return authz.Actor{}, apperr.Unauthorized("sign in to continue")
 }

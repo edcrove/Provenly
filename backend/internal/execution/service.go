@@ -3,10 +3,15 @@ package execution
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
+	"slices"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
@@ -91,7 +96,7 @@ func attachOutcomes(ctx context.Context, repo Repository, runs []TestRun, set fu
 	}
 	for _, id := range ids {
 		in := inputs[id]
-		outcomes[id] = ComputeSummary(id, in.Expected, in.Valid, nil).Outcome()
+		outcomes[id] = Summarize(id, in, nil).Outcome()
 	}
 	for i, r := range runs {
 		set(i, outcomes[r.ID])
@@ -189,8 +194,60 @@ func (s *Service) Summary(ctx context.Context, runID int64) (Summary, error) {
 	if err != nil {
 		return Summary{}, err
 	}
+	return Summarize(runID, inputs[runID], diagnostics), nil
+}
+
+const maxReason = 500
+
+// Amend includes in a run's universe a TC-ID that has valid results in the run but was outside its snapshot
+// (DEC-42). The snapshot never changes; the amendment is recorded with who made it and why.
+func (s *Service) Amend(ctx context.Context, runID, testCaseID int64, reason string, by authz.Actor) (Amendment, error) {
+	reason = strings.TrimSpace(reason)
+	var v apperr.Validator
+	v.Check(reason != "" && utf8.RuneCountInString(reason) <= maxReason, "reason", fmt.Sprintf("must be 1 to %d characters", maxReason))
+	v.CheckText("reason", reason)
+	v.Check(testCaseID >= 1, "testCaseId", "must be a positive integer")
+	if err := v.Err(); err != nil {
+		return Amendment{}, err
+	}
+	if _, err := s.getRun(ctx, runID); err != nil {
+		return Amendment{}, err
+	}
+	inputs, err := s.repo.ListSummaryInputs(ctx, []int64{runID})
+	if err != nil {
+		return Amendment{}, err
+	}
 	in := inputs[runID]
-	return ComputeSummary(runID, in.Expected, in.Valid, diagnostics), nil
+	if slices.Contains(in.Universe(), testCaseID) {
+		return Amendment{}, apperr.Conflict("TC-ID %d is already in the universe of run %d", testCaseID, runID)
+	}
+	if !slices.Contains(Summarize(runID, in, nil).OutsideUniverseIDs, testCaseID) {
+		return Amendment{}, apperr.Validation(apperr.ValidationFailed,
+			apperr.FieldError{Field: "testCaseId", Message: "has no valid result in this run: only TC-IDs reported by the run can be included"})
+	}
+	a, err := s.repo.InsertAmendment(ctx, NewAmendment{
+		TestRunID: runID, TestCaseID: testCaseID, AmendedBy: by.ID, AmendedByUsername: by.Username, Reason: reason,
+	})
+	if errors.Is(err, ErrConflict) {
+		return Amendment{}, apperr.Conflict("TC-ID %d is already in the universe of run %d", testCaseID, runID)
+	}
+	return a, err
+}
+
+// ListAmendments returns a page of a run's amendments, oldest first.
+func (s *Service) ListAmendments(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[Amendment], error) {
+	if _, err := s.getRun(ctx, runID); err != nil {
+		return pagination.Result[Amendment]{}, err
+	}
+	items, err := s.repo.ListAmendments(ctx, runID, page.Limit(), page.Offset())
+	if err != nil {
+		return pagination.Result[Amendment]{}, err
+	}
+	total, err := s.repo.CountAmendments(ctx, runID)
+	if err != nil {
+		return pagination.Result[Amendment]{}, err
+	}
+	return pagination.Result[Amendment]{Items: items, Page: page, Total: total}, nil
 }
 
 // History returns the results of a TC-ID across runs, newest first.

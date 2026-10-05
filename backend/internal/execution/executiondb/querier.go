@@ -11,23 +11,27 @@ import (
 )
 
 type Querier interface {
+	CountAmendments(ctx context.Context, testRunID int64) (int64, error)
 	CountParseErrors(ctx context.Context, testRunID int64) (int64, error)
 	CountResultsForTestCase(ctx context.Context, testCaseID pgtype.Int8) (int64, error)
 	CountRunResults(ctx context.Context, arg CountRunResultsParams) (int64, error)
 	CountTestRuns(ctx context.Context, projectIds []int64) (int64, error)
 	GetTestRun(ctx context.Context, id int64) (GetTestRunRow, error)
 	GetTestRunIDByExternalID(ctx context.Context, arg GetTestRunIDByExternalIDParams) (int64, error)
+	InsertAmendment(ctx context.Context, arg InsertAmendmentParams) (TestRunAmendment, error)
 	InsertExpectedCases(ctx context.Context, arg InsertExpectedCasesParams) error
 	InsertParseErrors(ctx context.Context, arg []InsertParseErrorsParams) (int64, error)
 	InsertTestResults(ctx context.Context, arg []InsertTestResultsParams) (int64, error)
 	InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error)
+	ListAmendments(ctx context.Context, arg ListAmendmentsParams) ([]TestRunAmendment, error)
 	ListDiagnosticResults(ctx context.Context, testRunID int64) ([]ListDiagnosticResultsRow, error)
 	ListParseErrors(ctx context.Context, arg ListParseErrorsParams) ([]ListParseErrorsRow, error)
 	// The page is chosen first (index on test_case_id, id DESC) and each run's counts
 	// are computed once, not for every row skipped by OFFSET or repeated per result.
 	ListResultsForTestCase(ctx context.Context, arg ListResultsForTestCaseParams) ([]ListResultsForTestCaseRow, error)
 	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]TestResult, error)
-	// Snapshot TC-IDs (status NULL) and valid results of the given runs, in one read.
+	// Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status) of
+	// the given runs, in one read.
 	ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]ListSummaryInputsRow, error)
 	// The page is chosen first: the per-run counts are only computed for its rows,
 	// not for every row skipped by OFFSET.

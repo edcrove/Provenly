@@ -452,6 +452,34 @@ export function useTestRunSummary(id: number) {
   })
 }
 
+export function useRunAmendments(id: number, enabled = true) {
+  return useQuery({
+    queryKey: [...keys.testRun(id), 'amendments'],
+    enabled: enabled && id > 0,
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/test-runs/{testRunId}/amendments', {
+          params: { path: { testRunId: id }, query: { pageSize: MAX_PAGE } },
+        }),
+      ),
+  })
+}
+
+/** Includes a reported TC-ID in a run's universe (DEC-42); the run, its summary and the run list change. */
+export function useAmendRun(id: number) {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async (body: { testCaseId: number; reason: string }) =>
+      unwrap(
+        await api.POST('/api/v1/test-runs/{testRunId}/amendments', {
+          params: { path: { testRunId: id } },
+          body,
+        }),
+      ),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.testRuns }),
+  })
+}
+
 export function useTestRunResults(
   id: number,
   page: number,

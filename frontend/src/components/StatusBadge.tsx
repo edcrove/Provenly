@@ -40,3 +40,14 @@ export function ExecutionBadge({ status }: { status: ExecutionStatus }) {
     </Badge>
   )
 }
+
+/** Marks a run whose universe was amended after its creation (DEC-42), so its numbers are not mistaken for the
+ * original snapshot's. */
+export function EditedBadge({ amendments }: { amendments: number }) {
+  if (amendments === 0) return null
+  return (
+    <Badge variant="outline" data-testid="edited-badge" title={`${amendments} amendment(s) after creation`}>
+      edited
+    </Badge>
+  )
+}

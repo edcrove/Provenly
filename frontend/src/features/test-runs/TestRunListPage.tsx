@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 import { useProjects, useTestRuns } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
-import { ExecutionBadge, VerdictBadge } from '@/components/StatusBadge'
+import { EditedBadge, ExecutionBadge, VerdictBadge } from '@/components/StatusBadge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -65,7 +65,10 @@ export function TestRunListPage() {
                         {projectKey(run.projectId)}
                       </TableCell>
                       <TableCell>
-                        <VerdictBadge verdict={run.outcome.verdict} />
+                        <div className="flex flex-wrap gap-1">
+                          <VerdictBadge verdict={run.outcome.verdict} />
+                          <EditedBadge amendments={run.amendmentCount} />
+                        </div>
                       </TableCell>
                       <TableCell className="tabular-nums" data-testid="pass-rate">
                         {run.outcome.executed > 0 ? formatPercent(run.outcome.passRate) : '—'}

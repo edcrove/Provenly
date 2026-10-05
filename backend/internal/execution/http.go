@@ -20,6 +20,8 @@ type API interface {
 	Summary(ctx context.Context, runID int64) (Summary, error)
 	ListParseErrors(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[ParseError], error)
 	History(ctx context.Context, testCaseID int64, page pagination.Page) (pagination.Result[HistoryEntry], error)
+	Amend(ctx context.Context, runID, testCaseID int64, reason string, by authz.Actor) (Amendment, error)
+	ListAmendments(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[Amendment], error)
 }
 
 // TestCaseChecker is what the execution REST adapter needs from the catalog
@@ -50,9 +52,11 @@ type TestRunDTO struct {
 	Outcome       outcomeDTO `json:"outcome"`
 	ExpectedCount int32      `json:"expectedCount"`
 	ResultCount   int32      `json:"resultCount"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	StartedAt     *time.Time `json:"startedAt"`
-	CompletedAt   *time.Time `json:"completedAt"`
+	// AmendmentCount > 0 means the run's universe was edited after its creation (DEC-42).
+	AmendmentCount int32      `json:"amendmentCount"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	StartedAt      *time.Time `json:"startedAt"`
+	CompletedAt    *time.Time `json:"completedAt"`
 }
 
 type outcomeDTO struct {
@@ -72,7 +76,7 @@ func RunDTO(r TestRun) TestRunDTO {
 		ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.Commit, Status: r.Status,
 		Outcome:       outcomeDTO(r.Outcome),
-		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, CreatedAt: r.CreatedAt,
+		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt,
 		StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,
 	}
 }
@@ -192,6 +196,8 @@ type summaryDTO struct {
 	OutsideUniverse    int32                  `json:"outsideUniverse"`
 	OutsideUniverseIDs []int64                `json:"outsideUniverseTestCaseIds"`
 	TestCases          []testCaseOutcomeDTO   `json:"testCases"`
+	SnapshotTotal      int32                  `json:"snapshotTotal"`
+	AmendedIDs         []int64                `json:"amendedTestCaseIds"`
 }
 
 func toSummaryDTO(s Summary, keys map[int64]string) summaryDTO {
@@ -209,7 +215,32 @@ func toSummaryDTO(s Summary, keys map[int64]string) summaryDTO {
 		OutsideUniverse:    s.OutsideUniverse,
 		OutsideUniverseIDs: s.OutsideUniverseIDs,
 		TestCases:          cases,
+		SnapshotTotal:      s.SnapshotTotal,
+		AmendedIDs:         s.AmendedIDs,
 	}
+}
+
+type amendmentDTO struct {
+	ID                int64     `json:"id"`
+	TestRunID         int64     `json:"testRunId"`
+	TestCaseID        int64     `json:"testCaseId"`
+	TestCaseKey       string    `json:"testCaseKey"`
+	AmendedBy         int64     `json:"amendedBy"`
+	AmendedByUsername string    `json:"amendedByUsername"`
+	Reason            string    `json:"reason"`
+	CreatedAt         time.Time `json:"createdAt"`
+}
+
+func toAmendmentDTO(a Amendment, keys map[int64]string) amendmentDTO {
+	return amendmentDTO{
+		ID: a.ID, TestRunID: a.TestRunID, TestCaseID: a.TestCaseID, TestCaseKey: keys[a.TestCaseID], AmendedBy: a.AmendedBy,
+		AmendedByUsername: a.AmendedByUsername, Reason: a.Reason, CreatedAt: a.CreatedAt,
+	}
+}
+
+type amendRequest struct {
+	TestCaseID int64  `json:"testCaseId"`
+	Reason     string `json:"reason"`
 }
 
 // Handler is the REST adapter of the execution module.
@@ -226,14 +257,14 @@ func NewHandler(api API, catalog TestCaseChecker, guard authz.Guard) *Handler {
 
 type runKey struct{}
 
-// onRun authorizes routes on /test-runs/{testRunId}: the run's project must be visible to the user (else 404).
-// A malformed id is left to next.
-func (h *Handler) onRun(next http.HandlerFunc) http.HandlerFunc {
+// onRun authorizes routes on /test-runs/{testRunId}: the run's project must be visible to the user (else 404)
+// and give at least minRole (else 403). A malformed id is left to next.
+func (h *Handler) onRun(minRole authz.Role, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if id, err := httpx.PathID(r, "testRunId"); err == nil {
 			run, err := h.api.GetRun(r.Context(), id)
 			if err == nil {
-				err = h.guard.Require(r.Context(), run.ProjectID, authz.RoleViewer, runNotFound(id))
+				err = h.guard.Require(r.Context(), run.ProjectID, minRole, runNotFound(id))
 			}
 			if err != nil {
 				httpx.WriteError(w, r, err)
@@ -248,10 +279,12 @@ func (h *Handler) onRun(next http.HandlerFunc) http.HandlerFunc {
 // Register mounts the execution routes.
 func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/test-runs", h.listRuns)
-	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}", h.onRun(h.getRun))
-	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/results", h.onRun(h.listResults))
-	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/summary", h.onRun(h.summary))
-	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/parse-errors", h.onRun(h.parseErrors))
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}", h.onRun(authz.RoleViewer, h.getRun))
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/results", h.onRun(authz.RoleViewer, h.listResults))
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/summary", h.onRun(authz.RoleViewer, h.summary))
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/parse-errors", h.onRun(authz.RoleViewer, h.parseErrors))
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/amendments", h.onRun(authz.RoleViewer, h.listAmendments))
+	mux.HandleFunc("POST /api/v1/test-runs/{testRunId}/amendments", h.onRun(authz.RoleMaintainer, h.amend))
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}/results", h.history)
 }
 
@@ -431,4 +464,66 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, func(e HistoryEntry) historyDTO { return historyEntryDTO(e, keys) }))
+}
+
+// amendmentKeys resolves the display keys of the amended test cases.
+func (h *Handler) amendmentKeys(ctx context.Context, items []Amendment) (map[int64]string, error) {
+	ids := make([]int64, len(items))
+	for i, a := range items {
+		ids[i] = a.TestCaseID
+	}
+	return h.catalog.Keys(ctx, ids)
+}
+
+func (h *Handler) listAmendments(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.PathID(r, "testRunId")
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	res, err := h.api.ListAmendments(r.Context(), id, page)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	keys, err := h.amendmentKeys(r.Context(), res.Items)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, func(a Amendment) amendmentDTO { return toAmendmentDTO(a, keys) }))
+}
+
+func (h *Handler) amend(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.PathID(r, "testRunId")
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	var req amendRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	by, err := h.guard.Actor(r.Context())
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	a, err := h.api.Amend(r.Context(), id, req.TestCaseID, req.Reason, by)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	keys, err := h.amendmentKeys(r.Context(), []Amendment{a})
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, toAmendmentDTO(a, keys))
 }

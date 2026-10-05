@@ -75,4 +75,12 @@ type Guard interface {
 	Require(ctx context.Context, projectID int64, minRole Role, notFound error) error
 	// RequireAdmin answers a forbidden error unless the user is an administrator.
 	RequireAdmin(ctx context.Context) error
+	// Actor returns who is making the request (recorded with audited changes).
+	Actor(ctx context.Context) (Actor, error)
+}
+
+// Actor is the signed-in user making a change.
+type Actor struct {
+	ID       int64
+	Username string
 }

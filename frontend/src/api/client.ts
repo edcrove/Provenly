@@ -5,6 +5,7 @@ import type { components, paths } from './schema'
 export type User = components['schemas']['User']
 export type Member = components['schemas']['Member']
 export type ApiKey = components['schemas']['ApiKey']
+export type Amendment = components['schemas']['Amendment']
 export type Invitation = components['schemas']['Invitation']
 export type AcceptInvitationRequest = components['schemas']['AcceptInvitationRequest']
 export type CreateInvitationRequest = components['schemas']['CreateInvitationRequest']

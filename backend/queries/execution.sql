@@ -15,7 +15,8 @@ VALUES (@test_run_id, @test_case_id, @requested_test_case_id, @correlation, @tes
 -- name: GetTestRun :one
 SELECT r.*,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
-    (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count
+    (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
+    (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
 FROM test_runs r WHERE r.id = @id;
 
 -- name: GetTestRunIDByExternalID :one
@@ -26,7 +27,8 @@ SELECT id FROM test_runs WHERE project_id = @project_id AND external_run_id = @e
 -- not for every row skipped by OFFSET.
 SELECT r.*,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
-    (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count
+    (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
+    (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
 FROM test_runs r
 WHERE r.id IN (
     SELECT p.id FROM test_runs p
@@ -54,11 +56,15 @@ WHERE test_run_id = @test_run_id
   AND (sqlc.narg('correlation')::text IS NULL OR correlation = sqlc.narg('correlation')::text);
 
 -- name: ListSummaryInputs :many
--- Snapshot TC-IDs (status NULL) and valid results of the given runs, in one read.
-SELECT test_run_id, test_case_id, NULL::text AS status FROM test_run_expected_cases
+-- Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status) of
+-- the given runs, in one read.
+SELECT test_run_id, test_case_id, 'expected' AS kind, NULL::text AS status FROM test_run_expected_cases
 WHERE test_run_id = ANY(@test_run_ids::bigint[])
 UNION ALL
-SELECT test_run_id, test_case_id::bigint, status FROM test_results
+SELECT test_run_id, test_case_id, 'amended', NULL FROM test_run_amendments
+WHERE test_run_id = ANY(@test_run_ids::bigint[])
+UNION ALL
+SELECT test_run_id, test_case_id::bigint, 'result', status FROM test_results
 WHERE test_run_id = ANY(@test_run_ids::bigint[]) AND correlation = 'valid'
 ORDER BY 1, 2;
 
@@ -76,14 +82,15 @@ WITH page AS (
 ), counts AS (
     SELECT r.id,
         (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
-        (SELECT count(*) FROM test_results x WHERE x.test_run_id = r.id)::int AS result_count
+        (SELECT count(*) FROM test_results x WHERE x.test_run_id = r.id)::int AS result_count,
+        (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
     FROM test_runs r
     WHERE r.id IN (SELECT q.test_run_id FROM test_results q WHERE q.id IN (SELECT id FROM page))
 )
 SELECT sqlc.embed(t),
     r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
-    c.expected_count AS run_expected_count, c.result_count AS run_result_count
+    c.expected_count AS run_expected_count, c.result_count AS run_result_count, c.amendment_count AS run_amendment_count
 FROM test_results t
 JOIN test_runs r ON r.id = t.test_run_id
 JOIN counts c ON c.id = r.id
@@ -105,3 +112,16 @@ LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountParseErrors :one
 SELECT count(*) FROM test_run_parse_errors WHERE test_run_id = @test_run_id;
+
+-- name: InsertAmendment :one
+INSERT INTO test_run_amendments (test_run_id, test_case_id, amended_by, amended_by_username, reason)
+VALUES (@test_run_id, @test_case_id, @amended_by, @amended_by_username, @reason)
+ON CONFLICT (test_run_id, test_case_id) DO NOTHING
+RETURNING *;
+
+-- name: ListAmendments :many
+SELECT * FROM test_run_amendments WHERE test_run_id = @test_run_id ORDER BY id
+LIMIT @page_limit OFFSET @page_offset;
+
+-- name: CountAmendments :one
+SELECT count(*) FROM test_run_amendments WHERE test_run_id = @test_run_id;

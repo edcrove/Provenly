@@ -50,4 +50,5 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 43 | Project members: roles managed by an administrator or maintainer | `43-project-members.png` |
 | 44 | A new CI API key, shown once with the CI step that uses it | `44-project-api-keys.png` |
 | 45 | A save refused because someone else saved first (optimistic locking) | `45-test-case-conflict.png` |
-| 46 | A viewer reads a test case without editing actions | `46-viewer-test-case.png` |
+| 46 | A run edited after creation: a reported manual test case included by a maintainer, with its history | `46-test-run-amended.png` |
+| 47 | A viewer reads a test case without editing actions | `47-viewer-test-case.png` |

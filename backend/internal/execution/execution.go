@@ -59,6 +59,9 @@ var Correlations = []Correlation{CorrelationValid, CorrelationMissing, Correlati
 // ErrNotFound is returned by a Repository when a row does not exist.
 var ErrNotFound = errors.New("not found")
 
+// ErrConflict is returned by repositories when a unique record already exists.
+var ErrConflict = errors.New("conflict")
+
 // ExternalRunID builds the idempotency key {provider}:{run_id}:{run_attempt}.
 func ExternalRunID(provider, providerRunID string, attempt int32) string {
 	return provider + ":" + providerRunID + ":" + strconv.Itoa(int(attempt))
@@ -77,11 +80,14 @@ type TestRun struct {
 	Commit        string
 	Status        RunStatus
 	Outcome       RunOutcome
+	// ExpectedCount is the size of the universe: the snapshot plus its amendments.
 	ExpectedCount int32
 	ResultCount   int32
-	CreatedAt     time.Time
-	StartedAt     *time.Time
-	CompletedAt   *time.Time
+	// AmendmentCount > 0 marks the run as edited after its creation (DEC-42).
+	AmendmentCount int32
+	CreatedAt      time.Time
+	StartedAt      *time.Time
+	CompletedAt    *time.Time
 	// ReportSHA256 is the digest of the report that created the run (internal; not exposed).
 	ReportSHA256 string
 }
@@ -172,7 +178,35 @@ type ValidResult struct {
 // TC-IDs (ascending) and its valid results.
 type SummaryInputs struct {
 	Expected []int64
-	Valid    []ValidResult
+	// Amended are TC-IDs added to the universe after the run was created (DEC-42), ascending.
+	Amended []int64
+	Valid   []ValidResult
+}
+
+// Universe is the snapshot plus its amendments.
+func (in SummaryInputs) Universe() []int64 {
+	return append(append([]int64(nil), in.Expected...), in.Amended...)
+}
+
+// Amendment adds a TC-ID with valid results to a run's universe after the run was created (DEC-42). Amendments
+// are append-only and record who made them and why.
+type Amendment struct {
+	ID                int64
+	TestRunID         int64
+	TestCaseID        int64
+	AmendedBy         int64
+	AmendedByUsername string
+	Reason            string
+	CreatedAt         time.Time
+}
+
+// NewAmendment is the content of an amendment to record.
+type NewAmendment struct {
+	TestRunID         int64
+	TestCaseID        int64
+	AmendedBy         int64
+	AmendedByUsername string
+	Reason            string
 }
 
 // HistoryEntry is a historical result of a TC-ID plus the run it was observed in.
@@ -209,6 +243,11 @@ type Repository interface {
 	ListDiagnostics(ctx context.Context, runID int64) ([]Diagnostic, error)
 	ListResultsForTestCase(ctx context.Context, testCaseID int64, limit, offset int32) ([]HistoryEntry, error)
 	CountResultsForTestCase(ctx context.Context, testCaseID int64) (int64, error)
+
+	// InsertAmendment returns ErrConflict when the TC-ID is already amended into the run.
+	InsertAmendment(ctx context.Context, a NewAmendment) (Amendment, error)
+	ListAmendments(ctx context.Context, runID int64, limit, offset int32) ([]Amendment, error)
+	CountAmendments(ctx context.Context, runID int64) (int64, error)
 
 	// InTx runs fn inside one database transaction.
 	InTx(ctx context.Context, fn func(Repository) error) error

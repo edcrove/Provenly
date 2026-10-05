@@ -28,3 +28,5 @@ targets:
     description: a maintainer creates an API key on the project page (shown once with the CI step), CI reports a run with it, the key shows its last use, is revoked, and the run appears in the test case history
   - id: FE-E2E-014
     description: two people edit the same test case in two browsers; the second save is refused with a conflict notice, Reload shows the first person's change and the second change then saves on top of it
+  - id: FE-E2E-015
+    description: a maintainer includes a reported test case from the run page with a reason; the run shows the edited badge (detail and list), the amendment history and the new verdict

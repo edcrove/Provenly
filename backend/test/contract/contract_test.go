@@ -173,7 +173,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 34, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 36, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -527,6 +527,8 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.GET("/api/v1/test-runs/1/results").Expect())
 	problem(e.GET("/api/v1/test-runs/1/summary").Expect())
 	problem(e.GET("/api/v1/test-runs/1/parse-errors").Expect())
+	problem(e.GET("/api/v1/test-runs/1/amendments").Expect())
+	problem(e.POST("/api/v1/test-runs/1/amendments").WithJSON(map[string]any{"testCaseId": 1, "reason": "x"}).Expect())
 	problem(ingest(e, "1", 1, strings.ReplaceAll(report(1), "\n", "")).Expect())
 }
 
@@ -753,4 +755,40 @@ func TestOptimisticLocking(t *testing.T) {
 	e.PATCH(path).WithHeader("If-Match", "3").WithJSON(map[string]any{"title": "x"}).Expect().Status(http.StatusBadRequest)
 	e.DELETE(stepPath).WithHeader("If-Match", `"3"`).Expect().Status(http.StatusNoContent).Header("ETag").NotEmpty()
 	e.POST(path + "/deprecate").Expect().Status(http.StatusOK).Header("ETag").NotEmpty()
+}
+
+// TestAmendments (DEC-42): a maintainer includes a reported TC-ID that was outside the snapshot; the run is marked as
+// edited, the summary counts it and the amendment history says who and why.
+func TestAmendments(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	e := anon(t, s, 1<<20)
+	manual := int64(admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "Refund"}).Expect().Status(http.StatusCreated).
+		JSON().Object().Value("id").Number().Raw())
+	run := ingest(admin, "60", 1, `<testsuite><testcase name="refund TC-`+strconv.FormatInt(manual, 10)+`"/></testsuite>`).
+		Expect().Status(http.StatusCreated).JSON().Object().Value("testRun").Object()
+	run.HasValue("amendmentCount", 0)
+	path := "/api/v1/test-runs/" + strconv.FormatInt(int64(run.Value("id").Number().Raw()), 10)
+
+	amended := admin.POST(path + "/amendments").WithJSON(map[string]any{"testCaseId": manual, "reason": "marked manual by mistake"}).
+		Expect().Status(http.StatusCreated).JSON().Object()
+	amended.HasValue("amendedByUsername", adminUser).HasValue("testCaseKey", "TC-"+strconv.FormatInt(manual, 10))
+	admin.GET(path).Expect().Status(http.StatusOK).JSON().Object().HasValue("amendmentCount", 1).HasValue("expectedCount", 1)
+	sum := admin.GET(path + "/summary").Expect().Status(http.StatusOK).JSON().Object()
+	sum.HasValue("snapshotTotal", 0).HasValue("expectedTotal", 1).Value("amendedTestCaseIds").Array().IsEqual([]int64{manual})
+	admin.GET(path+"/amendments").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	admin.GET(path+"/amendments").WithQuery("page", 0).Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/test-runs/987654/amendments").Expect().Status(http.StatusNotFound)
+
+	admin.POST(path + "/amendments").WithJSON(map[string]any{"testCaseId": manual, "reason": "again"}).Expect().Status(http.StatusConflict)
+	admin.POST(path + "/amendments").WithJSON(map[string]any{"testCaseId": manual, "reason": " "}).Expect().Status(http.StatusBadRequest)
+	admin.POST(path + "/amendments").WithJSON(map[string]any{"testCaseId": 987654, "reason": "x"}).Expect().Status(http.StatusBadRequest)
+	admin.POST(path + "/amendments").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.POST("/api/v1/test-runs/987654/amendments").WithJSON(map[string]any{"testCaseId": 1, "reason": "x"}).Expect().Status(http.StatusNotFound)
+
+	inv := admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "TC", "role": "member"}).Expect().Status(http.StatusCreated).JSON().Object()
+	member := as(e, e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "mia",
+		"displayName": "Mia", "password": "mia's password"}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
+	member.POST(path + "/amendments").WithJSON(map[string]any{"testCaseId": manual, "reason": "x"}).Expect().Status(http.StatusForbidden)
+	member.GET(path + "/amendments").Expect().Status(http.StatusOK)
 }

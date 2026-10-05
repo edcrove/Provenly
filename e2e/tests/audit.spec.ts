@@ -36,7 +36,9 @@ test.describe('Audit log (prototype feature 20)', () => {
     await page.getByRole('link', { name: 'Audit' }).click()
     await page.getByLabel('Project', { exact: true }).fill(key)
     await page.getByRole('button', { name: 'Filter' }).click()
-    await expect(page.getByRole('cell', { name: 'PATCH /api/v1/projects/{projectKey}' })).toBeVisible()
-    await expect(page.getByRole('cell', { name: `/api/v1/projects/${key}`, exact: true })).toBeVisible()
+    // The project fixture may itself patch the project: any PATCH row of this project will do.
+    const row = page.locator('[data-testid^="audit-"]').filter({ hasText: 'PATCH /api/v1/projects/{projectKey}' }).first()
+    await expect(row).toContainText(`/api/v1/projects/${key}`)
+    await expect(page.locator('[data-testid^="audit-"]').filter({ hasNotText: key })).toHaveCount(0)
   })
 })

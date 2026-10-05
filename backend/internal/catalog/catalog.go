@@ -131,8 +131,8 @@ type UpdateInput struct {
 
 // ListFilter narrows a test case list; nil fields do not filter.
 type ListFilter struct {
-	Status    *Status
-	ProjectID *int64
+	Status     *Status
+	ProjectIDs []int64
 }
 
 // CreateStepInput is the content of a new step. Position nil appends at the end.
@@ -165,8 +165,8 @@ type Repository interface {
 	CreateProject(ctx context.Context, in CreateProjectInput) (Project, error)
 	GetProject(ctx context.Context, id int64) (Project, error)
 	GetProjectByKey(ctx context.Context, key string) (Project, error)
-	ListProjects(ctx context.Context, limit, offset int32) ([]Project, error)
-	CountProjects(ctx context.Context) (int64, error)
+	ListProjects(ctx context.Context, projectIDs []int64, limit, offset int32) ([]Project, error)
+	CountProjects(ctx context.Context, projectIDs []int64) (int64, error)
 	UpdateProject(ctx context.Context, key string, in UpdateProjectInput) (Project, error)
 
 	ListTestSteps(ctx context.Context, testCaseID int64, limit, offset int32) ([]TestStep, error)

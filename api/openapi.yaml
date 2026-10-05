@@ -18,6 +18,11 @@ info:
       ingestion. A session is the token returned by sign-in, sent as
       `Authorization: Bearer <token>` or, from a browser, the HttpOnly
       `provenly_session` cookie set by sign-in. Without one the answer is 401.
+    - Roles: administrators see and do everything. Everyone else works in the
+      projects they are members of, as `maintainer` (manages the project, its
+      members and deprecations), `member` (creates and edits test cases and
+      steps) or `viewer` (read only). Anything in a project the user is not a
+      member of answers 404, as if it did not exist; too low a role answers 403.
     - Projects: every test case and run belongs to a project with a key of 2 to 10
       upper-case letters or digits (e.g. `CHK`). The default project `TC` holds the
       test cases created before projects existed. Projects are never deleted and
@@ -222,6 +227,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
         "500":
@@ -330,6 +337,8 @@ paths:
           $ref: "#/components/responses/UnsupportedMediaType"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -380,6 +389,85 @@ paths:
           $ref: "#/components/responses/UnsupportedMediaType"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/members:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [projects]
+      operationId: listProjectMembers
+      summary: List a project's members by username (anyone who can see the project)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/members/{username}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/Username"
+    put:
+      tags: [projects]
+      operationId: setProjectMember
+      summary: Add a user to the project or change their role (maintainers and administrators)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetMemberRequest"
+      responses:
+        "200":
+          description: The membership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [projects]
+      operationId: removeProjectMember
+      summary: Remove a user from the project (maintainers and administrators)
+      responses:
+        "204":
+          description: Removed
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -437,6 +525,8 @@ paths:
           $ref: "#/components/responses/UnsupportedMediaType"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -487,6 +577,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -510,6 +602,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -533,6 +627,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -586,6 +682,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -617,6 +715,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -649,6 +749,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
     delete:
@@ -664,6 +766,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -954,6 +1058,15 @@ components:
       in: cookie
       name: provenly_session
   parameters:
+    Username:
+      name: username
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 32
+      example: ana
     InvitationId:
       name: invitationId
       in: path
@@ -1282,7 +1395,7 @@ components:
     Invitation:
       type: object
       additionalProperties: false
-      required: [id, email, note, status, createdBy, createdAt, expiresAt, acceptedAt, acceptedUserId, revokedAt]
+      required: [id, email, note, status, createdBy, createdAt, expiresAt, acceptedAt, acceptedUserId, revokedAt, projectId, projectRole]
       properties:
         id:
           type: integer
@@ -1315,6 +1428,15 @@ components:
           type: string
           format: date-time
           nullable: true
+        projectId:
+          type: integer
+          format: int64
+          nullable: true
+          description: The project the account joins on accept, if any
+        projectRole:
+          type: string
+          nullable: true
+          enum: [maintainer, member, viewer, null]
 
     InvitationPage:
       allOf:
@@ -1338,6 +1460,47 @@ components:
         note:
           type: string
           maxLength: 200
+        project:
+          type: string
+          description: Key of a project the account joins on accept (with `role`)
+        role:
+          $ref: "#/components/schemas/ProjectRole"
+
+    ProjectRole:
+      type: string
+      enum: [maintainer, member, viewer]
+
+    Member:
+      type: object
+      additionalProperties: false
+      required: [user, role, since]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        role:
+          $ref: "#/components/schemas/ProjectRole"
+        since:
+          type: string
+          format: date-time
+
+    MemberPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Member"
+
+    SetMemberRequest:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role:
+          $ref: "#/components/schemas/ProjectRole"
 
     CreatedInvitation:
       type: object
@@ -1375,7 +1538,7 @@ components:
     Project:
       type: object
       additionalProperties: false
-      required: [id, key, name, description, createdAt, updatedAt]
+      required: [id, key, name, description, createdAt, updatedAt, myRole]
       properties:
         id:
           type: integer
@@ -1395,6 +1558,10 @@ components:
         updatedAt:
           type: string
           format: date-time
+        myRole:
+          type: string
+          enum: [admin, maintainer, member, viewer]
+          description: What the signed-in user may do in this project
 
     ProjectPage:
       allOf:

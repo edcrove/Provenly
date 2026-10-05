@@ -46,7 +46,7 @@ func TestProjects(t *testing.T) {
 		e, _ = apperr.As(err)
 		assert.Equal(t, apperr.KindNotFound, e.Kind)
 
-		page, err := s.Catalog.ListProjects(ctx, pagination.Page{Number: 1, Size: 1})
+		page, err := s.Catalog.ListProjects(ctx, nil, pagination.Page{Number: 1, Size: 1})
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), page.Total)
 		assert.Equal(t, "CHK", page.Items[0].Key, "ordered by key")
@@ -111,7 +111,7 @@ func TestProjects(t *testing.T) {
 			assert.True(t, seen[i], "CHK-%d missing: numbers are contiguous", i)
 		}
 
-		list, err := s.Catalog.List(ctx, catalog.ListFilter{ProjectID: &chk.ID}, pagination.Default())
+		list, err := s.Catalog.List(ctx, catalog.ListFilter{ProjectIDs: []int64{chk.ID}}, pagination.Default())
 		require.NoError(t, err)
 		assert.Equal(t, int64(n), list.Total)
 		got, err := s.Catalog.Get(ctx, list.Items[0].ID)
@@ -177,7 +177,7 @@ func TestProjects(t *testing.T) {
 		assert.False(t, replay.Created, "externalRunId is unique per project")
 		assert.Equal(t, out.Run.ID, replay.Run.ID)
 
-		runs, err := s.Execution.ListRuns(ctx, &chk.ID, pagination.Default())
+		runs, err := s.Execution.ListRuns(ctx, []int64{chk.ID}, pagination.Default())
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), runs.Total)
 		all, err := s.Execution.ListRuns(ctx, nil, pagination.Default())

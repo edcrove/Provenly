@@ -76,6 +76,12 @@ func (s *Service) Get(ctx context.Context, id int64) (TestCase, error) {
 	return tc, mapNotFound(err, id)
 }
 
+// ProjectOf returns the project of a test case.
+func (s *Service) ProjectOf(ctx context.Context, id int64) (int64, error) {
+	tc, err := s.Get(ctx, id)
+	return tc.ProjectID, err
+}
+
 // EnsureExists returns a not-found error when the TC-ID does not exist.
 func (s *Service) EnsureExists(ctx context.Context, id int64) error {
 	_, err := s.Get(ctx, id)
@@ -204,12 +210,12 @@ func (s *Service) ProjectByID(ctx context.Context, id int64) (Project, error) {
 }
 
 // ListProjects returns a page of projects ordered by key.
-func (s *Service) ListProjects(ctx context.Context, page pagination.Page) (pagination.Result[Project], error) {
-	items, err := s.repo.ListProjects(ctx, page.Limit(), page.Offset())
+func (s *Service) ListProjects(ctx context.Context, projectIDs []int64, page pagination.Page) (pagination.Result[Project], error) {
+	items, err := s.repo.ListProjects(ctx, projectIDs, page.Limit(), page.Offset())
 	if err != nil {
 		return pagination.Result[Project]{}, err
 	}
-	total, err := s.repo.CountProjects(ctx)
+	total, err := s.repo.CountProjects(ctx, projectIDs)
 	if err != nil {
 		return pagination.Result[Project]{}, err
 	}

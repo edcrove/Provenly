@@ -22,6 +22,17 @@ func (q *Queries) CountInvitations(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countProjectMembers = `-- name: CountProjectMembers :one
+SELECT count(*) FROM project_members WHERE project_id = $1
+`
+
+func (q *Queries) CountProjectMembers(ctx context.Context, projectID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countProjectMembers, projectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countUsers = `-- name: CountUsers :one
 SELECT count(*) FROM users
 `
@@ -34,9 +45,9 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 }
 
 const createInvitation = `-- name: CreateInvitation :one
-INSERT INTO invitations (token_sha256, email, note, created_by, expires_at)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, token_sha256, email, note, created_by, created_at, expires_at, accepted_at, accepted_user_id, revoked_at
+INSERT INTO invitations (token_sha256, email, note, created_by, expires_at, project_id, project_role)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, token_sha256, email, note, created_by, created_at, expires_at, accepted_at, accepted_user_id, revoked_at, project_id, project_role
 `
 
 type CreateInvitationParams struct {
@@ -45,6 +56,8 @@ type CreateInvitationParams struct {
 	Note        string
 	CreatedBy   int64
 	ExpiresAt   pgtype.Timestamptz
+	ProjectID   pgtype.Int8
+	ProjectRole pgtype.Text
 }
 
 func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error) {
@@ -54,6 +67,8 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 		arg.Note,
 		arg.CreatedBy,
 		arg.ExpiresAt,
+		arg.ProjectID,
+		arg.ProjectRole,
 	)
 	var i Invitation
 	err := row.Scan(
@@ -67,6 +82,8 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 		&i.AcceptedAt,
 		&i.AcceptedUserID,
 		&i.RevokedAt,
+		&i.ProjectID,
+		&i.ProjectRole,
 	)
 	return i, err
 }
@@ -109,8 +126,25 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteMember = `-- name: DeleteMember :execrows
+DELETE FROM project_members WHERE project_id = $1 AND user_id = $2
+`
+
+type DeleteMemberParams struct {
+	ProjectID int64
+	UserID    int64
+}
+
+func (q *Queries) DeleteMember(ctx context.Context, arg DeleteMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteMember, arg.ProjectID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getInvitation = `-- name: GetInvitation :one
-SELECT id, token_sha256, email, note, created_by, created_at, expires_at, accepted_at, accepted_user_id, revoked_at FROM invitations WHERE id = $1
+SELECT id, token_sha256, email, note, created_by, created_at, expires_at, accepted_at, accepted_user_id, revoked_at, project_id, project_role FROM invitations WHERE id = $1
 `
 
 func (q *Queries) GetInvitation(ctx context.Context, id int64) (Invitation, error) {
@@ -127,8 +161,26 @@ func (q *Queries) GetInvitation(ctx context.Context, id int64) (Invitation, erro
 		&i.AcceptedAt,
 		&i.AcceptedUserID,
 		&i.RevokedAt,
+		&i.ProjectID,
+		&i.ProjectRole,
 	)
 	return i, err
+}
+
+const getMemberRole = `-- name: GetMemberRole :one
+SELECT role FROM project_members WHERE project_id = $1 AND user_id = $2
+`
+
+type GetMemberRoleParams struct {
+	ProjectID int64
+	UserID    int64
+}
+
+func (q *Queries) GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (string, error) {
+	row := q.db.QueryRow(ctx, getMemberRole, arg.ProjectID, arg.UserID)
+	var role string
+	err := row.Scan(&role)
+	return role, err
 }
 
 const getUser = `-- name: GetUser :one
@@ -172,7 +224,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 }
 
 const listInvitations = `-- name: ListInvitations :many
-SELECT id, token_sha256, email, note, created_by, created_at, expires_at, accepted_at, accepted_user_id, revoked_at FROM invitations ORDER BY id DESC LIMIT $2 OFFSET $1
+SELECT id, token_sha256, email, note, created_by, created_at, expires_at, accepted_at, accepted_user_id, revoked_at, project_id, project_role FROM invitations ORDER BY id DESC LIMIT $2 OFFSET $1
 `
 
 type ListInvitationsParams struct {
@@ -200,7 +252,89 @@ func (q *Queries) ListInvitations(ctx context.Context, arg ListInvitationsParams
 			&i.AcceptedAt,
 			&i.AcceptedUserID,
 			&i.RevokedAt,
+			&i.ProjectID,
+			&i.ProjectRole,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectMembers = `-- name: ListProjectMembers :many
+SELECT users.id, users.username, users.display_name, users.email, users.password_hash, users.is_admin, users.created_at, users.updated_at, m.role AS member_role, m.created_at AS member_since
+FROM project_members m JOIN users ON users.id = m.user_id
+WHERE m.project_id = $1
+ORDER BY users.username
+LIMIT $3 OFFSET $2
+`
+
+type ListProjectMembersParams struct {
+	ProjectID  int64
+	PageOffset int32
+	PageLimit  int32
+}
+
+type ListProjectMembersRow struct {
+	User        User
+	MemberRole  string
+	MemberSince pgtype.Timestamptz
+}
+
+func (q *Queries) ListProjectMembers(ctx context.Context, arg ListProjectMembersParams) ([]ListProjectMembersRow, error) {
+	rows, err := q.db.Query(ctx, listProjectMembers, arg.ProjectID, arg.PageOffset, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListProjectMembersRow
+	for rows.Next() {
+		var i ListProjectMembersRow
+		if err := rows.Scan(
+			&i.User.ID,
+			&i.User.Username,
+			&i.User.DisplayName,
+			&i.User.Email,
+			&i.User.PasswordHash,
+			&i.User.IsAdmin,
+			&i.User.CreatedAt,
+			&i.User.UpdatedAt,
+			&i.MemberRole,
+			&i.MemberSince,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUserMemberships = `-- name: ListUserMemberships :many
+SELECT project_id, role FROM project_members WHERE user_id = $1
+`
+
+type ListUserMembershipsRow struct {
+	ProjectID int64
+	Role      string
+}
+
+func (q *Queries) ListUserMemberships(ctx context.Context, userID int64) ([]ListUserMembershipsRow, error) {
+	rows, err := q.db.Query(ctx, listUserMemberships, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUserMembershipsRow
+	for rows.Next() {
+		var i ListUserMembershipsRow
+		if err := rows.Scan(&i.ProjectID, &i.Role); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -250,7 +384,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 }
 
 const lockInvitationByToken = `-- name: LockInvitationByToken :one
-SELECT id, token_sha256, email, note, created_by, created_at, expires_at, accepted_at, accepted_user_id, revoked_at FROM invitations WHERE token_sha256 = $1 FOR UPDATE
+SELECT id, token_sha256, email, note, created_by, created_at, expires_at, accepted_at, accepted_user_id, revoked_at, project_id, project_role FROM invitations WHERE token_sha256 = $1 FOR UPDATE
 `
 
 // Locks the invitation so two acceptances of one link cannot both create a user.
@@ -268,6 +402,8 @@ func (q *Queries) LockInvitationByToken(ctx context.Context, tokenSha256 []byte)
 		&i.AcceptedAt,
 		&i.AcceptedUserID,
 		&i.RevokedAt,
+		&i.ProjectID,
+		&i.ProjectRole,
 	)
 	return i, err
 }
@@ -289,7 +425,7 @@ func (q *Queries) MarkInvitationAccepted(ctx context.Context, arg MarkInvitation
 const revokeInvitation = `-- name: RevokeInvitation :one
 UPDATE invitations SET revoked_at = now()
 WHERE id = $1 AND accepted_at IS NULL AND revoked_at IS NULL
-RETURNING id, token_sha256, email, note, created_by, created_at, expires_at, accepted_at, accepted_user_id, revoked_at
+RETURNING id, token_sha256, email, note, created_by, created_at, expires_at, accepted_at, accepted_user_id, revoked_at, project_id, project_role
 `
 
 // No row when the invitation does not exist or is already accepted or revoked.
@@ -307,6 +443,8 @@ func (q *Queries) RevokeInvitation(ctx context.Context, id int64) (Invitation, e
 		&i.AcceptedAt,
 		&i.AcceptedUserID,
 		&i.RevokedAt,
+		&i.ProjectID,
+		&i.ProjectRole,
 	)
 	return i, err
 }
@@ -330,6 +468,31 @@ func (q *Queries) SetPasswordHash(ctx context.Context, arg SetPasswordHashParams
 		&i.Email,
 		&i.PasswordHash,
 		&i.IsAdmin,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertMember = `-- name: UpsertMember :one
+INSERT INTO project_members (project_id, user_id, role) VALUES ($1, $2, $3)
+ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role, updated_at = now()
+RETURNING project_id, user_id, role, created_at, updated_at
+`
+
+type UpsertMemberParams struct {
+	ProjectID int64
+	UserID    int64
+	Role      string
+}
+
+func (q *Queries) UpsertMember(ctx context.Context, arg UpsertMemberParams) (ProjectMember, error) {
+	row := q.db.QueryRow(ctx, upsertMember, arg.ProjectID, arg.UserID, arg.Role)
+	var i ProjectMember
+	err := row.Scan(
+		&i.ProjectID,
+		&i.UserID,
+		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

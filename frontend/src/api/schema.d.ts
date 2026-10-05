@@ -219,6 +219,49 @@ export interface paths {
         patch: operations["updateProject"];
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        /** List a project's members by username (anyone who can see the project) */
+        get: operations["listProjectMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/members/{username}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example ana */
+                username: components["parameters"]["Username"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Add a user to the project or change their role (maintainers and administrators) */
+        put: operations["setProjectMember"];
+        post?: never;
+        /** Remove a user from the project (maintainers and administrators) */
+        delete: operations["removeProjectMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-cases": {
         parameters: {
             query?: never;
@@ -625,6 +668,13 @@ export interface components {
             acceptedUserId: number | null;
             /** Format: date-time */
             revokedAt: string | null;
+            /**
+             * Format: int64
+             * @description The project the account joins on accept, if any
+             */
+            projectId: number | null;
+            /** @enum {string|null} */
+            projectRole: "maintainer" | "member" | "viewer" | null;
         };
         InvitationPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["Invitation"][];
@@ -633,6 +683,23 @@ export interface components {
             /** @description Optional; becomes the account's email unless the person gives another */
             email?: string | null;
             note?: string;
+            /** @description Key of a project the account joins on accept (with `role`) */
+            project?: string;
+            role?: components["schemas"]["ProjectRole"];
+        };
+        /** @enum {string} */
+        ProjectRole: "maintainer" | "member" | "viewer";
+        Member: {
+            user: components["schemas"]["User"];
+            role: components["schemas"]["ProjectRole"];
+            /** Format: date-time */
+            since: string;
+        };
+        MemberPage: components["schemas"]["PageMeta"] & {
+            items: components["schemas"]["Member"][];
+        };
+        SetMemberRequest: {
+            role: components["schemas"]["ProjectRole"];
         };
         CreatedInvitation: {
             invitation: components["schemas"]["Invitation"];
@@ -659,6 +726,11 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * @description What the signed-in user may do in this project
+             * @enum {string}
+             */
+            myRole: "admin" | "maintainer" | "member" | "viewer";
         };
         ProjectPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["Project"][];
@@ -1078,6 +1150,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @example ana */
+        Username: string;
         InvitationId: number;
         /** @example CHK */
         ProjectKey: string;
@@ -1315,6 +1389,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -1426,6 +1501,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
@@ -1485,8 +1561,102 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listProjectMembers: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of members */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    setProjectMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example ana */
+                username: components["parameters"]["Username"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description The membership */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    removeProjectMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                /** @example ana */
+                username: components["parameters"]["Username"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -1547,6 +1717,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
@@ -1606,6 +1777,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
@@ -1634,6 +1806,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
@@ -1661,6 +1834,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
@@ -1722,6 +1896,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
@@ -1754,6 +1929,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
@@ -1781,6 +1957,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
@@ -1813,6 +1990,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];

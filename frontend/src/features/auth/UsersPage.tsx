@@ -2,7 +2,13 @@ import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router'
 
 import type { Invitation } from '@/api/client'
-import { useCreateInvitation, useInvitations, useRevokeInvitation, useUsers } from '@/api/queries'
+import {
+  useCreateInvitation,
+  useInvitations,
+  useProjects,
+  useRevokeInvitation,
+  useUsers,
+} from '@/api/queries'
 import { PageTitle } from '@/components/PageTitle'
 import { Pagination } from '@/components/Pagination'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
@@ -11,8 +17,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime } from '@/lib/format'
+import { memberRoles, type MemberRole } from '@/lib/roles'
 import { positiveInt } from '@/lib/status'
 
 import { useCurrentUser } from './currentUser'
@@ -29,18 +37,22 @@ function NewInvitation() {
   const create = useCreateInvitation()
   const [email, setEmail] = useState('')
   const [note, setNote] = useState('')
+  const [project, setProject] = useState('')
+  const [role, setRole] = useState<MemberRole>('member')
+  const projects = useProjects()
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const submit = (e: FormEvent) => {
     e.preventDefault()
     setCopied(false)
     create.mutate(
-      { email: email || null, note },
+      { email: email || null, note, ...(project ? { project, role } : {}) },
       {
         onSuccess: (res) => {
           setLink(invitationLink(res.token))
           setEmail('')
           setNote('')
+          setProject('')
         },
       },
     )
@@ -71,6 +83,34 @@ function NewInvitation() {
           <Input id="invite-note" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} />
         </div>
       </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="grid gap-2">
+          <Label htmlFor="invite-project">Joins project (optional)</Label>
+          <NativeSelect id="invite-project" value={project} onChange={(e) => setProject(e.target.value)}>
+            <option value="">No project</option>
+            {(projects.data?.items ?? []).map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.key} · {p.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="invite-role">As</Label>
+          <NativeSelect
+            id="invite-role"
+            value={role}
+            disabled={!project}
+            onChange={(e) => setRole(e.target.value as MemberRole)}
+          >
+            {memberRoles.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      </div>
       <div>
         <Button type="submit" disabled={create.isPending}>
           Create invitation link
@@ -96,7 +136,13 @@ function NewInvitation() {
   )
 }
 
-function InvitationRow({ invitation }: { invitation: Invitation }) {
+function InvitationRow({
+  invitation,
+  projectKeys,
+}: {
+  invitation: Invitation
+  projectKeys: Record<number, string>
+}) {
   const revoke = useRevokeInvitation()
   return (
     <TableRow data-testid={`invitation-${invitation.id}`}>
@@ -105,6 +151,11 @@ function InvitationRow({ invitation }: { invitation: Invitation }) {
       </TableCell>
       <TableCell>{invitation.email ?? '—'}</TableCell>
       <TableCell>{invitation.note || '—'}</TableCell>
+      <TableCell data-testid="invitation-grant">
+        {invitation.projectRole
+          ? `${projectKeys[invitation.projectId!] ?? '?'} · ${invitation.projectRole}`
+          : '—'}
+      </TableCell>
       <TableCell className="whitespace-nowrap">{formatDateTime(invitation.createdAt)}</TableCell>
       <TableCell className="whitespace-nowrap">{formatDateTime(invitation.expiresAt)}</TableCell>
       <TableCell>
@@ -132,6 +183,8 @@ export function UsersPage() {
   const invPage = positiveInt(params.get('invitations'), 1)
   const admin = me.isAdmin
   const users = useUsers(page, admin)
+  const projects = useProjects()
+  const projectKeys = Object.fromEntries((projects.data?.items ?? []).map((p) => [p.id, p.key]))
   const invitations = useInvitations(invPage, admin)
   const setParam = (name: string) => (p: number, replace?: boolean) => {
     const merged = new URLSearchParams(params)
@@ -221,6 +274,7 @@ export function UsersPage() {
                       <TableHead>Status</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Note</TableHead>
+                      <TableHead>Project</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead>Expires</TableHead>
                       <TableHead />
@@ -229,13 +283,13 @@ export function UsersPage() {
                   <TableBody>
                     {data.items.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-muted-foreground">
+                        <TableCell colSpan={7} className="text-muted-foreground">
                           No invitations yet.
                         </TableCell>
                       </TableRow>
                     )}
                     {data.items.map((i) => (
-                      <InvitationRow key={i.id} invitation={i} />
+                      <InvitationRow key={i.id} invitation={i} projectKeys={projectKeys} />
                     ))}
                   </TableBody>
                 </Table>

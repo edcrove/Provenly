@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,21 +14,24 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
 // stubAPI answers every call with the configured error, or with canned data.
 type stubAPI struct {
-	err        error
-	projectErr error
-	gotFilter  ListFilter
-	gotCreate  CreateInput
-	gotProject CreateProjectInput
-	gotStatus  *Status
-	gotPage    pagination.Page
-	gotUpdate  UpdateInput
-	gotStep    CreateStepInput
-	gotOrder   []int64
+	err           error
+	getErr        error
+	projectErr    error
+	gotFilter     ListFilter
+	gotProjectIDs []int64
+	gotCreate     CreateInput
+	gotProject    CreateProjectInput
+	gotStatus     *Status
+	gotPage       pagination.Page
+	gotUpdate     UpdateInput
+	gotStep       CreateStepInput
+	gotOrder      []int64
 }
 
 var sample = TestCase{ID: 153, ProjectID: 1, ProjectKey: "TC", Number: 153, Title: "Login", Status: StatusActive, Automated: true,
@@ -53,13 +57,14 @@ func (s *stubAPI) ProjectByKey(_ context.Context, key string) (Project, error) {
 	p.Key = key
 	return p, s.projectErr
 }
-func (s *stubAPI) ListProjects(_ context.Context, p pagination.Page) (pagination.Result[Project], error) {
+func (s *stubAPI) ListProjects(_ context.Context, ids []int64, p pagination.Page) (pagination.Result[Project], error) {
+	s.gotProjectIDs = ids
 	return pagination.Result[Project]{Items: []Project{sampleProject}, Page: p, Total: 1}, s.err
 }
 func (s *stubAPI) UpdateProject(context.Context, string, UpdateProjectInput) (Project, error) {
 	return sampleProject, s.err
 }
-func (s *stubAPI) Get(context.Context, int64) (TestCase, error) { return sample, s.err }
+func (s *stubAPI) Get(context.Context, int64) (TestCase, error) { return sample, s.getErr }
 func (s *stubAPI) List(_ context.Context, f ListFilter, p pagination.Page) (pagination.Result[TestCase], error) {
 	s.gotFilter = f
 	s.gotStatus = f.Status
@@ -89,8 +94,12 @@ func (s *stubAPI) ReorderSteps(_ context.Context, _ int64, ids []int64) ([]TestS
 }
 
 func serve(api API, method, target, body string) *httptest.ResponseRecorder {
+	return serveAs(adminGuard, api, method, target, body)
+}
+
+func serveAs(guard authz.Guard, api API, method, target, body string) *httptest.ResponseRecorder {
 	mux := http.NewServeMux()
-	NewHandler(api).Register(mux)
+	NewHandler(api, guard).Register(mux)
 	req := httptest.NewRequest(method, target, strings.NewReader(body))
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
@@ -151,10 +160,9 @@ func TestHandlerPassesInputs(t *testing.T) {
 
 	// The project filter and the project of a new test case are resolved by key; TC is the default.
 	serve(api, "GET", "/api/v1/test-cases?project=CHK", "")
-	require.NotNil(t, api.gotFilter.ProjectID)
-	assert.Equal(t, int64(1), *api.gotFilter.ProjectID)
+	assert.Equal(t, []int64{1}, api.gotFilter.ProjectIDs)
 	serve(api, "GET", "/api/v1/test-cases", "")
-	assert.Nil(t, api.gotFilter.ProjectID)
+	assert.Nil(t, api.gotFilter.ProjectIDs, "administrators: every project")
 	serve(api, "POST", "/api/v1/test-cases", `{"title":"t","project":"CHK"}`)
 	assert.Equal(t, int64(1), api.gotCreate.ProjectID)
 	serve(api, "POST", "/api/v1/projects", `{"key":"web","name":"Web","description":"d"}`)
@@ -181,7 +189,6 @@ func TestHandlerErrors(t *testing.T) {
 	requests := []struct{ method, target, body string }{
 		{"GET", "/api/v1/test-cases", ""},
 		{"POST", "/api/v1/test-cases", `{"title":"a"}`},
-		{"GET", "/api/v1/test-cases/1", ""},
 		{"PATCH", "/api/v1/test-cases/1", `{"title":"a"}`},
 		{"POST", "/api/v1/test-cases/1/deprecate", ""},
 		{"POST", "/api/v1/test-cases/1/reactivate", ""},
@@ -194,12 +201,19 @@ func TestHandlerErrors(t *testing.T) {
 		{"POST", "/api/v1/projects", `{"key":"CHK","name":"n"}`},
 		{"PATCH", "/api/v1/projects/CHK", `{"name":"n"}`},
 	}
+	// Each operation's own failure, and (for /test-cases/{id}) the lookup that authorizes it.
+	lookup := &stubAPI{getErr: apperr.NotFound("missing")}
 	for _, r := range requests {
-		rec := serve(notFound, r.method, r.target, r.body)
-		assert.Equal(t, http.StatusNotFound, rec.Code, "%s %s", r.method, r.target)
-		var p map[string]any
-		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &p))
-		assert.Equal(t, "not_found", p["code"])
+		for _, api := range []*stubAPI{notFound, lookup} {
+			if api == lookup && !strings.Contains(r.target, "/test-cases/1") {
+				continue
+			}
+			rec := serve(api, r.method, r.target, r.body)
+			assert.Equal(t, http.StatusNotFound, rec.Code, "%s %s", r.method, r.target)
+			var p map[string]any
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &p))
+			assert.Equal(t, "not_found", p["code"])
+		}
 	}
 
 	badRequests := []struct{ method, target, body string }{
@@ -245,4 +259,65 @@ func TestHandlerErrors(t *testing.T) {
 	rec := serve(&stubAPI{err: apperr.Conflict("project CHK already exists")}, "POST", "/api/v1/projects", `{"key":"CHK","name":"n"}`)
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"code":"conflict"`)
+}
+
+// Roles per project: administrators do everything; maintainers manage the project and deprecate; members edit
+// test cases and steps; viewers read; a project without a role is invisible (404, never 403).
+func TestHandlerAuthorization(t *testing.T) {
+	api := &stubAPI{}
+	as := func(role authz.Role) authz.Guard { return memberOf(map[int64]authz.Role{1: role}) }
+	status := func(g authz.Guard, method, target, body string) int {
+		return serveAs(g, api, method, target, body).Code
+	}
+
+	cases := []struct {
+		method, target, body string
+		min                  authz.Role
+		success              int
+	}{
+		{"GET", "/api/v1/test-cases/153", "", authz.RoleViewer, 200},
+		{"GET", "/api/v1/test-cases/153/steps", "", authz.RoleViewer, 200},
+		{"PATCH", "/api/v1/test-cases/153", `{"title":"a"}`, authz.RoleMember, 200},
+		{"POST", "/api/v1/test-cases/153/steps", `{"action":"a"}`, authz.RoleMember, 201},
+		{"PUT", "/api/v1/test-cases/153/steps/order", `{"stepIds":[9]}`, authz.RoleMember, 200},
+		{"PATCH", "/api/v1/test-cases/153/steps/9", `{"action":"a"}`, authz.RoleMember, 200},
+		{"DELETE", "/api/v1/test-cases/153/steps/9", "", authz.RoleMember, 204},
+		{"POST", "/api/v1/test-cases/153/deprecate", "", authz.RoleMaintainer, 200},
+		{"POST", "/api/v1/test-cases/153/reactivate", "", authz.RoleMaintainer, 200},
+		{"POST", "/api/v1/test-cases", `{"title":"a"}`, authz.RoleMember, 201},
+		{"GET", "/api/v1/projects/TC", "", authz.RoleViewer, 200},
+		{"PATCH", "/api/v1/projects/TC", `{"name":"n"}`, authz.RoleMaintainer, 200},
+	}
+	for _, c := range cases {
+		name := c.method + " " + c.target
+		assert.Equal(t, http.StatusNotFound, status(memberOf(nil), c.method, c.target, c.body), "no role: invisible, "+name)
+		for r := authz.RoleViewer; r <= authz.RoleMaintainer; r++ {
+			want := c.success
+			if r < c.min {
+				want = http.StatusForbidden
+			}
+			assert.Equal(t, want, status(as(r), c.method, c.target, c.body), "%s as %s", name, r)
+		}
+	}
+	rec := serveAs(memberOf(nil), api, "GET", "/api/v1/test-cases/153", "")
+	assert.Contains(t, rec.Body.String(), "test case 153 not found", "the same answer as an unknown test case")
+
+	// Lists are narrowed to the user's projects; ?project of another project is not found.
+	serveAs(as(authz.RoleViewer), api, "GET", "/api/v1/test-cases", "")
+	assert.Equal(t, []int64{1}, api.gotFilter.ProjectIDs)
+	assert.Equal(t, http.StatusNotFound, status(memberOf(nil), "GET", "/api/v1/test-cases?project=TC", ""))
+	rec = serveAs(as(authz.RoleMember), api, "GET", "/api/v1/projects", "")
+	assert.Equal(t, []int64{1}, api.gotProjectIDs)
+	assert.Contains(t, rec.Body.String(), `"myRole":"member"`)
+	rec = serveAs(adminGuard, api, "GET", "/api/v1/projects/TC", "")
+	assert.Contains(t, rec.Body.String(), `"myRole":"admin"`)
+
+	// Only administrators create projects; a failing guard fails the request.
+	assert.Equal(t, http.StatusForbidden, status(as(authz.RoleMaintainer), "POST", "/api/v1/projects", `{"key":"CHK","name":"n"}`))
+	assert.Equal(t, http.StatusCreated, status(adminGuard, "POST", "/api/v1/projects", `{"key":"CHK","name":"n"}`))
+	broken := stubGuard{err: errors.New("db down")}
+	for _, target := range []string{"/api/v1/test-cases", "/api/v1/projects", "/api/v1/projects/TC"} {
+		assert.Equal(t, http.StatusInternalServerError, status(broken, "GET", target, ""), target)
+	}
+	assert.Equal(t, http.StatusInternalServerError, status(broken, "POST", "/api/v1/projects", `{"key":"CHK","name":"n"}`))
 }

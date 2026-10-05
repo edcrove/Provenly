@@ -274,7 +274,7 @@ func TestRunsArePerProject(t *testing.T) {
 	assert.Equal(t, second.ID, replay.ID)
 
 	two := int64(2)
-	res, err := svc.ListRuns(ctx, &two, pagination.Default())
+	res, err := svc.ListRuns(ctx, []int64{two}, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), res.Total)
 	assert.Equal(t, second.ID, res.Items[0].ID)

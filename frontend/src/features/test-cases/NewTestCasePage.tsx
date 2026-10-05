@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/select'
 import { PageTitle } from '@/components/PageTitle'
 import { useCurrentProject } from '@/features/projects/currentProject'
+import { can } from '@/lib/roles'
 
 import { TestCaseForm } from './TestCaseForm'
 
@@ -32,11 +33,13 @@ export function NewTestCasePage() {
         <div className="grid gap-2">
           <Label htmlFor="tc-project">Project</Label>
           <NativeSelect id="tc-project" value={project} onChange={(e) => setProject(e.target.value)}>
-            {(projects.data?.items ?? []).map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.key} · {p.name}
-              </option>
-            ))}
+            {(projects.data?.items ?? [])
+              .filter((p) => can(p.myRole, 'member'))
+              .map((p) => (
+                <option key={p.key} value={p.key}>
+                  {p.key} · {p.name}
+                </option>
+              ))}
           </NativeSelect>
         </div>
         <TestCaseForm

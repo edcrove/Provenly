@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"time"
 )
@@ -110,13 +111,13 @@ func (f *fakeRepo) GetTestRun(_ context.Context, id int64) (TestRun, error) {
 	return r, nil
 }
 
-func (f *fakeRepo) ListTestRuns(ctx context.Context, projectID *int64, limit, offset int32) ([]TestRun, error) {
+func (f *fakeRepo) ListTestRuns(ctx context.Context, projectIDs []int64, limit, offset int32) ([]TestRun, error) {
 	if err := f.errs["ListTestRuns"]; err != nil {
 		return nil, err
 	}
 	var out []TestRun
 	for id, run := range f.runs {
-		if projectID != nil && run.ProjectID != *projectID {
+		if projectIDs != nil && !slices.Contains(projectIDs, run.ProjectID) {
 			continue
 		}
 		r, _ := f.GetTestRun(ctx, id)
@@ -129,13 +130,13 @@ func (f *fakeRepo) ListTestRuns(ctx context.Context, projectID *int64, limit, of
 	return out[offset:min(len(out), int(offset+limit))], nil
 }
 
-func (f *fakeRepo) CountTestRuns(_ context.Context, projectID *int64) (int64, error) {
+func (f *fakeRepo) CountTestRuns(_ context.Context, projectIDs []int64) (int64, error) {
 	if err := f.errs["CountTestRuns"]; err != nil {
 		return 0, err
 	}
 	n := 0
 	for _, run := range f.runs {
-		if projectID == nil || run.ProjectID == *projectID {
+		if projectIDs == nil || slices.Contains(projectIDs, run.ProjectID) {
 			n++
 		}
 	}

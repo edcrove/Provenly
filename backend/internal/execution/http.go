@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
@@ -13,7 +15,7 @@ import (
 // API is the set of execution use cases exposed over REST.
 type API interface {
 	GetRun(ctx context.Context, id int64) (TestRun, error)
-	ListRuns(ctx context.Context, projectID *int64, page pagination.Page) (pagination.Result[TestRun], error)
+	ListRuns(ctx context.Context, projectIDs []int64, page pagination.Page) (pagination.Result[TestRun], error)
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, page pagination.Page) (pagination.Result[TestResult], error)
 	Summary(ctx context.Context, runID int64) (Summary, error)
 	ListParseErrors(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[ParseError], error)
@@ -21,10 +23,11 @@ type API interface {
 }
 
 // TestCaseChecker is what the execution REST adapter needs from the catalog
-// module's public interface: 404s for unknown test cases, the ?project=<KEY> filter
+// module's public interface: the project of a test case, the ?project=<KEY> filter
 // and the display keys (<KEY>-<n>) of the test cases a response mentions.
 type TestCaseChecker interface {
-	EnsureExists(ctx context.Context, id int64) error
+	// ProjectOf returns the project of a test case (a not-found error for unknown ids).
+	ProjectOf(ctx context.Context, id int64) (int64, error)
 	ProjectIDByKey(ctx context.Context, key string) (int64, error)
 	Keys(ctx context.Context, ids []int64) (map[int64]string, error)
 }
@@ -213,21 +216,61 @@ func toSummaryDTO(s Summary, keys map[int64]string) summaryDTO {
 type Handler struct {
 	api     API
 	catalog TestCaseChecker
+	guard   authz.Guard
 }
 
 // NewHandler builds a Handler.
-func NewHandler(api API, catalog TestCaseChecker) *Handler {
-	return &Handler{api: api, catalog: catalog}
+func NewHandler(api API, catalog TestCaseChecker, guard authz.Guard) *Handler {
+	return &Handler{api: api, catalog: catalog, guard: guard}
+}
+
+type runKey struct{}
+
+// onRun authorizes routes on /test-runs/{testRunId}: the run's project must be visible to the user (else 404).
+// A malformed id is left to next.
+func (h *Handler) onRun(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if id, err := httpx.PathID(r, "testRunId"); err == nil {
+			run, err := h.api.GetRun(r.Context(), id)
+			if err == nil {
+				err = h.guard.Require(r.Context(), run.ProjectID, authz.RoleViewer, runNotFound(id))
+			}
+			if err != nil {
+				httpx.WriteError(w, r, err)
+				return
+			}
+			r = r.WithContext(context.WithValue(r.Context(), runKey{}, run))
+		}
+		next(w, r)
+	}
 }
 
 // Register mounts the execution routes.
 func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/test-runs", h.listRuns)
-	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}", h.getRun)
-	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/results", h.listResults)
-	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/summary", h.summary)
-	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/parse-errors", h.parseErrors)
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}", h.onRun(h.getRun))
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/results", h.onRun(h.listResults))
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/summary", h.onRun(h.summary))
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/parse-errors", h.onRun(h.parseErrors))
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}/results", h.history)
+}
+
+// visibleProjects narrows the run list to ?project=<KEY> (which the user must see) or to every project the
+// user can see (nil: every project, for administrators).
+func (h *Handler) visibleProjects(r *http.Request) ([]int64, error) {
+	key, err := httpx.PatternQuery(r, "project", ProjectKeyPattern, "must be a project key: 2 to 10 upper-case letters or digits, starting with a letter")
+	if err != nil {
+		return nil, err
+	}
+	if key != nil {
+		id, err := h.catalog.ProjectIDByKey(r.Context(), *key)
+		if err == nil {
+			err = h.guard.Require(r.Context(), id, authz.RoleViewer, apperr.NotFound("project %s not found", *key))
+		}
+		return []int64{id}, err
+	}
+	scope, err := h.guard.Scope(r.Context())
+	return scope.ProjectIDs(), err
 }
 
 func (h *Handler) listRuns(w http.ResponseWriter, r *http.Request) {
@@ -236,18 +279,12 @@ func (h *Handler) listRuns(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	var projectID *int64
-	key, err := httpx.PatternQuery(r, "project", ProjectKeyPattern, "must be a project key: 2 to 10 upper-case letters or digits, starting with a letter")
-	if err == nil && key != nil {
-		var id int64
-		id, err = h.catalog.ProjectIDByKey(r.Context(), *key)
-		projectID = &id
-	}
+	projectIDs, err := h.visibleProjects(r)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	res, err := h.api.ListRuns(r.Context(), projectID, page)
+	res, err := h.api.ListRuns(r.Context(), projectIDs, page)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -256,17 +293,12 @@ func (h *Handler) listRuns(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getRun(w http.ResponseWriter, r *http.Request) {
-	id, err := httpx.PathID(r, "testRunId")
-	if err != nil {
+	if _, err := httpx.PathID(r, "testRunId"); err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	run, err := h.api.GetRun(r.Context(), id)
-	if err != nil {
-		httpx.WriteError(w, r, err)
-		return
-	}
-	httpx.WriteJSON(w, http.StatusOK, RunDTO(run))
+	// Loaded and authorized by onRun.
+	httpx.WriteJSON(w, http.StatusOK, RunDTO(r.Context().Value(runKey{}).(TestRun)))
 }
 
 func enumStrings[T ~string](values []T) []string {
@@ -380,7 +412,11 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	if err := h.catalog.EnsureExists(r.Context(), id); err != nil {
+	projectID, err := h.catalog.ProjectOf(r.Context(), id)
+	if err == nil {
+		err = h.guard.Require(r.Context(), projectID, authz.RoleViewer, apperr.NotFound("test case %d not found", id))
+	}
+	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}

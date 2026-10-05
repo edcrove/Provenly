@@ -55,11 +55,11 @@ func (q *Queries) CountRunResults(ctx context.Context, arg CountRunResultsParams
 
 const countTestRuns = `-- name: CountTestRuns :one
 SELECT count(*) FROM test_runs
-WHERE $1::bigint IS NULL OR project_id = $1::bigint
+WHERE $1::bigint[] IS NULL OR project_id = ANY($1::bigint[])
 `
 
-func (q *Queries) CountTestRuns(ctx context.Context, projectID pgtype.Int8) (int64, error) {
-	row := q.db.QueryRow(ctx, countTestRuns, projectID)
+func (q *Queries) CountTestRuns(ctx context.Context, projectIds []int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countTestRuns, projectIds)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -486,14 +486,14 @@ SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.
 FROM test_runs r
 WHERE r.id IN (
     SELECT p.id FROM test_runs p
-    WHERE $1::bigint IS NULL OR p.project_id = $1::bigint
+    WHERE $1::bigint[] IS NULL OR p.project_id = ANY($1::bigint[])
     ORDER BY p.id DESC LIMIT $3 OFFSET $2
 )
 ORDER BY r.id DESC
 `
 
 type ListTestRunsParams struct {
-	ProjectID  pgtype.Int8
+	ProjectIds []int64
 	PageOffset int32
 	PageLimit  int32
 }
@@ -520,7 +520,7 @@ type ListTestRunsRow struct {
 // The page is chosen first: the per-run counts are only computed for its rows,
 // not for every row skipped by OFFSET.
 func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]ListTestRunsRow, error) {
-	rows, err := q.db.Query(ctx, listTestRuns, arg.ProjectID, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listTestRuns, arg.ProjectIds, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}

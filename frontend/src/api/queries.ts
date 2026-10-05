@@ -9,6 +9,7 @@ import { useRef } from 'react'
 
 import { previousPage } from '@/lib/paging'
 import { unwrap } from '@/lib/problem'
+import type { MemberRole } from '@/lib/roles'
 import type { Correlation, ResultStatus } from '@/lib/status'
 
 import {
@@ -157,6 +158,47 @@ export function useProjects(page = 1, pageSize = MAX_PAGE) {
     placeholderData: (prev, q) => previousPage([...keys.projects, 'list', pageSize, page], prev, q?.queryKey),
     queryFn: async () => unwrap(await api.GET('/api/v1/projects', { params: { query: { page, pageSize } } })),
   })
+}
+
+export function useProjectMembers(projectKey: string, page: number) {
+  return useQuery({
+    queryKey: [...keys.projects, projectKey, 'members', page],
+    placeholderData: (prev, q) =>
+      previousPage([...keys.projects, projectKey, 'members', page], prev, q?.queryKey),
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/projects/{projectKey}/members', {
+          params: { path: { projectKey }, query: { page } },
+        }),
+      ),
+  })
+}
+
+export function useMemberMutations(projectKey: string) {
+  const qc = useQueryClient()
+  // Refetch after failures too: the list on screen may be stale.
+  const onSettled = () => qc.invalidateQueries({ queryKey: [...keys.projects, projectKey, 'members'] })
+  return {
+    set: useExclusiveMutation({
+      mutationFn: async ({ username, role }: { username: string; role: MemberRole }) =>
+        unwrap(
+          await api.PUT('/api/v1/projects/{projectKey}/members/{username}', {
+            params: { path: { projectKey, username } },
+            body: { role },
+          }),
+        ),
+      onSettled,
+    }),
+    remove: useExclusiveMutation({
+      mutationFn: async (username: string) =>
+        unwrap(
+          await api.DELETE('/api/v1/projects/{projectKey}/members/{username}', {
+            params: { path: { projectKey, username } },
+          }),
+        ),
+      onSettled,
+    }),
+  }
 }
 
 export function useCreateProject() {

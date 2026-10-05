@@ -201,8 +201,8 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 }
 
 // ListTestRuns implements execution.Repository.
-func (s *Store) ListTestRuns(ctx context.Context, projectID *int64, limit, offset int32) ([]execution.TestRun, error) {
-	rows, err := s.q.ListTestRuns(ctx, executiondb.ListTestRunsParams{ProjectID: optInt8(projectID), PageLimit: limit, PageOffset: offset})
+func (s *Store) ListTestRuns(ctx context.Context, projectIDs []int64, limit, offset int32) ([]execution.TestRun, error) {
+	rows, err := s.q.ListTestRuns(ctx, executiondb.ListTestRunsParams{ProjectIds: projectIDs, PageLimit: limit, PageOffset: offset})
 	if err != nil {
 		return nil, err
 	}
@@ -221,15 +221,8 @@ func (s *Store) ListTestRuns(ctx context.Context, projectID *int64, limit, offse
 }
 
 // CountTestRuns implements execution.Repository.
-func (s *Store) CountTestRuns(ctx context.Context, projectID *int64) (int64, error) {
-	return s.q.CountTestRuns(ctx, optInt8(projectID))
-}
-
-func optInt8(v *int64) pgtype.Int8 {
-	if v == nil {
-		return pgtype.Int8{}
-	}
-	return pgtype.Int8{Int64: *v, Valid: true}
+func (s *Store) CountTestRuns(ctx context.Context, projectIDs []int64) (int64, error) {
+	return s.q.CountTestRuns(ctx, projectIDs)
 }
 
 // ListRunResults implements execution.Repository.

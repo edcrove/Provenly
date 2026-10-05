@@ -10,7 +10,7 @@ import (
 
 type Querier interface {
 	CloseTestStepGap(ctx context.Context, arg CloseTestStepGapParams) error
-	CountProjects(ctx context.Context) (int64, error)
+	CountProjects(ctx context.Context, projectIds []int64) (int64, error)
 	CountTestCases(ctx context.Context, arg CountTestCasesParams) (int64, error)
 	CountTestSteps(ctx context.Context, testCaseID int64) (int64, error)
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
@@ -29,6 +29,7 @@ type Querier interface {
 	// and the status of the referenced numbers come from the same snapshot: a
 	// deprecation committed during an ingestion cannot put a TC in one and not the other.
 	ListIngestionView(ctx context.Context, arg ListIngestionViewParams) ([]ListIngestionViewRow, error)
+	// project_ids NULL means every project (administrators); otherwise only those.
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
 	// The identity (project and number) of the given test cases, for display.
 	ListTestCaseKeys(ctx context.Context, ids []int64) ([]ListTestCaseKeysRow, error)

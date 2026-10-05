@@ -4,6 +4,7 @@ import { AcceptInvitePage } from '@/features/auth/AcceptInvitePage'
 import { AccountPage } from '@/features/auth/AccountPage'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { UsersPage } from '@/features/auth/UsersPage'
+import { ProjectMembersPage } from '@/features/projects/ProjectMembersPage'
 import { ProjectsPage } from '@/features/projects/ProjectsPage'
 import { NewTestCasePage } from '@/features/test-cases/NewTestCasePage'
 import { TestCaseDetailPage } from '@/features/test-cases/TestCaseDetailPage'
@@ -22,6 +23,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Navigate to="/test-cases" replace /> },
       { path: 'projects', element: <ProjectsPage /> },
+      { path: 'projects/:projectKey', element: <ProjectMembersPage /> },
       { path: 'users', element: <UsersPage /> },
       { path: 'account', element: <AccountPage /> },
       { path: 'test-cases', element: <TestCaseListPage /> },

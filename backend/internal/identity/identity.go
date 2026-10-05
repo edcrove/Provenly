@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 )
 
 // User is a local account. Users are never deleted.
@@ -43,6 +45,16 @@ type Invitation struct {
 	AcceptedAt     *time.Time
 	AcceptedUserID *int64
 	RevokedAt      *time.Time
+	// ProjectID and ProjectRole: the project role the account gets on accept, if any.
+	ProjectID   *int64
+	ProjectRole authz.Role
+}
+
+// Member is a user's role in a project.
+type Member struct {
+	User  User
+	Role  authz.Role
+	Since time.Time
 }
 
 // Status of the invitation at time now.
@@ -75,6 +87,8 @@ type NewInvitation struct {
 	Note        string
 	CreatedBy   int64
 	ExpiresAt   time.Time
+	ProjectID   *int64
+	ProjectRole authz.Role
 }
 
 // Errors returned by repositories.
@@ -102,6 +116,14 @@ type Repository interface {
 	MarkInvitationAccepted(ctx context.Context, id, userID int64) error
 	// RevokeInvitation returns ErrNotFound when it does not exist or is already accepted or revoked.
 	RevokeInvitation(ctx context.Context, id int64) (Invitation, error)
+	// MemberRole returns authz.RoleNone when the user is not a member of the project.
+	MemberRole(ctx context.Context, projectID, userID int64) (authz.Role, error)
+	ListUserMemberships(ctx context.Context, userID int64) (map[int64]authz.Role, error)
+	ListProjectMembers(ctx context.Context, projectID int64, limit, offset int32) ([]Member, error)
+	CountProjectMembers(ctx context.Context, projectID int64) (int64, error)
+	UpsertMember(ctx context.Context, projectID, userID int64, role authz.Role) error
+	// DeleteMember reports whether the user was a member.
+	DeleteMember(ctx context.Context, projectID, userID int64) (bool, error)
 }
 
 type userKey struct{}

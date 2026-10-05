@@ -32,7 +32,10 @@ sql:
         emit_interface: true
   - engine: postgresql
     schema:
+      - migrations/00001_catalog.sql
+      - migrations/00012_projects.sql
       - migrations/00014_identity.sql
+      - migrations/00015_project_members.sql
     queries: queries/identity.sql
     gen:
       go:

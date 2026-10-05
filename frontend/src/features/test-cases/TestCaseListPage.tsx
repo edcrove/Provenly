@@ -1,7 +1,7 @@
 import { Plus } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 
-import { useTestCases } from '@/api/queries'
+import { useProjects, useTestCases } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import { PageTitle } from '@/components/PageTitle'
 import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useCurrentProject } from '@/features/projects/currentProject'
+import { can } from '@/lib/roles'
 import { pickEnum, positiveInt } from '@/lib/status'
 
 const statuses = ['active', 'deprecated'] as const
@@ -20,6 +21,11 @@ export function TestCaseListPage() {
   const page = positiveInt(params.get('page'), 1)
   const status = pickEnum(params.get('status'), statuses)
   const { project } = useCurrentProject()
+  const projects = useProjects()
+  // Members can create test cases in their projects (in the current one when a project is chosen).
+  const canCreate = (projects.data?.items ?? []).some(
+    (p) => (!project || p.key === project) && can(p.myRole, 'member'),
+  )
   const query = useTestCases(page, status, project || undefined)
 
   const update = (next: Record<string, string | undefined>, replace = false) => {
@@ -48,11 +54,13 @@ export function TestCaseListPage() {
             <option value="active">Active</option>
             <option value="deprecated">Deprecated</option>
           </NativeSelect>
-          <Button asChild>
-            <Link to="/test-cases/new">
-              <Plus /> New test case
-            </Link>
-          </Button>
+          {canCreate ? (
+            <Button asChild>
+              <Link to="/test-cases/new">
+                <Plus /> New test case
+              </Link>
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent>

@@ -200,8 +200,8 @@ type Repository interface {
 	ListParseErrors(ctx context.Context, runID int64, limit, offset int32) ([]ParseError, error)
 	CountParseErrors(ctx context.Context, runID int64) (int64, error)
 	GetTestRun(ctx context.Context, id int64) (TestRun, error)
-	ListTestRuns(ctx context.Context, projectID *int64, limit, offset int32) ([]TestRun, error)
-	CountTestRuns(ctx context.Context, projectID *int64) (int64, error)
+	ListTestRuns(ctx context.Context, projectIDs []int64, limit, offset int32) ([]TestRun, error)
+	CountTestRuns(ctx context.Context, projectIDs []int64) (int64, error)
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, limit, offset int32) ([]TestResult, error)
 	CountRunResults(ctx context.Context, runID int64, f ResultFilter) (int64, error)
 	// ListSummaryInputs returns the snapshot TC-IDs and valid results of each given run.

@@ -3,9 +3,11 @@ package identity
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
@@ -23,6 +25,31 @@ type API interface {
 	ListInvitations(ctx context.Context, actor User, page pagination.Page) (pagination.Result[Invitation], error)
 	RevokeInvitation(ctx context.Context, actor User, id int64) (Invitation, error)
 	AcceptInvitation(ctx context.Context, in AcceptInput) (Session, error)
+	ListMembers(ctx context.Context, projectID int64, page pagination.Page) (pagination.Result[Member], error)
+	SetMember(ctx context.Context, projectID int64, username, role string) (Member, error)
+	RemoveMember(ctx context.Context, projectID int64, username string) error
+}
+
+// Projects resolves project keys (the catalog module's public interface).
+type Projects interface {
+	ProjectIDByKey(ctx context.Context, key string) (int64, error)
+}
+
+// ProjectKeyPattern mirrors the catalog's project key format (validated before any lookup).
+var ProjectKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
+
+type memberDTO struct {
+	User  UserDTO   `json:"user"`
+	Role  string    `json:"role"`
+	Since time.Time `json:"since"`
+}
+
+func toMemberDTO(m Member) memberDTO {
+	return memberDTO{User: ToUserDTO(m.User), Role: m.Role.String(), Since: m.Since}
+}
+
+type memberRequest struct {
+	Role string `json:"role"`
 }
 
 // UserDTO is the wire form of User (never the password hash).
@@ -57,6 +84,8 @@ type invitationDTO struct {
 	AcceptedAt     *time.Time       `json:"acceptedAt"`
 	AcceptedUserID *int64           `json:"acceptedUserId"`
 	RevokedAt      *time.Time       `json:"revokedAt"`
+	ProjectID      *int64           `json:"projectId"`
+	ProjectRole    *string          `json:"projectRole"`
 }
 
 type createdInvitationDTO struct {
@@ -75,8 +104,10 @@ type passwordRequest struct {
 }
 
 type invitationRequest struct {
-	Email *string `json:"email"`
-	Note  string  `json:"note"`
+	Email   *string `json:"email"`
+	Note    string  `json:"note"`
+	Project string  `json:"project"`
+	Role    string  `json:"role"`
 }
 
 type acceptRequest struct {
@@ -89,12 +120,15 @@ type acceptRequest struct {
 
 // Handler is the REST adapter of the identity module.
 type Handler struct {
-	api API
-	now func() time.Time
+	api      API
+	projects Projects
+	now      func() time.Time
 }
 
 // NewHandler builds a Handler.
-func NewHandler(api API, now func() time.Time) *Handler { return &Handler{api: api, now: now} }
+func NewHandler(api API, projects Projects, now func() time.Time) *Handler {
+	return &Handler{api: api, projects: projects, now: now}
+}
 
 // RegisterPublic mounts the routes that work without a session.
 func (h *Handler) RegisterPublic(mux httpx.Router) {
@@ -111,6 +145,9 @@ func (h *Handler) RegisterProtected(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/invitations", h.listInvitations)
 	mux.HandleFunc("POST /api/v1/invitations", h.createInvitation)
 	mux.HandleFunc("POST /api/v1/invitations/{invitationId}/revoke", h.revokeInvitation)
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/members", h.listMembers)
+	mux.HandleFunc("PUT /api/v1/projects/{projectKey}/members/{username}", h.setMember)
+	mux.HandleFunc("DELETE /api/v1/projects/{projectKey}/members/{username}", h.removeMember)
 }
 
 // protected is a Router whose routes all require a session.
@@ -169,10 +206,78 @@ func toSessionDTO(s Session) sessionDTO {
 }
 
 func (h *Handler) toInvitationDTO(i Invitation) invitationDTO {
-	return invitationDTO{
+	dto := invitationDTO{
 		ID: i.ID, Email: i.Email, Note: i.Note, Status: i.Status(h.now()), CreatedBy: i.CreatedBy, CreatedAt: i.CreatedAt,
-		ExpiresAt: i.ExpiresAt, AcceptedAt: i.AcceptedAt, AcceptedUserID: i.AcceptedUserID, RevokedAt: i.RevokedAt,
+		ExpiresAt: i.ExpiresAt, AcceptedAt: i.AcceptedAt, AcceptedUserID: i.AcceptedUserID, RevokedAt: i.RevokedAt, ProjectID: i.ProjectID,
 	}
+	if i.ProjectID != nil {
+		role := i.ProjectRole.String()
+		dto.ProjectRole = &role
+	}
+	return dto
+}
+
+// projectID resolves the {projectKey} path segment (400 when malformed, 404 when unknown).
+func (h *Handler) projectID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	key := r.PathValue("projectKey")
+	if !ProjectKeyPattern.MatchString(key) {
+		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "projectKey", Message: "must be a project key"}))
+		return 0, false
+	}
+	id, err := h.projects.ProjectIDByKey(r.Context(), key)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return 0, false
+	}
+	return id, true
+}
+
+func (h *Handler) listMembers(w http.ResponseWriter, r *http.Request) {
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	id, ok := h.projectID(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.api.ListMembers(r.Context(), id, page)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, toMemberDTO))
+}
+
+func (h *Handler) setMember(w http.ResponseWriter, r *http.Request) {
+	var req memberRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	id, ok := h.projectID(w, r)
+	if !ok {
+		return
+	}
+	m, err := h.api.SetMember(r.Context(), id, r.PathValue("username"), req.Role)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toMemberDTO(m))
+}
+
+func (h *Handler) removeMember(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.projectID(w, r)
+	if !ok {
+		return
+	}
+	if err := h.api.RemoveMember(r.Context(), id, r.PathValue("username")); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
@@ -255,7 +360,24 @@ func (h *Handler) createInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, _ := UserFrom(r.Context())
-	inv, token, err := h.api.CreateInvitation(r.Context(), u, CreateInvitationInput(req))
+	if err := requireAdmin(u); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	in := CreateInvitationInput{Email: req.Email, Note: req.Note, Role: req.Role}
+	if req.Project != "" {
+		if !ProjectKeyPattern.MatchString(req.Project) {
+			httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "project", Message: "must be a project key"}))
+			return
+		}
+		id, err := h.projects.ProjectIDByKey(r.Context(), req.Project)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		in.ProjectID = &id
+	}
+	inv, token, err := h.api.CreateInvitation(r.Context(), u, in)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

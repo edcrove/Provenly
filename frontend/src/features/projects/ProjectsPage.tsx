@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 
 import type { Project } from '@/api/client'
 import { useCreateProject, useProjects, useUpdateProject } from '@/api/queries'
@@ -13,6 +13,9 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime } from '@/lib/format'
 import { positiveInt } from '@/lib/status'
+
+import { useCurrentUser } from '@/features/auth/currentUser'
+import { can } from '@/lib/roles'
 
 import { useCurrentProject } from './currentProject'
 
@@ -87,9 +90,11 @@ function ProjectRow({ project }: { project: Project }) {
         {name === null ? (
           <span className="flex items-center gap-2">
             {project.name}
-            <Button size="sm" variant="ghost" onClick={() => setName(project.name)}>
-              Rename
-            </Button>
+            {can(project.myRole, 'maintainer') ? (
+              <Button size="sm" variant="ghost" onClick={() => setName(project.name)}>
+                Rename
+              </Button>
+            ) : null}
           </span>
         ) : (
           <form onSubmit={(e) => save(e, name)} className="flex items-center gap-2">
@@ -110,7 +115,13 @@ function ProjectRow({ project }: { project: Project }) {
         {update.error ? <ErrorAlert error={update.error} title="Could not rename the project" /> : null}
       </TableCell>
       <TableCell className="text-muted-foreground">{project.description || '—'}</TableCell>
+      <TableCell data-testid="my-role">{project.myRole}</TableCell>
       <TableCell className="whitespace-nowrap">{formatDateTime(project.createdAt)}</TableCell>
+      <TableCell>
+        <Link to={`/projects/${project.key}`} className="underline">
+          Members
+        </Link>
+      </TableCell>
     </TableRow>
   )
 }
@@ -120,6 +131,7 @@ export function ProjectsPage() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
   const query = useProjects(page, PAGE_SIZE)
+  const me = useCurrentUser()
   return (
     <div className="grid gap-6">
       <Card>
@@ -143,7 +155,9 @@ export function ProjectsPage() {
                       <TableHead>Key</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Description</TableHead>
+                      <TableHead>Your role</TableHead>
                       <TableHead>Created</TableHead>
+                      <TableHead />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -163,14 +177,16 @@ export function ProjectsPage() {
           </QueryState>
         </CardContent>
       </Card>
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle as="h2">New project</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <NewProjectForm />
-        </CardContent>
-      </Card>
+      {me.isAdmin ? (
+        <Card className="max-w-2xl">
+          <CardHeader>
+            <CardTitle as="h2">New project</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <NewProjectForm />
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   )
 }

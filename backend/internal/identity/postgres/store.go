@@ -12,6 +12,7 @@ import (
 
 	"github.com/edcrove/provenly/backend/internal/identity"
 	"github.com/edcrove/provenly/backend/internal/identity/identitydb"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 )
 
 // Store implements identity.Repository.
@@ -77,7 +78,25 @@ func toInvitation(r identitydb.Invitation) identity.Invitation {
 		id := r.AcceptedUserID.Int64
 		inv.AcceptedUserID = &id
 	}
+	if r.ProjectID.Valid {
+		id := r.ProjectID.Int64
+		inv.ProjectID = &id
+		inv.ProjectRole = role(r.ProjectRole.String)
+	}
 	return inv
+}
+
+// role parses a role stored under the CHECK constraint (always valid).
+func role(s string) authz.Role {
+	r, _ := authz.ParseMemberRole(s)
+	return r
+}
+
+func optInt8(v *int64) pgtype.Int8 {
+	if v == nil {
+		return pgtype.Int8{}
+	}
+	return pgtype.Int8{Int64: *v, Valid: true}
 }
 
 func users(rows []identitydb.User) []identity.User {
@@ -131,6 +150,7 @@ func (s *Store) CreateInvitation(ctx context.Context, in identity.NewInvitation)
 	r, err := s.q.CreateInvitation(ctx, identitydb.CreateInvitationParams{
 		TokenSha256: in.TokenSHA256, Email: text(in.Email), Note: in.Note, CreatedBy: in.CreatedBy,
 		ExpiresAt: pgtype.Timestamptz{Time: in.ExpiresAt, Valid: true},
+		ProjectID: optInt8(in.ProjectID), ProjectRole: pgtype.Text{String: in.ProjectRole.String(), Valid: in.ProjectID != nil},
 	})
 	return toInvitation(r), err
 }
@@ -171,4 +191,53 @@ func (s *Store) MarkInvitationAccepted(ctx context.Context, id, userID int64) er
 func (s *Store) RevokeInvitation(ctx context.Context, id int64) (identity.Invitation, error) {
 	r, err := s.q.RevokeInvitation(ctx, id)
 	return toInvitation(r), notFound(err)
+}
+
+// MemberRole implements identity.Repository.
+func (s *Store) MemberRole(ctx context.Context, projectID, userID int64) (authz.Role, error) {
+	r, err := s.q.GetMemberRole(ctx, identitydb.GetMemberRoleParams{ProjectID: projectID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return authz.RoleNone, nil
+	}
+	return role(r), err
+}
+
+// ListUserMemberships implements identity.Repository.
+func (s *Store) ListUserMemberships(ctx context.Context, userID int64) (map[int64]authz.Role, error) {
+	rows, err := s.q.ListUserMemberships(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]authz.Role, len(rows))
+	for _, r := range rows {
+		out[r.ProjectID] = role(r.Role)
+	}
+	return out, nil
+}
+
+// ListProjectMembers implements identity.Repository.
+func (s *Store) ListProjectMembers(ctx context.Context, projectID int64, limit, offset int32) ([]identity.Member, error) {
+	rows, err := s.q.ListProjectMembers(ctx, identitydb.ListProjectMembersParams{ProjectID: projectID, PageLimit: limit, PageOffset: offset})
+	out := make([]identity.Member, len(rows))
+	for i, r := range rows {
+		out[i] = identity.Member{User: toUser(r.User), Role: role(r.MemberRole), Since: r.MemberSince.Time}
+	}
+	return out, err
+}
+
+// CountProjectMembers implements identity.Repository.
+func (s *Store) CountProjectMembers(ctx context.Context, projectID int64) (int64, error) {
+	return s.q.CountProjectMembers(ctx, projectID)
+}
+
+// UpsertMember implements identity.Repository.
+func (s *Store) UpsertMember(ctx context.Context, projectID, userID int64, r authz.Role) error {
+	_, err := s.q.UpsertMember(ctx, identitydb.UpsertMemberParams{ProjectID: projectID, UserID: userID, Role: r.String()})
+	return err
+}
+
+// DeleteMember implements identity.Repository.
+func (s *Store) DeleteMember(ctx context.Context, projectID, userID int64) (bool, error) {
+	n, err := s.q.DeleteMember(ctx, identitydb.DeleteMemberParams{ProjectID: projectID, UserID: userID})
+	return n > 0, err
 }

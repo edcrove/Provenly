@@ -124,13 +124,6 @@ func statusText(s *catalog.Status) pgtype.Text {
 	return pgtype.Text{String: string(*s), Valid: true}
 }
 
-func optInt8(v *int64) pgtype.Int8 {
-	if v == nil {
-		return pgtype.Int8{}
-	}
-	return pgtype.Int8{Int64: *v, Valid: true}
-}
-
 func toProject(r catalogdb.Project) catalog.Project {
 	return catalog.Project{
 		ID: r.ID, Key: r.Key, Name: r.Name, Description: r.Description,
@@ -161,7 +154,7 @@ func (s *Store) LockTestCase(ctx context.Context, id int64) error {
 // ListTestCases implements catalog.Repository.
 func (s *Store) ListTestCases(ctx context.Context, f catalog.ListFilter, limit, offset int32) ([]catalog.TestCase, error) {
 	rows, err := s.q.ListTestCases(ctx, catalogdb.ListTestCasesParams{
-		Status: statusText(f.Status), ProjectID: optInt8(f.ProjectID), PageLimit: limit, PageOffset: offset,
+		Status: statusText(f.Status), ProjectIds: f.ProjectIDs, PageLimit: limit, PageOffset: offset,
 	})
 	if err != nil {
 		return nil, err
@@ -177,7 +170,7 @@ func (s *Store) ListTestCases(ctx context.Context, f catalog.ListFilter, limit, 
 
 // CountTestCases implements catalog.Repository.
 func (s *Store) CountTestCases(ctx context.Context, f catalog.ListFilter) (int64, error) {
-	return s.q.CountTestCases(ctx, catalogdb.CountTestCasesParams{Status: statusText(f.Status), ProjectID: optInt8(f.ProjectID)})
+	return s.q.CountTestCases(ctx, catalogdb.CountTestCasesParams{Status: statusText(f.Status), ProjectIds: f.ProjectIDs})
 }
 
 // UpdateTestCase implements catalog.Repository.
@@ -269,8 +262,8 @@ func project(r catalogdb.Project, err error) (catalog.Project, error) {
 }
 
 // ListProjects implements catalog.Repository.
-func (s *Store) ListProjects(ctx context.Context, limit, offset int32) ([]catalog.Project, error) {
-	rows, err := s.q.ListProjects(ctx, catalogdb.ListProjectsParams{PageLimit: limit, PageOffset: offset})
+func (s *Store) ListProjects(ctx context.Context, projectIDs []int64, limit, offset int32) ([]catalog.Project, error) {
+	rows, err := s.q.ListProjects(ctx, catalogdb.ListProjectsParams{ProjectIds: projectIDs, PageLimit: limit, PageOffset: offset})
 	if err != nil {
 		return nil, err
 	}
@@ -282,8 +275,8 @@ func (s *Store) ListProjects(ctx context.Context, limit, offset int32) ([]catalo
 }
 
 // CountProjects implements catalog.Repository.
-func (s *Store) CountProjects(ctx context.Context) (int64, error) {
-	return s.q.CountProjects(ctx)
+func (s *Store) CountProjects(ctx context.Context, projectIDs []int64) (int64, error) {
+	return s.q.CountProjects(ctx, projectIDs)
 }
 
 // UpdateProject implements catalog.Repository.

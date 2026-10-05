@@ -60,7 +60,7 @@ function StepForm({
 }
 
 /** Optional ordered steps of a test case: add, edit, delete and reorder. */
-export function StepsEditor({ testCaseId }: { testCaseId: number }) {
+export function StepsEditor({ testCaseId, readOnly = false }: { testCaseId: number; readOnly?: boolean }) {
   const query = useTestSteps(testCaseId)
   const m = useStepMutations(testCaseId)
   const [editing, setEditing] = useState<number | null>(null)
@@ -114,45 +114,47 @@ export function StepsEditor({ testCaseId }: { testCaseId: number }) {
                           <p className="text-muted-foreground">Expected: {step.expectedResult}</p>
                         ) : null}
                       </div>
-                      <div className="flex gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`Move step ${step.position} up`}
-                          disabled={index === 0}
-                          onClick={() => move(data.items, index, -1)}
-                        >
-                          <ArrowUp />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`Move step ${step.position} down`}
-                          disabled={index === data.items.length - 1}
-                          onClick={() => move(data.items, index, 1)}
-                        >
-                          <ArrowDown />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`Edit step ${step.position}`}
-                          onClick={() => setEditing(step.id)}
-                        >
-                          <Pencil />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`Delete step ${step.position}`}
-                          onClick={() => {
-                            track('remove')
-                            m.remove.mutate(step.id)
-                          }}
-                        >
-                          <Trash2 />
-                        </Button>
-                      </div>
+                      {readOnly ? null : (
+                        <div className="flex gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Move step ${step.position} up`}
+                            disabled={index === 0}
+                            onClick={() => move(data.items, index, -1)}
+                          >
+                            <ArrowUp />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Move step ${step.position} down`}
+                            disabled={index === data.items.length - 1}
+                            onClick={() => move(data.items, index, 1)}
+                          >
+                            <ArrowDown />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Edit step ${step.position}`}
+                            onClick={() => setEditing(step.id)}
+                          >
+                            <Pencil />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Delete step ${step.position}`}
+                            onClick={() => {
+                              track('remove')
+                              m.remove.mutate(step.id)
+                            }}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </li>
@@ -161,14 +163,16 @@ export function StepsEditor({ testCaseId }: { testCaseId: number }) {
           )
         }
       </QueryState>
-      <StepForm
-        initial={{ action: '', expectedResult: '' }}
-        submitLabel="Add step"
-        onSubmit={(f, clear) => {
-          track('create')
-          m.create.mutate(f, { onSuccess: clear })
-        }}
-      />
+      {readOnly ? null : (
+        <StepForm
+          initial={{ action: '', expectedResult: '' }}
+          submitLabel="Add step"
+          onSubmit={(f, clear) => {
+            track('create')
+            m.create.mutate(f, { onSuccess: clear })
+          }}
+        />
+      )}
     </div>
   )
 }

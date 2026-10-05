@@ -19,6 +19,50 @@ type Invitation struct {
 	AcceptedAt     pgtype.Timestamptz
 	AcceptedUserID pgtype.Int8
 	RevokedAt      pgtype.Timestamptz
+	ProjectID      pgtype.Int8
+	ProjectRole    pgtype.Text
+}
+
+type Project struct {
+	ID          int64
+	Key         string
+	Name        string
+	Description string
+	NextNumber  int64
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type ProjectMember struct {
+	ProjectID int64
+	UserID    int64
+	Role      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type TestCase struct {
+	ID             int64
+	Title          string
+	Description    string
+	ExpectedResult string
+	Status         string
+	Automated      bool
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	DeprecatedAt   pgtype.Timestamptz
+	ProjectID      int64
+	Number         int64
+}
+
+type TestStep struct {
+	ID             int64
+	TestCaseID     int64
+	Position       int32
+	Action         string
+	ExpectedResult string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
 }
 
 type User struct {

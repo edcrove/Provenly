@@ -81,15 +81,15 @@ func register(r httpx.Router, s Services, maxIngestBytes int64) {
 		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
-	ids := identity.NewHandler(s.Identity, s.Now)
+	ids := identity.NewHandler(s.Identity, s.Catalog, s.Now)
 	ids.RegisterPublic(r)
 	// Ingestion stays open until CI API keys exist (prototype feature 4).
 	ingestion.NewHandler(s.Ingestion, maxIngestBytes).Register(r)
 	// Every other API route needs a session.
 	p := identity.Protect(r, s.Identity)
 	ids.RegisterProtected(p)
-	catalog.NewHandler(s.Catalog).Register(p)
-	execution.NewHandler(s.Execution, s.Catalog).Register(p)
+	catalog.NewHandler(s.Catalog, s.Identity).Register(p)
+	execution.NewHandler(s.Execution, s.Catalog, s.Identity).Register(p)
 }
 
 type patternRecorder []string

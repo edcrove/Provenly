@@ -181,6 +181,39 @@ def main():
     [t.join() for t in threads]
     check("30 parallel creations in a project: contiguous numbers", int(sorted(numbers) == list(range(1, 31))), 1)
 
+    # Roles (prototype feature 3): a viewer of one project sees only it, gets 403 on writes there and 404 elsewhere;
+    # member routes validate keys, usernames and roles before any lookup.
+    st, inv = call(base, "POST", "/invitations", {"project": key, "role": "viewer"})
+    check("invite into a project", st, 201)
+    viewer_name = f"probe.v{int(time.time()) % 10**8}"
+    st, sess = call(base, "POST", "/invitations/accept", {"token": inv.get("token", ""), "username": viewer_name, "displayName": "Probe viewer", "password": "a long password"}, headers={"Authorization": ""})
+    check("accept a project invitation", st, 201)
+    as_viewer = {"Authorization": "Bearer " + (sess.get("token", "") if isinstance(sess, dict) else "")}
+    st, projects = call(base, "GET", "/projects", headers=as_viewer)
+    check("viewer lists only their project", [(p["key"], p["myRole"]) for p in projects.get("items", [])] if isinstance(projects, dict) else st, [(key, "viewer")])
+    mine = call(base, "POST", "/test-cases", {"title": "probe-r", "project": key})[1]["id"]
+    for method, path, body, exp in [("GET", f"/test-cases/{mine}", None, 200), ("GET", f"/test-cases/{a}", None, 404),
+                                    ("GET", f"/test-runs/{run_id}", None, 404), ("GET", f"/test-cases/{a}/results", None, 404),
+                                    ("PATCH", f"/test-cases/{mine}", {"title": "x"}, 403), ("POST", f"/test-cases/{mine}/deprecate", None, 403),
+                                    ("POST", f"/test-cases/{mine}/steps", {"action": "x"}, 403), ("POST", "/test-cases", {"title": "x", "project": key}, 403),
+                                    ("POST", "/test-cases", {"title": "x"}, 404), ("POST", "/projects", {"key": "QV", "name": "x"}, 403),
+                                    ("PATCH", f"/projects/{key}", {"name": "x"}, 403), ("GET", f"/projects/{key}/members", None, 200),
+                                    ("PUT", f"/projects/{key}/members/{viewer_name}", {"role": "maintainer"}, 403),
+                                    ("GET", "/projects/NOPE99/members", None, 404), ("GET", "/users", None, 403), ("POST", "/invitations", {}, 403)]:
+        check(f"viewer {method} {path}", call(base, method, path, body, headers=as_viewer)[0], exp)
+    for user, body, exp in [(viewer_name, {"role": "owner"}, 400), (viewer_name, {"role": ""}, 400), (viewer_name, {}, 400),
+                            ("nobody-here", {"role": "member"}, 404), ("%00", {"role": "member"}, 400), ("a" * 300, {"role": "member"}, 404)]:
+        check(f"PUT member {user[:20]!r} {body}", call(base, "PUT", f"/projects/{key}/members/{user}", body)[0], exp)
+    check("PUT member text/plain", call(base, "PUT", f"/projects/{key}/members/{viewer_name}", raw=b'{"role":"member"}', ctype="text/plain")[0], 415)
+    check("PUT member bad key", call(base, "PUT", f"/projects/bad/members/{viewer_name}", {"role": "member"})[0], 400)
+    check("invite role without project", call(base, "POST", "/invitations", {"role": "viewer"})[0], 400)
+    check("invite unknown project", call(base, "POST", "/invitations", {"project": "NOPE99", "role": "viewer"})[0], 404)
+    check("promote to member", call(base, "PUT", f"/projects/{key}/members/{viewer_name}", {"role": "member"})[0], 200)
+    check("member edits", call(base, "PATCH", f"/test-cases/{mine}", {"title": "probe-r2"}, headers=as_viewer)[0], 200)
+    check("remove member", call(base, "DELETE", f"/projects/{key}/members/{viewer_name}")[0], 204)
+    check("removed member: project invisible", call(base, "GET", f"/test-cases/{mine}", headers=as_viewer)[0], 404)
+    check("remove again", call(base, "DELETE", f"/projects/{key}/members/{viewer_name}")[0], 404)
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

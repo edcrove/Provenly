@@ -29,6 +29,8 @@ jobs:
           cache-dependency-path: |
             backend/go.sum
             tools/covgate/go.sum
+      - name: Workflows (actionlint)
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
       - name: Build
         working-directory: backend
         run: go build ./...

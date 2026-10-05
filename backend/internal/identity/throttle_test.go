@@ -16,7 +16,11 @@ import (
 func TestLoginThrottle(t *testing.T) {
 	s, repo, c, ctx := setup(t)
 	admin(ctx, t, s)
-	s = NewService(repo, c.now, func() Config { cfg := testConfig(); cfg.LoginMaxFailures, cfg.LoginWindow = 5, 15*time.Minute; return cfg }())
+	s = NewService(repo, c.now, func() Config {
+		cfg := testConfig()
+		cfg.LoginMaxFailures, cfg.LoginWindow = 5, 15*time.Minute
+		return cfg
+	}())
 
 	for range 4 {
 		_, err := s.Login(ctx, "Admin", "wrong password")

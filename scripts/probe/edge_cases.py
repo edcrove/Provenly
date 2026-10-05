@@ -611,6 +611,37 @@ def main():
     check("change the repository keeping the token", call(base, "PUT", gh, {"repository": "acme/web"})[1].get("tokenHint"), "…9876")
     check("disconnect GitHub", call(base, "DELETE", gh)[0], 204)
 
+    # Agents (prototype feature 19): the MCP endpoint answers every malformed message with a JSON-RPC error or a
+    # problem, never a 5xx; tools validate their arguments and see what the user sees.
+    def mcp(body, raw=None, ctype="application/json"):
+        return call(base, "POST", "/mcp", body, raw=raw, ctype=ctype)
+    st, init = mcp({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}})
+    check("mcp initialize", f"{st} {init.get('result', {}).get('protocolVersion') if isinstance(init, dict) else ''}", "200 2025-06-18")
+    check("mcp notification", mcp({"jsonrpc": "2.0", "method": "notifications/initialized"})[0], 202)
+    for raw, code in [(b"{", -32700), (b"[]", -32600), (b'[{"jsonrpc":"2.0","id":1,"method":"ping"}]', -32600), (b'{"jsonrpc":"1.0","id":1,"method":"ping"}', -32600),
+                      (b'{"jsonrpc":"2.0","id":1}', -32600), (b'{"jsonrpc":"2.0","id":1,"method":"nope"}', -32601),
+                      (b'{"jsonrpc":"2.0","id":1,"method":"tools/call","params":"x"}', -32602), (b'{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"rm"}}', -32602),
+                      (b'{"jsonrpc":"2.0","id":{"a":1},"method":"ping"}', None), (b'{"jsonrpc":"2.0","id":1,"method":"ping","params":"\u0000"}', None)]:
+        st, body = mcp(None, raw=raw)
+        got = body.get("error", {}).get("code") if isinstance(body, dict) else body
+        check(f"mcp {raw[:40]!r}", f"{st} {got}", f"200 {code}")
+    check("mcp text/plain", mcp(None, raw=b"{}", ctype="text/plain")[0], 415)
+    check("mcp oversized", mcp(None, raw=b'{"pad":"' + b"x" * (1 << 20) + b'"}')[0], 413)
+    for args in [{"projectKey": "../x"}, {"projectKey": ".."}]:
+        st, body = mcp({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "list_issues", "arguments": args}})
+        check(f"mcp list_issues {args}", f"{st} {body.get('error', {}).get('code') if isinstance(body, dict) else body}", "200 -32602")
+    for args in [{}, {"testCaseId": 0}, {"testCaseId": "1"}, {"testCaseId": 1.5}, {"testCaseId": 2 ** 70}, {"testCaseId": 9223372036854775807}, {"testCaseId": 1, "x": 1}]:
+        st, body = mcp({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_test_case", "arguments": args}})
+        check(f"mcp get_test_case {args}", f"{st} {body.get('error', {}).get('code') if isinstance(body, dict) else body}", "200 -32602")
+    for name, args in [("get_test_case", {"testCaseId": 999999999}), ("get_project_quality", {"projectKey": "NOPE1"}),
+                       ("search_test_cases", {"project": "nope"}), ("list_test_run_results", {"testRunId": 1, "status": "\u0000"})]:
+        st, body = mcp({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}})
+        res = body.get("result", {}) if isinstance(body, dict) else {}
+        text = (res.get("content") or [{}])[0].get("text", "")
+        check(f"mcp {name} {args}: a tool error", f"{st} {res.get('isError')} {text.startswith('HTTP 4')}", "200 True True")
+    st, body = mcp({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_test_case", "arguments": {"testCaseId": a}}})
+    check("mcp reads a test case", body.get("result", {}).get("structuredContent", {}).get("key") if isinstance(body, dict) else st, a_key)
+
     # Tracing (prototype feature 17): every response through the proxy names its trace; a caller's traceparent is
     # continued; malformed traceparents are ignored (a new trace), never an error.
     def trace_of(path, traceparent=None):

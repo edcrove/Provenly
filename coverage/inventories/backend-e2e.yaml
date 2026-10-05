@@ -49,3 +49,5 @@ targets:
     description: OpenTelemetry through the public API - responses carry X-Trace-Id; a W3C traceparent sent by the caller is continued (health and a JUnit ingestion keep the caller's trace id); requests without one get a new trace
   - id: BE-E2E-024
     description: integrations through the public API - a webhook gets its secret once (never listed); a JUnit run is delivered by the worker within seconds as run.completed with a signature the receiver verifies, and the delivery is listed as succeeded; invalid endpoints are 400; GitHub Issues is connected with a token shown only as a hint, a sync mirrors the double's issues (not pull requests) with their state using the token, and the connection can be changed and removed
+  - id: BE-E2E-025
+    description: MCP through the public API - without a session the endpoint is 401; an agent with a session token initializes (protocol 2025-06-18), lists the tools and reads a project's test cases, a test case's history, a run and the project's quality as the user; a missing test case is a tool error

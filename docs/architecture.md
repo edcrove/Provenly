@@ -186,6 +186,13 @@ refuses anything else. Secrets Provenly only verifies (passwords, API keys) stay
   default the public API) and mirrors them through `catalog.ImportIssues` (provider `github`, external id = number);
   failures are 502 `upstream_error` and recorded on the connection; a token another key sealed is 409.
 
+## Agents: MCP (prototype feature 19, DEC-10)
+
+`internal/mcp` serves `POST /api/v1/mcp` (Streamable HTTP, JSON-RPC, JSON responses) on the session routes. It owns
+no use cases: each tool is a GET on the application's own router (`app.NewHandler` binds it after registering the
+routes) with the caller's `Authorization`/`Cookie`, so authorization, validation and JSON shapes are the REST ones.
+Path arguments must be key-shaped (no `/` or dot segments) so a tool cannot address another route.
+
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its

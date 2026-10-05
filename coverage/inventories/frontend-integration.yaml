@@ -147,3 +147,6 @@ targets:
   - id: FE-INT-044
     description: project integrations - a maintainer adds a webhook and sees its signing secret once, pings it, pauses and resumes it, and pages its deliveries (status, attempts, answer); connects GitHub Issues (repository, labels, token shown only as a hint), syncs (created/updated), sees a failed sync's error, changes the repository keeping the token, rotates the token and disconnects; an unreadable token, failed writes and a failed read are reported; members and viewers see no integrations
     surfaces: [src/features/projects/WebhooksSection.tsx, src/features/projects/GitHubSection.tsx, src/features/projects/ProjectMembersPage.tsx]
+  - id: FE-INT-045
+    description: the account page shows how to connect an MCP client (Claude Code) as the signed-in user - sign in for a session token, then register the endpoint with it
+    surfaces: [src/features/auth/AccountPage.tsx]

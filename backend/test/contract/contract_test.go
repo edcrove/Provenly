@@ -177,7 +177,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 74, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 75, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).

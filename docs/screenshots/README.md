@@ -44,7 +44,7 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 37 | Test case list narrowed to the current project (CHK-1…) | `37-test-cases-in-project.png` |
 | 38 | Run of the CHK project: CHK keys and a wrong_project diagnostic | `38-test-run-in-project.png` |
 | 39 | Users and invitations (admin): a new invitation link shown once | `39-users-and-invitations.png` |
-| 40 | Account: identity and password change | `40-account.png` |
+| 40 | Account: identity, password change and the command that connects an MCP agent as the user | `40-account.png` |
 | 41 | Joining Provenly from an invitation link | `41-accept-invitation.png` |
 | 42 | Sign-in with a wrong password | `42-sign-in-error.png` |
 | 43 | Project members: roles managed by an administrator or maintainer | `43-project-members.png` |

@@ -11,6 +11,12 @@ Nothing here is merged into `main`.
 
 Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ planned.
 
+**Outcome (2026-10-05):** all 21 features are built and merged, each with its own PR, decisions (`Pn-m` below) and
+tests in every layer; the full suite (`make coverage`) passes all gates at 100%, the edge-case probe passes on a fresh
+stack, and the screenshots in `docs/screenshots` show every UI flow. Paused topics stay paused (MVP topic 7, D8–D13).
+For a review, start with the feature map, then the decision log (what was decided without Ed and why), then each
+feature's section (behavior, API, code, tests).
+
 ## Feature map
 
 | # | Feature | Source | Status | PR |

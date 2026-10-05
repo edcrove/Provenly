@@ -566,6 +566,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mcp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Model Context Protocol endpoint (Streamable HTTP, JSON responses) with read-only tools for agents
+         * @description One JSON-RPC 2.0 message per request (no batches): `initialize`, `ping`, `tools/list` and `tools/call`. Notifications and responses are accepted with 202 and no body. Tools are read-only and call this API in-process as the signed-in user, so they see what the user may see; an API error is a tool result with `isError: true` and the problem as text. Agents authenticate with a session token (`POST /auth/login`).
+         */
+        post: operations["mcp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/webhooks": {
         parameters: {
             query?: never;
@@ -1953,6 +1973,31 @@ export interface components {
         };
         IssueLinksRequest: {
             testCaseIds: number[];
+        };
+        /** @description A JSON-RPC 2.0 request, notification or response (MCP). */
+        JsonRpcMessage: {
+            /** @example 2.0 */
+            jsonrpc: string;
+            /** @description Request id (string or number); absent in notifications. */
+            id?: unknown;
+            /** @example tools/call */
+            method?: string;
+            params?: {
+                [key: string]: unknown;
+            };
+        };
+        JsonRpcResponse: {
+            /** @enum {string} */
+            jsonrpc: "2.0";
+            /** @description The request's id (null when the request could not be read). */
+            id: unknown;
+            result?: {
+                [key: string]: unknown;
+            };
+            error?: {
+                code: number;
+                message: string;
+            };
         };
         /** @enum {string} */
         WebhookEvent: "run.completed";
@@ -3690,6 +3735,40 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    mcp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JsonRpcMessage"];
+            };
+        };
+        responses: {
+            /** @description The JSON-RPC response (a result or a JSON-RPC error) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JsonRpcResponse"];
+                };
+            };
+            /** @description A notification or response, accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
         };
     };
     listWebhooks: {

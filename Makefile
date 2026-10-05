@@ -26,7 +26,7 @@ LOAD_DOTENV := set -a; [ ! -f $(ROOT)/.env.local ] || . $(ROOT)/.env.local; set 
 .PHONY: help probe setup up dev down ps logs infra db-dump db-reset db-restore demo-reset seed-snapshot seed-rebuild-demo \
 	check-env guard-prod migrate dev-backend dev-frontend generate check-generated lint screenshots \
 	test-backend-unit test-backend-integration test-backend-contract fuzz \
-	test-frontend-unit test-frontend-integration test-frontend-contract test-e2e \
+	test-frontend-unit test-frontend-integration test-frontend-contract test-reporter test-e2e \
 	test gates coverage clean
 
 help: ## Show this help
@@ -37,6 +37,7 @@ setup: ## Install Go modules and npm dependencies (frontend, e2e)
 	cd tools/covgate && go mod download
 	cd frontend && npm ci
 	cd e2e && npm ci
+	cd reporters/playwright && npm ci
 
 check-env:
 	@test -f $(ENV_FILE) || { echo "error: $(ENV_FILE) not found (prod: cp envs/prod.env.example envs/prod.env and set a password)" >&2; exit 1; }
@@ -121,6 +122,7 @@ lint: ## Lint, vet, format-check and typecheck both services
 	cd tools/covgate && go vet ./...
 	cd frontend && npm run lint && npm run format:check && npm run typecheck
 	cd e2e && npm run typecheck
+	cd reporters/playwright && npm run typecheck
 
 test-backend-unit: $(OUT) ## Backend Unit (testing+testify), raw coverage in GOCOVERDIR
 	rm -rf $(GOCOV)/unit && mkdir -p $(GOCOV)/unit
@@ -162,7 +164,10 @@ test-frontend-contract: ## Frontend Contract (generated client + MSW handlers va
 test-e2e: ## E2E journeys (Playwright) on the instrumented stack and an ephemeral database
 	./scripts/e2e.sh
 
-test: test-backend-unit test-backend-integration test-backend-contract test-frontend-unit test-frontend-integration test-frontend-contract test-e2e ## Run every suite
+test-reporter: ## Playwright reporter unit tests (100% coverage thresholds)
+	cd reporters/playwright && npm test
+
+test: test-backend-unit test-backend-integration test-backend-contract test-frontend-unit test-frontend-integration test-frontend-contract test-reporter test-e2e ## Run every suite
 
 screenshots: ## Capture every UI flow into docs/screenshots (ephemeral database)
 	./scripts/screenshots.sh

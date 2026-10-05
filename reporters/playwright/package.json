@@ -1,0 +1,19 @@
+{
+  "name": "@provenly/playwright-reporter",
+  "version": "0.1.0",
+  "description": "Playwright reporter for Provenly: streams a live run while tests execute and sends the final JUnit report with each test's TC-ID",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "files": ["src/index.ts"],
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@vitest/coverage-v8": "^5.0.3",
+    "typescript": "~5.9",
+    "vitest": "^5.0.3"
+  }
+}

@@ -41,3 +41,5 @@ targets:
     description: issue verification through the public API - a native issue is I-1 and unlinked; a Jira import with its state is linked to a test case (unverified); a failing run makes it a known issue with the run as evidence; a later skip is inconclusive and keeps it; a closing re-import makes it reopen, a passing run validated fixed, reopening it not reproducible; filters by test case, bad states, imports without state, duplicates and unknown ids are refused
   - id: BE-E2E-020
     description: project quality through the public API - automation rate over active test cases, never-executed test cases listed, flaky counts over the latest runs narrowed by window; out-of-range or malformed staleDays and window are 400 and unknown projects 404
+  - id: BE-E2E-021
+    description: live runs through the public API - a live run starts with its snapshot (a repeated start returns it), takes streamed events idempotently by event id (duplicates counted, invalid events 400), shows provisional progress; its JUnit report completes it with the final results and the reconciliation names the test that started but never finished live; events after completion are 409

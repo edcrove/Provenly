@@ -5,6 +5,7 @@ import type {
   ApiKey,
   Dimension,
   Issue,
+  LiveRun,
   Requirement,
   Suite,
   Invitation,
@@ -44,6 +45,8 @@ export interface MockDb {
   /** Requirements by project id; latest is the latest result status of each test case (coverage). */
   requirements: (Requirement & { projectId: number })[]
   latest: Record<number, 'passed' | 'failed' | 'error' | 'skipped'>
+  /** Live state of live runs, by run id (what GET /test-runs/{id}/live answers). */
+  live: Record<number, LiveRun>
   /** Flaky test case counts the quality endpoint reports (by test case id). */
   flaky: Record<number, number>
   /** Issues by project id; their verification is recomputed from latest (skipped is inconclusive). */
@@ -83,6 +86,7 @@ export function seed(): MockDb {
     latest: {},
     issues: [],
     flaky: {},
+    live: {},
     projects: [project()],
     testCases: [tc, testCase({ id: 154, title: 'Logout works' })],
     steps: [
@@ -546,6 +550,15 @@ const stepsOf = (tcId: number) =>
   db.steps.filter((s) => s.testCaseId === tcId).sort((a, b) => a.position - b.position)
 
 export const handlers = [
+  http.get(
+    `${BASE}/test-runs/:testRunId/live`,
+    guard(({ params }) => {
+      const run = findRun(params.testRunId)
+      if (run instanceof Response) return run
+      const live = db.live[run.id]
+      return live ? respond(live) : problem(409, 'conflict', `run ${run.id} is not a live run`)
+    }),
+  ),
   http.get(
     `${BASE}/projects/:projectKey/quality`,
     guard(({ params, request }) => {

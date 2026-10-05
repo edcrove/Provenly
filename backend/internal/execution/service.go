@@ -57,6 +57,23 @@ func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, r
 			if id, err = r.GetTestRunIDByExternalID(ctx, run.ProjectID, externalID); err != nil {
 				return err
 			}
+			// The final report of a running live run completes it: its results become the run's (MVP live runs).
+			current, mode, err := r.LockTestRun(ctx, id)
+			if err != nil {
+				return err
+			}
+			if mode == ModeLive && current == RunRunning {
+				created = true
+				if err := r.InsertTestResults(ctx, id, results); err != nil {
+					return err
+				}
+				if err := r.InsertParseErrors(ctx, id, parseErrors); err != nil {
+					return err
+				}
+				if err := r.CompleteLiveRun(ctx, id, status, run.ReportSHA256); err != nil {
+					return err
+				}
+			}
 		} else {
 			created = true
 			if err := r.InsertExpectedCases(ctx, id, expected); err != nil {
@@ -270,9 +287,12 @@ func (s *Service) History(ctx context.Context, testCaseID int64, page pagination
 	return pagination.Result[HistoryEntry]{Items: items, Page: page, Total: total}, nil
 }
 
-// StartRun creates a running manual run with its expected universe and no results yet.
+// StartRun creates a running manual (default) or live run with its expected universe and no results yet. Starting a
+// live run again with the same external id returns it (runners retry); any other existing run is a conflict.
 func (s *Service) StartRun(ctx context.Context, run NewRun, expected []int64) (TestRun, error) {
-	run.Mode = ModeManual
+	if run.Mode != ModeLive {
+		run.Mode = ModeManual
+	}
 	var out TestRun
 	err := s.repo.InTx(ctx, func(r Repository) error {
 		id, ok, err := r.InsertTestRun(ctx, InsertRunParams{
@@ -282,7 +302,20 @@ func (s *Service) StartRun(ctx context.Context, run NewRun, expected []int64) (T
 			return err
 		}
 		if !ok {
-			return apperr.Conflict("a run with this id already exists")
+			if run.Mode != ModeLive {
+				return apperr.Conflict("a run with this id already exists")
+			}
+			existing, err := r.GetTestRunIDByExternalID(ctx, run.ProjectID, ExternalRunID(run.Provider, run.ProviderRunID, run.RunAttempt))
+			if err != nil {
+				return err
+			}
+			if out, err = r.GetTestRun(ctx, existing); err != nil {
+				return err
+			}
+			if out.Mode != ModeLive {
+				return apperr.Conflict("run %d with this id was not started live", existing)
+			}
+			return attachOutcomes(ctx, r, []TestRun{out}, func(_ int, o RunOutcome) { out.Outcome = o })
 		}
 		if err := r.InsertExpectedCases(ctx, id, expected); err != nil {
 			return err

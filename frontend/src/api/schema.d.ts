@@ -829,6 +829,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/test-runs/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a live run before executing (CI with a project API key, or members); starting it again returns it
+         * @description The run expects the project's active automated test cases (the suite's when named) and stays `running` while
+         *     the runner streams events. The final JUnit report, sent to `/api/v1/ingestion/junit` with the same
+         *     provider, runId and runAttempt, completes it and stays the source of truth.
+         */
+        post: operations["startLiveRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/test-runs/{testRunId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stream live events of a running live run (idempotent by eventId) */
+        post: operations["recordLiveEvents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/test-runs/{testRunId}/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        /** The provisional live state of a live run and, once its final report arrived, the reconciliation of its events with the final results */
+        get: operations["getLiveRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-runs/manual": {
         parameters: {
             query?: never;
@@ -1813,6 +1873,78 @@ export interface components {
                     runs: number;
                 }[];
             };
+        };
+        StartLiveRunRequest: {
+            /** @description The project key (default the API key's project, else TC). */
+            project?: string;
+            suite?: string;
+            provider: string;
+            runId: string;
+            /** Format: int32 */
+            runAttempt: number;
+            pipeline?: string;
+            branch?: string;
+            commit?: string;
+        };
+        LiveEventsRequest: {
+            events: {
+                /** @description Identifies the event; a repeated delivery is skipped. */
+                eventId: string;
+                /** Format: int64 */
+                sequence: number;
+                /** @enum {string} */
+                type: "test.started" | "test.finished" | "step.started" | "step.completed" | "run.finished";
+                testName?: string;
+                /** @description The TC-ID the test declares (CHK-12, TC-12 or 12). */
+                testCase?: string;
+                /**
+                 * @description Required for test.finished, absent otherwise.
+                 * @enum {string}
+                 */
+                status?: "passed" | "failed" | "error" | "skipped";
+                /** Format: date-time */
+                occurredAt?: string;
+            }[];
+        };
+        LiveEventsResult: {
+            accepted: number;
+            duplicates: number;
+        };
+        LiveRun: {
+            /**
+             * @description Pending while the run runs; then whether the live events agree with the final report.
+             * @enum {string}
+             */
+            reconciliation: "pending" | "consistent" | "mismatch";
+            /** Format: int32 */
+            events: number;
+            /** Format: int64 */
+            lastSequence: number | null;
+            /** @description The runner sent run.finished. */
+            runFinished: boolean;
+            /** Format: int32 */
+            waiting: number;
+            /** Format: int32 */
+            running: number;
+            /** Format: int32 */
+            finished: number;
+            testCases: {
+                /** Format: int64 */
+                testCaseId: number;
+                testCaseKey: string;
+                /** @enum {string} */
+                state: "waiting" | "running" | "passed" | "failed" | "error" | "skipped";
+            }[];
+            mismatches: {
+                /** @enum {string} */
+                kind: "status_mismatch" | "live_only" | "final_only" | "started_without_finished" | "duplicate" | "invalid_correlation";
+                /** Format: int64 */
+                testCaseId: number | null;
+                testCaseKey: string | null;
+                requestedTestCaseId: string | null;
+                liveStatus: string | null;
+                finalStatus: string | null;
+            }[];
         };
         TestRunPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["TestRun"][];
@@ -3987,6 +4119,97 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    startLiveRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartLiveRunRequest"];
+            };
+        };
+        responses: {
+            /** @description The running live run */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    recordLiveEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LiveEventsRequest"];
+            };
+        };
+        responses: {
+            /** @description How many events were accepted and how many were repeated deliveries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveEventsResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getLiveRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The live state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };

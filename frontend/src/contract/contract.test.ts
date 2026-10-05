@@ -1784,6 +1784,54 @@ const qualityScenarios: Scenario[] = [
   },
 ]
 
+const liveRun7 = { testRunId: 7 }
+const withLive = () => {
+  db.runs[0] = { ...db.runs[0], mode: 'live', executionStatus: 'running' }
+  db.live[7] = {
+    reconciliation: 'pending',
+    events: 1,
+    lastSequence: 1,
+    runFinished: false,
+    waiting: 1,
+    running: 1,
+    finished: 0,
+    testCases: [
+      { testCaseId: 153, testCaseKey: 'TC-153', state: 'running' },
+      { testCaseId: 154, testCaseKey: 'TC-154', state: 'waiting' },
+    ],
+    mismatches: [],
+  }
+}
+const liveScenarios: Scenario[] = [
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/live',
+    status: 200,
+    setup: withLive,
+    call: (c) => c.GET('/api/v1/test-runs/{testRunId}/live', { params: { path: liveRun7 } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/live',
+    status: 400,
+    call: (c) => c.GET('/api/v1/test-runs/{testRunId}/live', { params: { path: { testRunId: 0 } } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/live',
+    status: 404,
+    call: (c) => c.GET('/api/v1/test-runs/{testRunId}/live', { params: { path: { testRunId: 987654 } } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/live',
+    status: 409,
+    call: (c) => c.GET('/api/v1/test-runs/{testRunId}/live', { params: { path: liveRun7 } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/live',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/test-runs/{testRunId}/live', { params: { path: liveRun7 } }),
+  },
+]
+
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 type AnyCall = (path: string, init: object) => Promise<Result>
 const anyPath = {
@@ -1833,6 +1881,7 @@ const scenarios: Scenario[] = [
   ...requirementScenarios,
   ...issueScenarios,
   ...qualityScenarios,
+  ...liveScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
   // Projects

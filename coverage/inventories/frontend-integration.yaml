@@ -141,3 +141,6 @@ targets:
   - id: FE-INT-042
     description: quality dashboard - asks for a project; shows the latest run, the pass-rate trend (each bar links to its run), automation rate, test cases never or not recently executed and flaky test cases, re-reading them when the stale period or the run window changes; breaks requirement coverage (archived ones excluded) and issue verification down; empty projects and failing reads say so
     surfaces: [src/features/dashboard/DashboardPage.tsx]
+  - id: FE-INT-043
+    description: live runs - a running live run shows provisional progress (finished, running, waiting) and each test case's live state, polls, and when the final report arrives reloads as completed with the reconciliation (mismatch kinds, live and final statuses, unknown TC-IDs); a consistent run lists no mismatches; batch runs have no live panel
+    surfaces: [src/features/live/LivePanel.tsx, src/features/test-runs/TestRunDetailPage.tsx]

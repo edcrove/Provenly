@@ -44,6 +44,12 @@ func (s *stubAPI) ListRunResults(_ context.Context, _ int64, f ResultFilter, p p
 func (s *stubAPI) Summary(context.Context, int64) (Summary, error) {
 	return ComputeSummary(3, []int64{153, 154}, []ValidResult{{TestCaseID: 153, Status: Passed}}, []Diagnostic{{Correlation: CorrelationMissing}}), s.err
 }
+func (s *stubAPI) Live(context.Context, int64) (Live, error) {
+	seq, tc := int64(4), int64(153)
+	return Live{Cases: []LiveCase{{TestCaseID: 153, State: "passed"}, {TestCaseID: 154, State: LiveWaiting}}, Waiting: 1, Finished: 1, Events: 2,
+		LastSequence: &seq, Reconciliation: ReconciliationMismatch, Mismatches: []Mismatch{
+			{Kind: MismatchStatus, TestCaseID: &tc, LiveStatus: "passed", FinalStatus: "failed"}, {Kind: MismatchInvalidCorrelation, Requested: "TC-9"}}}, s.err
+}
 func (s *stubAPI) ListParseErrors(_ context.Context, _ int64, p pagination.Page) (pagination.Result[ParseError], error) {
 	return pagination.Result[ParseError]{Items: []ParseError{{Index: 2, TestName: "t", Message: "m", Persisted: true, Severity: "warning"}}, Page: p, Total: 1}, s.err
 }
@@ -102,6 +108,10 @@ func TestHandlerHappyPaths(t *testing.T) {
 		"/api/v1/test-runs/3/summary":                                 `"executionPercent":50`,
 		"/api/v1/test-cases/153/results":                              `"testCaseKey":"TC-153"`,
 		"/api/v1/test-runs/3/parse-errors":                            `"items":[{"index":2,"testName":"t","message":"m","persisted":true,"severity":"warning"}]`,
+		"/api/v1/test-runs/3/live": `{"reconciliation":"mismatch","events":2,"lastSequence":4,"runFinished":false,"waiting":1,"running":0,"finished":1,` +
+			`"testCases":[{"testCaseId":153,"testCaseKey":"TC-153","state":"passed"},{"testCaseId":154,"testCaseKey":"CHK-4","state":"waiting"}],` +
+			`"mismatches":[{"kind":"status_mismatch","testCaseId":153,"testCaseKey":"TC-153","requestedTestCaseId":null,"liveStatus":"passed","finalStatus":"failed"},` +
+			`{"kind":"invalid_correlation","testCaseId":null,"testCaseKey":null,"requestedTestCaseId":"TC-9","liveStatus":null,"finalStatus":null}]}`,
 	}
 	for target, want := range cases {
 		rec := serve(&stubAPI{}, stubCatalog{}, target)
@@ -144,19 +154,19 @@ func TestHandlerErrors(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, serve(&stubAPI{getErr: apperr.NotFound("missing")}, stubCatalog{}, "/api/v1/test-runs/3").Code)
 	for _, target := range []string{
 		"/api/v1/test-runs", "/api/v1/test-runs/3/results",
-		"/api/v1/test-runs/3/summary", "/api/v1/test-cases/1/results", "/api/v1/test-runs/3/parse-errors",
+		"/api/v1/test-runs/3/summary", "/api/v1/test-cases/1/results", "/api/v1/test-runs/3/parse-errors", "/api/v1/test-runs/3/live",
 	} {
 		assert.Equal(t, http.StatusNotFound, serve(failing, stubCatalog{}, target).Code, target)
 	}
 	assert.Equal(t, http.StatusNotFound, serve(&stubAPI{}, stubCatalog{err: apperr.NotFound("TC-1")}, "/api/v1/test-cases/1/results").Code)
-	for _, target := range []string{"/api/v1/test-runs/3/results", "/api/v1/test-runs/3/summary", "/api/v1/test-cases/153/results"} {
+	for _, target := range []string{"/api/v1/test-runs/3/results", "/api/v1/test-runs/3/summary", "/api/v1/test-cases/153/results", "/api/v1/test-runs/3/live"} {
 		assert.Equal(t, http.StatusInternalServerError, serve(&stubAPI{}, stubCatalog{keysErr: errors.New("db down")}, target).Code, "key lookup failure: "+target)
 	}
 
 	for _, target := range []string{
 		"/api/v1/test-runs?page=x", "/api/v1/test-runs/x", "/api/v1/test-runs/x/results",
 		"/api/v1/test-runs/3/results?page=0", "/api/v1/test-runs/3/results?status=untested",
-		"/api/v1/test-runs/3/results?correlation=nope", "/api/v1/test-runs/x/summary",
+		"/api/v1/test-runs/3/results?correlation=nope", "/api/v1/test-runs/x/summary", "/api/v1/test-runs/x/live",
 		"/api/v1/test-cases/x/results", "/api/v1/test-cases/1/results?pageSize=0",
 		"/api/v1/test-runs/x/parse-errors", "/api/v1/test-runs/3/parse-errors?page=0",
 	} {

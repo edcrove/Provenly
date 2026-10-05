@@ -13,6 +13,7 @@ import { formatDateTime, formatPercent } from '@/lib/format'
 import { can } from '@/lib/roles'
 import { isInterruptedRun, positiveInt } from '@/lib/status'
 import { RunKnownIssues } from '@/features/issues/RunKnownIssues'
+import { LivePanel } from '@/features/live/LivePanel'
 import { ManualExecution } from '@/features/manual/ManualExecution'
 
 import { RunAmendments } from './RunAmendments'
@@ -68,7 +69,7 @@ export function TestRunDetailPage() {
             {isInterruptedRun(r.executionStatus) || r.executionStatus === 'running' ? (
               <ExecutionBadge status={r.executionStatus} />
             ) : null}
-            {r.mode === 'manual' ? <Badge variant="outline">manual</Badge> : null}
+            {r.mode !== 'batch' ? <Badge variant="outline">{r.mode}</Badge> : null}
             <span className="text-muted-foreground text-sm" data-testid="run-pass-rate">
               {r.outcome.executed > 0
                 ? `${formatPercent(r.outcome.passRate)} of executed passed`
@@ -117,6 +118,7 @@ export function TestRunDetailPage() {
                     <RunDiagnostics summary={s} testRunId={r.id} />
                   </CardContent>
                 </Card>
+                {r.mode === 'live' ? <LivePanel run={r} /> : null}
                 {r.mode === 'manual' &&
                 r.executionStatus === 'running' &&
                 can(projects.find((p) => p.id === r.projectId)?.myRole, 'member') ? (

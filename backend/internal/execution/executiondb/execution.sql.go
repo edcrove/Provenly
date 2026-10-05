@@ -11,6 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const completeLiveRun = `-- name: CompleteLiveRun :exec
+UPDATE test_runs SET status = $1, completed_at = now(), report_sha256 = $2
+WHERE id = $3 AND mode = 'live' AND status = 'running'
+`
+
+type CompleteLiveRunParams struct {
+	Status       string
+	ReportSha256 string
+	ID           int64
+}
+
+// The final report completes a running live run: its execution status, completion time and report digest.
+func (q *Queries) CompleteLiveRun(ctx context.Context, arg CompleteLiveRunParams) error {
+	_, err := q.db.Exec(ctx, completeLiveRun, arg.Status, arg.ReportSha256, arg.ID)
+	return err
+}
+
 const countAmendments = `-- name: CountAmendments :one
 SELECT count(*) FROM test_run_amendments WHERE test_run_id = $1
 `
@@ -42,6 +59,17 @@ func (q *Queries) CountResultsForTestCase(ctx context.Context, testCaseID pgtype
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const countRunEvents = `-- name: CountRunEvents :one
+SELECT count(*)::int FROM test_run_events WHERE test_run_id = $1
+`
+
+func (q *Queries) CountRunEvents(ctx context.Context, testRunID int64) (int32, error) {
+	row := q.db.QueryRow(ctx, countRunEvents, testRunID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const countRunResults = `-- name: CountRunResults :one
@@ -288,6 +316,43 @@ type InsertParseErrorsParams struct {
 	Message   string
 	Persisted bool
 	Severity  string
+}
+
+const insertRunEvent = `-- name: InsertRunEvent :execrows
+INSERT INTO test_run_events (test_run_id, event_id, sequence, event_type, test_name, requested_test_case_id, test_case_id, status, occurred_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+ON CONFLICT (test_run_id, event_id) DO NOTHING
+`
+
+type InsertRunEventParams struct {
+	TestRunID           int64
+	EventID             string
+	Sequence            int64
+	EventType           string
+	TestName            string
+	RequestedTestCaseID pgtype.Text
+	TestCaseID          pgtype.Int8
+	Status              pgtype.Text
+	OccurredAt          pgtype.Timestamptz
+}
+
+// Appends one live event; an event id already received for the run is a duplicate delivery and is skipped (0 rows).
+func (q *Queries) InsertRunEvent(ctx context.Context, arg InsertRunEventParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertRunEvent,
+		arg.TestRunID,
+		arg.EventID,
+		arg.Sequence,
+		arg.EventType,
+		arg.TestName,
+		arg.RequestedTestCaseID,
+		arg.TestCaseID,
+		arg.Status,
+		arg.OccurredAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 type InsertTestResultsParams struct {
@@ -760,6 +825,42 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 			&i.RunExpectedCount,
 			&i.RunResultCount,
 			&i.RunAmendmentCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunEvents = `-- name: ListRunEvents :many
+SELECT id, test_run_id, event_id, sequence, event_type, test_name, requested_test_case_id, test_case_id, status, occurred_at, received_at FROM test_run_events WHERE test_run_id = $1 ORDER BY sequence, id
+`
+
+func (q *Queries) ListRunEvents(ctx context.Context, testRunID int64) ([]TestRunEvent, error) {
+	rows, err := q.db.Query(ctx, listRunEvents, testRunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TestRunEvent
+	for rows.Next() {
+		var i TestRunEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.TestRunID,
+			&i.EventID,
+			&i.Sequence,
+			&i.EventType,
+			&i.TestName,
+			&i.RequestedTestCaseID,
+			&i.TestCaseID,
+			&i.Status,
+			&i.OccurredAt,
+			&i.ReceivedAt,
 		); err != nil {
 			return nil, err
 		}

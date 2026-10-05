@@ -27,6 +27,7 @@ type Services struct {
 	Execution *execution.Service
 	Ingestion *ingestion.Service
 	Manual    *ingestion.Manual
+	Live      *ingestion.Live
 	Insights  *insights.Service
 	Identity  *identity.Service
 	// Now is the clock of the services (session and invitation expiry).
@@ -49,8 +50,9 @@ func NewServicesWith(pool *pgxpool.Pool, now func() time.Time, idcfg identity.Co
 	exe := execution.NewService(executionpg.NewStore(pool), now)
 	// Requirement coverage reads the latest results through the catalog's port.
 	cat.SetResults(exe)
+	ing := ingestion.NewService(cat, exe, ids)
 	return Services{
-		Catalog: cat, Execution: exe, Ingestion: ingestion.NewService(cat, exe, ids),
+		Catalog: cat, Execution: exe, Ingestion: ing, Live: ingestion.NewLive(ing, exe, now),
 		Manual:   ingestion.NewManual(cat, exe, ids),
 		Insights: insights.NewService(cat, exe, ids, now),
 		Identity: ids, Now: now, Ready: pool.Ping,
@@ -92,7 +94,9 @@ func register(r httpx.Router, s Services, maxIngestBytes int64) {
 	ids := identity.NewHandler(s.Identity, s.Catalog, s.Now)
 	ids.RegisterPublic(r)
 	// CI reports with a project API key; people with a session.
-	ingestion.NewHandler(s.Ingestion, maxIngestBytes).Register(identity.ProtectWithKeys(r, s.Identity))
+	keys := identity.ProtectWithKeys(r, s.Identity)
+	ingestion.NewHandler(s.Ingestion, maxIngestBytes).Register(keys)
+	ingestion.NewLiveHandler(s.Live).Register(keys)
 	// Every other API route needs a session.
 	p := identity.Protect(r, s.Identity)
 	ids.RegisterProtected(p)

@@ -459,3 +459,47 @@ func (s *Store) ListFlakyCounts(ctx context.Context, projectID int64, window, li
 	}
 	return out, nil
 }
+
+// CountRunEvents implements execution.Repository.
+func (s *Store) CountRunEvents(ctx context.Context, runID int64) (int, error) {
+	n, err := s.q.CountRunEvents(ctx, runID)
+	return int(n), err
+}
+
+// InsertRunEvent implements execution.Repository.
+func (s *Store) InsertRunEvent(ctx context.Context, runID int64, e execution.NewEvent) (bool, error) {
+	p := executiondb.InsertRunEventParams{
+		TestRunID: runID, EventID: e.EventID, Sequence: e.Sequence, EventType: string(e.Type), TestName: e.TestName,
+		RequestedTestCaseID: filterText(e.RequestedTestCaseID), TestCaseID: int8Arg(e.TestCaseID), Status: filterText(e.Status),
+		OccurredAt: pgtype.Timestamptz{Time: e.OccurredAt, Valid: true},
+	}
+	n, err := s.q.InsertRunEvent(ctx, p)
+	return n == 1, err
+}
+
+// ListRunEvents implements execution.Repository.
+func (s *Store) ListRunEvents(ctx context.Context, runID int64) ([]execution.Event, error) {
+	rows, err := s.q.ListRunEvents(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]execution.Event, len(rows))
+	for i, r := range rows {
+		e := execution.Event{ID: r.ID, ReceivedAt: r.ReceivedAt.Time, NewEvent: execution.NewEvent{
+			EventID: r.EventID, Sequence: r.Sequence, Type: execution.EventType(r.EventType), TestName: r.TestName,
+			OccurredAt: r.OccurredAt.Time,
+		}}
+		e.RequestedTestCaseID, e.TestCaseID = textPtr(r.RequestedTestCaseID), int8Ptr(r.TestCaseID)
+		if r.Status.Valid {
+			st := execution.ResultStatus(r.Status.String)
+			e.Status = &st
+		}
+		out[i] = e
+	}
+	return out, nil
+}
+
+// CompleteLiveRun implements execution.Repository.
+func (s *Store) CompleteLiveRun(ctx context.Context, runID int64, status execution.RunStatus, reportSHA256 string) error {
+	return s.q.CompleteLiveRun(ctx, executiondb.CompleteLiveRunParams{ID: runID, Status: string(status), ReportSha256: reportSHA256})
+}

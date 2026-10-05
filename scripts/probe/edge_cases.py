@@ -524,10 +524,50 @@ def main():
         check(f"quality ?{qs}", call(base, "GET", f"{quality}?{qs}")[0], exp)
     for path, exp in [("/projects/bad/quality", 400), ("/projects/NOPE99/quality", 404)]:
         check(f"GET {path}", call(base, "GET", path)[0], exp)
-    st, q = call(base, "GET", quality)
-    tcs = q.get("testCases", {}) if isinstance(q, dict) else {}
+    st, qual = call(base, "GET", quality)
+    tcs = qual.get("testCases", {}) if isinstance(qual, dict) else {}
     check("quality: active = automated + manual", tcs.get("active") == tcs.get("automated", -1) + tcs.get("manual", -1), True)
     check("removed member reads quality", call(base, "GET", quality, headers=as_viewer)[0], 404)
+
+    # Live runs (prototype feature 15): starts and events are validated before any lookup; events are idempotent;
+    # twenty concurrent deliveries of one event store it once; the final report completes the run.
+    live_id = f"probelive{int(time.time())}"
+    start = {"project": key, "provider": "github", "runId": live_id, "runAttempt": 1}
+    for body, exp in [({}, 400), ({**start, "runAttempt": 0}, 400), ({**start, "provider": "Bad"}, 400), ({**start, "runId": "a b"}, 400),
+                      ({**start, "project": "bad"}, 400), ({**start, "project": "NOPE99"}, 404), ({**start, "suite": "Bad"}, 400),
+                      ({**start, "suite": "nope"}, 404), ({**start, "pipeline": "p" * 201}, 400), ({**start, "unknown": 1}, 400),
+                      ({"provider": "github", "runId": q.format(1).split("runId=")[1].split("&")[0], "runAttempt": 1}, 409)]:
+        check(f"start live {str(body)[:50]}", call(base, "POST", "/test-runs/live", body)[0], exp)
+    check("start live text/plain", call(base, "POST", "/test-runs/live", raw=b"{}", ctype="text/plain")[0], 415)
+    st, lrun = call(base, "POST", "/test-runs/live", start)
+    check("start a live run", st, 201)
+    lid = lrun.get("id", 0) if isinstance(lrun, dict) else 0
+    check("start it again", call(base, "POST", "/test-runs/live", start)[1].get("id"), lid)
+    evs = f"/test-runs/{lid}/events"
+    ev = {"eventId": "e1", "sequence": 1, "type": "test.started", "testName": "probe"}
+    for body, exp in [({}, 400), ({"events": []}, 400), ({"events": [ev] * 501}, 400), ({"events": [{**ev, "eventId": "a b"}]}, 400),
+                      ({"events": [{**ev, "sequence": -1}]}, 400), ({"events": [{**ev, "type": "test.paused"}]}, 400),
+                      ({"events": [{**ev, "type": "test.finished"}]}, 400), ({"events": [{**ev, "status": "passed"}]}, 400),
+                      ({"events": [{**ev, "testName": "n" * 1001}]}, 400), ({"events": [{**ev, "testName": "a\u0000"}]}, 400),
+                      ({"events": [{**ev, "occurredAt": "yesterday"}]}, 400), ({"events": [{**ev, "unknown": 1}]}, 400),
+                      ({"events": [{**ev, "testCase": "TC-99999999"}]}, 200)]:
+        check(f"events {str(body)[:50]}", call(base, "POST", evs, body)[0], exp)
+    check("events text/plain", call(base, "POST", evs, raw=b"{}", ctype="text/plain")[0], 415)
+    for rid, exp in [("0", 400), ("abc", 400), ("9223372036854775807", 404), (str(run_id), 409)]:
+        check(f"events into run {rid}", call(base, "POST", f"/test-runs/{rid}/events", {"events": [{**ev, "eventId": "z"}]})[0], exp)
+        check(f"live of run {rid}", call(base, "GET", f"/test-runs/{rid}/live")[0], exp)
+    codes = []
+    threads = [threading.Thread(target=lambda: codes.append(call(base, "POST", evs, {"events": [{**ev, "eventId": "race"}]})[1].get("accepted"))) for _ in range(20)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    check("20 concurrent deliveries of one event: stored once", codes.count(1), 1)
+    st, lv = call(base, "GET", f"/test-runs/{lid}/live")
+    check("live state while running", lv.get("reconciliation") if isinstance(lv, dict) else st, "pending")
+    st, body = call(base, "POST", f"/ingestion/junit?project={key}&provider=github&runId={live_id}&runAttempt=1", raw=xml, ctype="application/xml")
+    check("the report completes the live run", f"{st} {body.get('testRun', {}).get('executionStatus') if isinstance(body, dict) else ''}", "201 completed")
+    st, lv = call(base, "GET", f"/test-runs/{lid}/live")
+    check("reconciled after the report", lv.get("reconciliation") if isinstance(lv, dict) else st, "mismatch")
+    check("events after the report", call(base, "POST", evs, {"events": [{**ev, "eventId": "late"}]})[0], 409)
 
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]

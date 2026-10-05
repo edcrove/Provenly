@@ -11,9 +11,12 @@ import (
 )
 
 type Querier interface {
+	// The final report completes a running live run: its execution status, completion time and report digest.
+	CompleteLiveRun(ctx context.Context, arg CompleteLiveRunParams) error
 	CountAmendments(ctx context.Context, testRunID int64) (int64, error)
 	CountParseErrors(ctx context.Context, testRunID int64) (int64, error)
 	CountResultsForTestCase(ctx context.Context, testCaseID pgtype.Int8) (int64, error)
+	CountRunEvents(ctx context.Context, testRunID int64) (int32, error)
 	CountRunResults(ctx context.Context, arg CountRunResultsParams) (int64, error)
 	CountTestRuns(ctx context.Context, arg CountTestRunsParams) (int64, error)
 	FinishTestRun(ctx context.Context, arg FinishTestRunParams) error
@@ -24,6 +27,8 @@ type Querier interface {
 	// One recorded result of a running run; a re-test of the same test is its next attempt.
 	InsertManualResult(ctx context.Context, arg InsertManualResultParams) (TestResult, error)
 	InsertParseErrors(ctx context.Context, arg []InsertParseErrorsParams) (int64, error)
+	// Appends one live event; an event id already received for the run is a duplicate delivery and is skipped (0 rows).
+	InsertRunEvent(ctx context.Context, arg InsertRunEventParams) (int64, error)
 	InsertTestResults(ctx context.Context, arg []InsertTestResultsParams) (int64, error)
 	InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error)
 	// Whether a test case is in a run's universe: its snapshot or its amendments.
@@ -46,6 +51,7 @@ type Querier interface {
 	// The page is chosen first (index on test_case_id, id DESC) and each run's counts
 	// are computed once, not for every row skipped by OFFSET or repeated per result.
 	ListResultsForTestCase(ctx context.Context, arg ListResultsForTestCaseParams) ([]ListResultsForTestCaseRow, error)
+	ListRunEvents(ctx context.Context, testRunID int64) ([]TestRunEvent, error)
 	// retried: a later attempt of the same test exists in the run, so this one is not its logical result.
 	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]ListRunResultsRow, error)
 	// Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status, the

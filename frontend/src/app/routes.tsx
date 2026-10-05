@@ -1,5 +1,9 @@
 import { Navigate, type RouteObject } from 'react-router'
 
+import { AcceptInvitePage } from '@/features/auth/AcceptInvitePage'
+import { AccountPage } from '@/features/auth/AccountPage'
+import { LoginPage } from '@/features/auth/LoginPage'
+import { UsersPage } from '@/features/auth/UsersPage'
 import { ProjectsPage } from '@/features/projects/ProjectsPage'
 import { NewTestCasePage } from '@/features/test-cases/NewTestCasePage'
 import { TestCaseDetailPage } from '@/features/test-cases/TestCaseDetailPage'
@@ -11,11 +15,15 @@ import { Layout } from './Layout'
 import { NotFoundPage } from './NotFoundPage'
 
 export const routes: RouteObject[] = [
+  { path: 'login', element: <LoginPage /> },
+  { path: 'accept-invite', element: <AcceptInvitePage /> },
   {
     element: <Layout />,
     children: [
       { index: true, element: <Navigate to="/test-cases" replace /> },
       { path: 'projects', element: <ProjectsPage /> },
+      { path: 'users', element: <UsersPage /> },
+      { path: 'account', element: <AccountPage /> },
       { path: 'test-cases', element: <TestCaseListPage /> },
       { path: 'test-cases/new', element: <NewTestCasePage /> },
       { path: 'test-cases/:testCaseId', element: <TestCaseDetailPage /> },

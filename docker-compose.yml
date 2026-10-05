@@ -27,6 +27,10 @@ x-app-env: &app-env
   PROVENLY_DATABASE_URL: postgres://${POSTGRES_USER:-provenly}:${POSTGRES_PASSWORD:-provenly}@postgres:5432/${POSTGRES_DB:-provenly}?sslmode=disable
   PROVENLY_LOG_LEVEL: ${PROVENLY_LOG_LEVEL:-info}
   PROVENLY_MAX_INGEST_BYTES: ${PROVENLY_MAX_INGEST_BYTES:-10485760}
+  PROVENLY_JWT_SECRET: ${PROVENLY_JWT_SECRET:-}
+  # The demo administrator when the env file does not say (an empty value, as in prod.env.example, means none).
+  PROVENLY_ADMIN_USERNAME: ${PROVENLY_ADMIN_USERNAME-admin}
+  PROVENLY_ADMIN_PASSWORD: ${PROVENLY_ADMIN_PASSWORD-provenly-demo}
 
 services:
   postgres:

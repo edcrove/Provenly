@@ -3,7 +3,7 @@
 Open-source QA / test-management platform (formerly *OpenTestHub*). This repository holds the **POC**: a
 vertical slice where a Test Case gets a permanent numeric id (`TC-<id>`), an automated test declares that id, CI
 sends a JUnit XML report, Provenly ingests it into an idempotent TestRun and a UI/API shows results, a
-snapshot-based summary and per-test-case history. Everything runs locally, without authentication.
+snapshot-based summary and per-test-case history. Everything runs locally; sign in with the demo administrator (`admin` / `provenly-demo`, see `envs/demo.env`).
 
 ```
 TC-153 created ──► automated test declares TC-153 ──► CI posts JUnit XML ──► Provenly
@@ -78,8 +78,12 @@ Screenshots of every UI flow: [`docs/screenshots`](docs/screenshots/README.md) (
 ### Try the POC flow with curl
 
 ```bash
+# 0. Sign in (the demo administrator of envs/demo.env); the session cookie goes to cookies.txt
+curl -s -c cookies.txt -X POST localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' -d '{"username":"admin","password":"provenly-demo"}'
+
 # 1. Create an automated test case; the TC-ID is assigned by Provenly
-curl -s -X POST localhost:8080/api/v1/test-cases \
+curl -s -b cookies.txt -X POST localhost:8080/api/v1/test-cases \
   -H 'Content-Type: application/json' \
   -d '{"title":"User can log in","expectedResult":"Dashboard is shown","automated":true}'
 # => {"id":8,"key":"TC-8",...}   (use the returned id below; the demo data already holds TC-1..TC-7)
@@ -97,8 +101,8 @@ curl -s -X POST -H 'Content-Type: application/xml' --data-binary @report.xml \
 # => 201, created=true, testRun.id=6, diagnostics=[missing TC-ID]. Re-sending the same attempt returns 200.
 
 # 3. Summary (snapshot universe, aggregated failed > error > skipped > passed, 3 percentages) and history
-curl -s localhost:8080/api/v1/test-runs/6/summary
-curl -s localhost:8080/api/v1/test-cases/8/results
+curl -s -b cookies.txt localhost:8080/api/v1/test-runs/6/summary
+curl -s -b cookies.txt localhost:8080/api/v1/test-cases/8/results
 ```
 
 Then open http://localhost:3000 → *Test Runs* → run #6, or *Test Cases* → TC-8 for its history.

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,7 +50,9 @@ func TestPlatform(t *testing.T) {
 	})
 
 	t.Run("BE-INT-015_cli_migrates_and_serves_against_postgres", func(t *testing.T) {
-		env := map[string]string{"PROVENLY_DATABASE_URL": db.URL, "PROVENLY_AUTO_MIGRATE": "true", "PROVENLY_HTTP_ADDR": "127.0.0.1:0"}
+		require.NoError(t, db.Reset(context.Background()))
+		env := map[string]string{"PROVENLY_DATABASE_URL": db.URL, "PROVENLY_AUTO_MIGRATE": "true", "PROVENLY_HTTP_ADDR": "127.0.0.1:0",
+			"PROVENLY_ADMIN_USERNAME": "admin", "PROVENLY_ADMIN_PASSWORD": "correct horse", "PROVENLY_JWT_SECRET": strings.Repeat("k", 32)}
 		var stderr bytes.Buffer
 		d := cli.DefaultDeps(func(k string) string { return env[k] }, &stderr)
 		assert.Equal(t, 0, cli.Run(context.Background(), []string{"migrate", "up"}, d), stderr.String())
@@ -68,13 +71,24 @@ func TestPlatform(t *testing.T) {
 		go func() { done <- cli.Run(ctx, []string{"serve"}, d) }()
 		base := "http://" + <-addr
 		require.Eventually(t, func() bool {
-			resp, err := http.Get(base + "/api/v1/test-cases")
+			resp, err := http.Get(base + "/readyz")
 			if err != nil {
 				return false
 			}
 			_ = resp.Body.Close()
 			return resp.StatusCode == http.StatusOK
 		}, 5*time.Second, 50*time.Millisecond)
+		// The configured administrator was bootstrapped and signs in; the session opens the API.
+		resp, err := http.Post(base+"/api/v1/auth/login", "application/json", strings.NewReader(`{"username":"admin","password":"correct horse"}`))
+		require.NoError(t, err)
+		_ = resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		req, _ := http.NewRequest(http.MethodGet, base+"/api/v1/test-cases", nil)
+		req.AddCookie(resp.Cookies()[0])
+		resp, err = http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		_ = resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		cancel()
 		assert.Equal(t, 0, <-done, stderr.String())
 

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gavv/httpexpect/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/edcrove/provenly/backend/internal/app"
@@ -54,7 +55,7 @@ func TestSystem(t *testing.T) {
 	e.GET("/healthz").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "ok")
 	e.GET("/readyz").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "ok")
 
-	down := app.NewServices(db.Pool, time.Now)
+	down := app.NewServicesWith(db.Pool, time.Now, identityConfig())
 	down.Ready = func(context.Context) error { return errors.New("database is down") }
 	api(t, down, 1<<20).GET("/readyz").Expect().Status(http.StatusServiceUnavailable).
 		JSON(problemOpts).Object().HasValue("code", "service_unavailable")
@@ -155,6 +156,83 @@ func TestProjects(t *testing.T) {
 	e.GET("/api/v1/test-runs").WithQuery("project", "NOPE").Expect().Status(http.StatusNotFound)
 }
 
+// TestAuthentication: every protected operation answers 401 without a session, sign-in and invitations
+// work end to end, and administrator-only operations answer 403 to other users.
+func TestAuthentication(t *testing.T) {
+	s := fresh(t)
+	e := anon(t, s, 1<<20)
+	params := strings.NewReplacer("{testCaseId}", "1", "{testRunId}", "1", "{stepId}", "1", "{projectKey}", "TC", "{invitationId}", "1")
+	protected := 0
+	for path, item := range doc.Paths.Map() {
+		for method, op := range item.Operations() {
+			if op.Responses.Value("401") == nil || op.OperationID == "login" {
+				continue
+			}
+			protected++
+			e.Request(method, params.Replace(path)).WithJSON(map[string]any{}).Expect().
+				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
+		}
+	}
+	assert.Equal(t, 27, protected, "every operation except health, readiness, sign-in, sign-out, accept and ingestion")
+	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
+
+	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
+		Expect().Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("detail", "invalid username or password")
+	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"user": "admin"}).Expect().Status(http.StatusBadRequest)
+	// Found by the probe sweep: a NUL in the username used to reach Postgres as a 500.
+	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": "admin\x00", "password": "x"}).Expect().Status(http.StatusUnauthorized)
+	e.POST("/api/v1/auth/login").WithText(`{"username":"admin"}`).Expect().Status(http.StatusUnsupportedMediaType)
+	login := e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": "ADMIN", "password": adminPassword}).Expect().Status(http.StatusOK)
+	login.Cookie("provenly_session").Value().NotEmpty()
+	token := login.JSON().Object().Value("token").String().Raw()
+	admin := as(e, token)
+	admin.GET("/api/v1/auth/me").Expect().Status(http.StatusOK).JSON().Object().HasValue("username", "admin").HasValue("isAdmin", true)
+	e.GET("/api/v1/auth/me").WithCookie("provenly_session", token).Expect().Status(http.StatusOK)
+	e.POST("/api/v1/auth/logout").Expect().Status(http.StatusNoContent)
+
+	created := admin.POST("/api/v1/invitations").WithJSON(map[string]any{"email": "ana@example.com", "note": "QA"}).
+		Expect().Status(http.StatusCreated).JSON().Object()
+	invToken := created.Value("token").String().Raw()
+	created.Value("invitation").Object().HasValue("status", "pending").HasValue("email", "ana@example.com")
+	admin.POST("/api/v1/invitations").WithJSON(map[string]any{"email": "nope"}).Expect().Status(http.StatusBadRequest)
+	admin.POST("/api/v1/invitations").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.GET("/api/v1/invitations").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	admin.GET("/api/v1/invitations").WithQuery("page", 0).Expect().Status(http.StatusBadRequest)
+
+	accept := func(tok, username string) *httpexpect.Response {
+		return e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": tok, "username": username, "displayName": "Ana", "password": "ana's password"}).Expect()
+	}
+	accept(invToken, "Admin").Status(http.StatusConflict).JSON(problemOpts).Object().HasValue("code", "conflict")
+	accept(invToken, "x").Status(http.StatusBadRequest)
+	e.POST("/api/v1/invitations/accept").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	ana := accept(invToken, "ana").Status(http.StatusCreated).JSON().Object()
+	ana.Value("user").Object().HasValue("username", "ana").HasValue("isAdmin", false).HasValue("email", "ana@example.com")
+	accept(invToken, "ana2").Status(http.StatusNotFound)
+	anaAPI := as(e, ana.Value("token").String().Raw())
+
+	anaAPI.GET("/api/v1/users").Expect().Status(http.StatusForbidden).JSON(problemOpts).Object().HasValue("code", "forbidden")
+	anaAPI.GET("/api/v1/invitations").Expect().Status(http.StatusForbidden)
+	anaAPI.POST("/api/v1/invitations").WithJSON(map[string]any{}).Expect().Status(http.StatusForbidden)
+	anaAPI.POST("/api/v1/invitations/1/revoke").Expect().Status(http.StatusForbidden)
+	anaAPI.GET("/api/v1/test-cases").Expect().Status(http.StatusOK)
+
+	admin.GET("/api/v1/users").WithQuery("pageSize", 1).Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 2)
+	admin.GET("/api/v1/users").WithQuery("pageSize", 0).Expect().Status(http.StatusBadRequest)
+	admin.POST("/api/v1/invitations/1/revoke").Expect().Status(http.StatusConflict)
+	admin.POST("/api/v1/invitations/987654/revoke").Expect().Status(http.StatusNotFound)
+	admin.POST("/api/v1/invitations/0/revoke").Expect().Status(http.StatusBadRequest)
+	second := admin.POST("/api/v1/invitations").WithJSON(map[string]any{}).Expect().Status(http.StatusCreated).JSON().Object()
+	admin.POST("/api/v1/invitations/2/revoke").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "revoked")
+	accept(second.Value("token").String().Raw(), "bob").Status(http.StatusNotFound)
+
+	anaAPI.POST("/api/v1/auth/password").WithJSON(map[string]any{"currentPassword": "wrong one!", "newPassword": "a brand new password"}).
+		Expect().Status(http.StatusBadRequest)
+	anaAPI.POST("/api/v1/auth/password").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	anaAPI.POST("/api/v1/auth/password").WithJSON(map[string]any{"currentPassword": "ana's password", "newPassword": "a brand new password"}).
+		Expect().Status(http.StatusOK).JSON().Object().Value("user").Object().HasValue("username", "ana")
+	anaAPI.GET("/api/v1/auth/me").Expect().Status(http.StatusUnauthorized)
+}
+
 func TestTestSteps(t *testing.T) {
 	e := api(t, fresh(t), 1<<20)
 	id := int64(e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "Steps"}).Expect().Status(http.StatusCreated).
@@ -214,7 +292,7 @@ func TestRunsAndIngestion(t *testing.T) {
 	ingest(e, "1", 1, "<not-xml").Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "invalid_junit")
 	e.POST("/api/v1/ingestion/junit").WithQuery("provider", "github").WithQuery("runId", "1").WithQuery("runAttempt", 1).
 		WithJSON(map[string]any{}).Expect().Status(http.StatusUnsupportedMediaType)
-	small := api(t, app.NewServices(db.Pool, time.Now), 64)
+	small := api(t, app.NewServicesWith(db.Pool, time.Now, identityConfig()), 64)
 	ingest(small, "9", 1, report(id)).Expect().Status(http.StatusRequestEntityTooLarge).JSON(problemOpts).Object().HasValue("code", "payload_too_large")
 
 	e.GET("/api/v1/test-runs").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 4)
@@ -249,14 +327,23 @@ func TestRunsAndIngestion(t *testing.T) {
 // TestInternalErrors covers the 500 variant of every operation that declares
 // it, by serving the API on a closed connection pool.
 func TestInternalErrors(t *testing.T) {
+	fresh(t) // the administrator whose token the closed-pool API cannot check
 	pool, err := postgres.Open(context.Background(), db.URL)
 	require.NoError(t, err)
 	pool.Close()
-	e := api(t, app.NewServices(pool, time.Now), 1<<20)
+	e := api(t, app.NewServicesWith(pool, time.Now, identityConfig()), 1<<20)
 	problem := func(r *httpexpect.Response) {
 		r.Status(http.StatusInternalServerError).JSON(problemOpts).Object().HasValue("code", "internal_error")
 	}
 	problem(e.GET("/api/v1/projects").Expect())
+	problem(e.GET("/api/v1/auth/me").Expect())
+	problem(e.POST("/api/v1/auth/password").WithJSON(map[string]any{"currentPassword": "x", "newPassword": "a long password"}).Expect())
+	problem(e.GET("/api/v1/users").Expect())
+	problem(e.GET("/api/v1/invitations").Expect())
+	problem(e.POST("/api/v1/invitations").WithJSON(map[string]any{}).Expect())
+	problem(e.POST("/api/v1/invitations/1/revoke").Expect())
+	problem(e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": "admin", "password": "x"}).Expect())
+	problem(e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": "t", "username": "ana", "displayName": "Ana", "password": "a long password"}).Expect())
 	problem(e.POST("/api/v1/projects").WithJSON(map[string]any{"key": "CHK", "name": "x"}).Expect())
 	problem(e.GET("/api/v1/projects/CHK").Expect())
 	problem(e.PATCH("/api/v1/projects/CHK").WithJSON(map[string]any{"name": "x"}).Expect())

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -49,6 +50,19 @@ func TestServe(t *testing.T) {
 	assert.Empty(t, r.migrations)
 }
 
+// A configured secret signs sessions (no random fallback).
+func TestServeWithSecret(t *testing.T) {
+	r := &recorder{}
+	env := map[string]string{"PROVENLY_DATABASE_URL": baseEnv["PROVENLY_DATABASE_URL"], "PROVENLY_JWT_SECRET": strings.Repeat("k", 32)}
+	d, stderr := testDeps(t, env, r)
+	assert.Equal(t, 0, Run(context.Background(), nil, d))
+	assert.NotContains(t, stderr.String(), "random secret")
+	r = &recorder{}
+	d, stderr = testDeps(t, baseEnv, r)
+	assert.Equal(t, 0, Run(context.Background(), nil, d))
+	assert.Contains(t, stderr.String(), "random secret")
+}
+
 func TestServeWithAutoMigrate(t *testing.T) {
 	r := &recorder{}
 	env := map[string]string{"PROVENLY_DATABASE_URL": baseEnv["PROVENLY_DATABASE_URL"], "PROVENLY_AUTO_MIGRATE": "true"}
@@ -81,6 +95,8 @@ func TestErrors(t *testing.T) {
 		"auto migrate": {env: map[string]string{"PROVENLY_DATABASE_URL": "postgres://x@127.0.0.1:1/db", "PROVENLY_AUTO_MIGRATE": "1"}, mutate: func(d *Deps) {
 			d.Migrate = func(context.Context, *pgxpool.Pool, string) error { return errBoom }
 		}, want: "boom"},
+		"bootstrap admin": {env: map[string]string{"PROVENLY_DATABASE_URL": "postgres://x@127.0.0.1:1/db",
+			"PROVENLY_ADMIN_USERNAME": "admin", "PROVENLY_ADMIN_PASSWORD": "correct horse"}, want: "127.0.0.1"},
 		"listen": {env: baseEnv, mutate: func(d *Deps) {
 			d.Listen = func(string) (net.Listener, error) { return nil, errBoom }
 		}, want: "boom"},

@@ -24,7 +24,7 @@ import json, subprocess, sys
 api, work = sys.argv[1], sys.argv[2]
 
 def call(method, path, data=None, ctype=None):
-    cmd = ["curl", "-s", "--noproxy", "*", "-o", f"{work}/body", "-w", "%{http_code}", "-X", method, api + "/api/v1" + path]
+    cmd = ["curl", "-s", "--noproxy", "*", "-b", f"{work}/cookies.txt", "-o", f"{work}/body", "-w", "%{http_code}", "-X", method, api + "/api/v1" + path]
     if data is not None:
         cmd += ["-H", f"Content-Type: {ctype}", "--data-binary", data]
     status = int(subprocess.run(cmd, capture_output=True, text=True, check=True).stdout)

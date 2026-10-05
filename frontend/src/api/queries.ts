@@ -13,6 +13,8 @@ import type { Correlation, ResultStatus } from '@/lib/status'
 
 import {
   api,
+  type AcceptInvitationRequest,
+  type CreateInvitationRequest,
   type CreateProjectRequest,
   type CreateTestCaseRequest,
   type UpdateProjectRequest,
@@ -22,6 +24,9 @@ import {
 const MAX_PAGE = 100
 
 export const keys = {
+  me: ['auth', 'me'] as const,
+  users: ['users'] as const,
+  invitations: ['invitations'] as const,
   projects: ['projects'] as const,
   testCases: ['test-cases'] as const,
   testCase: (id: number) => ['test-cases', id] as const,
@@ -53,6 +58,97 @@ function useExclusiveMutation<TData, TVariables = void>(
     mutation.mutate(variables as TVariables, options)
   }
   return { ...mutation, mutate }
+}
+
+/** The signed-in user; a 401 means nobody is signed in. */
+export function useMe() {
+  return useQuery({
+    queryKey: keys.me,
+    queryFn: async () => unwrap(await api.GET('/api/v1/auth/me')),
+  })
+}
+
+export function useLogin() {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async (body: { username: string; password: string }) =>
+      unwrap(await api.POST('/api/v1/auth/login', { body })),
+    // Another user's cached data must never show: start from an empty cache.
+    onSuccess: (session) => {
+      qc.clear()
+      qc.setQueryData(keys.me, session.user)
+    },
+  })
+}
+
+export function useLogout() {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async () => unwrap(await api.POST('/api/v1/auth/logout')),
+    onSettled: () => {
+      qc.clear()
+      void qc.invalidateQueries({ queryKey: keys.me })
+    },
+  })
+}
+
+export function useChangePassword() {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async (body: { currentPassword: string; newPassword: string }) =>
+      unwrap(await api.POST('/api/v1/auth/password', { body })),
+    onSuccess: (session) => qc.setQueryData(keys.me, session.user),
+  })
+}
+
+export function useAcceptInvitation() {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async (body: AcceptInvitationRequest) =>
+      unwrap(await api.POST('/api/v1/invitations/accept', { body })),
+    onSuccess: (session) => {
+      qc.clear()
+      qc.setQueryData(keys.me, session.user)
+    },
+  })
+}
+
+export function useUsers(page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...keys.users, page],
+    enabled,
+    placeholderData: (prev, q) => previousPage([...keys.users, page], prev, q?.queryKey),
+    queryFn: async () => unwrap(await api.GET('/api/v1/users', { params: { query: { page } } })),
+  })
+}
+
+export function useInvitations(page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...keys.invitations, page],
+    enabled,
+    placeholderData: (prev, q) => previousPage([...keys.invitations, page], prev, q?.queryKey),
+    queryFn: async () => unwrap(await api.GET('/api/v1/invitations', { params: { query: { page } } })),
+  })
+}
+
+export function useCreateInvitation() {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async (body: CreateInvitationRequest) =>
+      unwrap(await api.POST('/api/v1/invitations', { body })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.invitations }),
+  })
+}
+
+export function useRevokeInvitation() {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async (invitationId: number) =>
+      unwrap(
+        await api.POST('/api/v1/invitations/{invitationId}/revoke', { params: { path: { invitationId } } }),
+      ),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.invitations }),
+  })
 }
 
 export function useProjects(page = 1, pageSize = MAX_PAGE) {

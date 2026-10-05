@@ -13,6 +13,8 @@ import (
 	catalogpg "github.com/edcrove/provenly/backend/internal/catalog/postgres"
 	"github.com/edcrove/provenly/backend/internal/execution"
 	executionpg "github.com/edcrove/provenly/backend/internal/execution/postgres"
+	"github.com/edcrove/provenly/backend/internal/identity"
+	identitypg "github.com/edcrove/provenly/backend/internal/identity/postgres"
 	"github.com/edcrove/provenly/backend/internal/ingestion"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 )
@@ -23,16 +25,28 @@ type Services struct {
 	Catalog   *catalog.Service
 	Execution *execution.Service
 	Ingestion *ingestion.Service
+	Identity  *identity.Service
+	// Now is the clock of the services (session and invitation expiry).
+	Now func() time.Time
 	// Ready reports whether the dependencies needed to serve requests (the
 	// database) are reachable.
 	Ready func(context.Context) error
 }
 
-// NewServices wires the modules on a PostgreSQL pool.
+// NewServices wires the modules on a PostgreSQL pool with a random session secret
+// (sessions do not survive a restart) and the production identity lifetimes.
 func NewServices(pool *pgxpool.Pool, now func() time.Time) Services {
+	return NewServicesWith(pool, now, identity.DefaultConfig(identity.RandomSecret()))
+}
+
+// NewServicesWith wires the modules with an explicit identity configuration.
+func NewServicesWith(pool *pgxpool.Pool, now func() time.Time, idcfg identity.Config) Services {
 	cat := catalog.NewService(catalogpg.NewStore(pool))
 	exe := execution.NewService(executionpg.NewStore(pool), now)
-	return Services{Catalog: cat, Execution: exe, Ingestion: ingestion.NewService(cat, exe), Ready: pool.Ping}
+	return Services{
+		Catalog: cat, Execution: exe, Ingestion: ingestion.NewService(cat, exe),
+		Identity: identity.NewService(identitypg.NewStore(pool), now, idcfg), Now: now, Ready: pool.Ping,
+	}
 }
 
 // readyTimeout bounds the readiness probe so a hung database fails it quickly.
@@ -67,9 +81,15 @@ func register(r httpx.Router, s Services, maxIngestBytes int64) {
 		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
-	catalog.NewHandler(s.Catalog).Register(r)
-	execution.NewHandler(s.Execution, s.Catalog).Register(r)
+	ids := identity.NewHandler(s.Identity, s.Now)
+	ids.RegisterPublic(r)
+	// Ingestion stays open until CI API keys exist (prototype feature 4).
 	ingestion.NewHandler(s.Ingestion, maxIngestBytes).Register(r)
+	// Every other API route needs a session.
+	p := identity.Protect(r, s.Identity)
+	ids.RegisterProtected(p)
+	catalog.NewHandler(s.Catalog).Register(p)
+	execution.NewHandler(s.Execution, s.Catalog).Register(p)
 }
 
 type patternRecorder []string

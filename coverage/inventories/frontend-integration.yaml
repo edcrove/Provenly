@@ -92,3 +92,15 @@ targets:
   - id: FE-INT-025
     description: run results show the test case key the API resolves (another project's key included), the id when there is none, and wrong_project diagnostics
     surfaces: [src/features/test-runs/RunResults.tsx, src/features/test-runs/RunDiagnostics.tsx, src/features/test-runs/RunSummary.tsx]
+  - id: FE-INT-026
+    description: without a session every page sends to sign-in and returns to the page asked for (never to another origin); wrong passwords are reported; sign-out and an expired session go back to sign-in; an unknown identity error is shown
+    surfaces: [src/features/auth/LoginPage.tsx, src/app/Layout.tsx]
+  - id: FE-INT-027
+    description: administrators list users and create (copy) and revoke invitation links, with errors and pagination; members see no Users page
+    surfaces: [src/features/auth/UsersPage.tsx]
+  - id: FE-INT-028
+    description: an invitation link creates the account (passwords must match) and signs the new user in; taken or invalid usernames and used or token-less links are reported
+    surfaces: [src/features/auth/AcceptInvitePage.tsx]
+  - id: FE-INT-029
+    description: the account page shows who is signed in and changes the password (mismatch and wrong current password reported)
+    surfaces: [src/features/auth/AccountPage.tsx]

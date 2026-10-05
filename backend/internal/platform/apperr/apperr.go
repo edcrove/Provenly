@@ -22,6 +22,10 @@ const (
 	KindInvalidDocument
 	// KindConflict means the request conflicts with the current state (e.g. a duplicate key).
 	KindConflict
+	// KindUnauthorized means the caller is not authenticated (no, invalid or expired credentials).
+	KindUnauthorized
+	// KindForbidden means the caller is authenticated but may not do this.
+	KindForbidden
 )
 
 // FieldError points a validation problem at a specific input field.
@@ -55,6 +59,16 @@ func NotFound(format string, args ...any) error {
 // Conflict builds a KindConflict error.
 func Conflict(format string, args ...any) error {
 	return &Error{Kind: KindConflict, Message: fmt.Sprintf(format, args...)}
+}
+
+// Unauthorized builds a KindUnauthorized error.
+func Unauthorized(format string, args ...any) error {
+	return &Error{Kind: KindUnauthorized, Message: fmt.Sprintf(format, args...)}
+}
+
+// Forbidden builds a KindForbidden error.
+func Forbidden(format string, args ...any) error {
+	return &Error{Kind: KindForbidden, Message: fmt.Sprintf(format, args...)}
 }
 
 // InvalidDocument builds a KindInvalidDocument error.

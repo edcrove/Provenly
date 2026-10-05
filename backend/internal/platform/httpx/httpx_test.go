@@ -33,6 +33,8 @@ func TestWriteErrorMapping(t *testing.T) {
 	}{
 		{apperr.NotFound("nope"), 404, CodeNotFound, nil},
 		{apperr.Conflict("taken"), 409, CodeConflict, nil},
+		{apperr.Unauthorized("sign in"), 401, CodeUnauthorized, nil},
+		{apperr.Forbidden("no"), 403, CodeForbidden, nil},
 		{apperr.InvalidDocument("bad xml"), 400, CodeInvalidJUnit, nil},
 		{apperr.Validation("v", apperr.FieldError{Field: "title", Message: "req"}), 400, CodeValidation, []FieldError{{Field: "title", Message: "req"}}},
 		{&http.MaxBytesError{Limit: 1}, 413, CodePayloadTooLarge, nil},

@@ -16,7 +16,7 @@ describe('FE-INT-001 application shell', () => {
 
   it('FE-INT-001 shows a not-found page for unknown routes', async () => {
     const { user, router } = renderRoute('/nowhere')
-    expect(screen.getByText('Page not found')).toBeInTheDocument()
+    expect(await screen.findByText('Page not found')).toBeInTheDocument()
     await user.click(screen.getByRole('link', { name: 'Go to test cases' }))
     expect(router.state.location.pathname).toBe('/test-cases')
   })

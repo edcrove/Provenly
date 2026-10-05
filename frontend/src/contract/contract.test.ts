@@ -38,7 +38,227 @@ const addChk = () => {
   db.projects.push({ ...db.projects[0], id: 2, key: 'CHK', name: 'Checkout' })
 }
 
+const signedOut = () => {
+  db.session = null
+}
+const asMember = () => {
+  db.users.push({ ...db.users[0], id: 2, username: 'ana', isAdmin: false })
+  db.session = 2
+}
+const pending = () => {
+  db.invitations.push({
+    id: 5,
+    email: null,
+    note: '',
+    status: 'pending',
+    createdBy: 1,
+    createdAt: '2026-10-05T10:00:00Z',
+    expiresAt: '2026-10-12T10:00:00Z',
+    acceptedAt: null,
+    acceptedUserId: null,
+    revokedAt: null,
+  })
+  db.invitationTokens['invite-5'] = 5
+}
+const accepted = () => {
+  pending()
+  db.invitations[0].status = 'accepted'
+}
+const inv = { invitationId: 5 }
+const acceptBody = (username = 'ana', token = 'invite-5') => ({
+  token,
+  username,
+  displayName: 'Ana',
+  password: 'a long password',
+})
+const login = { username: 'admin', password: 'correct horse' }
+const passwords = { currentPassword: 'correct horse', newPassword: 'a brand new password' }
+
+const authScenarios: Scenario[] = [
+  { op: 'POST /api/v1/auth/login', status: 200, call: (c) => c.POST('/api/v1/auth/login', { body: login }) },
+  {
+    op: 'POST /api/v1/auth/login',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/auth/login', {
+        body: { username: 'admin', password: 'x' },
+        bodySerializer: () => '{"username":',
+      }),
+  },
+  {
+    op: 'POST /api/v1/auth/login',
+    status: 401,
+    call: (c) => c.POST('/api/v1/auth/login', { body: { ...login, password: 'wrong password' } }),
+  },
+  {
+    op: 'POST /api/v1/auth/login',
+    status: 415,
+    call: (c) => c.POST('/api/v1/auth/login', { body: login, headers: textPlain }),
+  },
+  {
+    op: 'POST /api/v1/auth/login',
+    status: 500,
+    setup: fail,
+    call: (c) => c.POST('/api/v1/auth/login', { body: login }),
+  },
+  { op: 'POST /api/v1/auth/logout', status: 204, call: (c) => c.POST('/api/v1/auth/logout') },
+  { op: 'GET /api/v1/auth/me', status: 200, call: (c) => c.GET('/api/v1/auth/me') },
+  {
+    op: 'GET /api/v1/auth/me',
+    status: 500,
+    setup: () => {
+      db.failingMe = true
+    },
+    call: (c) => c.GET('/api/v1/auth/me'),
+  },
+  {
+    op: 'POST /api/v1/auth/password',
+    status: 200,
+    call: (c) => c.POST('/api/v1/auth/password', { body: passwords }),
+  },
+  {
+    op: 'POST /api/v1/auth/password',
+    status: 400,
+    call: (c) => c.POST('/api/v1/auth/password', { body: { ...passwords, currentPassword: 'wrong one!' } }),
+  },
+  {
+    op: 'POST /api/v1/auth/password',
+    status: 415,
+    call: (c) => c.POST('/api/v1/auth/password', { body: passwords, headers: textPlain }),
+  },
+  {
+    op: 'POST /api/v1/auth/password',
+    status: 500,
+    setup: fail,
+    call: (c) => c.POST('/api/v1/auth/password', { body: passwords }),
+  },
+  {
+    op: 'GET /api/v1/users',
+    status: 200,
+    call: (c) => c.GET('/api/v1/users', { params: { query: { page: 1 } } }),
+  },
+  {
+    op: 'GET /api/v1/users',
+    status: 400,
+    call: (c) => c.GET('/api/v1/users', { params: { query: { page: 0 } } }),
+  },
+  { op: 'GET /api/v1/users', status: 403, setup: asMember, call: (c) => c.GET('/api/v1/users') },
+  { op: 'GET /api/v1/users', status: 500, setup: fail, call: (c) => c.GET('/api/v1/users') },
+  { op: 'GET /api/v1/invitations', status: 200, setup: pending, call: (c) => c.GET('/api/v1/invitations') },
+  {
+    op: 'GET /api/v1/invitations',
+    status: 400,
+    call: (c) => c.GET('/api/v1/invitations', { params: { query: { pageSize: 0 } } }),
+  },
+  { op: 'GET /api/v1/invitations', status: 403, setup: asMember, call: (c) => c.GET('/api/v1/invitations') },
+  { op: 'GET /api/v1/invitations', status: 500, setup: fail, call: (c) => c.GET('/api/v1/invitations') },
+  {
+    op: 'POST /api/v1/invitations',
+    status: 201,
+    call: (c) => c.POST('/api/v1/invitations', { body: { email: 'bob@example.com', note: 'QA' } }),
+  },
+  {
+    op: 'POST /api/v1/invitations',
+    status: 400,
+    call: (c) => c.POST('/api/v1/invitations', { body: { email: 'bob@example' } }),
+  },
+  {
+    op: 'POST /api/v1/invitations',
+    status: 403,
+    setup: asMember,
+    call: (c) => c.POST('/api/v1/invitations', { body: {} }),
+  },
+  {
+    op: 'POST /api/v1/invitations',
+    status: 415,
+    call: (c) => c.POST('/api/v1/invitations', { body: {}, headers: textPlain }),
+  },
+  {
+    op: 'POST /api/v1/invitations',
+    status: 500,
+    setup: fail,
+    call: (c) => c.POST('/api/v1/invitations', { body: {} }),
+  },
+  ...(
+    [
+      [200, pending, inv],
+      [400, undefined, { invitationId: 0 }],
+      [403, asMember, inv],
+      [404, undefined, inv],
+      [409, accepted, inv],
+      [500, fail, inv],
+    ] as const
+  ).map(([status, setup, path]): Scenario => ({
+    op: 'POST /api/v1/invitations/{invitationId}/revoke',
+    status,
+    setup,
+    call: (c) => c.POST('/api/v1/invitations/{invitationId}/revoke', { params: { path } }),
+  })),
+  {
+    op: 'POST /api/v1/invitations/accept',
+    status: 201,
+    setup: pending,
+    call: (c) => c.POST('/api/v1/invitations/accept', { body: acceptBody() }),
+  },
+  {
+    op: 'POST /api/v1/invitations/accept',
+    status: 400,
+    call: (c) => c.POST('/api/v1/invitations/accept', { body: acceptBody('x') }),
+  },
+  {
+    op: 'POST /api/v1/invitations/accept',
+    status: 404,
+    call: (c) => c.POST('/api/v1/invitations/accept', { body: acceptBody('ana', 'nope') }),
+  },
+  {
+    op: 'POST /api/v1/invitations/accept',
+    status: 409,
+    setup: pending,
+    call: (c) => c.POST('/api/v1/invitations/accept', { body: acceptBody('admin') }),
+  },
+  {
+    op: 'POST /api/v1/invitations/accept',
+    status: 415,
+    call: (c) => c.POST('/api/v1/invitations/accept', { body: acceptBody(), headers: textPlain }),
+  },
+  {
+    op: 'POST /api/v1/invitations/accept',
+    status: 500,
+    setup: fail,
+    call: (c) => c.POST('/api/v1/invitations/accept', { body: acceptBody() }),
+  },
+]
+
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+type AnyCall = (path: string, init: object) => Promise<Result>
+const anyPath = { testCaseId: 153, testRunId: 7, stepId: 1, projectKey: 'TC', invitationId: 1 }
+
+/** Without a session every operation that declares 401 answers it (sign-in's own 401 is a wrong password). */
+const signedOutScenarios = (): Scenario[] =>
+  operations()
+    .filter(
+      (op) =>
+        consumedOperations().includes(op.key) &&
+        declaredStatuses(op).includes(401) &&
+        op.key !== 'POST /api/v1/auth/login',
+    )
+    .map((op) => {
+      const [method, path] = op.key.split(' ') as [Method, string]
+      return {
+        op: op.key,
+        status: 401,
+        setup: signedOut,
+        call: (c) =>
+          (c[method] as AnyCall)(path, {
+            params: { path: anyPath },
+            ...(method === 'GET' || method === 'DELETE' ? {} : { body: {} }),
+          }),
+      }
+    })
+
 const scenarios: Scenario[] = [
+  ...authScenarios,
+  ...signedOutScenarios(),
   // Projects
   {
     op: 'GET /api/v1/projects',

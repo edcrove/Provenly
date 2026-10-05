@@ -9,6 +9,10 @@ const databaseUrl =
   process.env.PROVENLY_DATABASE_URL ?? 'postgres://provenly:provenly@localhost:5439/provenly_e2e?sslmode=disable'
 
 export const apiURL = `http://localhost:${apiPort}`
+export const adminUsername = 'admin'
+export const adminPassword = 'e2e admin password'
+/** Browser state signed in as the administrator, written by the global setup. */
+export const adminState = path.join(import.meta.dirname, '.auth/admin.json')
 
 /**
  * E2E journeys run serially against the real stack: the coverage-instrumented
@@ -18,6 +22,7 @@ export const apiURL = `http://localhost:${apiPort}`
  */
 export default defineConfig({
   testDir: './tests',
+  globalSetup: './support/sign-in.ts',
   globalTeardown: './support/remap-coverage.ts',
   fullyParallel: false,
   workers: 1,
@@ -26,6 +31,8 @@ export default defineConfig({
   reporter: [['list'], ['json', { outputFile: 'coverage/results.json' }], ['html', { open: 'never' }]],
   use: {
     baseURL: `http://localhost:${webPort}`,
+    // Every journey (browser and API request fixture) starts signed in as the administrator.
+    storageState: adminState,
     trace: 'retain-on-failure',
     // Optional: run on an already installed Chromium instead of Playwright's own build.
     launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined },
@@ -41,6 +48,10 @@ export default defineConfig({
         PROVENLY_HTTP_ADDR: `:${apiPort}`,
         PROVENLY_AUTO_MIGRATE: 'true',
         PROVENLY_LOG_LEVEL: 'warn',
+        // The administrator every journey signs in as (created on the empty E2E database).
+        PROVENLY_ADMIN_USERNAME: adminUsername,
+        PROVENLY_ADMIN_PASSWORD: adminPassword,
+        PROVENLY_JWT_SECRET: 'e2e-only-session-signing-secret-0123456789',
         GOCOVERDIR: path.join(import.meta.dirname, 'coverage/backend'),
       },
     },

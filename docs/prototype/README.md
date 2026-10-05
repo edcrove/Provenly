@@ -16,7 +16,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | # | Feature | Source | Status | PR |
 |---|---|---|---|---|
 | 1 | Projects and per-project TC keys (`CHK-12`) | MVP D9, D10 | ✅ | proto/01-projects |
-| 2 | Users, login (JWT) and invitations | MVP D13, DEC-30 | ⏳ | |
+| 2 | Users, login (JWT) and invitations | MVP D13, DEC-30 | ✅ | proto/02-auth |
 | 3 | Roles and project membership (Admin, Maintainer, Member, Viewer) | MVP D12 | ⏳ | |
 | 4 | API keys for CI, `?project=` ingestion, secrets at rest | MVP D4, D11 | ⏳ | |
 | 5 | Optimistic locking (ETag / If-Match) | MVP D7 | ⏳ | |
@@ -51,6 +51,15 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P1-6 | References | A `tc-id` property may carry any key; another project's key is a new `wrong_project` diagnostic, never correlated. The name fallback only reads the run's own key; a bare number belongs to the run's project | Avoids silent cross-project links and false positives in test names (`HTTP-200`) |
 | P1-7 | Run identity | `externalRunId` unique per project | One CI pipeline may report several projects |
 | P1-8 | Keys in run responses | Results, summaries and history carry `testCaseKey` (resolved by the catalog through its public interface) | Runs reference internal ids; showing `TC-<id>` would be wrong for other projects |
+| P2-1 | Bootstrap | The first administrator comes from `PROVENLY_ADMIN_USERNAME` / `PROVENLY_ADMIN_PASSWORD` when there are no users; demo and qa ship a published demo password, prod refuses it | Self-hosting needs a first account without a setup wizard race; config is how the other settings already arrive |
+| P2-2 | Session transport | HS256 JWT (12 h) returned by sign-in and also set as an HttpOnly, SameSite=Strict cookie; the API accepts `Authorization: Bearer` or the cookie | The browser never sees the token (no XSS theft), scripts and CI tools use the bearer form; SameSite=Strict plus JSON-only bodies covers CSRF |
+| P2-3 | Revocation | Stateless sessions, but each request re-reads the user and a password-version claim signs every other session out on a password change | Real revocation without a session table; per-request user read is needed for roles anyway (feature 3) |
+| P2-4 | Passwords | bcrypt cost 12, 10 characters to 72 bytes (bcrypt's limit, never truncated silently); one answer for unknown user and wrong password, with equal timing | NIST-style minimum length, no composition rules; no account enumeration |
+| P2-5 | Invitations | Single-use link, 7 days, optional email (prefills the account's email), revocable while pending; only the SHA-256 of the token is stored; shown once | MVP D13 (invitation link, email optional); a leaked database does not leak usable links |
+| P2-6 | Who may invite | Only administrators manage users and invitations in this feature; feature 3 replaces this with roles | Smallest rule until roles exist |
+| P2-7 | Ingestion | Stays public until CI API keys exist (feature 4) | CI cannot sign in with a person's account; keys are the MVP answer (D4, D11) |
+| P2-8 | Usernames | 3–32 lower-case letters, digits, `.`, `-`, `_`; immutable; users are never deleted | Usernames appear in audit and history; a rename would rewrite who did what |
+| P2-9 | Known limits | No rate limiting or lockout on sign-in, no password reset by email, no SSO | Recorded for the readiness feature (21); reset is an admin action today (invite again) |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
 ## What each feature does
@@ -75,3 +84,25 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
   sweep for projects.
 - **Known limits**: no project-level permissions yet (feature 3); a test case cannot move between projects; the
   project list in the header loads up to 100 projects.
+
+### 2. Users, sign-in and invitations
+
+- **Behavior**: every page and API route needs a session (except health, readiness, sign-in, sign-out, accepting an
+  invitation and ingestion). Visiting any page signed out goes to sign-in and back. Administrators invite people with a
+  single-use link; the invited person picks a username and password and is signed in. A password change signs every
+  other session out.
+- **API**: `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/password`, `GET /users`,
+  `GET/POST /invitations`, `POST /invitations/{id}/revoke`, `POST /invitations/accept`; 401 declared on every
+  protected operation, 403 on administrator-only ones; `bearerAuth` and `cookieAuth` security schemes.
+- **Schema**: migration 00014 (users, invitations, protection triggers: no deletes, immutable usernames, settled
+  invitations never change).
+- **Config**: `PROVENLY_JWT_SECRET` (required in prod), `PROVENLY_ADMIN_USERNAME` / `PROVENLY_ADMIN_PASSWORD`; demo and
+  qa ship `admin` / `provenly-demo`.
+- **UI**: sign-in, join-by-link, account (password change) and Users pages; header shows the user and Sign out; Users is
+  visible to administrators (screenshots 39–42).
+- **Tests**: BE-INT-036..038 (including concurrent acceptances), a contract sweep that every protected operation answers
+  401, every new operation × status on both sides, FE-INT-026..029, BE-E2E-008, FE-E2E-011, unit tests (identity,
+  config, CLI, query client, links), probe sweep with auth cases. The probe found a 500 on sign-in with a NUL in the
+  username; fixed (impossible usernames are never looked up) with unit and contract regressions.
+- **Known limits**: see P2-9. All scripts (README flow, smoke, probe, env checks, demo seed) sign in first.
+

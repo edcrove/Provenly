@@ -36,6 +36,20 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 | `untested` is never persisted | `CHECK` on `test_results.status`; derived in `execution.ComputeSummary` |
 | `testCaseId` only for valid or deprecated correlations (deprecated results stay in history) | `CHECK ((correlation IN ('valid','deprecated')) = (test_case_id IS NOT NULL))` |
 
+## Identity and sessions (module `identity`)
+
+- Local accounts (MVP D13): username (lower-case, immutable) + bcrypt password (cost 12, 10 characters to 72 bytes).
+  Users are never deleted (trigger). The first administrator is created on start when there are no users, from
+  `PROVENLY_ADMIN_USERNAME` / `PROVENLY_ADMIN_PASSWORD`; prod refuses the public demo password.
+- New people join through single-use invitation links (7 days; email optional). Only the SHA-256 of the token is
+  stored; the link is shown once. Accepting locks the invitation row, so one link creates one account.
+- Sessions are HS256 JWTs (12 h) signed with `PROVENLY_JWT_SECRET` (required in prod, ≥ 32 bytes; random per start
+  elsewhere), sent as `Authorization: Bearer` or the HttpOnly, SameSite=Strict `provenly_session` cookie (Secure behind
+  TLS). Every request re-reads the user; a password change invalidates older sessions (password-version claim).
+- `identity.Protect` wraps the routes of the other modules: every API route needs a session except health, readiness,
+  sign-in, sign-out, accepting an invitation and (until CI API keys, prototype feature 4) ingestion. Without a session
+  the answer is `401 unauthorized`; administrator-only operations answer `403 forbidden`.
+
 ## REST conventions (see `api/openapi.yaml`)
 
 - Errors: `application/problem+json` with a stable `code` (`validation_error`, `not_found`, `invalid_junit`, …) and

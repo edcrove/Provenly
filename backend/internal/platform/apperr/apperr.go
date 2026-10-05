@@ -30,6 +30,8 @@ const (
 	KindPreconditionFailed
 	// KindUpstream means an external system Provenly called (GitHub, a tracker) failed or refused.
 	KindUpstream
+	// KindTooManyRequests means the caller must wait before trying again (e.g. repeated failed sign-ins).
+	KindTooManyRequests
 )
 
 // FieldError points a validation problem at a specific input field.
@@ -83,6 +85,11 @@ func PreconditionFailed(format string, args ...any) error {
 // Upstream builds a KindUpstream error.
 func Upstream(format string, args ...any) error {
 	return &Error{Kind: KindUpstream, Message: fmt.Sprintf(format, args...)}
+}
+
+// TooManyRequests builds a KindTooManyRequests error.
+func TooManyRequests(format string, args ...any) error {
+	return &Error{Kind: KindTooManyRequests, Message: fmt.Sprintf(format, args...)}
 }
 
 // InvalidDocument builds a KindInvalidDocument error.

@@ -110,6 +110,9 @@ jobs:
         working-directory: reporters/playwright
       - run: npm test
         working-directory: reporters/playwright
+      - name: Package (what npm publish would ship)
+        run: npm run build && npm pack --dry-run 2>&1 | tee pack.txt && grep -q "dist/index.js" pack.txt && grep -q "dist/index.d.ts" pack.txt
+        working-directory: reporters/playwright
       - name: Known vulnerabilities (npm audit)
         run: npm --prefix reporters/playwright audit --audit-level=high
 
@@ -246,6 +249,11 @@ jobs:
         env:
           CI: "true"
           E2E_DATABASE_URL: postgres://provenly:provenly@localhost:5432/provenly_e2e?sslmode=disable
+          # Dogfooding (prototype feature 21): with these repository secrets set, the journeys report themselves to
+          # a Provenly instance through the Playwright reporter; unset, the reporter does nothing.
+          PROVENLY_URL: ${{ secrets.PROVENLY_URL }}
+          PROVENLY_API_KEY: ${{ secrets.PROVENLY_API_KEY }}
+          PROVENLY_PROJECT: ${{ vars.PROVENLY_PROJECT }}
       - name: Gates
         run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates backend-e2e,frontend-e2e -evidence=false
       - uses: actions/upload-artifact@v5

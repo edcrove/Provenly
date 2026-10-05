@@ -35,6 +35,8 @@ import { invitation, project, summary, testCase, testResult, testRun, testStep, 
 export interface MockDb {
   users: User[]
   passwords: Record<string, string>
+  /** Failed sign-ins by username: five lock it (429), like the server's throttle. */
+  loginFailures: Record<string, number>
   invitations: Invitation[]
   /** Tokens of the invitations created in this mock, by invitation id. */
   invitationTokens: Record<string, number>
@@ -85,6 +87,7 @@ export function seed(): MockDb {
   return {
     users: [user()],
     passwords: { admin: 'correct horse' },
+    loginFailures: {},
     invitations: [],
     invitationTokens: {},
     session: 1,
@@ -173,6 +176,7 @@ const statusText: Record<number, string> = {
   403: 'Forbidden',
   404: 'Not Found',
   409: 'Conflict',
+  429: 'Too Many Requests',
   502: 'Bad Gateway',
   412: 'Precondition Failed',
   415: 'Unsupported Media Type',
@@ -1430,8 +1434,17 @@ export const handlers = [
           .trim()
           .toLowerCase()
         const u = db.users.find((x) => x.username === username)
-        if (!u || db.passwords[username] !== body?.password)
+        if ((db.loginFailures[username] ?? 0) >= 5)
+          return problem(
+            429,
+            'too_many_requests',
+            'too many failed sign-ins for this username; try again in 15 minutes',
+          )
+        if (!u || db.passwords[username] !== body?.password) {
+          db.loginFailures[username] = (db.loginFailures[username] ?? 0) + 1
           return problem(401, 'unauthorized', 'invalid username or password')
+        }
+        delete db.loginFailures[username]
         db.session = u.id
         return respond(session(u))
       }),

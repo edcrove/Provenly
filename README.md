@@ -43,6 +43,9 @@ That single command builds the images (`--build` rebuilds them after a `git pull
 images built from older code) and starts PostgreSQL, restores the demo snapshot into the empty database,
 applies migrations, then starts the API and the UI (nginx). Data persists across `docker compose down`/`up`.
 
+Running it for your team: [`docs/self-hosting.md`](docs/self-hosting.md) (released images, secrets, backups,
+upgrades). Security reports: [`SECURITY.md`](SECURITY.md).
+
 Three isolated environments can run side by side, each with its own data (details:
 [`docs/environments.md`](docs/environments.md)):
 

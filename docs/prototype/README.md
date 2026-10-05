@@ -35,7 +35,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 18 | Export sink (webhooks) and GitHub connector, secrets at rest | Planning #3, #21, Incubator, MVP D4 | ✅ | proto/18-integrations |
 | 19 | MCP server (agent interface) | Incubator, DEC-10 | ✅ | proto/19-mcp |
 | 20 | Audit log | Incubator (Project & Authorization) | ✅ | proto/20-audit |
-| 21 | Release pipeline, self-hosting guide, dogfooding, public readiness | Trello phase 4 | ⏳ | |
+| 21 | Release pipeline, self-hosting guide, dogfooding, public readiness | Trello phase 4 | ✅ | proto/21-release |
 
 ## Decision log
 
@@ -165,6 +165,12 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P20-3 | Mechanism | An audit router wraps each handler inside authentication, so the caller is known; the event is written after the handler answers and a failure to write is logged, never turned into an error | The change already happened; failing it afterwards would lie to the client |
 | P20-4 | Storage and access | Table `audit_events`, append-only (a trigger refuses updates and deletes); `GET /api/v1/audit` for administrators, newest first, filtered by project and actor; an "Audit" page in the header for administrators | Tamper-evident enough for the prototype; project maintainers' view can come later |
 | P20-5 | Not now | No before/after values, no retention policy or export, no audit of reads or sign-ins, no per-project audit for maintainers | Need decisions on retention and privacy |
+| P21-1 | Releases | A `vX.Y.Z` tag on a commit whose CI is green publishes the API and web images to GHCR (version and `latest`), the Playwright reporter to npm (with provenance, only when the `NPM_TOKEN` secret exists) and a GitHub release with generated notes; the version is stamped into the binary and logged at startup | One action (a tag) ships everything; nothing publishes from an untested commit |
+| P21-2 | Reporter package | `@provenly/playwright-reporter` builds to `dist/` (JS + types); CI checks what `npm publish` would ship | Consumers get JavaScript, not TypeScript sources |
+| P21-3 | Self-hosting | `docs/self-hosting.md`: the prod compose environment with released images (`IMAGE_PREFIX`/`IMAGE_TAG`), required secrets, TLS proxy, backups, upgrades and operations; `SECURITY.md` for private reports | What a team needs to run it without reading the code |
+| P21-4 | Sign-in throttle | Five failed sign-ins of a username within 15 minutes lock it (429, with how long) even with the right password; a success clears it; unknown usernames are throttled alike; in memory, bounded to 10 000 names | Slows password guessing per account without new infrastructure; per-address limits belong to the reverse proxy (documented) |
+| P21-5 | Dogfooding | CI's E2E journeys report themselves to a Provenly instance through the reporter when the `PROVENLY_URL`/`PROVENLY_API_KEY` secrets are set | Provenly tracks its own tests as soon as an instance exists, with no CI change |
+| P21-6 | Not now | No Helm chart or multi-instance throttle (shared store), no signed images (cosign), no SBOM, no automatic changelog beyond generated notes | Single-host prototype |
 | P12-6 | UI | A Requirements page (list with coverage, native creation and external registration), a requirement page (covering test cases, latest results, link/unlink, archive) and "Requirements" on the test case page | Traceability is visible from both sides |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
@@ -338,6 +344,18 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: new manual run page, manual execution panel on the run page, running/manual badges (screenshots 56–57).
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
+
+### 21. Release, self-hosting, dogfooding, public readiness (Trello phase 4)
+
+- **Behavior**: tagging `vX.Y.Z` publishes images, the reporter and a release; teams self-host with released images
+  following `docs/self-hosting.md`; repeated failed sign-ins lock a username for 15 minutes; Provenly's own E2E
+  journeys can report to a Provenly instance.
+- **Code**: `.github/workflows/release.yml`, CI reporter packaging check and dogfooding secrets, `app.Version`
+  (ldflags, startup log), compose `IMAGE_PREFIX`/`IMAGE_TAG`, reporter `dist/` build, identity sign-in throttle
+  (`throttle.go`, `apperr.TooManyRequests` → 429), `SECURITY.md`, `docs/self-hosting.md`.
+- **Tests**: unit at 100% (throttle: lock, case-insensitive, window end, success clears, unknown names, bound; 429
+  mapping; startup log), backend contract (429 problem), frontend contract (429 scenario) and FE-INT-047, BE-E2E-027,
+  probe throttle check (the sweep no longer fails sign-ins as the administrator); workflows checked with actionlint.
 
 ### 20. Audit log (Incubator, Project & Authorization)
 

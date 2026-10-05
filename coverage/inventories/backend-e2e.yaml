@@ -53,3 +53,5 @@ targets:
     description: MCP through the public API - without a session the endpoint is 401; an agent with a session token initializes (protocol 2025-06-18), lists the tools and reads a project's test cases, a test case's history, a run and the project's quality as the user; a missing test case is a tool error
   - id: BE-E2E-026
     description: audit log through the public API - a user's project rename and API key creation and a CI ingestion with that key are audited newest first with actor (the user, or the key by prefix and name), route, path, project and status; tokens never appear; malformed filters are 400; an API key cannot read the log
+  - id: BE-E2E-027
+    description: sign-in throttle through the public API - five failed sign-ins of a username answer 401, the sixth (and the same username in other case) 429 with how long; another username still gets 401

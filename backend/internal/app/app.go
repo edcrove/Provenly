@@ -96,8 +96,9 @@ func NewServicesConfig(pool *pgxpool.Pool, now func() time.Time, cfg Config) Ser
 	}
 }
 
-// Version is the version of the Provenly server (reported to MCP clients).
-const Version = "0.1.0-prototype"
+// Version is the version of the Provenly server, set at build time by release images
+// (-ldflags "-X github.com/edcrove/provenly/backend/internal/app.Version=v1.2.3"); "dev" otherwise.
+var Version = "dev"
 
 // readyTimeout bounds the readiness probe so a hung database fails it quickly.
 const readyTimeout = 2 * time.Second

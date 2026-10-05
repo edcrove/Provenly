@@ -1268,7 +1268,7 @@ export interface components {
              * @description Stable machine-readable error code. Requests that match no operation get `not_found` (404), or `method_not_allowed` (405, with an `Allow` header) when the path exists for other methods.
              * @enum {string}
              */
-            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "precondition_failed" | "method_not_allowed" | "payload_too_large" | "unsupported_media_type" | "service_unavailable" | "upstream_error" | "internal_error";
+            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "precondition_failed" | "method_not_allowed" | "payload_too_large" | "unsupported_media_type" | "service_unavailable" | "upstream_error" | "too_many_requests" | "internal_error";
             detail?: string;
             errors?: components["schemas"]["FieldError"][];
         };
@@ -2580,6 +2580,15 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description Too many failed sign-ins for this username; try again later (the detail says when) */
+        TooManyRequests: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description An external system (e.g. GitHub) failed or answered something unusable */
         BadGateway: {
             headers: {
@@ -2709,6 +2718,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             415: components["responses"]["UnsupportedMediaType"];
+            429: components["responses"]["TooManyRequests"];
             500: components["responses"]["InternalError"];
         };
     };

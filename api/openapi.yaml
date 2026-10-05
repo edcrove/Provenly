@@ -109,6 +109,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -2766,6 +2768,12 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    TooManyRequests:
+      description: Too many failed sign-ins for this username; try again later (the detail says when)
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     BadGateway:
       description: An external system (e.g. GitHub) failed or answered something unusable
       content:
@@ -2822,6 +2830,7 @@ components:
             - unsupported_media_type
             - service_unavailable
             - upstream_error
+            - too_many_requests
             - internal_error
         detail:
           type: string

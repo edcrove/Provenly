@@ -47,8 +47,9 @@ var baseEnv = map[string]string{"PROVENLY_DATABASE_URL": "postgres://u:p@127.0.0
 
 func TestServe(t *testing.T) {
 	r := &recorder{}
-	d, _ := testDeps(t, baseEnv, r)
+	d, stderr := testDeps(t, baseEnv, r)
 	assert.Equal(t, 0, Run(context.Background(), nil, d))
+	assert.Contains(t, stderr.String(), `"msg":"starting provenly","version":"dev"`)
 	assert.True(t, r.served)
 	assert.Empty(t, r.migrations)
 }

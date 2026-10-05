@@ -34,7 +34,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 17 | OpenTelemetry basic instrumentation | Trello, DEC-11 | ✅ | proto/17-otel |
 | 18 | Export sink (webhooks) and GitHub connector, secrets at rest | Planning #3, #21, Incubator, MVP D4 | ✅ | proto/18-integrations |
 | 19 | MCP server (agent interface) | Incubator, DEC-10 | ✅ | proto/19-mcp |
-| 20 | Audit log | Incubator (Project & Authorization) | ⏳ | |
+| 20 | Audit log | Incubator (Project & Authorization) | ✅ | proto/20-audit |
 | 21 | Release pipeline, self-hosting guide, dogfooding, public readiness | Trello phase 4 | ⏳ | |
 
 ## Decision log
@@ -160,6 +160,11 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P19-3 | Tools | 13 read tools: projects, test case search/detail/steps/history, runs, run detail/summary/results/live, project quality, issues, requirements. Arguments are validated (types, positive integers, key-shaped path segments, no unknown arguments) before any call | Covers "what is failing, since when, is it known" questions; write tools wait for a decision on agent writes |
 | P19-4 | Authentication | Agents use a session token (`POST /auth/login`, 12 h); the account page shows the commands to connect Claude Code | No new credential type in the prototype; API keys stay CI-only (P4) |
 | P19-5 | Not now | No write tools, no resources or prompts, no personal access tokens, no SSE notifications | DEC-10 keeps v0 read-only; tokens and writes need Ed's decision on agent permissions |
+| P20-1 | What is audited | Every successful authenticated change made through the API (POST, PUT, PATCH, DELETE with a 2xx): actor (username, or API key by prefix and name), action (method and route), path, project key (path or `?project=`), status, time. Reads, MCP calls and the live event stream are not; sign-in and accepting an invitation (no actor yet) are not | One mechanism covers every module, including future ones, with no per-handler code |
+| P20-2 | No bodies | Request and response bodies are never recorded | They can carry secrets (tokens, passwords, webhook secrets); the route and path say what changed |
+| P20-3 | Mechanism | An audit router wraps each handler inside authentication, so the caller is known; the event is written after the handler answers and a failure to write is logged, never turned into an error | The change already happened; failing it afterwards would lie to the client |
+| P20-4 | Storage and access | Table `audit_events`, append-only (a trigger refuses updates and deletes); `GET /api/v1/audit` for administrators, newest first, filtered by project and actor; an "Audit" page in the header for administrators | Tamper-evident enough for the prototype; project maintainers' view can come later |
+| P20-5 | Not now | No before/after values, no retention policy or export, no audit of reads or sign-ins, no per-project audit for maintainers | Need decisions on retention and privacy |
 | P12-6 | UI | A Requirements page (list with coverage, native creation and external registration), a requirement page (covering test cases, latest results, link/unlink, archive) and "Requirements" on the test case page | Traceability is visible from both sides |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
@@ -333,6 +338,18 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: new manual run page, manual execution panel on the run page, running/manual badges (screenshots 56–57).
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
+
+### 20. Audit log (Incubator, Project & Authorization)
+
+- **Behavior**: every change made through the UI or the API is recorded with who made it (a user or a CI API key),
+  the operation and the project; administrators read it on the Audit page (screenshot 68), filtered by project and
+  actor.
+- **API**: `GET /api/v1/audit?project=&actor=&page=` (administrators).
+- **Code**: module `internal/audit` (+ `postgres`, `auditdb`), migration 00029 (append-only trigger), audit router in
+  `internal/app` around the session and API key routes; frontend `features/audit/AuditPage.tsx`, "Audit" header link.
+- **Tests**: unit at 100% (which routes are audited, failures skipped, key actors, storable text, validation, admin
+  only, handler), BE-INT-057 (through the API on a real database, concurrency, filters, append-only and constraints),
+  backend and frontend contract, FE-INT-046, BE-E2E-026, FE-E2E-026, probe audit sweep.
 
 ### 19. MCP server (Incubator, DEC-10)
 

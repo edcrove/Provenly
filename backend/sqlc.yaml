@@ -67,3 +67,14 @@ sql:
         sql_package: pgx/v5
         emit_interface: true
         emit_json_tags: false
+  - engine: postgresql
+    schema:
+      - migrations/00029_audit.sql
+    queries: queries/audit.sql
+    gen:
+      go:
+        package: auditdb
+        out: internal/audit/auditdb
+        sql_package: pgx/v5
+        emit_interface: true
+        emit_json_tags: false

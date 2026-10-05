@@ -5,6 +5,7 @@ import type { components, paths } from './schema'
 export type User = components['schemas']['User']
 export type Member = components['schemas']['Member']
 export type ApiKey = components['schemas']['ApiKey']
+export type AuditEvent = components['schemas']['AuditEvent']
 export type Webhook = components['schemas']['Webhook']
 export type WebhookDelivery = components['schemas']['WebhookDelivery']
 export type UpdateWebhookRequest = components['schemas']['UpdateWebhookRequest']

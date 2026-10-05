@@ -51,3 +51,5 @@ targets:
     description: integrations through the public API - a webhook gets its secret once (never listed); a JUnit run is delivered by the worker within seconds as run.completed with a signature the receiver verifies, and the delivery is listed as succeeded; invalid endpoints are 400; GitHub Issues is connected with a token shown only as a hint, a sync mirrors the double's issues (not pull requests) with their state using the token, and the connection can be changed and removed
   - id: BE-E2E-025
     description: MCP through the public API - without a session the endpoint is 401; an agent with a session token initializes (protocol 2025-06-18), lists the tools and reads a project's test cases, a test case's history, a run and the project's quality as the user; a missing test case is a tool error
+  - id: BE-E2E-026
+    description: audit log through the public API - a user's project rename and API key creation and a CI ingestion with that key are audited newest first with actor (the user, or the key by prefix and name), route, path, project and status; tokens never appear; malformed filters are 400; an API key cannot read the log

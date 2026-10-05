@@ -9,6 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/edcrove/provenly/backend/internal/audit"
+	auditpg "github.com/edcrove/provenly/backend/internal/audit/postgres"
 	"github.com/edcrove/provenly/backend/internal/catalog"
 	catalogpg "github.com/edcrove/provenly/backend/internal/catalog/postgres"
 	"github.com/edcrove/provenly/backend/internal/execution"
@@ -36,7 +38,9 @@ type Services struct {
 	Insights  *insights.Service
 	// Integrations are the webhooks and connectors; its Run sends the queued webhook deliveries.
 	Integrations *integrations.Service
-	Identity     *identity.Service
+	// Audit records every authenticated change made through the API.
+	Audit    *audit.Service
+	Identity *identity.Service
 	// Now is the clock of the services (session and invitation expiry).
 	Now func() time.Time
 	// Ready reports whether the dependencies needed to serve requests (the
@@ -87,6 +91,7 @@ func NewServicesConfig(pool *pgxpool.Pool, now func() time.Time, cfg Config) Ser
 		Catalog: cat, Execution: exe, Ingestion: ing, Live: ingestion.NewLive(ing, exe, now), Manual: manual,
 		Insights:     insights.NewService(cat, exe, ids, now),
 		Integrations: integ,
+		Audit:        audit.NewService(auditpg.NewStore(pool), ids),
 		Identity:     ids, Now: now, Ready: pool.Ping,
 	}
 }
@@ -132,11 +137,12 @@ func register(r httpx.Router, s Services, maxIngestBytes int64, agents *mcp.Hand
 	ids := identity.NewHandler(s.Identity, s.Catalog, s.Now)
 	ids.RegisterPublic(r)
 	// CI reports with a project API key; people with a session.
-	keys := identity.ProtectWithKeys(r, s.Identity)
+	// Every authenticated change is audited (the audit router wraps the handlers, inside authentication).
+	keys := audit.Wrap(identity.ProtectWithKeys(r, s.Identity), s.Audit)
 	ingestion.NewHandler(s.Ingestion, maxIngestBytes).Register(keys)
 	ingestion.NewLiveHandler(s.Live).Register(keys)
 	// Every other API route needs a session.
-	p := identity.Protect(r, s.Identity)
+	p := audit.Wrap(identity.Protect(r, s.Identity), s.Audit)
 	ids.RegisterProtected(p)
 	catalog.NewHandler(s.Catalog, s.Identity).Register(p)
 	execution.NewHandler(s.Execution, s.Catalog, s.Identity).Register(p)
@@ -144,6 +150,7 @@ func register(r httpx.Router, s Services, maxIngestBytes int64, agents *mcp.Hand
 	insights.NewHandler(s.Insights).Register(p)
 	integrations.NewHandler(s.Integrations).Register(p)
 	agents.Register(p)
+	audit.NewHandler(s.Audit).Register(p)
 }
 
 type patternRecorder []string

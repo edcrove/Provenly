@@ -566,6 +566,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The audit log, newest first - every authenticated change made through the API (administrators)
+         * @description One event per successful POST, PUT, PATCH or DELETE: who (a username, or an API key by prefix and name), the operation (method and route), the request path and the project it addressed. Request bodies are never recorded. MCP calls (reads) and live run events are not audited.
+         */
+        get: operations["listAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mcp": {
         parameters: {
             query?: never;
@@ -1973,6 +1993,27 @@ export interface components {
         };
         IssueLinksRequest: {
             testCaseIds: number[];
+        };
+        AuditEvent: {
+            /** Format: int64 */
+            id: number;
+            /** Format: date-time */
+            occurredAt: string;
+            /** @example ana */
+            actor: string;
+            /**
+             * @description Method and route of the operation.
+             * @example PATCH /api/v1/test-cases/{testCaseId}
+             */
+            action: string;
+            /** @example /api/v1/test-cases/153 */
+            path: string;
+            /** @description The project key the request addressed (path or ?project=); null when it named none. */
+            project: string | null;
+            status: number;
+        };
+        AuditEventPage: components["schemas"]["PageMeta"] & {
+            items: components["schemas"]["AuditEvent"][];
         };
         /** @description A JSON-RPC 2.0 request, notification or response (MCP). */
         JsonRpcMessage: {
@@ -3734,6 +3775,37 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listAuditEvents: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
+                /** @description Only events that addressed this project. */
+                project?: string;
+                /** @description Only events of this actor (a username, exactly as listed). */
+                actor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             500: components["responses"]["InternalError"];
         };
     };

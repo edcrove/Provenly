@@ -22,6 +22,7 @@ import { TestRunListPage } from '@/features/test-runs/TestRunListPage'
 
 import { Layout } from './Layout'
 import { NotFoundPage } from './NotFoundPage'
+import { AuditPage } from '@/features/audit/AuditPage'
 
 export const routes: RouteObject[] = [
   { path: 'login', element: <LoginPage /> },
@@ -33,6 +34,7 @@ export const routes: RouteObject[] = [
       { path: 'projects', element: <ProjectsPage /> },
       { path: 'projects/:projectKey', element: <ProjectMembersPage /> },
       { path: 'users', element: <UsersPage /> },
+      { path: 'audit', element: <AuditPage /> },
       { path: 'account', element: <AccountPage /> },
       { path: 'test-cases', element: <TestCaseListPage /> },
       { path: 'test-cases/new', element: <NewTestCasePage /> },

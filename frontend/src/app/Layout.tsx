@@ -38,7 +38,9 @@ export function Layout() {
       </div>
     )
   const user = me.data
-  const nav = user.isAdmin ? [...links, { to: '/users', label: 'Users' }] : links
+  const nav = user.isAdmin
+    ? [...links, { to: '/users', label: 'Users' }, { to: '/audit', label: 'Audit' }]
+    : links
   return (
     <ProjectProvider>
       <div className="min-h-screen">

@@ -177,7 +177,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 75, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 76, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -562,6 +562,7 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.PATCH("/api/v1/projects/TC/dimensions/risk").WithJSON(map[string]any{"name": "R"}).Expect())
 	problem(e.POST("/api/v1/projects/TC/dimensions/risk/values").WithJSON(map[string]any{"key": "x", "name": "X"}).Expect())
 	problem(e.PATCH("/api/v1/projects/TC/dimensions/risk/values/low").WithJSON(map[string]any{"name": "L"}).Expect())
+	problem(e.GET("/api/v1/audit").Expect())
 	problem(e.GET("/api/v1/projects/TC/webhooks").Expect())
 	problem(e.POST("/api/v1/projects/TC/webhooks").WithJSON(map[string]any{"url": "https://x.test", "events": []string{"run.completed"}}).Expect())
 	problem(e.PATCH("/api/v1/projects/TC/webhooks/1").WithJSON(map[string]any{"active": true}).Expect())

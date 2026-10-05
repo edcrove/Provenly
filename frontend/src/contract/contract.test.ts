@@ -2235,7 +2235,34 @@ const integrationScenarios: Scenario[] = [
   },
 ]
 
+const auditScenarios: Scenario[] = [
+  {
+    op: 'GET /api/v1/audit',
+    status: 200,
+    setup: () => {
+      db.audit.push({
+        id: 1,
+        occurredAt: '2026-10-05T10:00:00Z',
+        actor: 'admin',
+        action: 'POST /api/v1/projects',
+        path: '/api/v1/projects',
+        project: null,
+        status: 201,
+      })
+    },
+    call: (c) => c.GET('/api/v1/audit', { params: { query: { project: 'TC', actor: 'admin', page: 1 } } }),
+  },
+  {
+    op: 'GET /api/v1/audit',
+    status: 400,
+    call: (c) => c.GET('/api/v1/audit', { params: { query: { project: 'tc' } } }),
+  },
+  { op: 'GET /api/v1/audit', status: 403, setup: asMember, call: (c) => c.GET('/api/v1/audit') },
+  { op: 'GET /api/v1/audit', status: 500, setup: fail, call: (c) => c.GET('/api/v1/audit') },
+]
+
 const scenarios: Scenario[] = [
+  ...auditScenarios,
   ...integrationScenarios,
   ...roleScenarios,
   ...apiKeyScenarios,

@@ -80,7 +80,7 @@ before=$( (ls backups/prod-*.sql 2>/dev/null || true) | wc -l)
 make --no-print-directory db-reset ENV=prod CONFIRM=prod >/dev/null 2>&1
 [ "$(ls backups/prod-*.sql | wc -l)" -gt "$before" ] || fail "db-reset ENV=prod did not dump first"
 grep -q "env-checks prod data $run" "$(ls -t backups/prod-*.sql | head -1)" || fail "the prod dump misses its data"
-[ "$(prod_api http://localhost:8280 "http://localhost:8280/api/v1/test-cases?pageSize=100" | grep -c "env-checks prod data $run")" = 0 ] || fail "db-reset ENV=prod kept the data"
+[ "$(prod_api http://localhost:8280 "http://localhost:8280/api/v1/test-cases?pageSize=100" | grep -o "env-checks prod data $run" | wc -l)" = 0 ] || fail "db-reset ENV=prod kept the data"
 make --no-print-directory down ENV=prod >/dev/null 2>&1
 ok "prod: empty start, dump before a confirmed reset"
 

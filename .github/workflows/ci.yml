@@ -251,7 +251,7 @@ jobs:
       - name: Build images and start the demo environment (docker compose up)
         run: docker compose up -d --build --wait
       - name: Demo starts from the demo snapshot
-        run: curl -fsS localhost:8080/api/v1/test-runs | grep -q '"totalItems":5'
+        run: ./scripts/api-get.sh http://localhost:8080 /api/v1/test-runs | grep -q '"totalItems":5'
       - name: README POC walkthrough runs verbatim on the fresh demo
         run: ./scripts/readme-flow.sh http://localhost:8080
       - name: Smoke test through nginx
@@ -260,7 +260,7 @@ jobs:
         run: |
           docker compose down
           docker compose up -d --wait
-          curl -fsS localhost:8080/api/v1/test-cases?pageSize=100 | grep -q 'Smoke test case'
+          ./scripts/api-get.sh http://localhost:8080 '/api/v1/test-cases?pageSize=100' | grep -q 'Smoke test case'
       - name: A second environment runs side by side (qa)
         run: |
           $COMPOSE up -d --wait
@@ -272,7 +272,7 @@ jobs:
       - name: demo-reset brings demo back to its snapshot
         run: |
           make demo-reset
-          ! curl -fsS localhost:8080/api/v1/test-cases?pageSize=100 | grep -q 'Smoke test case'
+          ! ./scripts/api-get.sh http://localhost:8080 '/api/v1/test-cases?pageSize=100' | grep -q 'Smoke test case'
       - name: Logs
         if: failure()
         run: docker compose logs; $COMPOSE logs

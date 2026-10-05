@@ -32,7 +32,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 15 | Live runs: execution sessions, live events, reconciliation | Trello Live Streaming, Planning #9 | ✅ | proto/15-live-runs |
 | 16 | Playwright reporter (`@provenly/playwright-reporter`) | Trello, DEC-15 | ✅ | proto/16-playwright-reporter |
 | 17 | OpenTelemetry basic instrumentation | Trello, DEC-11 | ✅ | proto/17-otel |
-| 18 | Export sink (webhooks) and GitHub connector, secrets at rest | Planning #3, #21, Incubator, MVP D4 | ⏳ | |
+| 18 | Export sink (webhooks) and GitHub connector, secrets at rest | Planning #3, #21, Incubator, MVP D4 | ✅ | proto/18-integrations |
 | 19 | MCP server (agent interface) | Incubator, DEC-10 | ⏳ | |
 | 20 | Audit log | Incubator (Project & Authorization) | ⏳ | |
 | 21 | Release pipeline, self-hosting guide, dogfooding, public readiness | Trello phase 4 | ⏳ | |
@@ -149,6 +149,12 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P17-2 | Export | Spans leave the process only when `OTEL_EXPORTER_OTLP_ENDPOINT` (or the traces-specific variable) is set, over OTLP/HTTP with the standard `OTEL_EXPORTER_OTLP_*` settings; a bad exporter configuration stops startup | No collector needed for the demo; standard variables work with any backend (Jaeger, Tempo, Honeycomb…) |
 | P17-3 | Logs | Every log record written in a request carries `trace_id` and `span_id` (slog handler); every response carries `X-Trace-Id` | Logs and traces correlate; a user can quote the trace id in a bug report |
 | P17-4 | Not now | No metrics, no test result ↔ trace link (the ingestion's trace id is in its logs; a `trace_id` column can come later), no collector in docker compose | Card: "leave room to associate traceId/spanId to TestResult later"; metrics need a decision on what to measure |
+| P18-1 | Secrets at rest | Secrets Provenly must read back (webhook signing secrets, GitHub tokens) are encrypted with AES-256-GCM under `PROVENLY_SECRETS_KEY` (32 bytes, base64, required in prod; random with a warning elsewhere), stored versioned (`v1:`); the database refuses clear values. A secret is shown once (webhook) or only as its last 4 characters (token) | Closes MVP D4 and P4-6; the version prefix leaves room for key rotation |
+| P18-2 | Webhooks | Maintainers subscribe https endpoints to `run.completed` (every completed CI, live or manual run, with the run as `getTestRun` returns it); deliveries are rows (outbox) sent by an in-process worker every 2 s, signed `sha256=HMAC(secret, "<timestamp>.<body>")`, retried 10 s / 1 min / 5 min / 30 min then failed; paused webhooks get nothing new; `ping` checks an endpoint | Planning #3 export sink; an outbox survives restarts and never blocks ingestion; the Stripe-like signature is familiar |
+| P18-3 | SSRF | Outbound calls refuse private, loopback and link-local addresses after DNS resolution, follow no redirects and ignore proxies; plain http and private targets are allowed only where `PROVENLY_WEBHOOKS_ALLOW_PRIVATE` (default: all environments but prod) | Notion 17 threat model: a webhook URL must not reach the deployment's own network |
+| P18-4 | GitHub connector | One repository per project, a token (fine-grained, issues read) and optional labels; "Sync" mirrors up to 500 issues (no pull requests) into the project's issues by number with their open/closed state, through the issue import of feature 13; failures are 502 and kept on the connection; disconnecting keeps the mirrored issues | Planning #21; read-only sync, manual trigger, reuses DEC-8 verification |
+| P18-5 | UI | Webhooks and GitHub Issues are sections of the project page, for maintainers (like API keys) | Project-level configuration lives in one place |
+| P18-6 | Not now | No scheduled GitHub sync or GitHub webhooks in, no other events (run.started, issue changes), no Jira connector, no key rotation command, no delivery replay button | Kept small; the outbox and secrets box are the foundations for them |
 | P12-6 | UI | A Requirements page (list with coverage, native creation and external registration), a requirement page (covering test cases, latest results, link/unlink, archive) and "Requirements" on the test case page | Traceability is visible from both sides |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
@@ -322,6 +328,23 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: new manual run page, manual execution panel on the run page, running/manual badges (screenshots 56–57).
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
+
+### 18. Integrations: webhooks and GitHub Issues (Planning #3, #21, MVP D4)
+
+- **Behavior**: on the project page a maintainer adds a webhook (the signing secret is shown once), pings it, pauses
+  it and reads its deliveries; every completed run is POSTed signed and retried. GitHub Issues: connect a repository
+  with a token (shown only as `…abcd`), sync to mirror its issues into the project's issues, see a failed sync's
+  error, rotate the token, disconnect.
+- **API**: `GET/POST /projects/{key}/webhooks`, `PATCH /webhooks/{id}`, `POST …/ping`, `GET …/deliveries`,
+  `GET/PUT/DELETE /projects/{key}/github`, `POST /projects/{key}/github/sync` (502 `upstream_error`, 409 unreadable token).
+- **Code**: module `internal/integrations` (+ `postgres`, `integrationsdb`), `platform/secrets`, migration 00028,
+  ingestion `RunNotifier`, delivery worker in `serve`, `PROVENLY_SECRETS_KEY` / `PROVENLY_WEBHOOKS_ALLOW_PRIVATE` /
+  `PROVENLY_GITHUB_API_URL`; frontend `WebhooksSection`, `GitHubSection` (screenshot 67).
+- **Tests**: unit at 100% (validation, SSRF guard and redirects, signing, retries and backoff, paused and undecryptable
+  secrets, worker loop, GitHub paging/labels/pull requests/failures, handlers, notifier, CLI key warning), BE-INT-055
+  (outbox from batch, live and manual runs, signatures, SKIP LOCKED with concurrent workers, lease, DB constraints),
+  BE-INT-056 (GitHub mirror, encrypted token, another key), backend and frontend contract (502/409 included),
+  FE-INT-044, BE-E2E-024 and FE-E2E-024 (local receiver verifying the HMAC, GitHub double), probe integrations sweep.
 
 ### 17. OpenTelemetry basic instrumentation (DEC-11)
 

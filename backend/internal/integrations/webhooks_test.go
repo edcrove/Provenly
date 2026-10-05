@@ -42,10 +42,13 @@ func TestOutboundClient(t *testing.T) {
 		http.Redirect(w, r, "http://169.254.169.254/latest/meta-data", http.StatusFound)
 	}))
 	defer srv.Close()
-	_, err := outboundClient(false).Get(srv.URL)
+	res, err := outboundClient(false).Get(srv.URL)
+	if err == nil {
+		_ = res.Body.Close()
+	}
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), errBlockedAddress.Error())
-	res, err := outboundClient(true).Get(srv.URL)
+	res, err = outboundClient(true).Get(srv.URL)
 	require.NoError(t, err)
 	_ = res.Body.Close()
 	assert.Equal(t, http.StatusFound, res.StatusCode)

@@ -854,9 +854,7 @@ export function useWebhooks(projectKey: string) {
   return useQuery({
     queryKey: webhooksKey(projectKey),
     queryFn: async () =>
-      unwrap(
-        await api.GET('/api/v1/projects/{projectKey}/webhooks', { params: { path: { projectKey } } }),
-      ),
+      unwrap(await api.GET('/api/v1/projects/{projectKey}/webhooks', { params: { path: { projectKey } } })),
   })
 }
 

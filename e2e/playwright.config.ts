@@ -5,6 +5,8 @@ import { defineConfig } from '@playwright/test'
 const root = path.resolve(import.meta.dirname, '..')
 const apiPort = process.env.E2E_API_PORT ?? '8081'
 const webPort = process.env.E2E_WEB_PORT ?? '4173'
+/** The GitHub API double the integrations journey serves (the backend's PROVENLY_GITHUB_API_URL). */
+export const githubPort = Number(process.env.E2E_GITHUB_PORT ?? '8098')
 const databaseUrl =
   process.env.PROVENLY_DATABASE_URL ?? 'postgres://provenly:provenly@localhost:5439/provenly_e2e?sslmode=disable'
 
@@ -59,6 +61,10 @@ export default defineConfig({
         PROVENLY_ADMIN_USERNAME: adminUsername,
         PROVENLY_ADMIN_PASSWORD: adminPassword,
         PROVENLY_JWT_SECRET: 'e2e-only-session-signing-secret-0123456789',
+        // Webhooks and the GitHub connector (prototype feature 18): a fixed key, local endpoints, GitHub double.
+        PROVENLY_SECRETS_KEY: Buffer.alloc(32, 7).toString('base64'),
+        PROVENLY_WEBHOOKS_ALLOW_PRIVATE: 'true',
+        PROVENLY_GITHUB_API_URL: `http://127.0.0.1:${githubPort}`,
         GOCOVERDIR: path.join(import.meta.dirname, 'coverage/backend'),
       },
     },

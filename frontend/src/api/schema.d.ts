@@ -1981,7 +1981,9 @@ export interface components {
             /** Format: date-time */
             completedAt: string | null;
             /** @description The JSON body sent (`event`, `sentAt` and, for run.completed, `project` and the `run` as in getTestRun). */
-            payload: Record<string, never>;
+            payload: {
+                [key: string]: unknown;
+            };
         };
         WebhookDeliveryPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["WebhookDelivery"][];

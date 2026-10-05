@@ -47,7 +47,7 @@ func TestIntegrations(t *testing.T) {
 	admin.POST(webhooks).WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
 	admin.POST("/api/v1/projects/NOPE/webhooks").WithJSON(map[string]any{"url": "https://x.test", "events": []string{"run.completed"}}).Expect().Status(http.StatusNotFound)
 
-	admin.POST(webhooks + "/" + id + "/ping").Expect().Status(http.StatusAccepted).JSON().Object().HasValue("event", "ping").HasValue("status", "pending")
+	admin.POST(webhooks+"/"+id+"/ping").Expect().Status(http.StatusAccepted).JSON().Object().HasValue("event", "ping").HasValue("status", "pending")
 	admin.POST(webhooks + "/0/ping").Expect().Status(http.StatusBadRequest)
 	admin.POST(webhooks + "/987654/ping").Expect().Status(http.StatusNotFound)
 	_, err := s.Integrations.DeliverDue(context.Background())
@@ -74,7 +74,7 @@ func TestIntegrations(t *testing.T) {
 	admin.PUT("/api/v1/projects/NOPE/github").WithJSON(map[string]any{"repository": "acme/shop", "token": "t"}).Expect().Status(http.StatusNotFound)
 	admin.PUT(github).WithJSON(map[string]any{"repository": "acme/shop", "token": "ghp_contract", "labels": ""}).Expect().Status(http.StatusOK).
 		JSON().Object().HasValue("tokenHint", "…ract").HasValue("lastSyncedAt", nil).HasValue("lastError", nil).NotContainsKey("token")
-	admin.POST(github+"/sync").Expect().Status(http.StatusOK).JSON().Object().IsEqual(map[string]any{"created": 1, "updated": 0})
+	admin.POST(github + "/sync").Expect().Status(http.StatusOK).JSON().Object().IsEqual(map[string]any{"created": 1, "updated": 0})
 	admin.GET(github).Expect().Status(http.StatusOK).JSON().Object().Value("lastSyncedAt").String().NotEmpty()
 	admin.GET("/api/v1/projects/TC/issues").Expect().Status(http.StatusOK).JSON().Object().Value("items").Array().Value(0).Object().
 		HasValue("provider", "github").HasValue("externalId", "4")

@@ -4255,6 +4255,7 @@ components:
           nullable: true
         payload:
           type: object
+          additionalProperties: true
           description: The JSON body sent (`event`, `sentAt` and, for run.completed, `project` and the `run` as in getTestRun).
 
     WebhookDeliveryPage:

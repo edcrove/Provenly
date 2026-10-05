@@ -9,6 +9,7 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 | `catalog` (Test Catalog) | `test_cases`, `test_steps` | `catalog.Service` | — |
 | `execution` (TestRun/Execution) | `test_runs`, `test_run_expected_cases`, `test_results` | `execution.Service` | `catalog` only through `TestCaseChecker` (404 on history) |
 | `ingestion` | none | `ingestion.Service` | `catalog` (`ExpectedUniverse`, `Statuses`), `execution` (`RecordRun`, `Diagnostics`) |
+| `integrations` | `webhooks`, `webhook_deliveries`, `github_connections` | `integrations.Service` | `catalog` (`ProjectByKey`, `ProjectByID`, `ImportIssues`), `identity` (access); hears completed runs from `ingestion` through `RunNotifier` |
 
 - A module never reads another module's tables and there are **no cross-module foreign keys**: execution stores
   TC-IDs by value, keeping a future extraction possible.
@@ -165,6 +166,25 @@ exported over OTLP/HTTP only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set). `teleme
 (otelhttp: continues `traceparent`, names spans after the mux route, sets `X-Trace-Id`); `postgres.Open` adds the
 otelpgx tracer so queries are child spans; `ingestion.Service.IngestJUnit` opens the ingestion span; the slog handler
 adds `trace_id`/`span_id` to every record written with a request context.
+
+## Integrations (prototype feature 18, MVP D4)
+
+`internal/integrations` owns webhooks and the GitHub Issues connector. Secrets Provenly must read back (webhook
+signing secrets, connector tokens) are sealed with AES-256-GCM by `platform/secrets` under `PROVENLY_SECRETS_KEY`
+(32 bytes, base64; required in prod, random with a warning elsewhere) and stored as `v1:` + base64; the database
+refuses anything else. Secrets Provenly only verifies (passwords, API keys) stay hashed.
+
+- **Outbox**: ingestion (a created batch run, a live run completed by its report) and `Manual.Finish` call
+  `RunNotifier.RunCompleted`, which inserts one `webhook_deliveries` row per active subscribed webhook; it never
+  fails the recording. A worker started by `serve` (`Integrations.Run`, every 2 s) claims due rows with
+  `FOR UPDATE SKIP LOCKED` and a one-minute lease, POSTs them signed (`X-Provenly-Signature: sha256=HMAC(ts.body)`)
+  and records the attempt: succeeded on 2xx, else retried after 10 s, 1 min, 5 min, 30 min, then failed.
+- **SSRF**: outbound requests (webhooks and GitHub) use a client that refuses private, loopback and link-local
+  addresses after DNS resolution (dialer `Control`), follows no redirects and ignores proxies; `PROVENLY_WEBHOOKS_ALLOW_PRIVATE`
+  (default: everywhere but prod) lifts it for local endpoints.
+- **GitHub**: `POST /projects/{key}/github/sync` reads up to 5 pages of 100 issues (`PROVENLY_GITHUB_API_URL`,
+  default the public API) and mirrors them through `catalog.ImportIssues` (provider `github`, external id = number);
+  failures are 502 `upstream_error` and recorded on the connection; a token another key sealed is 409.
 
 ## Retries (MVP D1)
 

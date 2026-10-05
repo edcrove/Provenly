@@ -22,7 +22,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 5 | Optimistic locking (ETag / If-Match) | MVP D7 | ✅ | proto/05-optimistic-locking |
 | 6 | Snapshot amendment per run | DEC-42 | ✅ | proto/06-snapshot-amendment |
 | 7 | Retries, logical result and flaky | MVP D1 | ✅ | proto/07-retries-flaky |
-| 8 | Compressed (gzip) report ingestion | MVP D6 | ⏳ | |
+| 8 | Compressed (gzip) report ingestion | MVP D6 | ✅ | proto/08-gzip-ingestion |
 | 9 | Taxonomy: tags and custom dimensions | Planning #26 | ⏳ | |
 | 10 | Test suites (static and query) and partial-run scope | Planning #27, MVP D2, Incubator | ⏳ | |
 | 11 | Manual execution (manual runs, step results) | MVP D3, Planning #4, Incubator | ⏳ | |
@@ -92,6 +92,10 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P7-4 | Storage | Every attempt is stored as a result with `attempt`; `retried` (a later attempt exists) is derived in queries; results stay immutable | Nothing reported is lost; the history shows every attempt |
 | P7-5 | Exposure | `flaky` in run outcome and summary (TC-IDs), `flaky` per summary test case, `attempt` and `retried` per result; UI: flaky badge (list and detail), flaky test cases, attempt markers in results and history | Flaky passes count as passed but stay visible |
 | P7-6 | Limits | Attempts beyond 100 keep the last 100 with a warning; invalid attempt/retry values are first attempts with a warning; Surefire attempt details come from `<stackTrace>`, their duration is unknown | Broken reporters never fail ingestion |
+| P8-1 | Encodings | `Content-Encoding: gzip` (and `x-gzip`); no encoding or `identity` as before; anything else (br, deflate, lists) stays a 415 | D6; gzip is what CI tools produce with one command |
+| P8-2 | Size limit | `PROVENLY_MAX_INGEST_BYTES` applies to the decompressed report (413 problem past it) and the compressed body is read through the same limit | D6; a gzip bomb never expands past the limit in memory |
+| P8-3 | Broken streams | Not gzip, truncated or corrupt: 400 `validation_error` on `body` | Client error with the reason, never a 500 |
+| P8-4 | CI step | The API key page's ready-to-paste step now gzips the report (`gzip -c junit.xml \| curl ... --data-binary @-`) | Smaller uploads by default |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
 ## What each feature does
@@ -208,4 +212,13 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: flaky badge, "Flaky (passed on a retry)" list, attempt badges ("attempt 1 · retried") (screenshot 47).
 - **Tests**: JUnit parser (attempts, properties, limits), summary (`logical`), handler and DTO tests; BE-INT-044;
   FE-INT-036; BE-E2E-013; FE-E2E-016; probe retry sweep.
+
+### 8. Compressed (gzip) report ingestion (MVP D6)
+
+- **Behavior**: CI can send `Content-Encoding: gzip`; the report is ingested exactly like a plain one. The size limit
+  applies to the decompressed body (gzip bombs are 413s); broken streams are 400s; other encodings stay 415.
+- **API**: `ingestJUnitReport` request body description; no new operation.
+- **UI**: the CI step on the API keys section uses gzip (screenshot 44).
+- **Tests**: handler unit tests (encodings, exact limit, bomb, incompressible body over the limit, broken streams),
+  contract (201, 400, 413, 415), BE-E2E-014, probe gzip sweep through nginx.
 

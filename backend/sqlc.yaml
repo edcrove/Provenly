@@ -36,6 +36,7 @@ sql:
       - migrations/00012_projects.sql
       - migrations/00014_identity.sql
       - migrations/00015_project_members.sql
+      - migrations/00016_api_keys.sql
     queries: queries/identity.sql
     gen:
       go:

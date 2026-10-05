@@ -241,3 +241,56 @@ func (s *Store) DeleteMember(ctx context.Context, projectID, userID int64) (bool
 	n, err := s.q.DeleteMember(ctx, identitydb.DeleteMemberParams{ProjectID: projectID, UserID: userID})
 	return n > 0, err
 }
+
+func toAPIKey(r identitydb.ApiKey) identity.APIKey {
+	return identity.APIKey{
+		ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Prefix: r.Prefix, TokenSHA256: r.TokenSha256, CreatedBy: r.CreatedBy,
+		CreatedAt: r.CreatedAt.Time, LastUsedAt: timePtr(r.LastUsedAt), RevokedAt: timePtr(r.RevokedAt),
+	}
+}
+
+// CreateAPIKey implements identity.Repository.
+func (s *Store) CreateAPIKey(ctx context.Context, k identity.NewAPIKey) (identity.APIKey, error) {
+	r, err := s.q.CreateAPIKey(ctx, identitydb.CreateAPIKeyParams{
+		ProjectID: k.ProjectID, Name: k.Name, Prefix: k.Prefix, TokenSha256: k.TokenSHA256, CreatedBy: k.CreatedBy,
+	})
+	return toAPIKey(r), err
+}
+
+// ListAPIKeys implements identity.Repository.
+func (s *Store) ListAPIKeys(ctx context.Context, projectID int64, limit, offset int32) ([]identity.APIKey, error) {
+	rows, err := s.q.ListAPIKeys(ctx, identitydb.ListAPIKeysParams{ProjectID: projectID, PageLimit: limit, PageOffset: offset})
+	out := make([]identity.APIKey, len(rows))
+	for i, r := range rows {
+		out[i] = toAPIKey(r)
+	}
+	return out, err
+}
+
+// CountAPIKeys implements identity.Repository.
+func (s *Store) CountAPIKeys(ctx context.Context, projectID int64) (int64, error) {
+	return s.q.CountAPIKeys(ctx, projectID)
+}
+
+// GetAPIKey implements identity.Repository.
+func (s *Store) GetAPIKey(ctx context.Context, projectID, id int64) (identity.APIKey, error) {
+	r, err := s.q.GetAPIKey(ctx, identitydb.GetAPIKeyParams{ID: id, ProjectID: projectID})
+	return toAPIKey(r), notFound(err)
+}
+
+// GetAPIKeyByToken implements identity.Repository.
+func (s *Store) GetAPIKeyByToken(ctx context.Context, digest []byte) (identity.APIKey, error) {
+	r, err := s.q.GetAPIKeyByToken(ctx, digest)
+	return toAPIKey(r), notFound(err)
+}
+
+// RevokeAPIKey implements identity.Repository.
+func (s *Store) RevokeAPIKey(ctx context.Context, projectID, id int64) (identity.APIKey, error) {
+	r, err := s.q.RevokeAPIKey(ctx, identitydb.RevokeAPIKeyParams{ID: id, ProjectID: projectID})
+	return toAPIKey(r), notFound(err)
+}
+
+// TouchAPIKey implements identity.Repository.
+func (s *Store) TouchAPIKey(ctx context.Context, id int64) error {
+	return s.q.TouchAPIKey(ctx, id)
+}

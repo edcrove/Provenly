@@ -16,6 +16,7 @@ import { formatDateTime } from '@/lib/format'
 import { can, memberRoles, roleDescriptions, type MemberRole } from '@/lib/roles'
 import { positiveInt } from '@/lib/status'
 
+import { ApiKeysSection } from './ApiKeysSection'
 import { useProjectRole } from './useProjectRole'
 
 function RoleSelect({
@@ -116,56 +117,59 @@ export function ProjectMembersPage() {
   const members = useProjectMembers(projectKey, page)
   const manage = can(useProjectRole(projectKey), 'maintainer')
   return (
-    <Card>
-      <CardHeader>
-        <PageTitle title={`${projectKey} members`} />
-        <CardTitle as="h1" className="text-xl">
-          <span className="font-mono">{projectKey}</span> members
-        </CardTitle>
-        <CardDescription>
-          <Link to="/projects" className="underline">
-            All projects
-          </Link>
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-6">
-        <QueryState query={members} page>
-          {(data) => (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Username</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Since</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.items.length === 0 && (
+    <div className="grid gap-6">
+      <Card>
+        <CardHeader>
+          <PageTitle title={`${projectKey} members`} />
+          <CardTitle as="h1" className="text-xl">
+            <span className="font-mono">{projectKey}</span> members
+          </CardTitle>
+          <CardDescription>
+            <Link to="/projects" className="underline">
+              All projects
+            </Link>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6">
+          <QueryState query={members} page>
+            {(data) => (
+              <>
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={5} className="text-muted-foreground">
-                        No members yet. Administrators work in every project without being members.
-                      </TableCell>
+                      <TableHead>Username</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Since</TableHead>
+                      <TableHead />
                     </TableRow>
-                  )}
-                  {data.items.map((m) => (
-                    <MemberRow key={m.user.id} member={m} manage={manage} projectKey={projectKey} />
-                  ))}
-                </TableBody>
-              </Table>
-              <Pagination
-                page={data.page}
-                totalPages={data.totalPages}
-                totalItems={data.totalItems}
-                onPageChange={(p, replace) => setParams({ page: String(p) }, { replace })}
-              />
-            </>
-          )}
-        </QueryState>
-        {manage ? <AddMember projectKey={projectKey} /> : null}
-      </CardContent>
-    </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {data.items.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-muted-foreground">
+                          No members yet. Administrators work in every project without being members.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {data.items.map((m) => (
+                      <MemberRow key={m.user.id} member={m} manage={manage} projectKey={projectKey} />
+                    ))}
+                  </TableBody>
+                </Table>
+                <Pagination
+                  page={data.page}
+                  totalPages={data.totalPages}
+                  totalItems={data.totalItems}
+                  onPageChange={(p, replace) => setParams({ page: String(p) }, { replace })}
+                />
+              </>
+            )}
+          </QueryState>
+          {manage ? <AddMember projectKey={projectKey} /> : null}
+        </CardContent>
+      </Card>
+      {manage ? <ApiKeysSection projectKey={projectKey} /> : null}
+    </div>
   )
 }

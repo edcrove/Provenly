@@ -24,3 +24,5 @@ targets:
     description: sign in from a fresh browser (back to the page asked for), invite someone, they join from the link in another browser and sign out
   - id: FE-E2E-012
     description: an administrator adds a project member in the UI; the member signs in and sees only the actions of their role, which narrow after a demotion
+  - id: FE-E2E-013
+    description: a maintainer creates an API key on the project page (shown once with the CI step), CI reports a run with it, the key shows its last use, is revoked, and the run appears in the test case history

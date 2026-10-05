@@ -262,6 +262,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        /** List the project's API keys, newest first (maintainers and administrators) */
+        get: operations["listApiKeys"];
+        put?: never;
+        /**
+         * Create an API key for CI to report runs into this project (maintainers and administrators)
+         * @description The key is returned once and never stored; only its digest is kept.
+         */
+        post: operations["createApiKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                apiKeyId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke an API key at once (maintainers and administrators) */
+        post: operations["revokeApiKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-cases": {
         parameters: {
             query?: never;
@@ -528,7 +573,10 @@ export interface paths {
         put?: never;
         /**
          * Ingest one complete JUnit XML report (batch) for a CI run attempt
-         * @description The run belongs to `project` (default `TC`): its expected universe is that
+         * @description CI authenticates with a project API key; people with a session need the
+         *     `member` role in the project. A key reports into its own project only: it is
+         *     the default `project`, and any other project answers 404.
+         *     The run belongs to `project` (default: the API key's project, else `TC`): its expected universe is that
          *     project's, the testcase-name fallback only reads `<project>-<n>`, and a
          *     `tc-id` property with another project's key is a `wrong_project` diagnostic.
          *     `externalRunId` = `{provider}:{runId}:{runAttempt}`, unique per project. Re-sending the same
@@ -700,6 +748,41 @@ export interface components {
         };
         SetMemberRequest: {
             role: components["schemas"]["ProjectRole"];
+        };
+        ApiKey: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @description First characters of the key, to tell keys apart (the key itself is never shown again). */
+            prefix: string;
+            /** @enum {string} */
+            status: "active" | "revoked";
+            /** Format: int64 */
+            createdBy: number;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description Last report made with the key (recorded at most once a minute).
+             */
+            lastUsedAt: string | null;
+            /** Format: date-time */
+            revokedAt: string | null;
+        };
+        ApiKeyPage: components["schemas"]["PageMeta"] & {
+            items: components["schemas"]["ApiKey"][];
+        };
+        CreateApiKeyRequest: {
+            /**
+             * @description What the key is for (e.g. the CI pipeline); 1 to 100 characters.
+             * @example GitHub Actions
+             */
+            name: string;
+        };
+        CreatedApiKey: {
+            apiKey: components["schemas"]["ApiKey"];
+            /** @description The key: send it as `Authorization: Bearer <token>`. Shown only once. */
+            token: string;
         };
         CreatedInvitation: {
             invitation: components["schemas"]["Invitation"];
@@ -1660,6 +1743,100 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    listApiKeys: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of API keys (never the keys themselves) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKeyPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createApiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateApiKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description The key and its token (shown only now) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedApiKey"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    revokeApiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                apiKeyId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The revoked key */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiKey"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     listTestCases: {
         parameters: {
             query?: {
@@ -2174,7 +2351,7 @@ export interface operations {
         parameters: {
             query: {
                 /**
-                 * @description Key of the project the run belongs to (default `TC`).
+                 * @description Key of the project the run belongs to (default the API key's project, else `TC`).
                  * @example CHK
                  */
                 project?: string;
@@ -2231,6 +2408,8 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];

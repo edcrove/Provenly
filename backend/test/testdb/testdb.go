@@ -51,7 +51,7 @@ func Start(ctx context.Context) (*DB, error) {
 // Reset empties every table (TRUNCATE does not fire the row-level protection triggers).
 func (d *DB) Reset(ctx context.Context) error {
 	// Identities restart so the default project is id 1 again and numbers start at 1.
-	_, err := d.Pool.Exec(ctx, `TRUNCATE test_run_parse_errors, test_results, test_run_expected_cases, test_runs, test_steps, test_cases, projects, project_members, invitations, users RESTART IDENTITY;
+	_, err := d.Pool.Exec(ctx, `TRUNCATE api_keys, test_run_parse_errors, test_results, test_run_expected_cases, test_runs, test_steps, test_cases, projects, project_members, invitations, users RESTART IDENTITY;
 INSERT INTO projects (key, name, description) VALUES ('TC', 'Default', 'Test cases created before projects existed.')`)
 	return err
 }

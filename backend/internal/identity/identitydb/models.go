@@ -8,6 +8,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ApiKey struct {
+	ID          int64
+	ProjectID   int64
+	Name        string
+	Prefix      string
+	TokenSha256 []byte
+	CreatedBy   int64
+	CreatedAt   pgtype.Timestamptz
+	LastUsedAt  pgtype.Timestamptz
+	RevokedAt   pgtype.Timestamptz
+}
+
 type Invitation struct {
 	ID             int64
 	TokenSha256    []byte

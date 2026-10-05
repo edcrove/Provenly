@@ -70,3 +70,31 @@ RETURNING *;
 
 -- name: DeleteMember :execrows
 DELETE FROM project_members WHERE project_id = @project_id AND user_id = @user_id;
+
+-- name: CreateAPIKey :one
+INSERT INTO api_keys (project_id, name, prefix, token_sha256, created_by)
+VALUES (@project_id, @name, @prefix, @token_sha256, @created_by)
+RETURNING *;
+
+-- name: ListAPIKeys :many
+SELECT * FROM api_keys WHERE project_id = @project_id ORDER BY id DESC LIMIT @page_limit OFFSET @page_offset;
+
+-- name: CountAPIKeys :one
+SELECT count(*) FROM api_keys WHERE project_id = @project_id;
+
+-- name: GetAPIKey :one
+SELECT * FROM api_keys WHERE id = @id AND project_id = @project_id;
+
+-- name: GetAPIKeyByToken :one
+SELECT * FROM api_keys WHERE token_sha256 = @token_sha256;
+
+-- name: RevokeAPIKey :one
+-- No row when the key does not exist in the project or is already revoked.
+UPDATE api_keys SET revoked_at = now()
+WHERE id = @id AND project_id = @project_id AND revoked_at IS NULL
+RETURNING *;
+
+-- name: TouchAPIKey :exec
+-- Records a use at most once a minute: a busy CI does not write on every report.
+UPDATE api_keys SET last_used_at = now()
+WHERE id = @id AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute');

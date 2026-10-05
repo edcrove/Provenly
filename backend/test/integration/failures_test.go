@@ -91,6 +91,13 @@ func TestPersistenceFailures(t *testing.T) {
 			"identity.CountProjectMembers":    func() error { _, err := idn.CountProjectMembers(ctx, 1); return err },
 			"identity.UpsertMember":           func() error { return idn.UpsertMember(ctx, 1, 1, authz.RoleViewer) },
 			"identity.DeleteMember":           func() error { _, err := idn.DeleteMember(ctx, 1, 1); return err },
+			"identity.CreateAPIKey":           func() error { _, err := idn.CreateAPIKey(ctx, identity.NewAPIKey{}); return err },
+			"identity.ListAPIKeys":            func() error { _, err := idn.ListAPIKeys(ctx, 1, 10, 0); return err },
+			"identity.CountAPIKeys":           func() error { _, err := idn.CountAPIKeys(ctx, 1); return err },
+			"identity.GetAPIKey":              func() error { _, err := idn.GetAPIKey(ctx, 1, 1); return err },
+			"identity.GetAPIKeyByToken":       func() error { _, err := idn.GetAPIKeyByToken(ctx, []byte("x")); return err },
+			"identity.RevokeAPIKey":           func() error { _, err := idn.RevokeAPIKey(ctx, 1, 1); return err },
+			"identity.TouchAPIKey":            func() error { return idn.TouchAPIKey(ctx, 1) },
 
 			"execution.InTx":                     func() error { return exe.InTx(ctx, func(execution.Repository) error { return nil }) },
 			"execution.InsertTestRun":            func() error { _, _, err := exe.InsertTestRun(ctx, execution.InsertRunParams{}); return err },

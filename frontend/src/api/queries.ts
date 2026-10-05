@@ -201,6 +201,47 @@ export function useMemberMutations(projectKey: string) {
   }
 }
 
+export function useApiKeys(projectKey: string, page: number, enabled = true) {
+  return useQuery({
+    queryKey: [...keys.projects, projectKey, 'api-keys', page],
+    enabled,
+    placeholderData: (prev, q) =>
+      previousPage([...keys.projects, projectKey, 'api-keys', page], prev, q?.queryKey),
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/projects/{projectKey}/api-keys', {
+          params: { path: { projectKey }, query: { page } },
+        }),
+      ),
+  })
+}
+
+export function useApiKeyMutations(projectKey: string) {
+  const qc = useQueryClient()
+  const onSettled = () => qc.invalidateQueries({ queryKey: [...keys.projects, projectKey, 'api-keys'] })
+  return {
+    create: useExclusiveMutation({
+      mutationFn: async (name: string) =>
+        unwrap(
+          await api.POST('/api/v1/projects/{projectKey}/api-keys', {
+            params: { path: { projectKey } },
+            body: { name },
+          }),
+        ),
+      onSettled,
+    }),
+    revoke: useExclusiveMutation({
+      mutationFn: async (apiKeyId: number) =>
+        unwrap(
+          await api.POST('/api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke', {
+            params: { path: { projectKey, apiKeyId } },
+          }),
+        ),
+      onSettled,
+    }),
+  }
+}
+
 export function useCreateProject() {
   const qc = useQueryClient()
   return useExclusiveMutation({

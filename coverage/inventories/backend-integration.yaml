@@ -82,3 +82,5 @@ targets:
     description: project roles persist (granted by an invitation on accept, changed in place, removed), drive the guard (scope, required role, invisible projects) and the database rejects unknown roles, unknown projects and incomplete invitation grants
   - id: BE-INT-040
     description: test case, run and project lists are narrowed to the visible projects (every project, some, or none for a user without memberships)
+  - id: BE-INT-041
+    description: project API keys persist only their digest, authenticate (a use recorded at most once a minute), report runs into their own project only, stop at once when revoked, and the database forbids deleting or altering them

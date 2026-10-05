@@ -29,12 +29,13 @@ func TestMain(m *testing.M) {
 	})
 }
 
-// fresh empties the database and returns services wired on it.
+// fresh empties the database and returns services wired on it, with a context signed in as an
+// administrator (ingestion authorizes its caller; administrators may report into any project).
 func fresh(t *testing.T) (app.Services, context.Context) {
 	t.Helper()
 	ctx := context.Background()
 	require.NoError(t, db.Reset(ctx))
-	return app.NewServicesWith(db.Pool, time.Now, testIdentity()), ctx
+	return app.NewServicesWith(db.Pool, time.Now, testIdentity()), identity.WithUser(ctx, identity.User{Username: "integration", IsAdmin: true})
 }
 
 // testIdentity is the production identity configuration with the cheapest bcrypt cost.

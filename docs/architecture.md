@@ -47,8 +47,11 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
   elsewhere), sent as `Authorization: Bearer` or the HttpOnly, SameSite=Strict `provenly_session` cookie (Secure behind
   TLS). Every request re-reads the user; a password change invalidates older sessions (password-version claim).
 - `identity.Protect` wraps the routes of the other modules: every API route needs a session except health, readiness,
-  sign-in, sign-out, accepting an invitation and (until CI API keys, prototype feature 4) ingestion. Without a session
-  the answer is `401 unauthorized`; administrator-only operations answer `403 forbidden`.
+  sign-in, sign-out and accepting an invitation. Without a session the answer is `401 unauthorized`;
+  administrator-only operations answer `403 forbidden`.
+- CI reports with project API keys (`pvk_...`, `Authorization: Bearer` only; SHA-256 stored, shown once).
+  `identity.ProtectWithKeys` wraps ingestion: a key authenticates as the key (no user) and `Require` lets it report
+  into its own project only; every other route rejects keys. Maintainers create, list and revoke them.
 
 ## Roles (package `platform/authz`)
 

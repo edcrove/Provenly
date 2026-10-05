@@ -87,6 +87,146 @@ const addAna = () => {
 const tcKey = { projectKey: 'TC' }
 const ana = { projectKey: 'TC', username: 'ana' }
 
+const withKey = () => {
+  db.apiKeys.push({
+    id: 9,
+    projectId: 1,
+    name: 'ci',
+    prefix: 'pvk_00000009',
+    status: 'active',
+    createdBy: 1,
+    createdAt: '2026-10-05T10:00:00Z',
+    lastUsedAt: null,
+    revokedAt: null,
+  })
+}
+const key9 = { projectKey: 'TC', apiKeyId: 9 }
+const apiKeyScenarios: Scenario[] = [
+  {
+    op: 'GET /api/v1/projects/{projectKey}/api-keys',
+    status: 200,
+    setup: withKey,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/api-keys', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/api-keys',
+    status: 400,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/api-keys', { params: { path: { projectKey: 'tc' } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/api-keys',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/api-keys', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/api-keys',
+    status: 404,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/api-keys', { params: { path: { projectKey: 'NOPE' } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/api-keys',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/api-keys', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys',
+    status: 201,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys', { params: { path: tcKey }, body: { name: 'ci' } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys', { params: { path: tcKey }, body: { name: ' ' } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys',
+    status: 403,
+    setup: asViewer,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys', { params: { path: tcKey }, body: { name: 'ci' } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys',
+    status: 404,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys', {
+        params: { path: { projectKey: 'NOPE' } },
+        body: { name: 'ci' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys',
+    status: 415,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys', {
+        params: { path: tcKey },
+        body: { name: 'ci' },
+        bodySerializer: JSON.stringify,
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys', { params: { path: tcKey }, body: { name: 'ci' } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke',
+    status: 200,
+    setup: withKey,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke', { params: { path: key9 } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke', {
+        params: { path: { projectKey: 'TC', apiKeyId: 0 } },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke',
+    status: 403,
+    setup: () => {
+      withKey()
+      asViewer()
+    },
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke', { params: { path: key9 } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke',
+    status: 404,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke', { params: { path: key9 } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke',
+    status: 409,
+    setup: () => {
+      withKey()
+      db.apiKeys[0] = { ...db.apiKeys[0], status: 'revoked', revokedAt: '2026-10-05T11:00:00Z' }
+    },
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke', { params: { path: key9 } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/api-keys/{apiKeyId}/revoke', { params: { path: key9 } }),
+  },
+]
+
 const roleScenarios: Scenario[] = [
   {
     op: 'POST /api/v1/projects',
@@ -418,6 +558,7 @@ const signedOutScenarios = (): Scenario[] =>
 
 const scenarios: Scenario[] = [
   ...roleScenarios,
+  ...apiKeyScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
   // Projects

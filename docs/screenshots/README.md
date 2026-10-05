@@ -48,4 +48,5 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 41 | Joining Provenly from an invitation link | `41-accept-invitation.png` |
 | 42 | Sign-in with a wrong password | `42-sign-in-error.png` |
 | 43 | Project members: roles managed by an administrator or maintainer | `43-project-members.png` |
-| 44 | A viewer reads a test case without editing actions | `44-viewer-test-case.png` |
+| 44 | A new CI API key, shown once with the CI step that uses it | `44-project-api-keys.png` |
+| 45 | A viewer reads a test case without editing actions | `45-viewer-test-case.png` |

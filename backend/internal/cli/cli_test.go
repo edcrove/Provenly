@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"net"
 	"net/http"
@@ -63,6 +64,19 @@ func TestServeWithSecret(t *testing.T) {
 	d, stderr = testDeps(t, baseEnv, r)
 	assert.Equal(t, 0, Run(context.Background(), nil, d))
 	assert.Contains(t, stderr.String(), "random secret")
+}
+
+// A configured secrets key encrypts webhook secrets and connector tokens; without one a random key is used, with a
+// warning (they cannot be read after a restart).
+func TestServeWithSecretsKey(t *testing.T) {
+	r := &recorder{}
+	env := map[string]string{"PROVENLY_DATABASE_URL": baseEnv["PROVENLY_DATABASE_URL"], "PROVENLY_SECRETS_KEY": base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32))}
+	d, stderr := testDeps(t, env, r)
+	assert.Equal(t, 0, Run(context.Background(), nil, d))
+	assert.NotContains(t, stderr.String(), "PROVENLY_SECRETS_KEY")
+	d, stderr = testDeps(t, baseEnv, &recorder{})
+	assert.Equal(t, 0, Run(context.Background(), nil, d))
+	assert.Contains(t, stderr.String(), "PROVENLY_SECRETS_KEY is not set")
 }
 
 func TestServeWithAutoMigrate(t *testing.T) {

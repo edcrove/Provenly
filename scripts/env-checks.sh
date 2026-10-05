@@ -63,6 +63,10 @@ if ! grep -q '^PROVENLY_JWT_SECRET=.\{32,\}' envs/prod.env; then
   sed -i '/^PROVENLY_\(JWT_SECRET\|ADMIN_USERNAME\|ADMIN_PASSWORD\)=$/d' envs/prod.env
   printf 'PROVENLY_JWT_SECRET=%s\nPROVENLY_ADMIN_USERNAME=admin\nPROVENLY_ADMIN_PASSWORD=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 12)" >> envs/prod.env
 fi
+if ! grep -q '^PROVENLY_SECRETS_KEY=.\{40,\}' envs/prod.env; then
+  sed -i '/^PROVENLY_SECRETS_KEY=$/d' envs/prod.env
+  printf 'PROVENLY_SECRETS_KEY=%s\n' "$(openssl rand -base64 32)" >> envs/prod.env
+fi
 prod_api() { PROVENLY_ADMIN_PASSWORD="$(sed -n 's/^PROVENLY_ADMIN_PASSWORD=//p' envs/prod.env | tail -1)" api "$@"; }
 for target in "db-reset ENV=prod" "db-restore ENV=prod FILE=$dump" "seed-snapshot FROM=prod NAME=x"; do
   # shellcheck disable=SC2086

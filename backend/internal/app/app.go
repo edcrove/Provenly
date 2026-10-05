@@ -17,7 +17,10 @@ import (
 	identitypg "github.com/edcrove/provenly/backend/internal/identity/postgres"
 	"github.com/edcrove/provenly/backend/internal/ingestion"
 	"github.com/edcrove/provenly/backend/internal/insights"
+	"github.com/edcrove/provenly/backend/internal/integrations"
+	integrationspg "github.com/edcrove/provenly/backend/internal/integrations/postgres"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
+	"github.com/edcrove/provenly/backend/internal/platform/secrets"
 	"github.com/edcrove/provenly/backend/internal/platform/telemetry"
 )
 
@@ -30,7 +33,9 @@ type Services struct {
 	Manual    *ingestion.Manual
 	Live      *ingestion.Live
 	Insights  *insights.Service
-	Identity  *identity.Service
+	// Integrations are the webhooks and connectors; its Run sends the queued webhook deliveries.
+	Integrations *integrations.Service
+	Identity     *identity.Service
 	// Now is the clock of the services (session and invitation expiry).
 	Now func() time.Time
 	// Ready reports whether the dependencies needed to serve requests (the
@@ -44,19 +49,44 @@ func NewServices(pool *pgxpool.Pool, now func() time.Time) Services {
 	return NewServicesWith(pool, now, identity.DefaultConfig(identity.RandomSecret()))
 }
 
-// NewServicesWith wires the modules with an explicit identity configuration.
+// Config configures the modules.
+type Config struct {
+	Identity identity.Config
+	// SecretsKey encrypts webhook secrets and connector tokens: 32 bytes, or nil for a random key (what is stored
+	// cannot be read after a restart).
+	SecretsKey   []byte
+	Integrations integrations.Config
+}
+
+// DefaultGitHubAPIURL is the public GitHub REST API.
+const DefaultGitHubAPIURL = "https://api.github.com"
+
+// NewServicesWith wires the modules with an explicit identity configuration, a random secrets key and outbound
+// requests restricted to public addresses.
 func NewServicesWith(pool *pgxpool.Pool, now func() time.Time, idcfg identity.Config) Services {
+	return NewServicesConfig(pool, now, Config{Identity: idcfg, Integrations: integrations.Config{GitHubAPIURL: DefaultGitHubAPIURL}})
+}
+
+// NewServicesConfig wires the modules with an explicit configuration.
+func NewServicesConfig(pool *pgxpool.Pool, now func() time.Time, cfg Config) Services {
+	idcfg := cfg.Identity
 	cat := catalog.NewService(catalogpg.NewStore(pool))
 	ids := identity.NewService(identitypg.NewStore(pool), now, idcfg)
 	exe := execution.NewService(executionpg.NewStore(pool), now)
 	// Requirement coverage reads the latest results through the catalog's port.
 	cat.SetResults(exe)
 	ing := ingestion.NewService(cat, exe, ids)
+	manual := ingestion.NewManual(cat, exe, ids)
+	box, _ := secrets.New(cfg.SecretsKey) // config.Load only accepts a 32-byte key (or none)
+	integ := integrations.NewService(integrationspg.NewStore(pool), cat, ids, box, cfg.Integrations, now)
+	// Completed runs (reports, live runs, manual runs) are exported to the project's webhooks.
+	ing.SetNotifier(integ)
+	manual.SetNotifier(integ)
 	return Services{
-		Catalog: cat, Execution: exe, Ingestion: ing, Live: ingestion.NewLive(ing, exe, now),
-		Manual:   ingestion.NewManual(cat, exe, ids),
-		Insights: insights.NewService(cat, exe, ids, now),
-		Identity: ids, Now: now, Ready: pool.Ping,
+		Catalog: cat, Execution: exe, Ingestion: ing, Live: ingestion.NewLive(ing, exe, now), Manual: manual,
+		Insights:     insights.NewService(cat, exe, ids, now),
+		Integrations: integ,
+		Identity:     ids, Now: now, Ready: pool.Ping,
 	}
 }
 
@@ -105,6 +135,7 @@ func register(r httpx.Router, s Services, maxIngestBytes int64) {
 	execution.NewHandler(s.Execution, s.Catalog, s.Identity).Register(p)
 	ingestion.NewManualHandler(s.Manual).Register(p)
 	insights.NewHandler(s.Insights).Register(p)
+	integrations.NewHandler(s.Integrations).Register(p)
 }
 
 type patternRecorder []string

@@ -15,6 +15,8 @@ import (
 	executionpg "github.com/edcrove/provenly/backend/internal/execution/postgres"
 	"github.com/edcrove/provenly/backend/internal/identity"
 	identitypg "github.com/edcrove/provenly/backend/internal/identity/postgres"
+	"github.com/edcrove/provenly/backend/internal/integrations"
+	integrationspg "github.com/edcrove/provenly/backend/internal/integrations/postgres"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/postgres"
 )
@@ -192,9 +194,31 @@ func TestPersistenceFailures(t *testing.T) {
 			"execution.ListResultsForTestCase":  func() error { _, err := exe.ListResultsForTestCase(ctx, 1, 10, 0); return err },
 			"execution.CountResultsForTestCase": func() error { _, err := exe.CountResultsForTestCase(ctx, 1); return err },
 		}
+		itg := integrationspg.NewStore(pool)
+		for name, call := range map[string]func() error{
+			"integrations.CreateWebhook":   func() error { _, err := itg.CreateWebhook(ctx, integrations.Webhook{}); return err },
+			"integrations.ListWebhooks":    func() error { _, err := itg.ListWebhooks(ctx, 1); return err },
+			"integrations.GetWebhook":      func() error { _, err := itg.GetWebhook(ctx, 1, 1); return err },
+			"integrations.GetWebhookByID":  func() error { _, err := itg.GetWebhookByID(ctx, 1); return err },
+			"integrations.UpdateWebhook":   func() error { return itg.UpdateWebhook(ctx, 1, 1, integrations.UpdateWebhookInput{}) },
+			"integrations.ListSubscribed":  func() error { _, err := itg.ListSubscribedWebhooks(ctx, 1, "run.completed"); return err },
+			"integrations.InsertDelivery":  func() error { _, err := itg.InsertDelivery(ctx, 1, "ping", []byte("{}")); return err },
+			"integrations.ClaimDue":        func() error { _, err := itg.ClaimDueDeliveries(ctx, 1); return err },
+			"integrations.FinishAttempt":   func() error { return itg.FinishAttempt(ctx, 1, integrations.Attempt{}) },
+			"integrations.ListDeliveries":  func() error { _, err := itg.ListDeliveries(ctx, 1, 10, 0); return err },
+			"integrations.CountDeliveries": func() error { _, err := itg.CountDeliveries(ctx, 1); return err },
+			"integrations.LastDeliveries":  func() error { _, err := itg.LastDeliveries(ctx, []int64{1}); return err },
+			"integrations.UpsertGitHub":    func() error { return itg.UpsertGitHubConnection(ctx, integrations.GitHubConnection{}) },
+			"integrations.GetGitHub":       func() error { _, err := itg.GetGitHubConnection(ctx, 1); return err },
+			"integrations.DeleteGitHub":    func() error { _, err := itg.DeleteGitHubConnection(ctx, 1); return err },
+			"integrations.RecordSync":      func() error { return itg.RecordGitHubSync(ctx, 1, nil, "") },
+		} {
+			calls[name] = call
+		}
 		for name, call := range calls {
 			err := call()
 			assert.Error(t, err, name)
+			assert.NotErrorIs(t, err, integrations.ErrNotFound, name)
 			assert.NotErrorIs(t, err, catalog.ErrNotFound, name)
 			assert.NotErrorIs(t, err, execution.ErrNotFound, name)
 			assert.NotErrorIs(t, err, identity.ErrNotFound, name)

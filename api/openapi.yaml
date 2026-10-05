@@ -49,6 +49,7 @@ tags:
   - name: requirements
   - name: issues
   - name: insights
+  - name: integrations
   - name: ingestion
 paths:
   /healthz:
@@ -1089,6 +1090,246 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/webhooks:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [integrations]
+      operationId: listWebhooks
+      summary: The project's webhooks with their latest delivery (maintainers); signing secrets are never returned
+      responses:
+        "200":
+          description: The webhooks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [integrations]
+      operationId: createWebhook
+      summary: Subscribe an endpoint to the project's events (maintainers); the signing secret is returned only now
+      description: >-
+        Deliveries are POSTed as JSON with the headers X-Provenly-Event, X-Provenly-Delivery, X-Provenly-Timestamp and
+        X-Provenly-Signature (`sha256=` + hex HMAC-SHA256 of `<timestamp>.<body>` with the secret). A delivery that does
+        not get a 2xx is retried after 10 s, 1 min, 5 min and 30 min, then marked failed. Endpoints must be https and
+        public (private, loopback and link-local addresses are refused) unless the deployment allows private targets.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWebhookRequest"
+      responses:
+        "201":
+          description: The webhook and its signing secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedWebhook"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/webhooks/{webhookId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/WebhookId"
+    patch:
+      tags: [integrations]
+      operationId: updateWebhook
+      summary: Change a webhook's URL or events, or pause and resume it (maintainers)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWebhookRequest"
+      responses:
+        "200":
+          description: The webhook
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Webhook"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/webhooks/{webhookId}/ping:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/WebhookId"
+    post:
+      tags: [integrations]
+      operationId: pingWebhook
+      summary: Queue a ping delivery, to check the endpoint and its signature verification (maintainers)
+      responses:
+        "202":
+          description: The queued delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookDelivery"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/WebhookId"
+    get:
+      tags: [integrations]
+      operationId: listWebhookDeliveries
+      summary: A webhook's deliveries, newest first, with the outcome of their latest attempt (maintainers)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of deliveries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookDeliveryPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/github:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [integrations]
+      operationId: getGitHubConnection
+      summary: The project's GitHub Issues connection (maintainers); the token is never returned, only a hint
+      responses:
+        "200":
+          description: The connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitHubConnection"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    put:
+      tags: [integrations]
+      operationId: connectGitHub
+      summary: Connect the project to a GitHub repository, or change its repository, labels or token (maintainers)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectGitHubRequest"
+      responses:
+        "200":
+          description: The connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitHubConnection"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [integrations]
+      operationId: disconnectGitHub
+      summary: Remove the connection and its token; the mirrored issues stay (maintainers)
+      responses:
+        "204":
+          description: Disconnected
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/github/sync:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    post:
+      tags: [integrations]
+      operationId: syncGitHub
+      summary: Mirror the repository's issues (not pull requests; only those with the labels, when set) into the project's issues (maintainers)
+      responses:
+        "200":
+          description: What the sync created and updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "502":
+          $ref: "#/components/responses/BadGateway"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -2307,6 +2548,14 @@ components:
         type: integer
         format: int64
         minimum: 1
+    WebhookId:
+      name: webhookId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
     SuiteKey:
       name: suiteKey
       in: path
@@ -2440,6 +2689,12 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    BadGateway:
+      description: An external system (e.g. GitHub) failed or answered something unusable
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     InternalError:
       description: Unexpected server error
       content:
@@ -2489,6 +2744,7 @@ components:
             - payload_too_large
             - unsupported_media_type
             - service_unavailable
+            - upstream_error
             - internal_error
         detail:
           type: string
@@ -3950,6 +4206,191 @@ components:
           items:
             type: integer
             format: int64
+
+    WebhookEvent:
+      type: string
+      enum: [run.completed]
+
+    DeliveryStatus:
+      type: string
+      enum: [pending, succeeded, failed]
+
+    WebhookDelivery:
+      type: object
+      additionalProperties: false
+      required: [id, webhookId, event, status, attempts, nextAttemptAt, lastStatusCode, lastError, createdAt, completedAt, payload]
+      properties:
+        id:
+          type: integer
+          format: int64
+        webhookId:
+          type: integer
+          format: int64
+        event:
+          type: string
+          enum: [run.completed, ping]
+        status:
+          $ref: "#/components/schemas/DeliveryStatus"
+        attempts:
+          type: integer
+          description: Attempts made so far (at most 5).
+        nextAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a pending delivery is attempted next; null once it succeeded or failed.
+        lastStatusCode:
+          type: integer
+          nullable: true
+          description: The HTTP status of the latest attempt; null before any or when the endpoint was unreachable.
+        lastError:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        payload:
+          type: object
+          description: The JSON body sent (`event`, `sentAt` and, for run.completed, `project` and the `run` as in getTestRun).
+
+    WebhookDeliveryPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/WebhookDelivery"
+
+    Webhook:
+      type: object
+      additionalProperties: false
+      required: [id, url, events, active, createdBy, createdAt, updatedAt, lastDelivery]
+      properties:
+        id:
+          type: integer
+          format: int64
+        url:
+          type: string
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/WebhookEvent"
+        active:
+          type: boolean
+          description: A paused webhook gets no new deliveries; pending ones fail.
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastDelivery:
+          allOf:
+            - $ref: "#/components/schemas/WebhookDelivery"
+          nullable: true
+
+    WebhookList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Webhook"
+
+    CreateWebhookRequest:
+      type: object
+      additionalProperties: false
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          maxLength: 2000
+          example: https://hooks.example.com/provenly
+        events:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/WebhookEvent"
+
+    CreatedWebhook:
+      type: object
+      additionalProperties: false
+      required: [webhook, secret]
+      properties:
+        webhook:
+          $ref: "#/components/schemas/Webhook"
+        secret:
+          type: string
+          description: The signing secret (whsec_...), shown only in this response.
+
+    UpdateWebhookRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        url:
+          type: string
+          maxLength: 2000
+        events:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/WebhookEvent"
+        active:
+          type: boolean
+
+    GitHubConnection:
+      type: object
+      additionalProperties: false
+      required: [repository, labels, tokenHint, lastSyncedAt, lastError, updatedAt]
+      properties:
+        repository:
+          type: string
+          example: acme/shop
+        labels:
+          type: string
+          description: Comma-separated labels an issue must have to be mirrored; empty mirrors every issue.
+        tokenHint:
+          type: string
+          description: The token's last four characters; empty when it cannot be decrypted (connect again with a token).
+        lastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastError:
+          type: string
+          nullable: true
+          description: Why the latest sync failed; null after a successful one.
+        updatedAt:
+          type: string
+          format: date-time
+
+    ConnectGitHubRequest:
+      type: object
+      additionalProperties: false
+      required: [repository]
+      properties:
+        repository:
+          type: string
+          description: owner/name
+        token:
+          type: string
+          maxLength: 500
+          description: A token that can read the repository's issues; required to connect, omitted keeps the stored one.
+        labels:
+          type: string
+          maxLength: 200
 
     ProjectQuality:
       type: object

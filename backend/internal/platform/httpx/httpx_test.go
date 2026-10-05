@@ -36,6 +36,7 @@ func TestWriteErrorMapping(t *testing.T) {
 		{apperr.Unauthorized("sign in"), 401, CodeUnauthorized, nil},
 		{apperr.Forbidden("no"), 403, CodeForbidden, nil},
 		{apperr.PreconditionFailed("stale"), 412, CodePreconditionFailed, nil},
+		{apperr.Upstream("github down"), 502, CodeUpstream, nil},
 		{apperr.InvalidDocument("bad xml"), 400, CodeInvalidJUnit, nil},
 		{apperr.Validation("v", apperr.FieldError{Field: "title", Message: "req"}), 400, CodeValidation, []FieldError{{Field: "title", Message: "req"}}},
 		{&http.MaxBytesError{Limit: 1}, 413, CodePayloadTooLarge, nil},

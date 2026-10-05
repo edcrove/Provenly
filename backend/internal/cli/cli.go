@@ -15,6 +15,7 @@ import (
 
 	"github.com/edcrove/provenly/backend/internal/app"
 	"github.com/edcrove/provenly/backend/internal/identity"
+	"github.com/edcrove/provenly/backend/internal/integrations"
 	"github.com/edcrove/provenly/backend/internal/platform/config"
 	"github.com/edcrove/provenly/backend/internal/platform/postgres"
 	"github.com/edcrove/provenly/backend/internal/platform/server"
@@ -96,11 +97,31 @@ func run(ctx context.Context, args []string, d Deps) error {
 		slog.WarnContext(ctx, "PROVENLY_JWT_SECRET is not set: using a random secret, sessions end when the API restarts")
 		secret = identity.RandomSecret()
 	}
-	services := app.NewServicesWith(pool, time.Now, identity.DefaultConfig(secret))
+	if cfg.SecretsKey == nil {
+		slog.WarnContext(ctx, "PROVENLY_SECRETS_KEY is not set: using a random key, webhook secrets and connector tokens cannot be read after the API restarts")
+	}
+	services := app.NewServicesConfig(pool, time.Now, app.Config{
+		Identity: identity.DefaultConfig(secret), SecretsKey: cfg.SecretsKey,
+		Integrations: integrations.Config{AllowPrivate: cfg.WebhooksAllowPrivate, GitHubAPIURL: cfg.GitHubAPIURL},
+	})
 	if cfg.AdminUsername != "" {
 		if err := services.Identity.Bootstrap(ctx, cfg.AdminUsername, cfg.AdminPassword); err != nil {
 			return err
 		}
 	}
+	// The webhook deliveries are sent while the API serves; the worker stops with it.
+	workerCtx, stop := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		services.Integrations.Run(workerCtx, deliveryInterval)
+		close(done)
+	}()
+	defer func() {
+		stop()
+		<-done
+	}()
 	return d.Serve(ctx, l, app.NewHandler(services, cfg.MaxIngestBytes))
 }
+
+// deliveryInterval is how often due webhook deliveries are sent.
+const deliveryInterval = 2 * time.Second

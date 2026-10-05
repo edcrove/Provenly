@@ -56,3 +56,14 @@ sql:
         sql_package: pgx/v5
         emit_interface: true
         emit_json_tags: false
+  - engine: postgresql
+    schema:
+      - migrations/00028_integrations.sql
+    queries: queries/integrations.sql
+    gen:
+      go:
+        package: integrationsdb
+        out: internal/integrations/integrationsdb
+        sql_package: pgx/v5
+        emit_interface: true
+        emit_json_tags: false

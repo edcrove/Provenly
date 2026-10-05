@@ -30,6 +30,10 @@ type Querier interface {
 	IsInUniverse(ctx context.Context, arg IsInUniverseParams) (pgtype.Bool, error)
 	ListAmendments(ctx context.Context, arg ListAmendmentsParams) ([]TestRunAmendment, error)
 	ListDiagnosticResults(ctx context.Context, testRunID int64) ([]ListDiagnosticResultsRow, error)
+	// For each given test case, its latest run with a conclusive logical status (passed, failed or error; skipped runs are
+	// inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test,
+	// aggregated failed > error > skipped > passed, as in summaries.
+	ListLatestConclusive(ctx context.Context, testCaseIds []int64) ([]ListLatestConclusiveRow, error)
 	// The valid results of each given test case in the latest run that has one for it (status, test and attempt), to
 	// read its latest status (requirement coverage).
 	ListLatestResults(ctx context.Context, testCaseIds []int64) ([]ListLatestResultsRow, error)

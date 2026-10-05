@@ -546,6 +546,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        /** The project's issues with their QA verification, newest first (anyone who can see the project) */
+        get: operations["listIssues"];
+        put?: never;
+        /** Report a native issue (numbered I-n) or register one of an external tracker by its id (members) */
+        post: operations["createIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/issues/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mirror issues of an external tracker with their state (read-only sync, by external id; maintainers) */
+        post: operations["importIssues"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/issues/{issueId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                issueId: components["parameters"]["IssueId"];
+            };
+            cookie?: never;
+        };
+        /** An issue with the verification of each linked test case */
+        get: operations["getIssue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit, close or reopen an issue (members) */
+        patch: operations["updateIssue"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/issues/{issueId}/test-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                issueId: components["parameters"]["IssueId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the test cases that reproduce an issue (members) */
+        put: operations["setIssueTestCases"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-cases": {
         parameters: {
             query?: never;
@@ -1572,6 +1656,95 @@ export interface components {
         RequirementLinksRequest: {
             testCaseIds: number[];
         };
+        Issue: {
+            /** Format: int64 */
+            id: number;
+            provider: components["schemas"]["RequirementProvider"];
+            /**
+             * @description The issue's id in its tracker (I-n for native ones). Never changes.
+             * @example PAY-123
+             */
+            externalId: string;
+            title: string;
+            description: string;
+            url: string;
+            state: components["schemas"]["IssueState"];
+            /** @description The status in the tracker, as mirrored (free text). */
+            providerStatus: string;
+            /** Format: date-time */
+            closedAt: string | null;
+            /**
+             * Format: date-time
+             * @description When an import last mirrored it (null for native issues).
+             */
+            lastSyncedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            testCaseIds: number[];
+            verification: components["schemas"]["Verification"];
+        };
+        /** @enum {string} */
+        IssueState: "open" | "closed";
+        /** @description QA verification (DEC-8) from the issue's state and the latest conclusive result (passed, failed or error) of each linked test case; skipped results are inconclusive and keep the previous evidence. The issue's status is the worst of its test cases (reopen > known_issue > unverified > not_reproducible > validated_fixed). */
+        Verification: {
+            /** @enum {string} */
+            status: "unlinked" | "unverified" | "known_issue" | "reopen" | "not_reproducible" | "validated_fixed";
+            testCases: {
+                /** Format: int64 */
+                testCaseId: number;
+                /** @enum {string} */
+                status: "unverified" | "known_issue" | "reopen" | "not_reproducible" | "validated_fixed";
+                /**
+                 * @description The latest conclusive status of the test case.
+                 * @enum {string|null}
+                 */
+                evidence: "passed" | "failed" | "error" | null;
+                /**
+                 * Format: int64
+                 * @description The run the evidence comes from.
+                 */
+                evidenceRunId: number | null;
+                /** @description The latest result was skipped; the verification kept the previous evidence. */
+                latestInconclusive: boolean;
+            }[];
+        };
+        IssueList: {
+            items: components["schemas"]["Issue"][];
+        };
+        CreateIssueRequest: {
+            provider?: components["schemas"]["RequirementProvider"];
+            /** @description Required for external trackers; native issues are numbered by Provenly. */
+            externalId?: string;
+            title: string;
+            description?: string;
+            url?: string;
+            state?: components["schemas"]["IssueState"];
+            providerStatus?: string;
+        };
+        ImportIssuesRequest: {
+            /** @enum {string} */
+            provider: "jira" | "github" | "azure_devops";
+            items: {
+                externalId: string;
+                title: string;
+                description?: string;
+                url?: string;
+                state: components["schemas"]["IssueState"];
+                providerStatus?: string;
+            }[];
+        };
+        UpdateIssueRequest: {
+            title?: string;
+            description?: string;
+            url?: string;
+            state?: components["schemas"]["IssueState"];
+            providerStatus?: string;
+        };
+        IssueLinksRequest: {
+            testCaseIds: number[];
+        };
         TestRunPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["TestRun"][];
         };
@@ -1922,6 +2095,7 @@ export interface components {
         /** @example risk */
         DimensionKey: string;
         RequirementId: number;
+        IssueId: number;
         /** @example smoke */
         SuiteKey: string;
         /** @example critical */
@@ -3043,6 +3217,201 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Requirement"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listIssues: {
+        parameters: {
+            query?: {
+                /** @description Only the issues linked to this test case. */
+                testCase?: number;
+                /** @description Only open or only closed issues. */
+                state?: components["schemas"]["IssueState"];
+            };
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description The issue */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    importIssues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportIssuesRequest"];
+            };
+        };
+        responses: {
+            /** @description What the import created and updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                issueId: components["parameters"]["IssueId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The issue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                issueId: components["parameters"]["IssueId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description The issue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    setIssueTestCases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                issueId: components["parameters"]["IssueId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueLinksRequest"];
+            };
+        };
+        responses: {
+            /** @description The issue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Issue"];
                 };
             };
             400: components["responses"]["BadRequest"];

@@ -344,3 +344,56 @@ DELETE FROM requirement_test_cases WHERE requirement_id = @requirement_id AND NO
 INSERT INTO requirement_test_cases (requirement_id, project_id, test_case_id)
 SELECT @requirement_id, @project_id, unnest(@test_case_ids::bigint[])
 ON CONFLICT DO NOTHING;
+
+-- name: ListIssues :many
+-- A project's issues (optionally only those linked to a test case, or in one state), newest first, with their linked
+-- test cases.
+SELECT i.*, coalesce((SELECT array_agg(l.test_case_id ORDER BY l.test_case_id) FROM issue_test_cases l WHERE l.issue_id = i.id), '{}')::bigint[] AS test_case_ids
+FROM issues i
+WHERE i.project_id = @project_id
+  AND (sqlc.narg('state')::text IS NULL OR i.state = sqlc.narg('state')::text)
+  AND (sqlc.narg('test_case_id')::bigint IS NULL OR EXISTS (SELECT 1 FROM issue_test_cases x WHERE x.issue_id = i.id AND x.test_case_id = sqlc.narg('test_case_id')::bigint))
+ORDER BY i.id DESC;
+
+-- name: GetIssue :one
+SELECT i.*, coalesce((SELECT array_agg(l.test_case_id ORDER BY l.test_case_id) FROM issue_test_cases l WHERE l.issue_id = i.id), '{}')::bigint[] AS test_case_ids
+FROM issues i WHERE i.project_id = @project_id AND i.id = @id;
+
+-- name: NextNativeIssueNumber :one
+-- Takes the next I-<n> of a project's native issues from its counter (the row lock serializes concurrent creations).
+UPDATE projects SET next_issue_number = next_issue_number + 1
+WHERE id = @project_id
+RETURNING (next_issue_number - 1)::bigint AS number;
+
+-- name: UpsertIssue :one
+-- Creates an issue, or (when sync is true) updates the mirrored one with the same provider and external id; closed_at
+-- follows the state (kept while it stays closed).
+INSERT INTO issues (project_id, provider, external_id, title, description, url, state, provider_status, closed_at, last_synced_at)
+VALUES (@project_id, @provider, @external_id, @title, @description, @url, @state, @provider_status,
+    CASE WHEN @state::text = 'closed' THEN now() END, sqlc.narg('last_synced_at'))
+ON CONFLICT (project_id, provider, external_id) DO UPDATE SET
+    title = EXCLUDED.title, description = EXCLUDED.description, url = EXCLUDED.url, state = EXCLUDED.state,
+    provider_status = EXCLUDED.provider_status, last_synced_at = EXCLUDED.last_synced_at,
+    closed_at = CASE WHEN EXCLUDED.state = 'closed' THEN coalesce(issues.closed_at, now()) END, updated_at = now()
+WHERE @sync::boolean
+RETURNING id, (xmax = 0)::boolean AS created;
+
+-- name: UpdateIssue :one
+UPDATE issues SET
+    title           = coalesce(sqlc.narg('title'), title),
+    description     = coalesce(sqlc.narg('description'), description),
+    url             = coalesce(sqlc.narg('url'), url),
+    provider_status = coalesce(sqlc.narg('provider_status'), provider_status),
+    state           = coalesce(sqlc.narg('state'), state),
+    closed_at       = CASE WHEN coalesce(sqlc.narg('state'), state) = 'closed' THEN coalesce(closed_at, now()) END,
+    updated_at      = now()
+WHERE project_id = @project_id AND id = @id
+RETURNING id;
+
+-- name: DeleteIssueLinks :exec
+DELETE FROM issue_test_cases WHERE issue_id = @issue_id AND NOT (test_case_id = ANY(coalesce(@keep::bigint[], '{}')));
+
+-- name: AddIssueLinks :exec
+INSERT INTO issue_test_cases (issue_id, project_id, test_case_id)
+SELECT @issue_id, @project_id, unnest(@test_case_ids::bigint[])
+ON CONFLICT DO NOTHING;

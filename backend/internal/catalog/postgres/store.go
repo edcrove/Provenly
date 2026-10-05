@@ -653,3 +653,64 @@ func timestamptzArg(t *time.Time) pgtype.Timestamptz {
 	}
 	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
+
+func toIssue(r catalogdb.ListIssuesRow) catalog.Issue {
+	return catalog.Issue{
+		ID: r.ID, ProjectID: r.ProjectID, Provider: r.Provider, ExternalID: r.ExternalID, Title: r.Title, Description: r.Description,
+		URL: r.Url, State: r.State, ProviderStatus: r.ProviderStatus, ClosedAt: timePtr(r.ClosedAt), LastSyncedAt: timePtr(r.LastSyncedAt),
+		CreatedAt: r.CreatedAt.Time, UpdatedAt: r.UpdatedAt.Time, TestCaseIDs: nonNil(r.TestCaseIds),
+	}
+}
+
+// ListIssues implements catalog.Repository.
+func (s *Store) ListIssues(ctx context.Context, projectID int64, f catalog.IssueFilter) ([]catalog.Issue, error) {
+	rows, err := s.q.ListIssues(ctx, catalogdb.ListIssuesParams{ProjectID: projectID, State: text(f.State), TestCaseID: int8Arg(f.TestCaseID)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]catalog.Issue, len(rows))
+	for i, r := range rows {
+		out[i] = toIssue(r)
+	}
+	return out, nil
+}
+
+// GetIssue implements catalog.Repository.
+func (s *Store) GetIssue(ctx context.Context, projectID, id int64) (catalog.Issue, error) {
+	r, err := s.q.GetIssue(ctx, catalogdb.GetIssueParams{ProjectID: projectID, ID: id})
+	return toIssue(catalogdb.ListIssuesRow(r)), notFound(err)
+}
+
+// NextNativeIssueNumber implements catalog.Repository.
+func (s *Store) NextNativeIssueNumber(ctx context.Context, projectID int64) (int64, error) {
+	return s.q.NextNativeIssueNumber(ctx, projectID)
+}
+
+// UpsertIssue implements catalog.Repository.
+func (s *Store) UpsertIssue(ctx context.Context, projectID int64, in catalog.IssueInput, sync bool, syncedAt *time.Time) (int64, bool, bool, error) {
+	r, err := s.q.UpsertIssue(ctx, catalogdb.UpsertIssueParams{
+		ProjectID: projectID, Provider: in.Provider, ExternalID: in.ExternalID, Title: in.Title, Description: in.Description,
+		Url: in.URL, State: in.State, ProviderStatus: in.ProviderStatus, LastSyncedAt: timestamptzArg(syncedAt), Sync: sync,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, false, nil
+	}
+	return r.ID, r.Created, err == nil, err
+}
+
+// UpdateIssue implements catalog.Repository.
+func (s *Store) UpdateIssue(ctx context.Context, projectID, id int64, in catalog.UpdateIssueInput) error {
+	_, err := s.q.UpdateIssue(ctx, catalogdb.UpdateIssueParams{
+		ProjectID: projectID, ID: id, Title: text(in.Title), Description: text(in.Description), Url: text(in.URL),
+		ProviderStatus: text(in.ProviderStatus), State: text(in.State),
+	})
+	return notFound(err)
+}
+
+// SetIssueTestCases implements catalog.Repository.
+func (s *Store) SetIssueTestCases(ctx context.Context, issueID, projectID int64, ids []int64) error {
+	if err := s.q.DeleteIssueLinks(ctx, catalogdb.DeleteIssueLinksParams{IssueID: issueID, Keep: ids}); err != nil {
+		return err
+	}
+	return s.q.AddIssueLinks(ctx, catalogdb.AddIssueLinksParams{IssueID: issueID, ProjectID: projectID, TestCaseIds: nonNil(ids)})
+}

@@ -444,6 +444,53 @@ func (q *Queries) ListDiagnosticResults(ctx context.Context, testRunID int64) ([
 	return items, nil
 }
 
+const listLatestConclusive = `-- name: ListLatestConclusive :many
+WITH last_attempts AS (
+    SELECT DISTINCT ON (t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name)
+        t.test_case_id, t.test_run_id, t.status
+    FROM test_results t
+    WHERE t.correlation = 'valid' AND t.test_case_id = ANY($1::bigint[])
+    ORDER BY t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name, t.attempt DESC, t.id DESC
+), per_run AS (
+    SELECT a.test_case_id, a.test_run_id,
+        CASE WHEN bool_or(a.status = 'failed') THEN 'failed' WHEN bool_or(a.status = 'error') THEN 'error'
+             WHEN bool_or(a.status = 'skipped') THEN 'skipped' ELSE 'passed' END AS status
+    FROM last_attempts a GROUP BY a.test_case_id, a.test_run_id
+)
+SELECT DISTINCT ON (p.test_case_id) p.test_case_id::bigint AS test_case_id, p.test_run_id, p.status::text AS status
+FROM per_run p WHERE p.status <> 'skipped'
+ORDER BY p.test_case_id, p.test_run_id DESC
+`
+
+type ListLatestConclusiveRow struct {
+	TestCaseID int64
+	TestRunID  int64
+	Status     string
+}
+
+// For each given test case, its latest run with a conclusive logical status (passed, failed or error; skipped runs are
+// inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test,
+// aggregated failed > error > skipped > passed, as in summaries.
+func (q *Queries) ListLatestConclusive(ctx context.Context, testCaseIds []int64) ([]ListLatestConclusiveRow, error) {
+	rows, err := q.db.Query(ctx, listLatestConclusive, testCaseIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLatestConclusiveRow
+	for rows.Next() {
+		var i ListLatestConclusiveRow
+		if err := rows.Scan(&i.TestCaseID, &i.TestRunID, &i.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLatestResults = `-- name: ListLatestResults :many
 SELECT t.test_case_id::bigint AS test_case_id, t.status, (t.suite_name || chr(31) || t.class_name || chr(31) || t.test_name)::text AS execution, t.attempt
 FROM test_results t

@@ -65,3 +65,6 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 58 | Requirements of a project: a native one and two mirrored from Jira, with their coverage | `58-requirements.png` |
 | 59 | A Jira requirement covered by two test cases: one passed, one failed in its latest result | `59-requirement-detail.png` |
 | 60 | A test case page listing the requirements it covers | `60-test-case-covered-requirements.png` |
+| 61 | Issues of a project: a native one and two mirrored from Jira, with their state and QA verification | `61-issues.png` |
+| 62 | A Jira issue reproduced by a failing test case: known issue, with the run that is its evidence | `62-issue-detail.png` |
+| 63 | A run whose failure is a known issue (linked to an open Jira issue) | `63-test-run-known-issues.png` |

@@ -308,6 +308,7 @@ test.describe('Frontend UI journeys', () => {
 
     await page.getByLabel('Current project').selectOption('')
     await page.getByRole('link', { name: 'Test Cases' }).click()
+    await expect(page).toHaveURL(/\/test-cases$/)
     await expect(page.getByRole('link', { name: `${key}-1` })).toBeVisible()
   })
 })

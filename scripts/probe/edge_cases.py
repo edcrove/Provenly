@@ -479,6 +479,43 @@ def main():
     [t.join() for t in threads]
     check("20 concurrent native requirements: distinct R-n", len(set(codes)), 20)
 
+    # Issues (prototype feature 13, DEC-8): providers, states, text and links are validated before any lookup; imports
+    # need a state; verification follows the state and the latest conclusive result; native numbers never collide.
+    issues = f"/projects/{key}/issues"
+    for body, exp in [({}, 400), ({"title": " "}, 400), ({"title": "x", "state": "done"}, 400), ({"title": "x", "state": ""}, 201),
+                      ({"title": "x", "provider": "jira"}, 400), ({"title": "x", "provider": "provenly", "externalId": "I-9"}, 400),
+                      ({"title": "x", "url": "javascript:alert(1)"}, 400), ({"title": "a\u0000"}, 400), ({"title": "x", "unknown": 1}, 400),
+                      ({"title": "x", "provider": "github", "externalId": "PROBE-1", "state": "closed"}, 201),
+                      ({"title": "again", "provider": "github", "externalId": "PROBE-1"}, 409)]:
+        check(f"create issue {str(body)[:50]}", call(base, "POST", issues, body)[0], exp)
+    check("create issue text/plain", call(base, "POST", issues, raw=b"{}", ctype="text/plain")[0], 415)
+    for body, exp in [({"provider": "jira", "items": [{"externalId": "B-1", "title": "x"}]}, 400),
+                      ({"provider": "jira", "items": [{"externalId": "B-1", "title": "x", "state": "resolved"}]}, 400),
+                      ({"provider": "jira", "items": [{"externalId": f"B-{i}", "title": "x", "state": "open"} for i in range(501)]}, 400),
+                      ({"provider": "jira", "items": [{"externalId": "B-1", "title": "x", "state": "open"}]}, 200)]:
+        check(f"import issues {str(body)[:50]}", call(base, "POST", f"{issues}/import", body)[0], exp)
+    st, page = call(base, "GET", f"{issues}?state=open")
+    bug = next((i for i in page.get("items", []) if i["externalId"] == "B-1"), {}) if isinstance(page, dict) else {}
+    bid = bug.get("id", 0)
+    check("link a test case", call(base, "PUT", f"{issues}/{bid}/test-cases", {"testCaseIds": [hand]})[0], 200)
+    st, got = call(base, "GET", f"{issues}/{bid}")
+    check("open with a passing manual re-test: not reproducible", got.get("verification", {}).get("status") if isinstance(got, dict) else st, "not_reproducible")
+    check("close it", call(base, "PATCH", f"{issues}/{bid}", {"state": "closed"})[0], 200)
+    st, got = call(base, "GET", f"{issues}/{bid}")
+    check("closed with a passing manual re-test: validated fixed", got.get("verification", {}).get("status") if isinstance(got, dict) else st, "validated_fixed")
+    for path, method, body, exp in [(f"{issues}/0", "GET", None, 400), (f"{issues}/9223372036854775807", "GET", None, 404),
+                                    (f"{issues}/{bid}", "PATCH", {}, 400), (f"{issues}/{bid}", "PATCH", {"state": "resolved"}, 400),
+                                    (f"{issues}/{bid}", "PATCH", {"state": None}, 400), (f"{issues}/{bid}/test-cases", "PUT", {"testCaseIds": [a]}, 400),
+                                    (f"{issues}/9223372036854775807/test-cases", "PUT", {"testCaseIds": []}, 404)]:
+        check(f"{method} {path[len(issues):] or '/'} {str(body)[:30]}", call(base, method, path, body)[0], exp)
+    for qs, exp in [("state=open", 200), ("state=", 400), ("state=OPEN", 400), ("testCase=0", 400), (f"testCase={hand}&state=closed", 200)]:
+        check(f"issues ?{qs}", call(base, "GET", f"{issues}?{qs}")[0], exp)
+    codes = []
+    threads = [threading.Thread(target=lambda: codes.append(call(base, "POST", issues, {"title": "race"})[1].get("externalId"))) for _ in range(20)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    check("20 concurrent native issues: distinct I-n", len(set(codes)), 20)
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

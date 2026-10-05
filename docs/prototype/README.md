@@ -27,7 +27,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 10 | Test suites (static and query) and partial-run scope | Planning #27, MVP D2, Incubator | ✅ | proto/10-suites |
 | 11 | Manual execution (manual runs, step results) | MVP D3, Planning #4, Incubator | ✅ | proto/11-manual-execution |
 | 12 | Requirements and requirement ↔ test traceability | Incubator (Requirements Federation) | ✅ | proto/12-requirements |
-| 13 | Issues, known issues and issue verification | Incubator, Planning #8 | ⏳ | |
+| 13 | Issues, known issues and issue verification | Incubator, Planning #8 | ✅ | proto/13-issues |
 | 14 | Quality dashboard (trends, flaky, coverage) | Incubator (Quality Intelligence) | ⏳ | |
 | 15 | Live runs: execution sessions, live events, reconciliation | Trello Live Streaming, Planning #9 | ⏳ | |
 | 16 | Playwright reporter (`@provenly/playwright-reporter`) | Trello, DEC-15 | ⏳ | |
@@ -122,6 +122,12 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P12-3 | Traceability | Many-to-many links between requirements and test cases of the same project, replaced as a set (`PUT .../test-cases`), editable by members | Simple to reason about and idempotent; the UI links and unlinks one at a time on top of it |
 | P12-4 | Coverage | Computed on read from the **latest result** of each covering test case (its logical status in the latest run with a valid result): failing if any failed/errored, passing if all passed, not run if none has results, partial otherwise, uncovered without links | Always current, no stored aggregate to keep in sync; the latest result is what a release decision looks at |
 | P12-5 | Lifecycle | Requirements are archived, never deleted; provider and external id never change (database trigger); native numbers come from a per-project counter and are never reused | Same identity guarantees as test cases |
+| P13-1 | Model | Issues are federated like requirements (native `I-n` or mirrored from Jira / GitHub / Azure DevOps by external id) with a normalized **state** (open / closed) besides the free-text status in the tracker; imports must state it; closing stamps `closedAt` | The DEC-8 matrix needs a two-valued state; trackers' workflows vary, so the mapping to open/closed belongs to whoever pushes the import |
+| P13-2 | Verification | Derived on read, never stored, with the DEC-8 base matrix per linked test case (open+fail = known issue, closed+fail = reopen, open+pass = not reproducible, closed+pass = validated fixed; error counts as a failure; no conclusive result = unverified) | Notion 05 Issue Verification State Machine, accepted as DEC-8 |
+| P13-3 | Inconclusive | The evidence is the latest **conclusive** logical result (passed / failed / error); a later skipped run keeps it and the link says `latestInconclusive` with the evidence run id | "BLOCKED, SKIPPED… must not replace a previous conclusive verification" (Notion 05) |
+| P13-4 | Aggregation | The issue takes its worst link: reopen > known issue > unverified > not reproducible > validated fixed. Not configurable in the prototype | Notion asks for a configurable policy; one safe default first, configuration once there is a second policy to offer |
+| P13-5 | Known issues | The run page lists failing test cases linked to an open issue as "known issue" and the rest as "new failures"; the run's verdict is unchanged | Triage help without hiding failures in the verdict |
+| P13-6 | Not now | No verification timeline (history), no write-back to trackers (reopen, comment, transition) | Timeline needs stored state changes (feature 20, audit log); write-back needs tracker credentials (feature 18) |
 | P12-6 | UI | A Requirements page (list with coverage, native creation and external registration), a requirement page (covering test cases, latest results, link/unlink, archive) and "Requirements" on the test case page | Traceability is visible from both sides |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
@@ -295,6 +301,21 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: new manual run page, manual execution panel on the run page, running/manual badges (screenshots 56–57).
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
+
+### 13. Issues, known issues and verification (DEC-8, Planning #8)
+
+- **Behavior**: issues are reported in Provenly (`I-1`…) or mirrored from a tracker with their state. Members link the
+  test cases that reproduce an issue; each link shows its evidence (latest conclusive result and its run) and its
+  verification, and the issue shows the worst one. Closing or reopening (in Provenly or by a re-import) re-derives it.
+  Run pages split failures into known issues and new failures; test case pages list their issues.
+- **API**: `GET/POST /projects/{key}/issues` (`?testCase=`, `?state=`), `POST .../issues/import`,
+  `GET/PATCH .../issues/{id}`, `PUT .../issues/{id}/test-cases`.
+- **Data**: migration 00025 (`issues`, `issue_test_cases`, `projects.next_issue_number`; state/closedAt consistency,
+  immutable identity, no deletes).
+- **UI**: Issues page with a state filter, issue page, linked issues on the test case page, known issues on the run
+  page (screenshots 61–63).
+- **Tests**: unit (matrix, aggregate, service, handlers, `LatestConclusive`), BE-INT-051, backend and frontend contract,
+  FE-INT-041, BE-E2E-019, FE-E2E-021, probe issues sweep.
 
 ### 12. Requirements and traceability (Incubator: Requirements Federation)
 

@@ -164,7 +164,7 @@ func TestAuthentication(t *testing.T) {
 	s := fresh(t)
 	e := anon(t, s, 1<<20)
 	params := strings.NewReplacer("{testCaseId}", "1", "{testRunId}", "1", "{stepId}", "1", "{projectKey}", "TC", "{invitationId}", "1", "{username}", "admin", "{apiKeyId}", "1",
-		"{dimensionKey}", "risk", "{valueKey}", "low", "{suiteKey}", "smoke", "{requirementId}", "1")
+		"{dimensionKey}", "risk", "{valueKey}", "low", "{suiteKey}", "smoke", "{requirementId}", "1", "{issueId}", "1")
 	protected := 0
 	for path, item := range doc.Paths.Map() {
 		for method, op := range item.Operations() {
@@ -176,7 +176,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 55, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 61, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -540,6 +540,12 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.GET("/api/v1/projects/TC/requirements/1").Expect())
 	problem(e.PATCH("/api/v1/projects/TC/requirements/1").WithJSON(map[string]any{"title": "x"}).Expect())
 	problem(e.PUT("/api/v1/projects/TC/requirements/1/test-cases").WithJSON(map[string]any{"testCaseIds": []int{}}).Expect())
+	problem(e.GET("/api/v1/projects/TC/issues").Expect())
+	problem(e.POST("/api/v1/projects/TC/issues").WithJSON(map[string]any{"title": "x"}).Expect())
+	problem(e.POST("/api/v1/projects/TC/issues/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "X-1", "title": "x", "state": "open"}}}).Expect())
+	problem(e.GET("/api/v1/projects/TC/issues/1").Expect())
+	problem(e.PATCH("/api/v1/projects/TC/issues/1").WithJSON(map[string]any{"title": "x"}).Expect())
+	problem(e.PUT("/api/v1/projects/TC/issues/1/test-cases").WithJSON(map[string]any{"testCaseIds": []int{}}).Expect())
 	problem(e.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "TC", "name": "x"}).Expect())
 	problem(e.POST("/api/v1/test-runs/1/manual-results").WithJSON(map[string]any{"testCaseId": 1, "status": "passed"}).Expect())
 	problem(e.POST("/api/v1/test-runs/1/finish").WithJSON(map[string]any{"status": "completed"}).Expect())
@@ -1056,4 +1062,64 @@ func TestRequirements(t *testing.T) {
 	viewer.POST(reqs + "/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "1", "title": "x"}}}).Expect().Status(http.StatusForbidden)
 	viewer.PATCH(reqs + "/" + jiraID).WithJSON(map[string]any{"title": "x"}).Expect().Status(http.StatusForbidden)
 	viewer.PUT(reqs + "/" + jiraID + "/test-cases").WithJSON(map[string]any{"testCaseIds": []int64{}}).Expect().Status(http.StatusForbidden)
+}
+
+func TestIssues(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	e := anon(t, s, 1<<20)
+	tc := admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "refund", "automated": true}).Expect().Status(http.StatusCreated).JSON().Object()
+	id := int64(tc.Value("id").Number().Raw())
+	issues := "/api/v1/projects/TC/issues"
+
+	native := admin.POST(issues).WithJSON(map[string]any{"title": "Double refund", "url": "https://x.test"}).Expect().Status(http.StatusCreated).JSON().Object()
+	native.HasValue("externalId", "I-1").HasValue("provider", "provenly").HasValue("state", "open").HasValue("closedAt", nil).
+		Value("verification").Object().HasValue("status", "unlinked")
+	jira := admin.POST(issues).WithJSON(map[string]any{"title": "Refund fails", "provider": "jira", "externalId": "PAY-7", "state": "closed"}).Expect().Status(http.StatusCreated).JSON().Object()
+	jira.Value("closedAt").String().NotEmpty()
+	jiraID := strconv.FormatInt(int64(jira.Value("id").Number().Raw()), 10)
+	admin.POST(issues).WithJSON(map[string]any{"title": "x", "provider": "jira", "externalId": "PAY-7"}).Expect().Status(http.StatusConflict)
+	admin.POST(issues).WithJSON(map[string]any{"title": "x", "state": "done"}).Expect().Status(http.StatusBadRequest)
+	admin.POST(issues).WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.POST("/api/v1/projects/NOPE/issues").WithJSON(map[string]any{"title": "x"}).Expect().Status(http.StatusNotFound)
+
+	admin.POST(issues + "/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "PAY-7", "title": "Refund fails v2", "state": "closed", "providerStatus": "Done"},
+		{"externalId": "PAY-8", "title": "Slow", "state": "open"}}}).Expect().Status(http.StatusOK).JSON().Object().IsEqual(map[string]any{"created": 1, "updated": 1})
+	admin.POST(issues + "/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "1", "title": "x"}}}).Expect().Status(http.StatusBadRequest)
+	admin.POST(issues + "/import").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.POST("/api/v1/projects/NOPE/issues/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "1", "title": "x", "state": "open"}}}).Expect().Status(http.StatusNotFound)
+
+	admin.PUT(issues+"/"+jiraID+"/test-cases").WithJSON(map[string]any{"testCaseIds": []int64{id}}).Expect().Status(http.StatusOK).
+		JSON().Object().Value("verification").Object().HasValue("status", "unverified").Value("testCases").Array().Value(0).Object().HasValue("evidence", nil)
+	ingest(admin, "91", 1, `<testsuite><testcase name="refund TC-`+strconv.FormatInt(id, 10)+`"><failure message="x"/></testcase></testsuite>`).Expect().Status(http.StatusCreated)
+	ingest(admin, "92", 1, `<testsuite><testcase name="refund TC-`+strconv.FormatInt(id, 10)+`"><skipped/></testcase></testsuite>`).Expect().Status(http.StatusCreated)
+	link := admin.GET(issues+"/"+jiraID).Expect().Status(http.StatusOK).JSON().Object().HasValue("title", "Refund fails v2").
+		Value("verification").Object().HasValue("status", "reopen").Value("testCases").Array().Value(0).Object()
+	link.HasValue("evidence", "failed").HasValue("latestInconclusive", true).Value("evidenceRunId").Number().Gt(0)
+	admin.GET(issues).WithQuery("testCase", id).Expect().Status(http.StatusOK).JSON().Object().Value("items").Array().Length().IsEqual(1)
+	admin.GET(issues).WithQuery("state", "open").Expect().Status(http.StatusOK).JSON().Object().Value("items").Array().Length().IsEqual(2)
+	admin.GET(issues).WithQuery("state", "done").Expect().Status(http.StatusBadRequest)
+	admin.GET(issues).WithQuery("testCase", "x").Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/projects/NOPE/issues").Expect().Status(http.StatusNotFound)
+	admin.GET(issues + "/0").Expect().Status(http.StatusBadRequest)
+	admin.GET(issues + "/987654").Expect().Status(http.StatusNotFound)
+	admin.PATCH(issues+"/"+jiraID).WithJSON(map[string]any{"state": "open"}).Expect().Status(http.StatusOK).JSON().Object().
+		HasValue("closedAt", nil).Value("verification").Object().HasValue("status", "known_issue")
+	admin.PATCH(issues + "/" + jiraID).WithJSON(map[string]any{}).Expect().Status(http.StatusBadRequest)
+	admin.PATCH(issues + "/987654").WithJSON(map[string]any{"title": "x"}).Expect().Status(http.StatusNotFound)
+	admin.PATCH(issues + "/" + jiraID).WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.PUT(issues + "/" + jiraID + "/test-cases").WithJSON(map[string]any{"testCaseIds": []int64{987654}}).Expect().Status(http.StatusBadRequest)
+	admin.PUT(issues + "/987654/test-cases").WithJSON(map[string]any{"testCaseIds": []int64{}}).Expect().Status(http.StatusNotFound)
+	admin.PUT(issues + "/" + jiraID + "/test-cases").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+
+	// Viewers read; members (and up) write; only maintainers import.
+	inv := admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "TC", "role": "viewer"}).Expect().Status(http.StatusCreated).JSON().Object()
+	viewer := as(e, e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "vic",
+		"displayName": "Vic", "password": "vic's password"}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
+	viewer.GET(issues).Expect().Status(http.StatusOK)
+	viewer.GET(issues + "/" + jiraID).Expect().Status(http.StatusOK)
+	viewer.POST(issues).WithJSON(map[string]any{"title": "x"}).Expect().Status(http.StatusForbidden)
+	viewer.POST(issues + "/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "1", "title": "x", "state": "open"}}}).Expect().Status(http.StatusForbidden)
+	viewer.PATCH(issues + "/" + jiraID).WithJSON(map[string]any{"title": "x"}).Expect().Status(http.StatusForbidden)
+	viewer.PUT(issues + "/" + jiraID + "/test-cases").WithJSON(map[string]any{"testCaseIds": []int64{}}).Expect().Status(http.StatusForbidden)
 }

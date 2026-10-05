@@ -59,6 +59,9 @@ type ResultReader interface {
 	// LatestStatuses returns the status of each test case in the latest run that has a result for it (passed,
 	// failed, error or skipped); test cases without results are absent.
 	LatestStatuses(ctx context.Context, testCaseIDs []int64) (map[int64]string, error)
+	// LatestConclusive returns the latest conclusive status (passed, failed or error) of each test case and the run
+	// it came from; test cases without conclusive results are absent.
+	LatestConclusive(ctx context.Context, testCaseIDs []int64) (map[int64]string, map[int64]int64, error)
 }
 
 // noResults is the reader of a catalog without an execution module: nothing has run.
@@ -66,6 +69,10 @@ type noResults struct{}
 
 func (noResults) LatestStatuses(context.Context, []int64) (map[int64]string, error) {
 	return map[int64]string{}, nil
+}
+
+func (noResults) LatestConclusive(context.Context, []int64) (map[int64]string, map[int64]int64, error) {
+	return map[int64]string{}, map[int64]int64{}, nil
 }
 
 // SetResults gives the service the reader of latest results used for requirement coverage.

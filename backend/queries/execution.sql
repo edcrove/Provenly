@@ -166,3 +166,23 @@ FROM test_results t
 WHERE t.correlation = 'valid' AND t.test_case_id = ANY(@test_case_ids::bigint[])
   AND t.test_run_id = (SELECT max(x.test_run_id) FROM test_results x WHERE x.test_case_id = t.test_case_id AND x.correlation = 'valid')
 ORDER BY t.test_case_id, t.id;
+
+-- name: ListLatestConclusive :many
+-- For each given test case, its latest run with a conclusive logical status (passed, failed or error; skipped runs are
+-- inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test,
+-- aggregated failed > error > skipped > passed, as in summaries.
+WITH last_attempts AS (
+    SELECT DISTINCT ON (t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name)
+        t.test_case_id, t.test_run_id, t.status
+    FROM test_results t
+    WHERE t.correlation = 'valid' AND t.test_case_id = ANY(@test_case_ids::bigint[])
+    ORDER BY t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name, t.attempt DESC, t.id DESC
+), per_run AS (
+    SELECT a.test_case_id, a.test_run_id,
+        CASE WHEN bool_or(a.status = 'failed') THEN 'failed' WHEN bool_or(a.status = 'error') THEN 'error'
+             WHEN bool_or(a.status = 'skipped') THEN 'skipped' ELSE 'passed' END AS status
+    FROM last_attempts a GROUP BY a.test_case_id, a.test_run_id
+)
+SELECT DISTINCT ON (p.test_case_id) p.test_case_id::bigint AS test_case_id, p.test_run_id, p.status::text AS status
+FROM per_run p WHERE p.status <> 'skipped'
+ORDER BY p.test_case_id, p.test_run_id DESC;

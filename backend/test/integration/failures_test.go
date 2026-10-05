@@ -104,8 +104,18 @@ func TestPersistenceFailures(t *testing.T) {
 			},
 			"catalog.SetRequirementTestCases": func() error { return cat.SetRequirementTestCases(ctx, 1, 1, []int64{1}) },
 			"execution.ListLatestResults":     func() error { _, err := exe.ListLatestResults(ctx, []int64{1}); return err },
-			"catalog.SetClassification":       func() error { return cat.SetClassification(ctx, 1, 1, 1, 1) },
-			"catalog.ClearClassification":     func() error { return cat.SetClassification(ctx, 1, 1, 1, 0) },
+			"execution.ListLatestConclusive":  func() error { _, err := exe.ListLatestConclusive(ctx, []int64{1}); return err },
+			"catalog.ListIssues":              func() error { _, err := cat.ListIssues(ctx, 1, catalog.IssueFilter{}); return err },
+			"catalog.GetIssue":                func() error { _, err := cat.GetIssue(ctx, 1, 1); return err },
+			"catalog.NextNativeIssueNumber":   func() error { _, err := cat.NextNativeIssueNumber(ctx, 1); return err },
+			"catalog.UpsertIssue": func() error {
+				_, _, _, err := cat.UpsertIssue(ctx, 1, catalog.IssueInput{Provider: "jira", ExternalID: "X-1", Title: "x", State: "open"}, true, nil)
+				return err
+			},
+			"catalog.UpdateIssue":         func() error { return cat.UpdateIssue(ctx, 1, 1, catalog.UpdateIssueInput{Title: str("x")}) },
+			"catalog.SetIssueTestCases":   func() error { return cat.SetIssueTestCases(ctx, 1, 1, []int64{1}) },
+			"catalog.SetClassification":   func() error { return cat.SetClassification(ctx, 1, 1, 1, 1) },
+			"catalog.ClearClassification": func() error { return cat.SetClassification(ctx, 1, 1, 1, 0) },
 			"catalog.CreateProject": func() error {
 				_, err := cat.CreateProject(ctx, catalog.CreateProjectInput{Key: "XX", Name: "x"})
 				return err

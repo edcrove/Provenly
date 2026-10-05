@@ -282,6 +282,13 @@ type InsertRunParams struct {
 	CompletedAt *time.Time
 }
 
+// Conclusive is the latest conclusive logical status (passed, failed or error) of a test case and the run it came from.
+type Conclusive struct {
+	TestCaseID int64
+	RunID      int64
+	Status     ResultStatus
+}
+
 // Repository is the persistence port of the execution module.
 type Repository interface {
 	// InsertTestRun inserts a run unless its external id exists; ok is false on conflict.
@@ -294,6 +301,8 @@ type Repository interface {
 	InsertManualResult(ctx context.Context, runID int64, r NewResult) (TestResult, error)
 	// ListLatestResults returns the valid results of each test case in its latest run with results.
 	ListLatestResults(ctx context.Context, testCaseIDs []int64) ([]ValidResult, error)
+	// ListLatestConclusive returns, per test case, its latest run with a conclusive logical status and that status.
+	ListLatestConclusive(ctx context.Context, testCaseIDs []int64) ([]Conclusive, error)
 	// FinishTestRun ends a running run with a final status.
 	FinishTestRun(ctx context.Context, id int64, status RunStatus) error
 	GetTestRunIDByExternalID(ctx context.Context, projectID int64, externalRunID string) (int64, error)

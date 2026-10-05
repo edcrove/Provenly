@@ -45,6 +45,7 @@ tags:
   - name: test-steps
   - name: test-runs
   - name: requirements
+  - name: issues
   - name: ingestion
 paths:
   /healthz:
@@ -1048,6 +1049,195 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/projects/{projectKey}/issues:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [issues]
+      operationId: listIssues
+      summary: The project's issues with their QA verification, newest first (anyone who can see the project)
+      parameters:
+        - name: testCase
+          in: query
+          required: false
+          description: Only the issues linked to this test case.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: state
+          in: query
+          required: false
+          description: Only open or only closed issues.
+          schema:
+            $ref: "#/components/schemas/IssueState"
+      responses:
+        "200":
+          description: The issues
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [issues]
+      operationId: createIssue
+      summary: Report a native issue (numbered I-n) or register one of an external tracker by its id (members)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIssueRequest"
+      responses:
+        "201":
+          description: The issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/issues/import:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    post:
+      tags: [issues]
+      operationId: importIssues
+      summary: Mirror issues of an external tracker with their state (read-only sync, by external id; maintainers)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportIssuesRequest"
+      responses:
+        "200":
+          description: What the import created and updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/issues/{issueId}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/IssueId"
+    get:
+      tags: [issues]
+      operationId: getIssue
+      summary: An issue with the verification of each linked test case
+      responses:
+        "200":
+          description: The issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [issues]
+      operationId: updateIssue
+      summary: Edit, close or reopen an issue (members)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateIssueRequest"
+      responses:
+        "200":
+          description: The issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/issues/{issueId}/test-cases:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/IssueId"
+    put:
+      tags: [issues]
+      operationId: setIssueTestCases
+      summary: Replace the test cases that reproduce an issue (members)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueLinksRequest"
+      responses:
+        "200":
+          description: The issue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/test-cases:
     get:
       tags: [test-cases]
@@ -1955,6 +2145,14 @@ components:
       example: risk
     RequirementId:
       name: requirementId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    IssueId:
+      name: issueId
       in: path
       required: true
       schema:
@@ -3404,6 +3602,196 @@ components:
           type: boolean
 
     RequirementLinksRequest:
+      type: object
+      additionalProperties: false
+      required: [testCaseIds]
+      properties:
+        testCaseIds:
+          type: array
+          maxItems: 1000
+          items:
+            type: integer
+            format: int64
+
+    Issue:
+      type: object
+      additionalProperties: false
+      required: [id, provider, externalId, title, description, url, state, providerStatus, closedAt, lastSyncedAt, createdAt, updatedAt, testCaseIds, verification]
+      properties:
+        id:
+          type: integer
+          format: int64
+        provider:
+          $ref: "#/components/schemas/RequirementProvider"
+        externalId:
+          type: string
+          description: The issue's id in its tracker (I-n for native ones). Never changes.
+          example: PAY-123
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+        state:
+          $ref: "#/components/schemas/IssueState"
+        providerStatus:
+          type: string
+          description: The status in the tracker, as mirrored (free text).
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When an import last mirrored it (null for native issues).
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        testCaseIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+        verification:
+          $ref: "#/components/schemas/Verification"
+
+    IssueState:
+      type: string
+      enum: [open, closed]
+
+    Verification:
+      type: object
+      additionalProperties: false
+      required: [status, testCases]
+      description: >-
+        QA verification (DEC-8) from the issue's state and the latest conclusive result (passed, failed or error) of
+        each linked test case; skipped results are inconclusive and keep the previous evidence. The issue's status is
+        the worst of its test cases (reopen > known_issue > unverified > not_reproducible > validated_fixed).
+      properties:
+        status:
+          type: string
+          enum: [unlinked, unverified, known_issue, reopen, not_reproducible, validated_fixed]
+        testCases:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [testCaseId, status, evidence, evidenceRunId, latestInconclusive]
+            properties:
+              testCaseId:
+                type: integer
+                format: int64
+              status:
+                type: string
+                enum: [unverified, known_issue, reopen, not_reproducible, validated_fixed]
+              evidence:
+                type: string
+                nullable: true
+                enum: [passed, failed, error, null]
+                description: The latest conclusive status of the test case.
+              evidenceRunId:
+                type: integer
+                format: int64
+                nullable: true
+                description: The run the evidence comes from.
+              latestInconclusive:
+                type: boolean
+                description: The latest result was skipped; the verification kept the previous evidence.
+
+    IssueList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Issue"
+
+    CreateIssueRequest:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        provider:
+          $ref: "#/components/schemas/RequirementProvider"
+        externalId:
+          type: string
+          description: Required for external trackers; native issues are numbered by Provenly.
+        title:
+          type: string
+          minLength: 1
+          maxLength: 300
+        description:
+          type: string
+          maxLength: 10000
+        url:
+          type: string
+          maxLength: 2000
+        state:
+          $ref: "#/components/schemas/IssueState"
+        providerStatus:
+          type: string
+          maxLength: 50
+
+    ImportIssuesRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, items]
+      properties:
+        provider:
+          type: string
+          enum: [jira, github, azure_devops]
+        items:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            additionalProperties: false
+            required: [externalId, title, state]
+            properties:
+              externalId:
+                type: string
+              title:
+                type: string
+              description:
+                type: string
+              url:
+                type: string
+              state:
+                $ref: "#/components/schemas/IssueState"
+              providerStatus:
+                type: string
+
+    UpdateIssueRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 300
+        description:
+          type: string
+          maxLength: 10000
+        url:
+          type: string
+          maxLength: 2000
+        state:
+          $ref: "#/components/schemas/IssueState"
+        providerStatus:
+          type: string
+          maxLength: 50
+
+    IssueLinksRequest:
       type: object
       additionalProperties: false
       required: [testCaseIds]

@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	AddIssueLinks(ctx context.Context, arg AddIssueLinksParams) error
 	AddRequirementLinks(ctx context.Context, arg AddRequirementLinksParams) error
 	AddSuiteCases(ctx context.Context, arg AddSuiteCasesParams) error
 	AddTestCaseTags(ctx context.Context, arg AddTestCaseTagsParams) error
@@ -27,6 +28,7 @@ type Querier interface {
 	// project does not exist.
 	CreateTestCase(ctx context.Context, arg CreateTestCaseParams) (TestCase, error)
 	CreateTestStep(ctx context.Context, arg CreateTestStepParams) (TestStep, error)
+	DeleteIssueLinks(ctx context.Context, arg DeleteIssueLinksParams) error
 	DeleteRequirementLinks(ctx context.Context, arg DeleteRequirementLinksParams) error
 	// Removes the members not in keep (all of them when keep is empty).
 	DeleteSuiteCases(ctx context.Context, arg DeleteSuiteCasesParams) error
@@ -34,6 +36,7 @@ type Querier interface {
 	DeleteTestCaseTags(ctx context.Context, arg DeleteTestCaseTagsParams) error
 	DeleteTestStep(ctx context.Context, arg DeleteTestStepParams) (int32, error)
 	DeprecateTestCase(ctx context.Context, id int64) (TestCase, error)
+	GetIssue(ctx context.Context, arg GetIssueParams) (GetIssueRow, error)
 	GetProject(ctx context.Context, id int64) (Project, error)
 	GetProjectByKey(ctx context.Context, key string) (Project, error)
 	GetRequirement(ctx context.Context, arg GetRequirementParams) (GetRequirementRow, error)
@@ -47,6 +50,9 @@ type Querier interface {
 	// and the status of the referenced numbers come from the same snapshot: a
 	// deprecation committed during an ingestion cannot put a TC in one and not the other.
 	ListIngestionView(ctx context.Context, arg ListIngestionViewParams) ([]ListIngestionViewRow, error)
+	// A project's issues (optionally only those linked to a test case, or in one state), newest first, with their linked
+	// test cases.
+	ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListIssuesRow, error)
 	// Which of the given ids are test cases of the project.
 	ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDsParams) ([]int64, error)
 	// project_ids NULL means every project (administrators); otherwise only those.
@@ -69,6 +75,8 @@ type Querier interface {
 	ListTestSteps(ctx context.Context, arg ListTestStepsParams) ([]TestStep, error)
 	// Locks the test case (and its steps' order) until the transaction ends; returns its current version.
 	LockTestCase(ctx context.Context, id int64) (int64, error)
+	// Takes the next I-<n> of a project's native issues from its counter (the row lock serializes concurrent creations).
+	NextNativeIssueNumber(ctx context.Context, projectID int64) (int64, error)
 	// Takes the next R-<n> of a project's native requirements from its counter (the row lock serializes concurrent
 	// creations; numbers are never reused).
 	NextNativeRequirementNumber(ctx context.Context, projectID int64) (int64, error)
@@ -79,11 +87,15 @@ type Querier interface {
 	ShiftTestStepsDown(ctx context.Context, arg ShiftTestStepsDownParams) error
 	UpdateDimension(ctx context.Context, arg UpdateDimensionParams) (ClassificationDimension, error)
 	UpdateDimensionValue(ctx context.Context, arg UpdateDimensionValueParams) (ClassificationValue, error)
+	UpdateIssue(ctx context.Context, arg UpdateIssueParams) (int64, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateRequirement(ctx context.Context, arg UpdateRequirementParams) (int64, error)
 	UpdateSuite(ctx context.Context, arg UpdateSuiteParams) (int64, error)
 	UpdateTestCase(ctx context.Context, arg UpdateTestCaseParams) (TestCase, error)
 	UpdateTestStep(ctx context.Context, arg UpdateTestStepParams) (TestStep, error)
+	// Creates an issue, or (when sync is true) updates the mirrored one with the same provider and external id; closed_at
+	// follows the state (kept while it stays closed).
+	UpsertIssue(ctx context.Context, arg UpsertIssueParams) (UpsertIssueRow, error)
 	// Creates a requirement, or (when sync is true) updates the mirrored one with the same provider and external id.
 	// xmax = 0 tells a fresh insert from an update.
 	UpsertRequirement(ctx context.Context, arg UpsertRequirementParams) (UpsertRequirementRow, error)

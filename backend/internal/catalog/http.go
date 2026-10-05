@@ -46,6 +46,12 @@ type API interface {
 	ImportRequirements(ctx context.Context, projectID int64, provider string, items []RequirementInput) (ImportResult, error)
 	UpdateRequirement(ctx context.Context, projectID, id int64, in UpdateRequirementInput) (RequirementView, error)
 	SetRequirementTestCases(ctx context.Context, projectID, id int64, ids []int64) (RequirementView, error)
+	Issues(ctx context.Context, projectID int64, f IssueFilter) ([]IssueView, error)
+	Issue(ctx context.Context, projectID, id int64) (IssueView, error)
+	CreateIssue(ctx context.Context, projectID int64, in IssueInput) (IssueView, error)
+	ImportIssues(ctx context.Context, projectID int64, provider string, items []IssueInput) (ImportResult, error)
+	UpdateIssue(ctx context.Context, projectID, id int64, in UpdateIssueInput) (IssueView, error)
+	SetIssueTestCases(ctx context.Context, projectID, id int64, ids []int64) (IssueView, error)
 }
 
 // ProjectKeyMessage is the validation message of a malformed project key.
@@ -289,6 +295,12 @@ func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/projects/{projectKey}/requirements/{requirementId}", h.getRequirement)
 	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/requirements/{requirementId}", h.updateRequirement)
 	mux.HandleFunc("PUT /api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases", h.setRequirementTestCases)
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/issues", h.listIssues)
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/issues", h.createIssue)
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/issues/import", h.importIssues)
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/issues/{issueId}", h.getIssue)
+	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/issues/{issueId}", h.updateIssue)
+	mux.HandleFunc("PUT /api/v1/projects/{projectKey}/issues/{issueId}/test-cases", h.setIssueTestCases)
 	mux.HandleFunc("GET /api/v1/test-cases", h.list)
 	mux.HandleFunc("POST /api/v1/test-cases", h.create)
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}", h.onTestCase(authz.RoleViewer, h.get))

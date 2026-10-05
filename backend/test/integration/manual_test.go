@@ -15,6 +15,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/ingestion"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
 func TestManualRuns(t *testing.T) {
@@ -57,6 +58,12 @@ func TestManualRuns(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, execution.StatusCounts{Untested: 1, Passed: 1}, sum.Counts)
 		assert.Equal(t, int32(0), sum.Flaky, "a manual re-test is a fix, not flakiness")
+		// The test case history says the results came from a manual run and who started it.
+		h, err := s.Execution.History(ctx, checkout.ID, pagination.Default())
+		require.NoError(t, err)
+		require.Len(t, h.Items, 2)
+		assert.Equal(t, execution.ModeManual, h.Items[0].Run.Mode)
+		assert.Equal(t, "integration", h.Items[0].Run.StartedBy)
 
 		// Twenty people record the same test case at once: twenty attempts, numbered without gaps.
 		var wg sync.WaitGroup

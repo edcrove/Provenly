@@ -121,17 +121,21 @@ export function ProjectMembersPage() {
   const manage = can(useProjectRole(projectKey), 'maintainer')
   return (
     <div className="grid gap-6">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <PageTitle title={`Project ${projectKey}`} />
+        <h1 className="text-2xl font-semibold">
+          Project <span className="font-mono">{projectKey}</span>
+        </h1>
+        <Link to="/projects" className="text-muted-foreground text-sm underline">
+          All projects
+        </Link>
+      </div>
       <Card>
         <CardHeader>
-          <PageTitle title={`${projectKey} members`} />
-          <CardTitle as="h1" className="text-xl">
-            <span className="font-mono">{projectKey}</span> members
+          <CardTitle as="h2" className="text-lg">
+            Members
           </CardTitle>
-          <CardDescription>
-            <Link to="/projects" className="underline">
-              All projects
-            </Link>
-          </CardDescription>
+          <CardDescription>Who works in this project and with which role.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
           <QueryState query={members} page>

@@ -148,6 +148,15 @@ describe('FE-INT-014 manual test case receiving automated results', () => {
     expect(db.testCases[0].automated).toBe(true)
   })
 
+  it('FE-INT-014 results from manual runs alone do not warn', async () => {
+    db.testCases[0] = testCase({ automated: false })
+    db.runs = db.runs.map((r) => ({ ...r, mode: 'manual' as const }))
+    renderRoute('/test-cases/153')
+    expect(await screen.findByText('Execution history')).toBeInTheDocument()
+    expect(await screen.findAllByRole('link', { name: 'github:9876:1' })).not.toHaveLength(0)
+    expect(screen.queryByTestId('manual-with-results')).not.toBeInTheDocument()
+  })
+
   it('FE-INT-014 does not warn without results or when deprecated', async () => {
     db.testCases[1] = testCase({ id: 154, title: 'Logout works', automated: false })
     const first = renderRoute('/test-cases/154')

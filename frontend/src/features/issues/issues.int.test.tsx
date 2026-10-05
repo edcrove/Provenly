@@ -73,6 +73,10 @@ describe('FE-INT-041 issues and verification', () => {
     db.latest[153] = 'failed'
     db.latest[154] = 'skipped'
     const { user: u } = renderRoute('/issues/TC/960')
+    // FE-INT-048: the tracker link and the list link are separated.
+    expect(
+      (await screen.findByRole('link', { name: 'Open in the tracker' })).parentElement,
+    ).toHaveTextContent('Open in the tracker · All issues')
     expect(await screen.findByTestId('verification-badge')).toHaveTextContent('Known issue')
     expect(screen.getByText('Status in the tracker: In Progress', { exact: false })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open in the tracker' })).toHaveAttribute(

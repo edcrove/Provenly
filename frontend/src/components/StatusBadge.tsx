@@ -23,11 +23,15 @@ export function CorrelationBadge({ correlation }: { correlation: Correlation }) 
   return <Badge variant={correlationVariant(correlation)}>{correlation}</Badge>
 }
 
-/** Test outcome of a run: passed, failed, incomplete or no tests. */
-export function VerdictBadge({ verdict }: { verdict: Verdict }) {
+/** Test outcome of a run: passed, failed, incomplete or no tests; provisional ("so far") while the run is running. */
+export function VerdictBadge({ verdict, running = false }: { verdict: Verdict; running?: boolean }) {
   return (
-    <Badge variant={verdictVariant(verdict)} data-testid="verdict-badge">
-      {verdictLabel(verdict)}
+    <Badge
+      variant={verdictVariant(verdict)}
+      data-testid="verdict-badge"
+      title={running ? 'Provisional: the run is still running' : undefined}
+    >
+      {running ? `${verdictLabel(verdict)} so far` : verdictLabel(verdict)}
     </Badge>
   )
 }

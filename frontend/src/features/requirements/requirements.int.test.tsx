@@ -68,6 +68,10 @@ describe('FE-INT-040 requirements and traceability', () => {
     db.requirements.push(jiraReq())
     db.latest[153] = 'passed'
     const { user: u } = renderRoute('/requirements/TC/950')
+    // FE-INT-048: the source link and the list link are separated.
+    expect((await screen.findByRole('link', { name: 'Open in the source' })).parentElement).toHaveTextContent(
+      'Open in the source · All requirements',
+    )
     expect(await screen.findByTestId('coverage-badge')).toHaveTextContent('Passing')
     expect(screen.getByText('Status in the source: In Progress', { exact: false })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open in the source' })).toHaveAttribute(

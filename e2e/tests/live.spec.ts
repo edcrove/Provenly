@@ -55,6 +55,7 @@ test.describe('Live runs', () => {
     await page.goto(`/test-runs/${run.id}`)
     await expect(page.getByTestId('live-progress')).toContainText('0 of 2 finished · 1 running · 1 waiting')
     await expect(page.getByTestId(`live-${login.key}`)).toContainText('running')
+    await expect(page.getByTestId('verdict-badge').first()).toContainText('so far')
     await request.post(`${apiURL}/api/v1/test-runs/${run.id}/events`, {
       data: { events: [{ eventId: 'b', sequence: 2, type: 'test.finished', testName: 'sign in', testCase: login.key, status: 'passed' }] },
     })
@@ -68,6 +69,7 @@ test.describe('Live runs', () => {
     expect(report.status()).toBe(201)
     await expect(page.getByTestId('reconciliation')).toHaveText('mismatch')
     await expect(page.getByTestId('mismatch')).toContainText('In the report, never seen live')
-    await expect(page.getByTestId('verdict-badge').first()).toContainText('passed')
+    await expect(page.getByTestId('verdict-badge').first()).toHaveText('passed')
+    await expect(page.getByTestId('live-progress')).toContainText('As streamed live: 1 of 2 finished · 0 started but never finished · 1 never started')
   })
 })

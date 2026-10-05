@@ -89,7 +89,10 @@ describe('FE-INT-043 live runs', () => {
     const { unmount } = renderRoute('/test-runs/7')
     expect(await screen.findByTestId('reconciliation')).toHaveTextContent('consistent')
     expect(screen.queryAllByTestId('mismatch')).toHaveLength(0)
-    expect(screen.getByTestId('live-progress')).toHaveTextContent('2 of 2 finished')
+    // FE-INT-048: once finished, the panel reads as history, never as tests still running.
+    expect(screen.getByTestId('live-progress')).toHaveTextContent(
+      'As streamed live: 2 of 2 finished · 0 started but never finished · 0 never started',
+    )
     unmount()
     db.runs[0] = { ...db.runs[0], mode: 'batch' }
     renderRoute('/test-runs/7')

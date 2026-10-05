@@ -22,6 +22,8 @@ const (
 	githubMaxPages = 5 // at most 500 issues per sync, the import bound
 	maxLabels      = 200
 	maxToken       = 500
+	// minHintedToken is the shortest token whose last four characters are shown.
+	minHintedToken = 12
 )
 
 var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$`)
@@ -50,7 +52,11 @@ func noConnection(key string) error {
 func (s *Service) view(c GitHubConnection) GitHubView {
 	v := GitHubView{Repository: c.Repository, Labels: c.Labels, LastSyncedAt: c.LastSyncedAt, LastError: c.LastError, UpdatedAt: c.UpdatedAt}
 	if token, err := s.box.Open(c.Token); err == nil {
-		v.TokenHint = "…" + token[max(0, len(token)-4):]
+		// Only the last four characters, and none of a short token (they would be most of it).
+		v.TokenHint = "…"
+		if len(token) >= minHintedToken {
+			v.TokenHint += token[len(token)-4:]
+		}
 	}
 	return v
 }

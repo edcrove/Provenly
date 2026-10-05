@@ -55,7 +55,9 @@ export function LivePanel({ run }: { run: TestRun }) {
               <div className="grid gap-4">
                 <div className="flex flex-wrap items-center gap-3 text-sm">
                   <span data-testid="live-progress">
-                    {l.finished} of {total} finished · {l.running} running · {l.waiting} waiting
+                    {running
+                      ? `${l.finished} of ${total} finished · ${l.running} running · ${l.waiting} waiting`
+                      : `As streamed live: ${l.finished} of ${total} finished · ${l.running} started but never finished · ${l.waiting} never started`}
                   </span>
                   <span className="text-muted-foreground">
                     {l.events} events{l.runFinished ? ' · runner finished' : ''}

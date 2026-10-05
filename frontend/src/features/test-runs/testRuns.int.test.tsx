@@ -154,7 +154,7 @@ describe('FE-INT-009 test run detail and summary', () => {
     expect(value('Completed')).toBe('2026-10-03 11:30:00 UTC')
   })
 
-  it('FE-INT-009 an empty universe reads 0% with its counts (0 of 0)', async () => {
+  it('FE-INT-009 an empty universe reads — with its counts (0 of 0)', async () => {
     db.summaries[7] = summary({
       expectedTotal: 0,
       executedTotal: 0,
@@ -181,11 +181,17 @@ describe('FE-INT-009 test run detail and summary', () => {
       }),
     ]
     renderRoute('/test-runs/7')
-    expect(await screen.findByTestId('execution-percent')).toHaveTextContent('0%')
+    expect(await screen.findByTestId('execution-percent')).toHaveTextContent('—')
     expect(screen.getByTestId('execution-counts')).toHaveTextContent('0 of 0 test cases executed')
     expect(screen.getByTestId('pass-rate')).toHaveTextContent('—')
     expect(screen.getByTestId('run-pass-rate')).toHaveTextContent('No test case executed')
     expect(screen.getByTestId('verdict-badge')).toHaveTextContent('no tests')
+    // FE-INT-048: a share of nothing is "—", never 0%.
+    expect(
+      within(screen.getByTestId('summary-total'))
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['Total', '0', '—', '—'])
   })
 
   it('FE-INT-009 rounds only for display so thirds add up to a 100% total', async () => {

@@ -154,7 +154,8 @@ export function IssueDetailPage() {
                   <a href={i.url} className="underline" target="_blank" rel="noreferrer">
                     Open in the tracker
                   </a>
-                ) : null}{' '}
+                ) : null}
+                {i.url ? ' · ' : null}
                 <Link to="/issues" className="underline">
                   All issues
                 </Link>

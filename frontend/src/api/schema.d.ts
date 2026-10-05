@@ -2112,7 +2112,7 @@ export interface components {
             repository: string;
             /** @description Comma-separated labels an issue must have to be mirrored; empty mirrors every issue. */
             labels: string;
-            /** @description The token's last four characters; empty when it cannot be decrypted (connect again with a token). */
+            /** @description An ellipsis followed by the token's last four characters (the ellipsis alone for tokens under 12 characters); empty when it cannot be decrypted (connect again with a token). */
             tokenHint: string;
             /** Format: date-time */
             lastSyncedAt: string | null;

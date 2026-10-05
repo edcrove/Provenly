@@ -10,6 +10,9 @@ import { resultStatuses, summaryStatuses } from '@/lib/status'
 export function RunSummary({ summary }: { summary: TestRunSummary }) {
   const untested = summary.testCases.filter((c) => c.status === 'untested')
   const flaky = summary.testCases.filter((c) => c.flaky)
+  // A share of nothing is not 0%: with no expected or no executed test case the percentage is undefined.
+  const ofExpected = (p: number) => (summary.expectedTotal > 0 ? formatPercent(p) : '—')
+  const ofExecuted = (p: number) => (summary.executedTotal > 0 ? formatPercent(p) : '—')
   return (
     <div className="grid gap-4">
       <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
@@ -33,7 +36,7 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
         <div className="rounded-md border p-3">
           <div className="text-muted-foreground">Execution</div>
           <div className="text-2xl font-semibold" data-testid="execution-percent">
-            {formatPercent(summary.executionPercent)}
+            {ofExpected(summary.executionPercent)}
           </div>
           <div className="text-muted-foreground text-xs" data-testid="execution-counts">
             {summary.executedTotal} of {plural(summary.expectedTotal, 'test case')} executed
@@ -42,7 +45,7 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
         <div className="rounded-md border p-3">
           <div className="text-muted-foreground">Pass rate</div>
           <div className="text-2xl font-semibold" data-testid="pass-rate">
-            {summary.executedTotal > 0 ? formatPercent(summary.percentOfExecuted.passed) : '—'}
+            {ofExecuted(summary.percentOfExecuted.passed)}
           </div>
           <div className="text-muted-foreground text-xs" data-testid="pass-counts">
             {summary.counts.passed} of {summary.executedTotal} executed passed
@@ -65,11 +68,11 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
                 <StatusBadge status={s} />
               </TableCell>
               <TableCell>{summary.counts[s]}</TableCell>
-              <TableCell>{formatPercent(summary.percentOfExpected[s])}</TableCell>
+              <TableCell>{ofExpected(summary.percentOfExpected[s])}</TableCell>
               <TableCell>
                 {s === 'untested'
                   ? '—'
-                  : formatPercent(summary.percentOfExecuted[s as (typeof resultStatuses)[number]])}
+                  : ofExecuted(summary.percentOfExecuted[s as (typeof resultStatuses)[number]])}
               </TableCell>
             </TableRow>
           ))}
@@ -77,10 +80,10 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
             <TableCell>Total</TableCell>
             <TableCell>{summary.expectedTotal}</TableCell>
             <TableCell>
-              {formatPercent(sumPercents(summaryStatuses.map((s) => summary.percentOfExpected[s])))}
+              {ofExpected(sumPercents(summaryStatuses.map((s) => summary.percentOfExpected[s])))}
             </TableCell>
             <TableCell>
-              {formatPercent(sumPercents(resultStatuses.map((s) => summary.percentOfExecuted[s])))}
+              {ofExecuted(sumPercents(resultStatuses.map((s) => summary.percentOfExecuted[s])))}
             </TableCell>
           </TableRow>
         </TableBody>

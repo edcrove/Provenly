@@ -29,13 +29,35 @@ type ClassificationValue struct {
 }
 
 type Project struct {
-	ID          int64
-	Key         string
-	Name        string
-	Description string
-	NextNumber  int64
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID                    int64
+	Key                   string
+	Name                  string
+	Description           string
+	NextNumber            int64
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+	NextRequirementNumber int64
+}
+
+type Requirement struct {
+	ID             int64
+	ProjectID      int64
+	Provider       string
+	ExternalID     string
+	Title          string
+	Description    string
+	Url            string
+	ProviderStatus string
+	ArchivedAt     pgtype.Timestamptz
+	LastSyncedAt   pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+}
+
+type RequirementTestCase struct {
+	RequirementID int64
+	ProjectID     int64
+	TestCaseID    int64
 }
 
 type TestCase struct {

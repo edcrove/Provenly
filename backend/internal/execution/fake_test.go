@@ -338,3 +338,26 @@ func (f *fakeRepo) FinishTestRun(_ context.Context, id int64, status RunStatus) 
 	f.runs[id] = r
 	return nil
 }
+
+func (f *fakeRepo) ListLatestResults(_ context.Context, ids []int64) ([]ValidResult, error) {
+	if err := f.errs["ListLatestResults"]; err != nil {
+		return nil, err
+	}
+	var out []ValidResult
+	for _, id := range ids {
+		latest := int64(0)
+		for runID, rs := range f.results {
+			for _, r := range rs {
+				if r.TestCaseID != nil && *r.TestCaseID == id && r.Correlation == CorrelationValid && runID > latest {
+					latest = runID
+				}
+			}
+		}
+		for _, r := range f.results[latest] {
+			if r.TestCaseID != nil && *r.TestCaseID == id && r.Correlation == CorrelationValid {
+				out = append(out, ValidResult{TestCaseID: id, Status: r.Status, Execution: r.TestName, Attempt: r.Attempt})
+			}
+		}
+	}
+	return out, nil
+}

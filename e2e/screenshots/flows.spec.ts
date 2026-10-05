@@ -426,5 +426,34 @@ test('UI flows', async ({ page }) => {
   await giftCard.getByRole('button', { name: 'Fail' }).click()
   await expect(giftCard.getByTestId('status-badge')).toHaveText('failed')
   await shot(page, 'manual-run-in-progress')
+  // Requirements (prototype feature 12): a Jira import and a native requirement, covered by CHK test cases.
+  const chk = ((await (await request.get(`${api}/test-cases?project=CHK&pageSize=100`)).json()) as { items: { id: number; key: string }[] }).items
+  const idOf = (k: string) => chk.find((t) => t.key === k)!.id
+  const reqs = `${api}/projects/CHK/requirements`
+  expect((await request.post(`${reqs}/import`, {
+    data: { provider: 'jira', items: [
+      { externalId: 'PAY-31', title: 'Refunds reach the original payment method', providerStatus: 'In progress', url: 'https://jira.example.com/browse/PAY-31' },
+      { externalId: 'PAY-40', title: 'Receipts list every item', providerStatus: 'To do' },
+    ] },
+  })).status()).toBe(200)
+  const listed = ((await (await request.get(reqs)).json()) as { items: { id: number; externalId: string }[] }).items
+  const pay31 = listed.find((r) => r.externalId === 'PAY-31')!.id
+  expect((await request.put(`${reqs}/${pay31}/test-cases`, { data: { testCaseIds: [idOf('CHK-2'), idOf('CHK-4')] } })).status()).toBe(200)
+  await page.goto('/requirements')
+  await page.getByLabel('Title').fill('Customers pay by card')
+  await page.getByRole('button', { name: 'Add requirement' }).click()
+  await page.getByRole('link', { name: 'R-1' }).click()
+  await page.getByLabel('Test case to link').selectOption({ label: 'CHK-1 · Pay by card (3-D Secure)' })
+  await page.getByRole('button', { name: 'Link test case' }).click()
+  await expect(page.getByTestId('coverage-badge')).toHaveText('Passing')
+  await page.goto('/requirements')
+  await expect(page.getByTestId('requirement-PAY-31')).toBeVisible()
+  await shot(page, 'requirements')
+  await page.goto(`/requirements/CHK/${pay31}`)
+  await expect(page.getByTestId('coverage-badge')).toHaveText('Failing')
+  await shot(page, 'requirement-detail')
+  await page.goto(`/test-cases/${idOf('CHK-4')}`)
+  await expect(page.getByTestId('covered-requirements')).toBeVisible()
+  await shot(page, 'test-case-covered-requirements')
   await page.getByLabel('Current project').selectOption('')
 })

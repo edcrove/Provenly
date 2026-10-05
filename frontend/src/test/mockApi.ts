@@ -4,6 +4,7 @@ import type {
   Amendment,
   ApiKey,
   Dimension,
+  Requirement,
   Suite,
   Invitation,
   ParseError,
@@ -39,6 +40,9 @@ export interface MockDb {
   amendments: Amendment[]
   /** Suites (with their members for static ones) by project id. */
   suites: (Suite & { projectId: number; id: number; members: number[] })[]
+  /** Requirements by project id; latest is the latest result status of each test case (coverage). */
+  requirements: (Requirement & { projectId: number })[]
+  latest: Record<number, 'passed' | 'failed' | 'error' | 'skipped'>
   /** Classification dimensions by project id. */
   dimensions: (Dimension & { projectId: number })[]
   /** The signed-in user's id (the session cookie), or null when signed out. */
@@ -70,6 +74,8 @@ export function seed(): MockDb {
     amendments: [],
     dimensions: seedDimensions(1),
     suites: [],
+    requirements: [],
+    latest: {},
     projects: [project()],
     testCases: [tc, testCase({ id: 154, title: 'Logout works' })],
     steps: [
@@ -444,11 +450,160 @@ function manualSummary(runId: number, cases: Outcome[]): TestRunSummary {
 }
 
 const RESULT_STATUSES = ['passed', 'failed', 'error', 'skipped']
+const PROVIDERS = ['provenly', 'jira', 'github', 'azure_devops']
+
+/** A requirement with its coverage recomputed from db.latest, like the server. */
+function requirementDto({ projectId, ...r }: MockDb['requirements'][number]): Requirement {
+  void projectId
+  const cases = r.testCaseIds.map((id) => ({ testCaseId: id, status: db.latest[id] ?? null }))
+  const passed = cases.filter((c) => c.status === 'passed').length
+  const failed = cases.filter((c) => c.status === 'failed' || c.status === 'error').length
+  const status: Requirement['coverage']['status'] =
+    cases.length === 0
+      ? 'uncovered'
+      : failed > 0
+        ? 'failing'
+        : passed === cases.length
+          ? 'passing'
+          : cases.every((c) => c.status === null)
+            ? 'not_run'
+            : 'partial'
+  return {
+    ...r,
+    coverage: {
+      status,
+      linked: cases.length,
+      passed,
+      failed,
+      notRun: cases.length - passed - failed,
+      testCases: cases,
+    },
+  }
+}
+
+function findRequirement(params: Record<string, string | readonly string[] | undefined>, min: MemberRole) {
+  const id = pathId(params.requirementId)
+  if (id === undefined) return validation('requirementId', 'must be a positive integer')
+  const p = visibleProject(params.projectKey)
+  if (p instanceof Response) return p
+  const denied = requireRole(p.id, min, () => notFound(`project ${p.key}`))
+  if (denied) return denied
+  return db.requirements.find((r) => r.projectId === p.id && r.id === id) ?? notFound(`requirement ${id}`)
+}
 
 const stepsOf = (tcId: number) =>
   db.steps.filter((s) => s.testCaseId === tcId).sort((a, b) => a.position - b.position)
 
 export const handlers = [
+  http.get(
+    `${BASE}/projects/:projectKey/requirements`,
+    guard(({ params, request }) => {
+      const p = visibleProject(params.projectKey)
+      if (p instanceof Response) return p
+      const raw = new URL(request.url).searchParams.get('testCase')
+      const testCase = raw === null ? undefined : pathId(raw)
+      if (raw !== null && testCase === undefined) return validation('testCase', 'must be a positive integer')
+      const items = db.requirements
+        .filter((r) => r.projectId === p.id && (testCase === undefined || r.testCaseIds.includes(testCase)))
+        .sort((a, b) => b.id - a.id)
+        .map(requirementDto)
+      return respond({ items })
+    }),
+  ),
+  http.post(
+    `${BASE}/projects/:projectKey/requirements`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const p = visibleProject(params.projectKey)
+        if (p instanceof Response) return p
+        const denied = requireRole(p.id, 'member', () => notFound(`project ${p.key}`))
+        if (denied) return denied
+        const body = await readBody(request)
+        const title = typeof body?.title === 'string' ? body.title.trim() : ''
+        if (!title) return validation('title', 'must not be empty')
+        const provider = String(body?.provider ?? 'provenly')
+        if (!PROVIDERS.includes(provider)) return validation('provider', 'is not a provider')
+        const native = provider === 'provenly'
+        const externalId = native
+          ? `R-${db.requirements.filter((r) => r.projectId === p.id && r.provider === 'provenly').length + 1}`
+          : String(body?.externalId ?? '')
+        if (!native && !/^[A-Za-z0-9][A-Za-z0-9._#/-]{0,99}$/.test(externalId))
+          return validation('externalId', 'must be the id in the provider')
+        if (
+          db.requirements.some(
+            (r) => r.projectId === p.id && r.provider === provider && r.externalId === externalId,
+          )
+        )
+          return problem(409, 'conflict', `requirement ${externalId} of ${provider} already exists`)
+        const r = {
+          projectId: p.id,
+          id: ++db.nextId,
+          provider: provider as Requirement['provider'],
+          externalId,
+          title,
+          description: String(body?.description ?? ''),
+          url: String(body?.url ?? ''),
+          providerStatus: String(body?.providerStatus ?? ''),
+          archivedAt: null,
+          lastSyncedAt: null,
+          createdAt: now(),
+          updatedAt: now(),
+          testCaseIds: [],
+          coverage: {
+            status: 'uncovered' as const,
+            linked: 0,
+            passed: 0,
+            failed: 0,
+            notRun: 0,
+            testCases: [],
+          },
+        }
+        db.requirements.push(r)
+        return respond(requirementDto(r), 201)
+      }),
+    ),
+  ),
+  http.get(
+    `${BASE}/projects/:projectKey/requirements/:requirementId`,
+    guard(({ params }) => {
+      const r = findRequirement(params, 'viewer')
+      return r instanceof Response ? r : respond(requirementDto(r))
+    }),
+  ),
+  http.patch(
+    `${BASE}/projects/:projectKey/requirements/:requirementId`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const r = findRequirement(params, 'member')
+        if (r instanceof Response) return r
+        const body = await readBody(request)
+        if (!body || Object.keys(body).length === 0)
+          return validation('body', 'at least one field is required')
+        if (body.title !== undefined && !String(body.title).trim())
+          return validation('title', 'must not be empty')
+        if (body.title !== undefined) r.title = String(body.title).trim()
+        if (body.archived === true) r.archivedAt ??= now()
+        if (body.archived === false) r.archivedAt = null
+        r.updatedAt = now()
+        return respond(requirementDto(r))
+      }),
+    ),
+  ),
+  http.put(
+    `${BASE}/projects/:projectKey/requirements/:requirementId/test-cases`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const r = findRequirement(params, 'member')
+        if (r instanceof Response) return r
+        const body = await readBody(request)
+        if (!Array.isArray(body?.testCaseIds)) return validation('testCaseIds', 'is required')
+        const ids = suiteMembers(r.projectId, body.testCaseIds)
+        if (ids instanceof Response) return ids
+        r.testCaseIds = ids.sort((a, b) => a - b)
+        return respond(requirementDto(r))
+      }),
+    ),
+  ),
   http.post(
     `${BASE}/test-runs/manual`,
     guard(

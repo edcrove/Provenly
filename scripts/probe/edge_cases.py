@@ -437,6 +437,48 @@ def main():
     check("finish it again", call(base, "POST", f"/test-runs/{mid}/finish", {"status": "cancelled"})[0], 409)
     check("record after finishing", call(base, "POST", rec, {"testCaseId": hand, "status": "passed"})[0], 409)
 
+    # Requirements (prototype feature 12): providers, external ids, text and links are validated before any lookup;
+    # imports are bounded and idempotent by external id; twenty concurrent native creations get twenty distinct R-n.
+    reqs = f"/projects/{key}/requirements"
+    for body, exp in [({}, 400), ({"title": " "}, 400), ({"title": "t" * 301}, 400), ({"title": "a\u0000"}, 400),
+                      ({"title": "x", "provider": "trello"}, 400), ({"title": "x", "provider": "provenly", "externalId": "R-9"}, 400),
+                      ({"title": "x", "provider": "jira"}, 400), ({"title": "x", "provider": "jira", "externalId": "-bad"}, 400),
+                      ({"title": "x", "provider": "jira", "externalId": "P" * 101}, 400), ({"title": "x", "url": "ftp://x"}, 400),
+                      ({"title": "x", "url": "https://" + "u" * 2000}, 400), ({"title": "x", "providerStatus": "s" * 51}, 400),
+                      ({"title": "x", "description": "d" * 10001}, 400), ({"title": "x", "unknown": 1}, 400),
+                      ({"title": "ñ" * 300, "provider": "jira", "externalId": "PROBE-1", "url": "https://jira.test/PROBE-1"}, 201),
+                      ({"title": "again", "provider": "jira", "externalId": "PROBE-1"}, 409)]:
+        check(f"create requirement {str(body)[:50]}", call(base, "POST", reqs, body)[0], exp)
+    check("create requirement text/plain", call(base, "POST", reqs, raw=b"{}", ctype="text/plain")[0], 415)
+    check("removed member creates a requirement", call(base, "POST", reqs, {"title": "x"}, headers=as_viewer)[0], 404)
+    check("removed member lists requirements", call(base, "GET", reqs, headers=as_viewer)[0], 404)
+    for body, exp in [({"provider": "provenly", "items": [{"externalId": "R-1", "title": "x"}]}, 400), ({"provider": "jira", "items": []}, 400),
+                      ({"provider": "jira", "items": [{"externalId": f"I-{i}", "title": "x"} for i in range(501)]}, 400),
+                      ({"provider": "jira", "items": [{"externalId": "I-1", "title": "x"}, {"externalId": "I-1", "title": "y"}]}, 400),
+                      ({"provider": "jira", "items": [{"externalId": "I-1"}]}, 400), ({"provider": "jira", "items": [{"externalId": "I-1", "title": "a\u0000"}]}, 400),
+                      ({"provider": "jira", "items": [{"externalId": f"I-{i}", "title": "x"} for i in range(500)]}, 200)]:
+        check(f"import {str(body)[:50]}", call(base, "POST", f"{reqs}/import", body)[0], exp)
+    st, res = call(base, "POST", f"{reqs}/import", {"provider": "jira", "items": [{"externalId": "I-1", "title": "renamed"}, {"externalId": "I-NEW", "title": "n"}]})
+    check("re-import updates by external id", f"{st} {res}", "200 {'created': 1, 'updated': 1}")
+    rid = call(base, "GET", reqs)[1]["items"][0]["id"]
+    for path, method, body, exp in [(f"{reqs}/0", "GET", None, 400), (f"{reqs}/abc", "GET", None, 400), (f"{reqs}/9223372036854775807", "GET", None, 404),
+                                    (f"{reqs}/{rid}", "PATCH", {}, 400), (f"{reqs}/{rid}", "PATCH", {"title": ""}, 400), (f"{reqs}/{rid}", "PATCH", {"archived": "yes"}, 400),
+                                    (f"{reqs}/9223372036854775807", "PATCH", {"archived": True}, 404), (f"{reqs}/{rid}/test-cases", "PUT", {}, 400),
+                                    (f"{reqs}/{rid}/test-cases", "PUT", {"testCaseIds": [0]}, 400), (f"{reqs}/{rid}/test-cases", "PUT", {"testCaseIds": list(range(1, 1002))}, 400),
+                                    (f"{reqs}/{rid}/test-cases", "PUT", {"testCaseIds": [9223372036854775807]}, 400),
+                                    (f"{reqs}/9223372036854775807/test-cases", "PUT", {"testCaseIds": []}, 404),
+                                    (f"{reqs}/{rid}/test-cases", "PUT", {"testCaseIds": [hand, hand]}, 200)]:
+        check(f"{method} {path[len(reqs):] or '/'} {str(body)[:30]}", call(base, method, path, body)[0], exp)
+    for qs, exp in [(f"testCase={hand}", 200), ("testCase=", 400), ("testCase=0", 400), ("testCase=abc", 400)]:
+        check(f"requirements ?{qs}", call(base, "GET", f"{reqs}?{qs}")[0], exp)
+    st, page = call(base, "GET", f"{reqs}?testCase={hand}")
+    check("requirements covered by a test case", len(page.get("items", [])) if isinstance(page, dict) else st, 1)
+    codes = []
+    threads = [threading.Thread(target=lambda: codes.append(call(base, "POST", reqs, {"title": "race"})[1].get("externalId"))) for _ in range(20)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    check("20 concurrent native requirements: distinct R-n", len(set(codes)), 20)
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

@@ -62,3 +62,6 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 55 | A partial run reported for the smoke suite: only the suite was expected (no untested noise) | `55-test-run-for-suite.png` |
 | 56 | Starting a manual run: what is tested, project, optional suite, which test cases | `56-manual-run-new.png` |
 | 57 | A manual run in progress: one test case failed at step 3 with a note, the other still untested | `57-manual-run-in-progress.png` |
+| 58 | Requirements of a project: a native one and two mirrored from Jira, with their coverage | `58-requirements.png` |
+| 59 | A Jira requirement covered by two test cases: one passed, one failed in its latest result | `59-requirement-detail.png` |
+| 60 | A test case page listing the requirements it covers | `60-test-case-covered-requirements.png` |

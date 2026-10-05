@@ -407,3 +407,16 @@ func int8Arg(v *int64) pgtype.Int8 {
 	}
 	return pgtype.Int8{Int64: *v, Valid: true}
 }
+
+// ListLatestResults implements execution.Repository.
+func (s *Store) ListLatestResults(ctx context.Context, testCaseIDs []int64) ([]execution.ValidResult, error) {
+	rows, err := s.q.ListLatestResults(ctx, testCaseIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]execution.ValidResult, len(rows))
+	for i, r := range rows {
+		out[i] = execution.ValidResult{TestCaseID: r.TestCaseID, Status: execution.ResultStatus(r.Status), Execution: r.Execution, Attempt: r.Attempt}
+	}
+	return out, nil
+}

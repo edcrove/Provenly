@@ -13,6 +13,7 @@ const links = [
   { to: '/test-cases', label: 'Test Cases' },
   { to: '/test-runs', label: 'Test Runs' },
   { to: '/suites', label: 'Suites' },
+  { to: '/requirements', label: 'Requirements' },
   { to: '/projects', label: 'Projects' },
 ]
 

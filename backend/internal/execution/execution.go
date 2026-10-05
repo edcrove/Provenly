@@ -292,6 +292,8 @@ type Repository interface {
 	IsInUniverse(ctx context.Context, runID, testCaseID int64) (bool, error)
 	// InsertManualResult appends one recorded result (the next attempt of its test) to a running run.
 	InsertManualResult(ctx context.Context, runID int64, r NewResult) (TestResult, error)
+	// ListLatestResults returns the valid results of each test case in its latest run with results.
+	ListLatestResults(ctx context.Context, testCaseIDs []int64) ([]ValidResult, error)
 	// FinishTestRun ends a running run with a final status.
 	FinishTestRun(ctx context.Context, id int64, status RunStatus) error
 	GetTestRunIDByExternalID(ctx context.Context, projectID int64, externalRunID string) (int64, error)

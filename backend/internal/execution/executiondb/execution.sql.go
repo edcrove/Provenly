@@ -444,6 +444,48 @@ func (q *Queries) ListDiagnosticResults(ctx context.Context, testRunID int64) ([
 	return items, nil
 }
 
+const listLatestResults = `-- name: ListLatestResults :many
+SELECT t.test_case_id::bigint AS test_case_id, t.status, (t.suite_name || chr(31) || t.class_name || chr(31) || t.test_name)::text AS execution, t.attempt
+FROM test_results t
+WHERE t.correlation = 'valid' AND t.test_case_id = ANY($1::bigint[])
+  AND t.test_run_id = (SELECT max(x.test_run_id) FROM test_results x WHERE x.test_case_id = t.test_case_id AND x.correlation = 'valid')
+ORDER BY t.test_case_id, t.id
+`
+
+type ListLatestResultsRow struct {
+	TestCaseID int64
+	Status     string
+	Execution  string
+	Attempt    int32
+}
+
+// The valid results of each given test case in the latest run that has one for it (status, test and attempt), to
+// read its latest status (requirement coverage).
+func (q *Queries) ListLatestResults(ctx context.Context, testCaseIds []int64) ([]ListLatestResultsRow, error) {
+	rows, err := q.db.Query(ctx, listLatestResults, testCaseIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLatestResultsRow
+	for rows.Next() {
+		var i ListLatestResultsRow
+		if err := rows.Scan(
+			&i.TestCaseID,
+			&i.Status,
+			&i.Execution,
+			&i.Attempt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listParseErrors = `-- name: ListParseErrors :many
 SELECT case_index, test_name, message, persisted, severity FROM test_run_parse_errors
 WHERE test_run_id = $1

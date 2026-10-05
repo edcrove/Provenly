@@ -116,3 +116,24 @@ func TestManualRetestIsNotFlaky(t *testing.T) {
 	assert.Equal(t, int32(2), s.Counts.Passed)
 	assert.Equal(t, int32(1), s.Flaky)
 }
+
+// The latest status of a test case is its logical status in the latest run with a result for it.
+func TestLatestStatuses(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo, func() time.Time { return fixedNow })
+	ctx := context.Background()
+	tc1, tc2 := int64(1), int64(2)
+	repo.results[1] = []TestResult{{TestCaseID: &tc1, Correlation: CorrelationValid, TestName: "a", Status: Failed, Attempt: 1}}
+	repo.results[2] = []TestResult{
+		{TestCaseID: &tc1, Correlation: CorrelationValid, TestName: "a", Status: Failed, Attempt: 1},
+		{TestCaseID: &tc1, Correlation: CorrelationValid, TestName: "a", Status: Passed, Attempt: 2},
+		{TestCaseID: &tc2, Correlation: CorrelationValid, TestName: "chrome", Status: Passed, Attempt: 1},
+		{TestCaseID: &tc2, Correlation: CorrelationValid, TestName: "firefox", Status: Skipped, Attempt: 1},
+	}
+	got, err := svc.LatestStatuses(ctx, []int64{1, 2, 3})
+	require.NoError(t, err)
+	assert.Equal(t, map[int64]string{1: "passed", 2: "skipped"}, got)
+	repo.errs["ListLatestResults"] = errBoom
+	_, err = svc.LatestStatuses(ctx, []int64{1})
+	assert.ErrorIs(t, err, errBoom)
+}

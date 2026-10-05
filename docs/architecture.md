@@ -112,6 +112,16 @@ append-only: the `test_run_children_immutable` trigger admits inserts only in th
 non-batch run is running, and `test_runs_protect_identity` freezes a finished run's status. Manual results use the
 class name `provenly-manual`, so a re-test is the next attempt of the same test and is never counted as flaky.
 
+## Requirements and traceability (prototype feature 12)
+
+`requirements` and `requirement_test_cases` belong to the catalog. A requirement is native (provider `provenly`,
+numbered `R-<n>` from `projects.next_requirement_number`, so concurrent creations never collide) or mirrored from an
+external tool by provider and external id (`UpsertRequirement`: an import creates or updates by that key and stamps
+`last_synced_at`; links and archiving survive re-imports). Coverage is read, never stored: the catalog asks a
+`catalog.ResultReader` port (implemented by `execution.Service.LatestStatuses`, wired in `app`) for the logical status
+of each covering test case in the latest run that has a valid result for it, and derives uncovered / not_run /
+failing / partial / passing. The catalog stays independent of the execution module.
+
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its

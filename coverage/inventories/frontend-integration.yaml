@@ -132,3 +132,6 @@ targets:
   - id: FE-INT-039
     description: manual execution - a member starts a manual run (project, optional suite, manual or all test cases, branch), records pass/fail/blocked/skip with a note and the failed step (only for failures), re-tests (the last result counts) and completes or cancels it; refusals are reported; a run without expected test cases says so; viewers see the run without the recording panel
     surfaces: [src/features/manual/NewManualRunPage.tsx, src/features/manual/ManualExecution.tsx, src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/TestRunListPage.tsx]
+  - id: FE-INT-040
+    description: requirements - the page asks for a project, lists requirements with their coverage and adds native (R-n) and external (Jira, GitHub, Azure DevOps) ones, reporting duplicates; a requirement shows its source, the latest result of each covering test case, links and unlinks test cases and archives/restores (failures reported); the test case page lists the requirements it covers; viewers only read; unknown requirements are not found
+    surfaces: [src/features/requirements/RequirementsPage.tsx, src/features/requirements/RequirementDetailPage.tsx, src/features/requirements/CoveredRequirements.tsx, src/features/test-cases/TestCaseDetailPage.tsx]

@@ -1340,6 +1340,216 @@ const manualScenarios: Scenario[] = [
   },
 ]
 
+const withRequirement = () => {
+  db.requirements.push({
+    projectId: 1,
+    id: 950,
+    provider: 'jira',
+    externalId: 'PAY-12',
+    title: 'Refunds',
+    description: '',
+    url: 'https://jira.test/PAY-12',
+    providerStatus: 'In Progress',
+    archivedAt: null,
+    lastSyncedAt: '2026-10-05T10:00:00Z',
+    createdAt: '2026-10-05T10:00:00Z',
+    updatedAt: '2026-10-05T10:00:00Z',
+    testCaseIds: [153],
+    coverage: { status: 'uncovered', linked: 0, passed: 0, failed: 0, notRun: 0, testCases: [] },
+  })
+  db.latest[153] = 'failed'
+}
+const req950 = { projectKey: 'TC', requirementId: 950 }
+const unknownReq = { projectKey: 'TC', requirementId: 987654 }
+
+const requirementScenarios: Scenario[] = [
+  {
+    op: 'GET /api/v1/projects/{projectKey}/requirements',
+    status: 200,
+    setup: withRequirement,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/requirements', {
+        params: { path: tcKey, query: { testCase: 153 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/requirements',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/requirements', {
+        params: { path: tcKey, query: { testCase: 0 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/requirements',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/requirements', { params: { path: chk } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/requirements',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/requirements', { params: { path: tcKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/requirements',
+    status: 201,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/requirements', {
+        params: { path: tcKey },
+        body: { title: 'Pay by card', url: 'https://x.test' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/requirements',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/requirements', { params: { path: tcKey }, body: { title: ' ' } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/requirements',
+    status: 403,
+    setup: asViewer,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/requirements', { params: { path: tcKey }, body: { title: 'x' } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/requirements',
+    status: 404,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/requirements', { params: { path: chk }, body: { title: 'x' } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/requirements',
+    status: 409,
+    setup: withRequirement,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/requirements', {
+        params: { path: tcKey },
+        body: { title: 'x', provider: 'jira', externalId: 'PAY-12' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/requirements',
+    status: 415,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/requirements', {
+        params: { path: tcKey },
+        body: { title: 'x' },
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/requirements',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.POST('/api/v1/projects/{projectKey}/requirements', { params: { path: tcKey }, body: { title: 'x' } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/requirements/{requirementId}',
+    status: 200,
+    setup: withRequirement,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/requirements/{requirementId}', { params: { path: req950 } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/requirements/{requirementId}',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/requirements/{requirementId}', {
+        params: { path: { projectKey: 'TC', requirementId: 0 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/requirements/{requirementId}',
+    status: 404,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/requirements/{requirementId}', { params: { path: unknownReq } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/requirements/{requirementId}',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/requirements/{requirementId}', { params: { path: req950 } }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/requirements/{requirementId}',
+    status: 200,
+    setup: withRequirement,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/requirements/{requirementId}', {
+        params: { path: req950 },
+        body: { archived: true },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/requirements/{requirementId}',
+    status: 400,
+    setup: withRequirement,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/requirements/{requirementId}', {
+        params: { path: req950 },
+        body: {},
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}/requirements/{requirementId}',
+    status: 404,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}/requirements/{requirementId}', {
+        params: { path: unknownReq },
+        body: { title: 'x' },
+      }),
+  },
+  ...taxonomyWriteFailures('PATCH /api/v1/projects/{projectKey}/requirements/{requirementId}', (c, headers) =>
+    c.PATCH('/api/v1/projects/{projectKey}/requirements/{requirementId}', {
+      params: { path: req950 },
+      body: { title: 'x' },
+      headers,
+    }),
+  ).map((sc) => ({ ...sc, setup: sc.setup ? () => (withRequirement(), sc.setup!()) : withRequirement })),
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases',
+    status: 200,
+    setup: withRequirement,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases', {
+        params: { path: req950 },
+        body: { testCaseIds: [153, 154] },
+      }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases',
+    status: 400,
+    setup: withRequirement,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases', {
+        params: { path: req950 },
+        body: { testCaseIds: [987654] },
+      }),
+  },
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases',
+    status: 404,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases', {
+        params: { path: unknownReq },
+        body: { testCaseIds: [] },
+      }),
+  },
+  ...taxonomyWriteFailures(
+    'PUT /api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases',
+    (c, headers) =>
+      c.PUT('/api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases', {
+        params: { path: req950 },
+        body: { testCaseIds: [] },
+        headers,
+      }),
+  ).map((sc) => ({ ...sc, setup: sc.setup ? () => (withRequirement(), sc.setup!()) : withRequirement })),
+]
+
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 type AnyCall = (path: string, init: object) => Promise<Result>
 const anyPath = {
@@ -1351,6 +1561,7 @@ const anyPath = {
   dimensionKey: 'risk',
   valueKey: 'critical',
   suiteKey: 'smoke',
+  requirementId: 1,
 }
 
 /** Without a session every operation that declares 401 answers it (sign-in's own 401 is a wrong password). */
@@ -1384,6 +1595,7 @@ const scenarios: Scenario[] = [
   ...taxonomyScenarios,
   ...suiteScenarios,
   ...manualScenarios,
+  ...requirementScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
   // Projects

@@ -87,10 +87,25 @@ func TestPersistenceFailures(t *testing.T) {
 				_, err := cat.UpdateSuite(ctx, 1, "s", catalog.UpdateSuiteInput{Name: str("x")})
 				return err
 			},
-			"catalog.SetSuiteCases":       func() error { return cat.SetSuiteCases(ctx, 1, 1, []int64{1}) },
-			"catalog.ProjectCaseIDs":      func() error { _, err := cat.ProjectCaseIDs(ctx, 1, []int64{1}); return err },
-			"catalog.SetClassification":   func() error { return cat.SetClassification(ctx, 1, 1, 1, 1) },
-			"catalog.ClearClassification": func() error { return cat.SetClassification(ctx, 1, 1, 1, 0) },
+			"catalog.SetSuiteCases":    func() error { return cat.SetSuiteCases(ctx, 1, 1, []int64{1}) },
+			"catalog.ProjectCaseIDs":   func() error { _, err := cat.ProjectCaseIDs(ctx, 1, []int64{1}); return err },
+			"catalog.ListRequirements": func() error { _, err := cat.ListRequirements(ctx, 1, nil); return err },
+			"catalog.GetRequirement":   func() error { _, err := cat.GetRequirement(ctx, 1, 1); return err },
+			"catalog.NextNativeRequirementNumber": func() error {
+				_, err := cat.NextNativeRequirementNumber(ctx, 1)
+				return err
+			},
+			"catalog.UpsertRequirement": func() error {
+				_, _, _, err := cat.UpsertRequirement(ctx, 1, catalog.RequirementInput{Provider: "jira", ExternalID: "X-1", Title: "x"}, true, nil)
+				return err
+			},
+			"catalog.UpdateRequirement": func() error {
+				return cat.UpdateRequirement(ctx, 1, 1, catalog.UpdateRequirementInput{Title: str("x")})
+			},
+			"catalog.SetRequirementTestCases": func() error { return cat.SetRequirementTestCases(ctx, 1, 1, []int64{1}) },
+			"execution.ListLatestResults":     func() error { _, err := exe.ListLatestResults(ctx, []int64{1}); return err },
+			"catalog.SetClassification":       func() error { return cat.SetClassification(ctx, 1, 1, 1, 1) },
+			"catalog.ClearClassification":     func() error { return cat.SetClassification(ctx, 1, 1, 1, 0) },
 			"catalog.CreateProject": func() error {
 				_, err := cat.CreateProject(ctx, catalog.CreateProjectInput{Key: "XX", Name: "x"})
 				return err

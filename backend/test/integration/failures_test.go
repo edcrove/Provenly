@@ -142,16 +142,24 @@ func TestPersistenceFailures(t *testing.T) {
 			"execution.CountParseErrors":         func() error { _, err := exe.CountParseErrors(ctx, 1); return err },
 			"execution.GetTestRun":               func() error { _, err := exe.GetTestRun(ctx, 1); return err },
 			"execution.ListTestRuns":             func() error { _, err := exe.ListTestRuns(ctx, execution.RunFilter{}, 10, 0); return err },
-			"execution.CountTestRuns":            func() error { _, err := exe.CountTestRuns(ctx, execution.RunFilter{}); return err },
-			"execution.ListRunResults":           func() error { _, err := exe.ListRunResults(ctx, 1, execution.ResultFilter{}, 10, 0); return err },
-			"execution.CountRunResults":          func() error { _, err := exe.CountRunResults(ctx, 1, execution.ResultFilter{}); return err },
-			"execution.ListSummaryInputs":        func() error { _, err := exe.ListSummaryInputs(ctx, []int64{1}); return err },
-			"execution.ListDiagnostics":          func() error { _, err := exe.ListDiagnostics(ctx, 1); return err },
-			"execution.InsertAmendment":          func() error { _, err := exe.InsertAmendment(ctx, execution.NewAmendment{}); return err },
-			"execution.ListAmendments":           func() error { _, err := exe.ListAmendments(ctx, 1, 10, 0); return err },
-			"execution.CountAmendments":          func() error { _, err := exe.CountAmendments(ctx, 1); return err },
-			"execution.ListResultsForTestCase":   func() error { _, err := exe.ListResultsForTestCase(ctx, 1, 10, 0); return err },
-			"execution.CountResultsForTestCase":  func() error { _, err := exe.CountResultsForTestCase(ctx, 1); return err },
+			"execution.LockTestRun":              func() error { _, _, err := exe.LockTestRun(ctx, 1); return err },
+			"execution.IsInUniverse":             func() error { _, err := exe.IsInUniverse(ctx, 1, 1); return err },
+			"execution.FinishTestRun":            func() error { return exe.FinishTestRun(ctx, 1, execution.RunCompleted) },
+			"execution.InsertManualResult": func() error {
+				id, key := int64(1), "TC-1"
+				_, err := exe.InsertManualResult(ctx, 1, execution.NewResult{TestCaseID: &id, RequestedTestCaseID: &key, TestName: key, Status: execution.Passed})
+				return err
+			},
+			"execution.CountTestRuns":           func() error { _, err := exe.CountTestRuns(ctx, execution.RunFilter{}); return err },
+			"execution.ListRunResults":          func() error { _, err := exe.ListRunResults(ctx, 1, execution.ResultFilter{}, 10, 0); return err },
+			"execution.CountRunResults":         func() error { _, err := exe.CountRunResults(ctx, 1, execution.ResultFilter{}); return err },
+			"execution.ListSummaryInputs":       func() error { _, err := exe.ListSummaryInputs(ctx, []int64{1}); return err },
+			"execution.ListDiagnostics":         func() error { _, err := exe.ListDiagnostics(ctx, 1); return err },
+			"execution.InsertAmendment":         func() error { _, err := exe.InsertAmendment(ctx, execution.NewAmendment{}); return err },
+			"execution.ListAmendments":          func() error { _, err := exe.ListAmendments(ctx, 1, 10, 0); return err },
+			"execution.CountAmendments":         func() error { _, err := exe.CountAmendments(ctx, 1); return err },
+			"execution.ListResultsForTestCase":  func() error { _, err := exe.ListResultsForTestCase(ctx, 1, 10, 0); return err },
+			"execution.CountResultsForTestCase": func() error { _, err := exe.CountResultsForTestCase(ctx, 1); return err },
 		}
 		for name, call := range calls {
 			err := call()

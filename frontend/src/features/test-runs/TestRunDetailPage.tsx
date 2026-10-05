@@ -1,15 +1,18 @@
 import { useParams } from 'react-router'
 
 import type { TestRun } from '@/api/client'
-import { useTestRun, useTestRunSummary } from '@/api/queries'
+import { useProjects, useTestRun, useTestRunSummary } from '@/api/queries'
 import { NotFoundPage } from '@/app/NotFoundPage'
 import { QueryState } from '@/components/QueryState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { EditedBadge, ExecutionBadge, FlakyBadge, SuiteBadge, VerdictBadge } from '@/components/StatusBadge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { formatDateTime, formatPercent } from '@/lib/format'
+import { can } from '@/lib/roles'
 import { isInterruptedRun, positiveInt } from '@/lib/status'
+import { ManualExecution } from '@/features/manual/ManualExecution'
 
 import { RunAmendments } from './RunAmendments'
 import { RunDiagnostics } from './RunDiagnostics'
@@ -48,6 +51,7 @@ export function TestRunDetailPage() {
   const id = positiveInt(testRunId, 0)
   const run = useTestRun(id)
   const summary = useTestRunSummary(id)
+  const projects = useProjects().data?.items ?? []
   if (!id) return <NotFoundPage />
   return (
     <QueryState page query={run}>
@@ -60,7 +64,10 @@ export function TestRunDetailPage() {
             <EditedBadge amendments={r.amendmentCount} />
             <FlakyBadge count={r.outcome.flaky} />
             <SuiteBadge suite={r.suite} />
-            {isInterruptedRun(r.executionStatus) ? <ExecutionBadge status={r.executionStatus} /> : null}
+            {isInterruptedRun(r.executionStatus) || r.executionStatus === 'running' ? (
+              <ExecutionBadge status={r.executionStatus} />
+            ) : null}
+            {r.mode === 'manual' ? <Badge variant="outline">manual</Badge> : null}
             <span className="text-muted-foreground text-sm" data-testid="run-pass-rate">
               {r.outcome.executed > 0
                 ? `${formatPercent(r.outcome.passRate)} of executed passed`
@@ -105,6 +112,11 @@ export function TestRunDetailPage() {
                     <RunDiagnostics summary={s} testRunId={r.id} />
                   </CardContent>
                 </Card>
+                {r.mode === 'manual' &&
+                r.executionStatus === 'running' &&
+                can(projects.find((p) => p.id === r.projectId)?.myRole, 'member') ? (
+                  <ManualExecution run={r} summary={s} />
+                ) : null}
                 {r.amendmentCount > 0 ? (
                   <RunAmendments testRunId={r.id} snapshotTotal={s.snapshotTotal} />
                 ) : null}

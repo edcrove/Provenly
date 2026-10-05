@@ -273,8 +273,8 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.ErrorContains(t, err, "identity of a test run is immutable")
 		_, err = db.Pool.Exec(ctx, `DELETE FROM test_runs WHERE id = $1`, out.Run.ID)
 		assert.ErrorContains(t, err, "test runs cannot be deleted")
-		_, err = db.Pool.Exec(ctx, `UPDATE test_runs SET status = 'running' WHERE id = $1`, out.Run.ID)
-		assert.NoError(t, err, "the lifecycle status may still change")
+		_, err = db.Pool.Exec(ctx, `UPDATE test_runs SET status = 'interrupted' WHERE id = $1`, out.Run.ID)
+		assert.ErrorContains(t, err, "a finished test run keeps its status", "only running (manual or live) runs change status (P11-5)")
 		_, err = db.Pool.Exec(ctx, `UPDATE test_runs SET started_at = completed_at + interval '1 second' WHERE id = $1`, out.Run.ID)
 		assert.ErrorContains(t, err, "test_runs_started_before_completed")
 
@@ -285,11 +285,11 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Equal(t, []string{fmt.Sprintf(ingestion.FutureStartWarning, "2099-01-01T00:00:00Z")}, future.Warnings)
 
 		m := meta("500", 1)
-		m.Branch, m.Commit = "release", "def456"
+		m.Branch, m.Commit, m.Status = "release", "def456", execution.RunInterrupted
 		replay, err := s.Ingestion.IngestJUnit(ctx, m, strings.NewReader(junitFor(tcProp("a", itoa(a.ID), ""))))
 		require.NoError(t, err)
 		assert.Equal(t, []string{
-			`status "completed" differs from "running", recorded for this attempt; it was not applied`,
+			`status "interrupted" differs from "completed", recorded for this attempt; it was not applied`,
 			`branch "release" differs from "main", recorded for this attempt; it was not applied`,
 			`commit "def456" differs from "abc123", recorded for this attempt; it was not applied`,
 		}, replay.Warnings)
@@ -465,13 +465,18 @@ func TestExecutionPersistence(t *testing.T) {
 		_, err := db.Pool.Exec(ctx, `INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, status) VALUES (1, 'x:y:1', 'github', '1', 1, 'completed')`)
 		assert.ErrorContains(t, err, "external_run_id_format")
 
-		// The full lifecycle is supported by the model even though the POC only
-		// records final statuses (created/running arrive with live streaming).
+		// The full lifecycle is supported by the model; running is for manual and live runs (P11-5).
 		for i, status := range []string{"created", "running", "completed", "interrupted", "cancelled"} {
-			_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, status) VALUES (1, $1, 'github', 'life', $2, $3)`,
-				"github:life:"+itoa(int64(i+1)), i+1, status)
+			mode := "batch"
+			if status == "running" {
+				mode = "manual"
+			}
+			_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, status, mode) VALUES (1, $1, 'github', 'life', $2, $3, $4)`,
+				"github:life:"+itoa(int64(i+1)), i+1, status, mode)
 			assert.NoError(t, err, status)
 		}
+		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, status) VALUES (1, 'github:life:8', 'github', 'life', 8, 'running')`)
+		assert.ErrorContains(t, err, "test_runs_running_is_not_batch", "a CI report is never running")
 		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, status) VALUES (1, 'github:life:9', 'github', 'life', 9, 'paused')`)
 		assert.Error(t, err, "unknown run statuses are rejected")
 		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, status) VALUES (1, 'github:life:10', 'github', 'life', 10, 'failed')`)

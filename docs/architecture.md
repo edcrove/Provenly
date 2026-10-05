@@ -103,6 +103,15 @@ intersects it with the expected universe read in the same snapshot as the correl
 key and name (`test_runs.suite_key/suite_name`, immutable). Summaries need no change: results outside the suite are
 outside the universe, as before.
 
+## Manual execution (prototype feature 11, MVP D3)
+
+A manual run is a test run with `mode = manual` and status `running` until a person finishes it. The ingestion module
+orchestrates it (`ingestion.Manual`: project access, selection through `catalog.Service.Selection`, the actor from
+identity) and the execution module stores it (`StartRun`, `RecordResult`, `FinishRun` under a row lock). Results stay
+append-only: the `test_run_children_immutable` trigger admits inserts only in the creating transaction or while a
+non-batch run is running, and `test_runs_protect_identity` freezes a finished run's status. Manual results use the
+class name `provenly-manual`, so a re-test is the next attempt of the same test and is never counted as flaky.
+
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its

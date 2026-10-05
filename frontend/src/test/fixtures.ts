@@ -98,6 +98,8 @@ export function testRun(overrides: Partial<TestRun> = {}): TestRun {
     projectId: 1,
     externalRunId: 'github:9876:1',
     suite: null,
+    mode: 'batch',
+    startedBy: null,
     provider: 'github',
     providerRunId: '9876',
     runAttempt: 1,
@@ -143,6 +145,8 @@ export function testResult(overrides: Partial<TestResult> = {}): TestResult {
     errorDetails: '',
     attempt: 1,
     retried: false,
+    recordedBy: null,
+    failedStep: null,
     createdAt: at,
     ...overrides,
   }

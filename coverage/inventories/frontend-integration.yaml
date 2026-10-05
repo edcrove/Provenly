@@ -129,3 +129,6 @@ targets:
   - id: FE-INT-038
     description: suites - the page asks for a project, lists its suites and creates query suites (tag and classification) and static ones; a static suite adds and removes test cases, a query suite shows its matches; archive and restore; failures are reported; viewers only read; unknown suites are not found; runs show their suite (badge, list filter linked from the suite)
     surfaces: [src/features/suites/SuitesPage.tsx, src/features/suites/SuiteDetailPage.tsx, src/features/test-runs/TestRunListPage.tsx, src/components/StatusBadge.tsx]
+  - id: FE-INT-039
+    description: manual execution - a member starts a manual run (project, optional suite, manual or all test cases, branch), records pass/fail/blocked/skip with a note and the failed step (only for failures), re-tests (the last result counts) and completes or cancels it; refusals are reported; a run without expected test cases says so; viewers see the run without the recording panel
+    surfaces: [src/features/manual/NewManualRunPage.tsx, src/features/manual/ManualExecution.tsx, src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/TestRunListPage.tsx]

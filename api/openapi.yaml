@@ -1298,6 +1298,109 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/test-runs/manual:
+    post:
+      tags: [test-runs]
+      operationId: startManualRun
+      summary: Start a manual run (members) expecting the active manual test cases of the project or suite (all of them with scope=all)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartManualRunRequest"
+      responses:
+        "201":
+          description: The running manual run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestRun"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-runs/{testRunId}/manual-results:
+    parameters:
+      - $ref: "#/components/parameters/TestRunId"
+    post:
+      tags: [test-runs]
+      operationId: recordManualResult
+      summary: Record the result of an expected test case in a running manual run (members); recording it again is a re-test
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualResultRequest"
+      responses:
+        "201":
+          description: The recorded result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-runs/{testRunId}/finish:
+    parameters:
+      - $ref: "#/components/parameters/TestRunId"
+    post:
+      tags: [test-runs]
+      operationId: finishManualRun
+      summary: Finish a running manual run as completed or cancelled (members)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinishRunRequest"
+      responses:
+        "200":
+          description: The finished run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestRun"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/test-runs/{testRunId}:
     parameters:
       - $ref: "#/components/parameters/TestRunId"
@@ -2581,6 +2684,13 @@ components:
       enum: [completed, interrupted, cancelled]
       default: completed
 
+    RunExecutionStatus:
+      type: string
+      description: |
+        How the run's execution ended (`completed`, `interrupted`, `cancelled`), or `running` while a manual run
+        still receives results.
+      enum: [running, completed, interrupted, cancelled]
+
     RunVerdict:
       type: string
       description: |
@@ -2649,7 +2759,17 @@ components:
         - amendmentCount
         - createdAt
         - suite
+        - mode
+        - startedBy
       properties:
+        mode:
+          type: string
+          enum: [batch, manual, live]
+          description: How the results arrive - one CI report (batch), recorded by people (manual) or streamed (live).
+        startedBy:
+          type: string
+          nullable: true
+          description: Who started a manual run.
         suite:
           description: The suite the run was reported for, as named then (null - the project's automated catalog).
           type: object
@@ -2690,7 +2810,7 @@ components:
         commit:
           type: string
         executionStatus:
-          $ref: "#/components/schemas/ExecutionStatus"
+          $ref: "#/components/schemas/RunExecutionStatus"
         outcome:
           $ref: "#/components/schemas/RunOutcome"
         expectedCount:
@@ -2849,6 +2969,67 @@ components:
             type: integer
             format: int64
 
+    StartManualRunRequest:
+      type: object
+      additionalProperties: false
+      required: [project, name]
+      properties:
+        project:
+          type: string
+          pattern: "^[A-Z][A-Z0-9]{1,9}$"
+        suite:
+          type: string
+          pattern: "^[a-z][a-z0-9-]{0,29}$"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: What is being tested (shown as the run's pipeline).
+        scope:
+          type: string
+          enum: [manual, all]
+          default: manual
+          description: manual expects the active manual test cases; all every active test case.
+        branch:
+          type: string
+          maxLength: 255
+        commit:
+          type: string
+          maxLength: 64
+
+    ManualResultRequest:
+      type: object
+      additionalProperties: false
+      required: [testCaseId, status]
+      properties:
+        testCaseId:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          $ref: "#/components/schemas/ResultStatus"
+        note:
+          type: string
+          maxLength: 10000
+        failedStep:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Only for a failed or error result.
+        durationMs:
+          type: integer
+          format: int64
+          minimum: 0
+
+    FinishRunRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [completed, cancelled]
+
     TestRunPage:
       allOf:
         - $ref: "#/components/schemas/PageMeta"
@@ -2889,7 +3070,19 @@ components:
         - createdAt
         - attempt
         - retried
+        - recordedBy
+        - failedStep
       properties:
+        recordedBy:
+          type: string
+          nullable: true
+          description: Who recorded a manual result (null for results reported by CI).
+        failedStep:
+          type: integer
+          format: int32
+          minimum: 1
+          nullable: true
+          description: The step where a manual test failed, when the tester said so.
         attempt:
           type: integer
           format: int32

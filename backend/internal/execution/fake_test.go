@@ -35,10 +35,14 @@ func (f *fakeRepo) InsertTestRun(_ context.Context, p InsertRunParams) (int64, b
 		return 0, false, nil
 	}
 	f.nextRun++
-	completed := p.CompletedAt
+	created := time.Now()
+	if p.CompletedAt != nil {
+		created = *p.CompletedAt
+	}
 	f.runs[f.nextRun] = TestRun{ID: f.nextRun, ProjectID: p.ProjectID, ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID,
 		RunAttempt: p.RunAttempt, Pipeline: p.Pipeline, Branch: p.Branch, Commit: p.Commit, Status: p.Status,
-		StartedAt: p.StartedAt, CompletedAt: &completed, CreatedAt: completed, SuiteKey: p.SuiteKey, SuiteName: p.SuiteName}
+		StartedAt: p.StartedAt, CompletedAt: p.CompletedAt, CreatedAt: created, SuiteKey: p.SuiteKey, SuiteName: p.SuiteName,
+		Mode: p.Mode, StartedBy: p.StartedBy}
 	f.byExt[ext] = f.nextRun
 	return f.nextRun, true, nil
 }
@@ -281,4 +285,56 @@ func (f *fakeRepo) CountAmendments(_ context.Context, runID int64) (int64, error
 		return 0, err
 	}
 	return int64(len(f.amended[runID])), nil
+}
+
+func (f *fakeRepo) LockTestRun(_ context.Context, id int64) (RunStatus, RunMode, error) {
+	if err := f.errs["LockTestRun"]; err != nil {
+		return "", "", err
+	}
+	r, ok := f.runs[id]
+	if !ok {
+		return "", "", ErrNotFound
+	}
+	return r.Status, r.Mode, nil
+}
+
+func (f *fakeRepo) IsInUniverse(_ context.Context, runID, tcID int64) (bool, error) {
+	if err := f.errs["IsInUniverse"]; err != nil {
+		return false, err
+	}
+	for _, a := range f.amended[runID] {
+		if a.TestCaseID == tcID {
+			return true, nil
+		}
+	}
+	return slices.Contains(f.expected[runID], tcID), nil
+}
+
+func (f *fakeRepo) InsertManualResult(_ context.Context, runID int64, r NewResult) (TestResult, error) {
+	if err := f.errs["InsertManualResult"]; err != nil {
+		return TestResult{}, err
+	}
+	attempt := int32(1)
+	for _, x := range f.results[runID] {
+		if x.TestName == r.TestName && x.Attempt >= attempt {
+			attempt = x.Attempt + 1
+		}
+	}
+	f.nextRes++
+	res := TestResult{ID: f.nextRes, TestRunID: runID, TestCaseID: r.TestCaseID, RequestedTestCaseID: r.RequestedTestCaseID,
+		Correlation: CorrelationValid, TestName: r.TestName, ClassName: ManualClass, Status: r.Status, Attempt: attempt,
+		ErrorMessage: r.ErrorMessage, RecordedBy: r.RecordedBy, FailedStep: r.FailedStep}
+	f.results[runID] = append(f.results[runID], res)
+	return res, nil
+}
+
+func (f *fakeRepo) FinishTestRun(_ context.Context, id int64, status RunStatus) error {
+	if err := f.errs["FinishTestRun"]; err != nil {
+		return err
+	}
+	r := f.runs[id]
+	now := time.Now()
+	r.Status, r.CompletedAt = status, &now
+	f.runs[id] = r
+	return nil
 }

@@ -257,3 +257,21 @@ func TestHandlerSuite(t *testing.T) {
 	run.SuiteKey, run.SuiteName = "smoke", "Smoke"
 	assert.Equal(t, &SuiteRefDTO{Key: "smoke", Name: "Smoke"}, RunDTO(run).Suite)
 }
+
+// Manual runs carry their mode and who started them; manual results who recorded them and the failed step.
+func TestManualDTOs(t *testing.T) {
+	run := sampleRun
+	assert.Equal(t, ModeBatch, RunDTO(run).Mode, "runs before modes are batch")
+	assert.Nil(t, RunDTO(run).StartedBy)
+	run.Mode, run.StartedBy = ModeManual, "ana"
+	assert.Equal(t, ModeManual, RunDTO(run).Mode)
+	assert.Equal(t, ptr("ana"), RunDTO(run).StartedBy)
+
+	res := sampleResult
+	assert.Nil(t, ResultDTO(res, nil).RecordedBy)
+	res.RecordedBy, res.FailedStep = "ana", ptr(int32(2))
+	dto := ResultDTO(res, map[int64]string{153: "TC-153"})
+	assert.Equal(t, ptr("ana"), dto.RecordedBy)
+	assert.Equal(t, ptr(int32(2)), dto.FailedStep)
+	assert.Equal(t, ptr("TC-153"), dto.TestCaseKey)
+}

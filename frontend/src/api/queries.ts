@@ -19,6 +19,8 @@ import {
   type CreateInvitationRequest,
   type CreateProjectRequest,
   type CreateSuiteRequest,
+  type ManualResultRequest,
+  type StartManualRunRequest,
   type CreateTestCaseRequest,
   type UpdateSuiteRequest,
   type UpdateDimensionRequest,
@@ -618,6 +620,43 @@ export function useAmendRun(id: number) {
       ),
     onSettled: () => qc.invalidateQueries({ queryKey: keys.testRuns }),
   })
+}
+
+export function useStartManualRun() {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async (body: StartManualRunRequest) =>
+      unwrap(await api.POST('/api/v1/test-runs/manual', { body })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.testRuns }),
+  })
+}
+
+/** Record and finish actions of a running manual run; every write refreshes the run, its summary and results. */
+export function useManualRun(id: number) {
+  const qc = useQueryClient()
+  const onSettled = () => qc.invalidateQueries({ queryKey: keys.testRuns })
+  return {
+    record: useExclusiveMutation({
+      mutationFn: async (body: ManualResultRequest) =>
+        unwrap(
+          await api.POST('/api/v1/test-runs/{testRunId}/manual-results', {
+            params: { path: { testRunId: id } },
+            body,
+          }),
+        ),
+      onSettled,
+    }),
+    finish: useExclusiveMutation({
+      mutationFn: async (status: 'completed' | 'cancelled') =>
+        unwrap(
+          await api.POST('/api/v1/test-runs/{testRunId}/finish', {
+            params: { path: { testRunId: id } },
+            body: { status },
+          }),
+        ),
+      onSettled,
+    }),
+  }
 }
 
 export function useTestRunResults(

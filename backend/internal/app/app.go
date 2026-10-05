@@ -25,6 +25,7 @@ type Services struct {
 	Catalog   *catalog.Service
 	Execution *execution.Service
 	Ingestion *ingestion.Service
+	Manual    *ingestion.Manual
 	Identity  *identity.Service
 	// Now is the clock of the services (session and invitation expiry).
 	Now func() time.Time
@@ -46,6 +47,7 @@ func NewServicesWith(pool *pgxpool.Pool, now func() time.Time, idcfg identity.Co
 	exe := execution.NewService(executionpg.NewStore(pool), now)
 	return Services{
 		Catalog: cat, Execution: exe, Ingestion: ingestion.NewService(cat, exe, ids),
+		Manual:   ingestion.NewManual(cat, exe, ids),
 		Identity: ids, Now: now, Ready: pool.Ping,
 	}
 }
@@ -91,6 +93,7 @@ func register(r httpx.Router, s Services, maxIngestBytes int64) {
 	ids.RegisterProtected(p)
 	catalog.NewHandler(s.Catalog, s.Identity).Register(p)
 	execution.NewHandler(s.Execution, s.Catalog, s.Identity).Register(p)
+	ingestion.NewManualHandler(s.Manual).Register(p)
 }
 
 type patternRecorder []string

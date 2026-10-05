@@ -176,7 +176,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 46, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 49, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -534,6 +534,9 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.POST("/api/v1/test-runs/1/amendments").WithJSON(map[string]any{"testCaseId": 1, "reason": "x"}).Expect())
 	problem(e.GET("/api/v1/projects/TC/dimensions").Expect())
 	problem(e.GET("/api/v1/projects/TC/suites").Expect())
+	problem(e.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "TC", "name": "x"}).Expect())
+	problem(e.POST("/api/v1/test-runs/1/manual-results").WithJSON(map[string]any{"testCaseId": 1, "status": "passed"}).Expect())
+	problem(e.POST("/api/v1/test-runs/1/finish").WithJSON(map[string]any{"status": "completed"}).Expect())
 	problem(e.POST("/api/v1/projects/TC/suites").WithJSON(map[string]any{"key": "s", "name": "S", "kind": "static"}).Expect())
 	problem(e.GET("/api/v1/projects/TC/suites/s").Expect())
 	problem(e.PATCH("/api/v1/projects/TC/suites/s").WithJSON(map[string]any{"name": "S"}).Expect())
@@ -944,4 +947,52 @@ func TestSuites(t *testing.T) {
 	viewer.POST(suites).WithJSON(map[string]any{"key": "v", "name": "V", "kind": "static"}).Expect().Status(http.StatusForbidden)
 	viewer.PATCH(suites + "/release").WithJSON(map[string]any{"name": "R"}).Expect().Status(http.StatusForbidden)
 	viewer.PUT(suites + "/release/cases").WithJSON(map[string]any{"testCaseIds": []int64{}}).Expect().Status(http.StatusForbidden)
+}
+
+// TestManualExecution: members start manual runs, record results while they run and finish them.
+func TestManualExecution(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	e := anon(t, s, 1<<20)
+	tc := admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "checkout"}).Expect().Status(http.StatusCreated).JSON().Object()
+	id := int64(tc.Value("id").Number().Raw())
+
+	run := admin.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "TC", "name": "Sign-off", "scope": "manual", "branch": "main"}).
+		Expect().Status(http.StatusCreated).JSON().Object()
+	run.HasValue("mode", "manual").HasValue("executionStatus", "running").HasValue("startedBy", "admin").HasValue("expectedCount", 1).HasValue("completedAt", nil)
+	runID := strconv.FormatInt(int64(run.Value("id").Number().Raw()), 10)
+	admin.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "TC", "name": " "}).Expect().Status(http.StatusBadRequest)
+	admin.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "NOPE", "name": "x"}).Expect().Status(http.StatusNotFound)
+	admin.POST("/api/v1/test-runs/manual").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.POST("/api/v1/projects/TC/suites").WithJSON(map[string]any{"key": "old", "name": "Old", "kind": "static"}).Expect().Status(http.StatusCreated)
+	admin.PATCH("/api/v1/projects/TC/suites/old").WithJSON(map[string]any{"archived": true}).Expect().Status(http.StatusOK)
+	admin.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "TC", "name": "x", "suite": "old"}).Expect().Status(http.StatusConflict)
+
+	results := "/api/v1/test-runs/" + runID + "/manual-results"
+	admin.POST(results).WithJSON(map[string]any{"testCaseId": id, "status": "failed", "note": "Pay button missing", "failedStep": 2}).Expect().
+		Status(http.StatusCreated).JSON().Object().HasValue("recordedBy", "admin").HasValue("failedStep", 2).HasValue("attempt", 1).HasValue("testCaseKey", "TC-"+strconv.FormatInt(id, 10))
+	admin.POST(results).WithJSON(map[string]any{"testCaseId": id, "status": "passed"}).Expect().Status(http.StatusCreated).JSON().Object().HasValue("attempt", 2)
+	admin.POST(results).WithJSON(map[string]any{"testCaseId": id, "status": "blocked"}).Expect().Status(http.StatusBadRequest)
+	admin.POST(results).WithJSON(map[string]any{"testCaseId": 987654, "status": "passed"}).Expect().Status(http.StatusConflict)
+	admin.POST(results).WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.POST("/api/v1/test-runs/987654/manual-results").WithJSON(map[string]any{"testCaseId": id, "status": "passed"}).Expect().Status(http.StatusNotFound)
+
+	finish := "/api/v1/test-runs/" + runID + "/finish"
+	admin.POST(finish).WithJSON(map[string]any{"status": "interrupted"}).Expect().Status(http.StatusBadRequest)
+	admin.POST(finish).WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.POST("/api/v1/test-runs/987654/finish").WithJSON(map[string]any{"status": "completed"}).Expect().Status(http.StatusNotFound)
+	admin.POST(finish).WithJSON(map[string]any{"status": "completed"}).Expect().Status(http.StatusOK).JSON().Object().
+		HasValue("executionStatus", "completed").Value("outcome").Object().HasValue("verdict", "passed")
+	admin.POST(finish).WithJSON(map[string]any{"status": "cancelled"}).Expect().Status(http.StatusConflict)
+	admin.GET("/api/v1/test-runs/"+runID+"/results").Expect().Status(http.StatusOK).JSON().Object().
+		Value("items").Array().Value(0).Object().HasValue("recordedBy", "admin").HasValue("errorMessage", "Pay button missing")
+
+	// A viewer reads the run but cannot run it (403).
+	inv := admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "TC", "role": "viewer"}).Expect().Status(http.StatusCreated).JSON().Object()
+	viewer := as(e, e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "vic",
+		"displayName": "Vic", "password": "vic's password"}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
+	viewer.GET("/api/v1/test-runs/" + runID).Expect().Status(http.StatusOK)
+	viewer.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "TC", "name": "x"}).Expect().Status(http.StatusForbidden)
+	viewer.POST(results).WithJSON(map[string]any{"testCaseId": id, "status": "passed"}).Expect().Status(http.StatusForbidden)
+	viewer.POST(finish).WithJSON(map[string]any{"status": "completed"}).Expect().Status(http.StatusForbidden)
 }

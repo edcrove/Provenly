@@ -25,7 +25,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 8 | Compressed (gzip) report ingestion | MVP D6 | ✅ | proto/08-gzip-ingestion |
 | 9 | Taxonomy: tags and custom dimensions | Planning #26 | ✅ | proto/09-taxonomy |
 | 10 | Test suites (static and query) and partial-run scope | Planning #27, MVP D2, Incubator | ✅ | proto/10-suites |
-| 11 | Manual execution (manual runs, step results) | MVP D3, Planning #4, Incubator | ⏳ | |
+| 11 | Manual execution (manual runs, step results) | MVP D3, Planning #4, Incubator | ✅ | proto/11-manual-execution |
 | 12 | Requirements and requirement ↔ test traceability | Incubator (Requirements Federation) | ⏳ | |
 | 13 | Issues, known issues and issue verification | Incubator, Planning #8 | ⏳ | |
 | 14 | Quality dashboard (trends, flaky, coverage) | Incubator (Quality Intelligence) | ⏳ | |
@@ -111,6 +111,12 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P10-5 | Membership | Static members may be deprecated or manual (they simply drop out of the expected universe); members must be of the suite's project; the list `?project=&suite=` shows members or matches | Keeps the suite definition stable while the catalog changes |
 | P10-6 | Permissions | Viewers read suites; maintainers create, edit, archive and change members | Suites define what CI runs count; same level as taxonomy (P9-7) |
 | P10-7 | Not now | Nested suites, suite templates and per-suite reporting (feature 14 reports by suite through `?suite=`); a run for several suites at once is not supported (one key per run) | Keep the model minimal for the prototype |
+| P11-1 | Model | A manual run is a test run with `mode=manual` and the new execution status `running`: a member starts it (project, optional suite, scope), records results one by one and finishes it as `completed` or `cancelled`; it reuses the snapshot, summary, verdict and history of CI runs | One run model for CI and people (Planning #4); every report, dashboard and history works unchanged |
+| P11-2 | Scope | Default scope **manual**: the active test cases that are not automated (CI covers the others); `all` expects every active test case (a release sign-off); a suite narrows either | Avoids expecting automated cases a person will not execute |
+| P11-3 | Results | Append-only, like CI results: recording a test case again is a re-test (its next attempt, gapless even under concurrency, at most 100); the last attempt counts and a pass after a failure is **not** flaky | Keeps the audit trail; a manual re-test after a fix is not flakiness |
+| P11-4 | Details | A result carries a note (shown as the error message), the failed step (only for failed/blocked) and who recorded it; "Blocked" in the UI is the `error` status | No per-step result table in the prototype: the failed step and the note cover the need; per-step results can come later |
+| P11-5 | Integrity | The database lets results into a run only in its creating transaction or while a manual (or live) run is running; a finished run keeps its status; mode and starter are part of the run's immutable identity | The same "results are the source of truth" rule as CI (findings 10) |
+| P11-6 | Permissions | Members start, record and finish; viewers read; manual runs need a session (API keys only report CI runs) | Manual execution is a person's work |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
 ## What each feature does
@@ -269,3 +275,17 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
   the CI hint and the runs link; suite badge on runs (screenshots 53–55).
 - **Tests**: unit (service, handlers, ingestion, execution filter), BE-INT-047, backend and frontend contract,
   FE-INT-038, BE-E2E-016, FE-E2E-018, probe suites sweep.
+
+### 11. Manual execution (MVP D3, Planning #4)
+
+- **Behavior**: a member starts a manual run from the run list (what is tested, project, optional suite, manual or all
+  test cases, branch). The run page shows the manual execution panel: Pass / Fail / Blocked / Skip per expected test
+  case with a note and the failed step; recording again is a re-test (the last result counts, not flaky). Complete or
+  cancel ends it; afterwards it is read-only like any run (summary, verdict, history).
+- **API**: `POST /test-runs/manual`, `POST /test-runs/{id}/manual-results`, `POST /test-runs/{id}/finish`; runs have
+  `mode` and `startedBy`, results `recordedBy` and `failedStep`; execution status `running`.
+- **Data**: migration 00023 (`test_runs.mode/started_by`, `test_results.recorded_by/failed_step`; triggers allow appends
+  only to running manual/live runs and freeze a finished run's status).
+- **UI**: new manual run page, manual execution panel on the run page, running/manual badges (screenshots 56–57).
+- **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
+  contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).

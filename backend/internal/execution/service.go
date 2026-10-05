@@ -48,7 +48,7 @@ func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, r
 	)
 	err := s.repo.InTx(ctx, func(r Repository) error {
 		id, ok, err := r.InsertTestRun(ctx, InsertRunParams{
-			NewRun: run, ExternalRunID: externalID, Status: status, CompletedAt: now,
+			NewRun: run, ExternalRunID: externalID, Status: status, CompletedAt: &now,
 		})
 		if err != nil {
 			return err
@@ -268,4 +268,95 @@ func (s *Service) History(ctx context.Context, testCaseID int64, page pagination
 		return pagination.Result[HistoryEntry]{}, err
 	}
 	return pagination.Result[HistoryEntry]{Items: items, Page: page, Total: total}, nil
+}
+
+// StartRun creates a running manual run with its expected universe and no results yet.
+func (s *Service) StartRun(ctx context.Context, run NewRun, expected []int64) (TestRun, error) {
+	run.Mode = ModeManual
+	var out TestRun
+	err := s.repo.InTx(ctx, func(r Repository) error {
+		id, ok, err := r.InsertTestRun(ctx, InsertRunParams{
+			NewRun: run, ExternalRunID: ExternalRunID(run.Provider, run.ProviderRunID, run.RunAttempt), Status: RunRunning,
+		})
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return apperr.Conflict("a run with this id already exists")
+		}
+		if err := r.InsertExpectedCases(ctx, id, expected); err != nil {
+			return err
+		}
+		if out, err = r.GetTestRun(ctx, id); err != nil {
+			return err
+		}
+		return attachOutcomes(ctx, r, []TestRun{out}, func(_ int, o RunOutcome) { out.Outcome = o })
+	})
+	return out, err
+}
+
+// lockRunning locks a manual run that is still running (409 otherwise).
+func lockRunning(ctx context.Context, r Repository, runID int64) error {
+	status, mode, err := r.LockTestRun(ctx, runID)
+	if errors.Is(err, ErrNotFound) {
+		return runNotFound(runID)
+	}
+	if err != nil {
+		return err
+	}
+	if mode != ModeManual {
+		return apperr.Conflict("run %d was reported by CI: its results come from its report", runID)
+	}
+	if status != RunRunning {
+		return apperr.Conflict("run %d is %s: it takes no more results", runID, status)
+	}
+	return nil
+}
+
+// RecordResult appends a manually recorded result of a test case in the run's universe; recording it again is a
+// re-test (its next attempt; the last one counts).
+func (s *Service) RecordResult(ctx context.Context, runID int64, res NewResult) (TestResult, error) {
+	var out TestResult
+	err := s.repo.InTx(ctx, func(r Repository) error {
+		if err := lockRunning(ctx, r, runID); err != nil {
+			return err
+		}
+		in, err := r.IsInUniverse(ctx, runID, *res.TestCaseID)
+		if err != nil {
+			return err
+		}
+		if !in {
+			return apperr.Conflict("test case %d is not expected in run %d", *res.TestCaseID, runID)
+		}
+		if out, err = r.InsertManualResult(ctx, runID, res); err != nil {
+			return err
+		}
+		if out.Attempt > MaxAttempts {
+			return apperr.Conflict("test case %d was already recorded %d times in run %d", *res.TestCaseID, MaxAttempts, runID)
+		}
+		return nil
+	})
+	return out, err
+}
+
+// FinishRun ends a running manual run as completed or cancelled.
+func (s *Service) FinishRun(ctx context.Context, runID int64, status RunStatus) (TestRun, error) {
+	if status != RunCompleted && status != RunCancelled {
+		return TestRun{}, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "status", Message: "must be one of completed, cancelled"})
+	}
+	var out TestRun
+	err := s.repo.InTx(ctx, func(r Repository) error {
+		if err := lockRunning(ctx, r, runID); err != nil {
+			return err
+		}
+		if err := r.FinishTestRun(ctx, runID, status); err != nil {
+			return err
+		}
+		var err error
+		if out, err = r.GetTestRun(ctx, runID); err != nil {
+			return err
+		}
+		return attachOutcomes(ctx, r, []TestRun{out}, func(_ int, o RunOutcome) { out.Outcome = o })
+	})
+	return out, err
 }

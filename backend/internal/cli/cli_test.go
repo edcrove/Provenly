@@ -12,6 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 var errBoom = errors.New("boom")
@@ -121,4 +123,23 @@ func TestDefaultDeps(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	assert.NoError(t, d.Serve(ctx, l, http.NotFoundHandler()))
+}
+
+// With an OTLP endpoint the exporter is built at startup; one that cannot be built stops the command.
+func TestOpenTelemetry(t *testing.T) {
+	env := map[string]string{"PROVENLY_DATABASE_URL": baseEnv["PROVENLY_DATABASE_URL"], "OTEL_EXPORTER_OTLP_ENDPOINT": "http://127.0.0.1:1"}
+	r := &recorder{}
+	d, _ := testDeps(t, env, r)
+	built := false
+	d.Exporter = func(context.Context) (sdktrace.SpanExporter, error) {
+		built = true
+		return tracetest.NewInMemoryExporter(), nil
+	}
+	assert.Equal(t, 0, Run(context.Background(), nil, d))
+	assert.True(t, built)
+	d.Exporter = func(context.Context) (sdktrace.SpanExporter, error) { return nil, errors.New("bad endpoint") }
+	d2, stderr := testDeps(t, env, r)
+	d2.Exporter = d.Exporter
+	assert.Equal(t, 1, Run(context.Background(), nil, d2))
+	assert.Contains(t, stderr.String(), "opentelemetry: bad endpoint")
 }

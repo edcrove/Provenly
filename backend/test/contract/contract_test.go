@@ -19,6 +19,7 @@ import (
 
 	"github.com/edcrove/provenly/backend/internal/app"
 	"github.com/edcrove/provenly/backend/internal/platform/postgres"
+	"github.com/edcrove/provenly/backend/internal/platform/telemetry"
 )
 
 const xmlType = "application/xml"
@@ -1226,4 +1227,17 @@ func TestLiveRuns(t *testing.T) {
 		Expect().Status(http.StatusForbidden)
 	batchID := strconv.FormatInt(int64(ingest(admin, "302", 1, `<testsuite/>`).Expect().Status(http.StatusCreated).JSON().Object().Value("testRun").Object().Value("id").Number().Raw()), 10)
 	admin.GET("/api/v1/test-runs/" + batchID + "/live").Expect().Status(http.StatusConflict)
+}
+
+// TestTraceIDs: with OpenTelemetry set up every response names its trace in X-Trace-Id, continuing a W3C
+// traceparent sent by the caller (CI, a proxy or the browser).
+func TestTraceIDs(t *testing.T) {
+	shutdown, err := telemetry.Setup(context.Background(), "test", false, nil)
+	require.NoError(t, err)
+	defer func() { _ = shutdown(context.Background()) }()
+	s := fresh(t)
+	e := anon(t, s, 1<<20)
+	e.GET("/healthz").WithHeader("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01").
+		Expect().Status(http.StatusOK).Header(telemetry.TraceHeader).IsEqual("4bf92f3577b34da6a3ce929d0e0e4736")
+	e.GET("/api/v1/test-cases").Expect().Status(http.StatusUnauthorized).Header(telemetry.TraceHeader).Length().IsEqual(32)
 }

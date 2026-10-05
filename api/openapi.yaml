@@ -28,6 +28,8 @@ info:
       upper-case letters or digits (e.g. `CHK`). The default project `TC` holds the
       test cases created before projects existed. Projects are never deleted and
       their key never changes.
+    - Tracing: every response carries `X-Trace-Id`, the OpenTelemetry trace of the
+      request; a W3C `traceparent` request header is continued.
     - Test Case identity: numeric `id` (used in URLs) plus a per-project `number`,
       displayed as `key` = `<projectKey>-<number>` (e.g. `CHK-12`). Both are
       assigned by the server, immutable and never reused.

@@ -158,6 +158,14 @@ started-without-finished, duplicate, invalid correlation). The UI polls every tw
 `reporters/playwright` is a client of the public API only (live runs, events and JUnit ingestion with a project API
 key): it adds no server code. Its TC-ID conventions mirror the JUnit ones (`tc-id` property, KEY-n in the name).
 
+## Observability (prototype feature 17)
+
+`internal/platform/telemetry` installs the OpenTelemetry SDK at startup (always, so spans and log correlation exist;
+exported over OTLP/HTTP only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set). `telemetry.Middleware` wraps the API
+(otelhttp: continues `traceparent`, names spans after the mux route, sets `X-Trace-Id`); `postgres.Open` adds the
+otelpgx tracer so queries are child spans; `ingestion.Service.IngestJUnit` opens the ingestion span; the slog handler
+adds `trace_id`/`span_id` to every record written with a request context.
+
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its

@@ -503,5 +503,16 @@ test('UI flows', async ({ page }) => {
   })).status()).toBe(201)
   await expect(page.getByTestId('reconciliation')).toHaveText('mismatch')
   await shot(page, 'live-run-reconciled')
+  // Integrations (prototype feature 18): a webhook with a queued ping and a GitHub Issues connection (never synced:
+  // the screenshots run offline).
+  const hook = (await (await request.post(`${api}/projects/CHK/webhooks`, {
+    data: { url: 'https://hooks.example.com/provenly', events: ['run.completed'] },
+  })).json()) as { webhook: { id: number } }
+  expect((await request.post(`${api}/projects/CHK/webhooks/${hook.webhook.id}/ping`)).status()).toBe(202)
+  expect((await request.put(`${api}/projects/CHK/github`, { data: { repository: 'acme/checkout', token: 'ghp_screenshot_7f3a', labels: 'bug' } })).status()).toBe(200)
+  await page.goto('/projects/CHK')
+  await expect(page.getByTestId('github-connection')).toContainText('acme/checkout')
+  await expect(page.getByTestId(`webhook-${hook.webhook.id}`)).toContainText('ping:')
+  await shot(page, 'project-integrations')
   await page.getByLabel('Current project').selectOption('')
 })

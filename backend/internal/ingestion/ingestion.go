@@ -53,6 +53,15 @@ type Access interface {
 	KeyProject(ctx context.Context) (int64, bool)
 }
 
+// RunNotifier hears of runs that completed (webhooks). It must not fail, nor slow down, the recording.
+type RunNotifier interface {
+	RunCompleted(ctx context.Context, run execution.TestRun)
+}
+
+type noNotifier struct{}
+
+func (noNotifier) RunCompleted(context.Context, execution.TestRun) {}
+
 // RunMeta is the CI metadata sent with a report.
 type RunMeta struct {
 	// ProjectKey is the project the run belongs to (default: the API key's project, else TC).
@@ -119,12 +128,16 @@ type Service struct {
 	catalog  Catalog
 	recorder Recorder
 	access   Access
+	notify   RunNotifier
 }
 
 // NewService builds a Service.
 func NewService(c Catalog, r Recorder, a Access) *Service {
-	return &Service{catalog: c, recorder: r, access: a}
+	return &Service{catalog: c, recorder: r, access: a, notify: noNotifier{}}
 }
+
+// SetNotifier sets who hears of runs a report completed (created, or a live run completed by its final report).
+func (s *Service) SetNotifier(n RunNotifier) { s.notify = n }
 
 // project resolves the run's project and checks the caller may report into it: members (and
 // administrators) with a session, or an API key of that project. A project the caller cannot
@@ -232,6 +245,9 @@ func (s *Service) ingestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	}, expected, results, parseErrors)
 	if err != nil {
 		return Outcome{}, err
+	}
+	if created {
+		s.notify.RunCompleted(ctx, run)
 	}
 	stored, err := s.recorder.Diagnostics(ctx, run.ID)
 	if err != nil {

@@ -570,6 +570,47 @@ def main():
     check("reconciled after the report", lv.get("reconciliation") if isinstance(lv, dict) else st, "mismatch")
     check("events after the report", call(base, "POST", evs, {"events": [{**ev, "eventId": "late"}]})[0], 409)
 
+    # Integrations (prototype feature 18): webhook and GitHub inputs are validated (never a 500), the secret is
+    # shown once and never listed, ids are scoped to the project, and the GitHub token never comes back.
+    hooks = f"/projects/{key}/webhooks"
+    for body, exp in [({}, 400), ({"url": "https://x.test"}, 400), ({"url": "https://x.test", "events": []}, 400),
+                      ({"url": "https://x.test", "events": ["run.started"]}, 400), ({"url": "ftp://x.test", "events": ["run.completed"]}, 400),
+                      ({"url": "https://u:p@x.test", "events": ["run.completed"]}, 400), ({"url": "https://x.test/\u0000", "events": ["run.completed"]}, 400),
+                      ({"url": "https://x.test/" + "a" * 2000, "events": ["run.completed"]}, 400), ({"url": 5, "events": ["run.completed"]}, 400),
+                      ({"url": "https://", "events": ["run.completed"]}, 400)]:
+        check(f"webhook {str(body)[:50]}", call(base, "POST", hooks, body)[0], exp)
+    check("webhook text/plain", call(base, "POST", hooks, raw=b"{}", ctype="text/plain")[0], 415)
+    st, made = call(base, "POST", hooks, {"url": "https://hooks.example.com/probe", "events": ["run.completed", "run.completed"]})
+    check("create a webhook", st, 201)
+    hid = made.get("webhook", {}).get("id", 0) if isinstance(made, dict) else 0
+    secret = made.get("secret", "") if isinstance(made, dict) else ""
+    check("events deduplicated", str(made.get("webhook", {}).get("events") if isinstance(made, dict) else None), "['run.completed']")
+    check("the secret is never listed", int(bool(secret) and secret not in json.dumps(call(base, "GET", hooks)[1])), 1)
+    for path, exp in [(f"{hooks}/0", 400), (f"{hooks}/abc", 400), (f"{hooks}/9223372036854775807", 404), (f"/projects/TC/webhooks/{hid}", 404)]:
+        check(f"patch webhook {path}", call(base, "PATCH", path, {"active": False})[0], exp)
+        check(f"ping webhook {path}", call(base, "POST", path + "/ping")[0], exp)
+        check(f"deliveries of {path}", call(base, "GET", path + "/deliveries")[0], exp)
+    for body, exp in [({}, 400), ({"events": []}, 400), ({"active": "no"}, 400), ({"url": "gopher://x"}, 400), ({"active": False}, 200)]:
+        check(f"update webhook {str(body)[:40]}", call(base, "PATCH", f"{hooks}/{hid}", body)[0], exp)
+    check("ping is queued", call(base, "POST", f"{hooks}/{hid}/ping")[0], 202)
+    for q, exp in [("page=0", 400), ("pageSize=101", 400), ("page=21474838&pageSize=100", 400), ("page=", 400), ("pageSize=1&x=y", 200)]:
+        check(f"deliveries ?{q}", call(base, "GET", f"{hooks}/{hid}/deliveries?{q}")[0], exp)
+    gh = f"/projects/{key}/github"
+    check("no GitHub connection", call(base, "GET", gh)[0], 404)
+    check("sync without a connection", call(base, "POST", gh + "/sync")[0], 404)
+    check("disconnect without a connection", call(base, "DELETE", gh)[0], 404)
+    for body, exp in [({}, 400), ({"repository": "acme/shop"}, 400), ({"repository": "acme", "token": "t"}, 400),
+                      ({"repository": "acme/shop/x", "token": "t"}, 400), ({"repository": "acme/shop", "token": ""}, 400),
+                      ({"repository": "acme/shop", "token": "t" * 501}, 400), ({"repository": "acme/shop", "token": "t\u0000"}, 400),
+                      ({"repository": "acme/shop", "token": "t", "labels": "l" * 201}, 400), ({"repository": "acme/shop", "token": 1}, 400)]:
+        check(f"connect GitHub {str(body)[:50]}", call(base, "PUT", gh, body)[0], exp)
+    check("connect GitHub text/plain", call(base, "PUT", gh, raw=b"{}", ctype="text/plain")[0], 415)
+    st, conn = call(base, "PUT", gh, {"repository": "acme/shop", "token": "ghp_probe_secret_9876"})
+    check("connect GitHub", f"{st} {conn.get('tokenHint') if isinstance(conn, dict) else ''}", "200 …9876")
+    check("the token never comes back", int("ghp_probe_secret" not in json.dumps(call(base, "GET", gh)[1])), 1)
+    check("change the repository keeping the token", call(base, "PUT", gh, {"repository": "acme/web"})[1].get("tokenHint"), "…9876")
+    check("disconnect GitHub", call(base, "DELETE", gh)[0], 204)
+
     # Tracing (prototype feature 17): every response through the proxy names its trace; a caller's traceparent is
     # continued; malformed traceparents are ignored (a new trace), never an error.
     def trace_of(path, traceparent=None):

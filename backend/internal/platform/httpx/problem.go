@@ -25,6 +25,7 @@ const (
 	CodePayloadTooLarge      = "payload_too_large"
 	CodeUnsupportedMediaType = "unsupported_media_type"
 	CodeServiceUnavailable   = "service_unavailable"
+	CodeUpstream             = "upstream_error"
 	CodeInternal             = "internal_error"
 )
 
@@ -89,6 +90,9 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 			return
 		case apperr.KindInvalidDocument:
 			WriteProblem(w, http.StatusBadRequest, CodeInvalidJUnit, e.Message)
+			return
+		case apperr.KindUpstream:
+			WriteProblem(w, http.StatusBadGateway, CodeUpstream, e.Message)
 			return
 		case apperr.KindValidation:
 			fields := make([]FieldError, len(e.Fields))

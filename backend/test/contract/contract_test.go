@@ -165,7 +165,7 @@ func TestAuthentication(t *testing.T) {
 	s := fresh(t)
 	e := anon(t, s, 1<<20)
 	params := strings.NewReplacer("{testCaseId}", "1", "{testRunId}", "1", "{stepId}", "1", "{projectKey}", "TC", "{invitationId}", "1", "{username}", "admin", "{apiKeyId}", "1",
-		"{dimensionKey}", "risk", "{valueKey}", "low", "{suiteKey}", "smoke", "{requirementId}", "1", "{issueId}", "1")
+		"{dimensionKey}", "risk", "{valueKey}", "low", "{suiteKey}", "smoke", "{requirementId}", "1", "{issueId}", "1", "{webhookId}", "1")
 	protected := 0
 	for path, item := range doc.Paths.Map() {
 		for method, op := range item.Operations() {
@@ -177,7 +177,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 65, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 74, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -562,6 +562,15 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.PATCH("/api/v1/projects/TC/dimensions/risk").WithJSON(map[string]any{"name": "R"}).Expect())
 	problem(e.POST("/api/v1/projects/TC/dimensions/risk/values").WithJSON(map[string]any{"key": "x", "name": "X"}).Expect())
 	problem(e.PATCH("/api/v1/projects/TC/dimensions/risk/values/low").WithJSON(map[string]any{"name": "L"}).Expect())
+	problem(e.GET("/api/v1/projects/TC/webhooks").Expect())
+	problem(e.POST("/api/v1/projects/TC/webhooks").WithJSON(map[string]any{"url": "https://x.test", "events": []string{"run.completed"}}).Expect())
+	problem(e.PATCH("/api/v1/projects/TC/webhooks/1").WithJSON(map[string]any{"active": true}).Expect())
+	problem(e.POST("/api/v1/projects/TC/webhooks/1/ping").Expect())
+	problem(e.GET("/api/v1/projects/TC/webhooks/1/deliveries").Expect())
+	problem(e.GET("/api/v1/projects/TC/github").Expect())
+	problem(e.PUT("/api/v1/projects/TC/github").WithJSON(map[string]any{"repository": "acme/shop", "token": "t"}).Expect())
+	problem(e.DELETE("/api/v1/projects/TC/github").Expect())
+	problem(e.POST("/api/v1/projects/TC/github/sync").Expect())
 	problem(ingest(e, "1", 1, strings.ReplaceAll(report(1), "\n", "")).Expect())
 }
 

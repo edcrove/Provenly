@@ -28,6 +28,8 @@ const (
 	KindForbidden
 	// KindPreconditionFailed means the resource changed since the caller read it (If-Match).
 	KindPreconditionFailed
+	// KindUpstream means an external system Provenly called (GitHub, a tracker) failed or refused.
+	KindUpstream
 )
 
 // FieldError points a validation problem at a specific input field.
@@ -76,6 +78,11 @@ func Forbidden(format string, args ...any) error {
 // PreconditionFailed builds a KindPreconditionFailed error.
 func PreconditionFailed(format string, args ...any) error {
 	return &Error{Kind: KindPreconditionFailed, Message: fmt.Sprintf(format, args...)}
+}
+
+// Upstream builds a KindUpstream error.
+func Upstream(format string, args ...any) error {
+	return &Error{Kind: KindUpstream, Message: fmt.Sprintf(format, args...)}
 }
 
 // InvalidDocument builds a KindInvalidDocument error.

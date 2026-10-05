@@ -4,6 +4,9 @@ import type {
   Amendment,
   ApiKey,
   Dimension,
+  GitHubConnection,
+  Webhook,
+  WebhookDelivery,
   Issue,
   LiveRun,
   Requirement,
@@ -51,6 +54,11 @@ export interface MockDb {
   flaky: Record<number, number>
   /** Issues by project id; their verification is recomputed from latest (skipped is inconclusive). */
   issues: (Issue & { projectId: number })[]
+  /** Webhooks by project id (lastDelivery is derived from deliveries) and their deliveries. */
+  webhooks: (Omit<Webhook, 'lastDelivery'> & { projectId: number })[]
+  deliveries: WebhookDelivery[]
+  /** GitHub connections by project id; repository acme/down answers 502 on sync, an empty tokenHint 409. */
+  github: (GitHubConnection & { projectId: number })[]
   /** Classification dimensions by project id. */
   dimensions: (Dimension & { projectId: number })[]
   /** The signed-in user's id (the session cookie), or null when signed out. */
@@ -85,6 +93,9 @@ export function seed(): MockDb {
     requirements: [],
     latest: {},
     issues: [],
+    webhooks: [],
+    deliveries: [],
+    github: [],
     flaky: {},
     live: {},
     projects: [project()],
@@ -158,6 +169,7 @@ const statusText: Record<number, string> = {
   403: 'Forbidden',
   404: 'Not Found',
   409: 'Conflict',
+  502: 'Bad Gateway',
   412: 'Precondition Failed',
   415: 'Unsupported Media Type',
   500: 'Internal Server Error',
@@ -309,6 +321,32 @@ function maintainedProject(raw: string | readonly string[] | undefined): Project
 }
 
 const DIMENSION = /^[a-z][a-z0-9-]{0,29}$/
+/** A project the user maintains, for integrations (any unknown or malformed key is 404, like the server). */
+function integrationProject(raw: string | readonly string[] | undefined): Project | Response {
+  const p = db.projects.find((x) => x.key === raw)
+  if (!p) return notFound(`project ${String(raw)}`)
+  return requireRole(p.id, 'maintainer', () => notFound(`project ${String(raw)}`)) ?? p
+}
+
+function webhookOf(p: Project, raw: string | readonly string[] | undefined) {
+  const id = pathId(raw)
+  if (id === undefined) return validation('webhookId', 'must be a positive integer')
+  return db.webhooks.find((w) => w.id === id && w.projectId === p.id) ?? notFound(`webhook ${id}`)
+}
+
+function webhookView({ projectId, ...w }: MockDb['webhooks'][number]): Webhook {
+  void projectId
+  const last = db.deliveries.filter((d) => d.webhookId === w.id).at(-1)
+  return last ? { ...w, lastDelivery: last } : w
+}
+
+const WEBHOOK_URL = /^https?:\/\/[^\s/@]+/
+
+function githubView({ projectId, ...c }: MockDb['github'][number]): GitHubConnection {
+  void projectId
+  return c
+}
+
 const VALUE = /^[a-z0-9][a-z0-9-]{0,29}$/
 const TAG = /^[a-z0-9][a-z0-9._-]{0,39}$/
 const PAIR = '[a-z][a-z0-9-]{0,29}:[a-z0-9][a-z0-9-]{0,29}'
@@ -1214,6 +1252,153 @@ export const handlers = [
       if (k.revokedAt) return problem(409, 'conflict', `API key ${id} is already revoked`)
       Object.assign(k, { status: 'revoked', revokedAt: now() })
       return respond(withoutProject(k))
+    }),
+  ),
+  http.get(
+    `${BASE}/projects/:projectKey/webhooks`,
+    guard(({ params }) => {
+      const p = integrationProject(params.projectKey)
+      if (p instanceof Response) return p
+      return respond({ items: db.webhooks.filter((w) => w.projectId === p.id).map(webhookView) })
+    }),
+  ),
+  http.post(
+    `${BASE}/projects/:projectKey/webhooks`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const body = await readBody(request)
+        const url = String(body?.url ?? '')
+        if (!WEBHOOK_URL.test(url)) return validation('url', 'must be an https URL without credentials')
+        const p = integrationProject(params.projectKey)
+        if (p instanceof Response) return p
+        const w = {
+          id: db.nextId++,
+          projectId: p.id,
+          url,
+          events: ['run.completed' as const],
+          active: true,
+          createdBy: db.users.find((u) => u.id === db.session)!.username,
+          createdAt: now(),
+          updatedAt: now(),
+        }
+        db.webhooks.push(w)
+        return respond({ webhook: webhookView(w), secret: `whsec_${'0'.repeat(48)}` }, 201)
+      }),
+    ),
+  ),
+  http.patch(
+    `${BASE}/projects/:projectKey/webhooks/:webhookId`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const body = (await readBody(request)) ?? {}
+        if (Object.keys(body).length === 0) return validation('body', 'at least one field is required')
+        const p = integrationProject(params.projectKey)
+        if (p instanceof Response) return p
+        const w = webhookOf(p, params.webhookId)
+        if (w instanceof Response) return w
+        if (typeof body.active === 'boolean') w.active = body.active
+        w.updatedAt = now()
+        return respond(webhookView(w))
+      }),
+    ),
+  ),
+  http.post(
+    `${BASE}/projects/:projectKey/webhooks/:webhookId/ping`,
+    guard(({ params }) => {
+      const p = integrationProject(params.projectKey)
+      if (p instanceof Response) return p
+      const w = webhookOf(p, params.webhookId)
+      if (w instanceof Response) return w
+      const d: WebhookDelivery = {
+        id: db.nextId++,
+        webhookId: w.id,
+        event: 'ping',
+        status: 'pending',
+        attempts: 0,
+        nextAttemptAt: now(),
+        lastStatusCode: null,
+        lastError: null,
+        createdAt: now(),
+        completedAt: null,
+        payload: { event: 'ping' },
+      }
+      db.deliveries.push(d)
+      return respond(d, 202)
+    }),
+  ),
+  http.get(
+    `${BASE}/projects/:projectKey/webhooks/:webhookId/deliveries`,
+    guard(({ params, request }) => {
+      const p = integrationProject(params.projectKey)
+      if (p instanceof Response) return p
+      const w = webhookOf(p, params.webhookId)
+      if (w instanceof Response) return w
+      const items = db.deliveries.filter((d) => d.webhookId === w.id).reverse()
+      return respond(pageOf(new URL(request.url), items))
+    }),
+  ),
+  http.get(
+    `${BASE}/projects/:projectKey/github`,
+    guard(({ params }) => {
+      const p = integrationProject(params.projectKey)
+      if (p instanceof Response) return p
+      const c = db.github.find((x) => x.projectId === p.id)
+      return c ? respond(githubView(c)) : notFound(`GitHub connection of ${p.key}`)
+    }),
+  ),
+  http.put(
+    `${BASE}/projects/:projectKey/github`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const body = (await readBody(request)) ?? {}
+        const repository = String(body.repository ?? '')
+        if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) return validation('repository', 'must be owner/name')
+        const p = integrationProject(params.projectKey)
+        if (p instanceof Response) return p
+        const current = db.github.find((x) => x.projectId === p.id)
+        const token = typeof body.token === 'string' ? body.token : undefined
+        if (!current && !token) return validation('token', 'is required to connect')
+        const c = {
+          projectId: p.id,
+          repository,
+          labels: String(body.labels ?? ''),
+          tokenHint: token ? `…${token.slice(-4)}` : current!.tokenHint,
+          lastSyncedAt: current?.lastSyncedAt ?? null,
+          lastError: null,
+          updatedAt: now(),
+        }
+        db.github = [...db.github.filter((x) => x.projectId !== p.id), c]
+        return respond(githubView(c))
+      }),
+    ),
+  ),
+  http.delete(
+    `${BASE}/projects/:projectKey/github`,
+    guard(({ params }) => {
+      const p = integrationProject(params.projectKey)
+      if (p instanceof Response) return p
+      const before = db.github.length
+      db.github = db.github.filter((x) => x.projectId !== p.id)
+      if (db.github.length === before) return notFound(`GitHub connection of ${p.key}`)
+      return new HttpResponse(null, { status: 204 })
+    }),
+  ),
+  http.post(
+    `${BASE}/projects/:projectKey/github/sync`,
+    guard(({ params }) => {
+      const p = integrationProject(params.projectKey)
+      if (p instanceof Response) return p
+      const c = db.github.find((x) => x.projectId === p.id)
+      if (!c) return notFound(`GitHub connection of ${p.key}`)
+      if (!c.tokenHint)
+        return problem(409, 'conflict', 'the GitHub token cannot be read; connect again with a new token')
+      if (c.repository === 'acme/down') {
+        c.lastError = `GitHub answered 503 for ${c.repository}`
+        return problem(502, 'upstream_error', c.lastError)
+      }
+      c.lastSyncedAt = now()
+      c.lastError = null
+      return respond({ created: 2, updated: 1 })
     }),
   ),
   http.post(

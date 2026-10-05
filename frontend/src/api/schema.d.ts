@@ -566,6 +566,135 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        /** The project's webhooks with their latest delivery (maintainers); signing secrets are never returned */
+        get: operations["listWebhooks"];
+        put?: never;
+        /**
+         * Subscribe an endpoint to the project's events (maintainers); the signing secret is returned only now
+         * @description Deliveries are POSTed as JSON with the headers X-Provenly-Event, X-Provenly-Delivery, X-Provenly-Timestamp and X-Provenly-Signature (`sha256=` + hex HMAC-SHA256 of `<timestamp>.<body>` with the secret). A delivery that does not get a 2xx is retried after 10 s, 1 min, 5 min and 30 min, then marked failed. Endpoints must be https and public (private, loopback and link-local addresses are refused) unless the deployment allows private targets.
+         */
+        post: operations["createWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/webhooks/{webhookId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                webhookId: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a webhook's URL or events, or pause and resume it (maintainers) */
+        patch: operations["updateWebhook"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/webhooks/{webhookId}/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                webhookId: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a ping delivery, to check the endpoint and its signature verification (maintainers) */
+        post: operations["pingWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                webhookId: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        /** A webhook's deliveries, newest first, with the outcome of their latest attempt (maintainers) */
+        get: operations["listWebhookDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/github": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        /** The project's GitHub Issues connection (maintainers); the token is never returned, only a hint */
+        get: operations["getGitHubConnection"];
+        /** Connect the project to a GitHub repository, or change its repository, labels or token (maintainers) */
+        put: operations["connectGitHub"];
+        post?: never;
+        /** Remove the connection and its token; the mirrored issues stay (maintainers) */
+        delete: operations["disconnectGitHub"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/github/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mirror the repository's issues (not pull requests; only those with the labels, when set) into the project's issues (maintainers) */
+        post: operations["syncGitHub"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/issues": {
         parameters: {
             query?: never;
@@ -1099,7 +1228,7 @@ export interface components {
              * @description Stable machine-readable error code. Requests that match no operation get `not_found` (404), or `method_not_allowed` (405, with an `Allow` header) when the path exists for other methods.
              * @enum {string}
              */
-            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "precondition_failed" | "method_not_allowed" | "payload_too_large" | "unsupported_media_type" | "service_unavailable" | "internal_error";
+            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "conflict" | "unauthorized" | "forbidden" | "precondition_failed" | "method_not_allowed" | "payload_too_large" | "unsupported_media_type" | "service_unavailable" | "upstream_error" | "internal_error";
             detail?: string;
             errors?: components["schemas"]["FieldError"][];
         };
@@ -1825,6 +1954,94 @@ export interface components {
         IssueLinksRequest: {
             testCaseIds: number[];
         };
+        /** @enum {string} */
+        WebhookEvent: "run.completed";
+        /** @enum {string} */
+        DeliveryStatus: "pending" | "succeeded" | "failed";
+        WebhookDelivery: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            webhookId: number;
+            /** @enum {string} */
+            event: "run.completed" | "ping";
+            status: components["schemas"]["DeliveryStatus"];
+            /** @description Attempts made so far (at most 5). */
+            attempts: number;
+            /**
+             * Format: date-time
+             * @description When a pending delivery is attempted next; null once it succeeded or failed.
+             */
+            nextAttemptAt: string | null;
+            /** @description The HTTP status of the latest attempt; null before any or when the endpoint was unreachable. */
+            lastStatusCode: number | null;
+            lastError: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            completedAt: string | null;
+            /** @description The JSON body sent (`event`, `sentAt` and, for run.completed, `project` and the `run` as in getTestRun). */
+            payload: {
+                [key: string]: unknown;
+            };
+        };
+        WebhookDeliveryPage: components["schemas"]["PageMeta"] & {
+            items: components["schemas"]["WebhookDelivery"][];
+        };
+        Webhook: {
+            /** Format: int64 */
+            id: number;
+            url: string;
+            events: components["schemas"]["WebhookEvent"][];
+            /** @description A paused webhook gets no new deliveries; pending ones fail. */
+            active: boolean;
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description The latest delivery; absent before the first one. */
+            lastDelivery?: components["schemas"]["WebhookDelivery"];
+        };
+        WebhookList: {
+            items: components["schemas"]["Webhook"][];
+        };
+        CreateWebhookRequest: {
+            /** @example https://hooks.example.com/provenly */
+            url: string;
+            events: components["schemas"]["WebhookEvent"][];
+        };
+        CreatedWebhook: {
+            webhook: components["schemas"]["Webhook"];
+            /** @description The signing secret (whsec_...), shown only in this response. */
+            secret: string;
+        };
+        UpdateWebhookRequest: {
+            url?: string;
+            events?: components["schemas"]["WebhookEvent"][];
+            active?: boolean;
+        };
+        GitHubConnection: {
+            /** @example acme/shop */
+            repository: string;
+            /** @description Comma-separated labels an issue must have to be mirrored; empty mirrors every issue. */
+            labels: string;
+            /** @description The token's last four characters; empty when it cannot be decrypted (connect again with a token). */
+            tokenHint: string;
+            /** Format: date-time */
+            lastSyncedAt: string | null;
+            /** @description Why the latest sync failed; null after a successful one. */
+            lastError: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ConnectGitHubRequest: {
+            /** @description owner/name */
+            repository: string;
+            /** @description A token that can read the repository's issues; required to connect, omitted keeps the stored one. */
+            token?: string;
+            labels?: string;
+        };
         ProjectQuality: {
             testCases: {
                 /** Format: int32 */
@@ -2277,6 +2494,15 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description An external system (e.g. GitHub) failed or answered something unusable */
+        BadGateway: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description Unexpected server error */
         InternalError: {
             headers: {
@@ -2302,6 +2528,7 @@ export interface components {
         DimensionKey: string;
         RequirementId: number;
         IssueId: number;
+        WebhookId: number;
         /** @example smoke */
         SuiteKey: string;
         /** @example critical */
@@ -3463,6 +3690,275 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    listWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The webhooks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWebhookRequest"];
+            };
+        };
+        responses: {
+            /** @description The webhook and its signing secret */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedWebhook"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                webhookId: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWebhookRequest"];
+            };
+        };
+        responses: {
+            /** @description The webhook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    pingWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                webhookId: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The queued delivery */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDelivery"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listWebhookDeliveries: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+                webhookId: components["parameters"]["WebhookId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of deliveries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDeliveryPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getGitHubConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The connection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitHubConnection"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    connectGitHub: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectGitHubRequest"];
+            };
+        };
+        responses: {
+            /** @description The connection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitHubConnection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    disconnectGitHub: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    syncGitHub: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the sync created and updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            502: components["responses"]["BadGateway"];
         };
     };
     listIssues: {

@@ -18,6 +18,7 @@ func TestHandlerWiring(t *testing.T) {
 	require.NotNil(t, s.Execution)
 	require.NotNil(t, s.Ingestion)
 	require.NotNil(t, s.Identity)
+	require.NotNil(t, s.Integrations)
 	h := NewHandler(s, 1024)
 
 	rec := httptest.NewRecorder()
@@ -56,13 +57,15 @@ func TestHandlerWiring(t *testing.T) {
 
 func TestRoutePatterns(t *testing.T) {
 	patterns := RoutePatterns()
-	assert.Len(t, patterns, 70)
+	assert.Len(t, patterns, 79)
 	assert.Contains(t, patterns, "POST /api/v1/invitations/accept")
 	assert.Contains(t, patterns, "PATCH /api/v1/projects/{projectKey}")
 	assert.Contains(t, patterns, "GET /readyz")
 	assert.Contains(t, patterns, "GET /healthz")
 	assert.Contains(t, patterns, "POST /api/v1/ingestion/junit")
 	assert.Contains(t, patterns, "GET /api/v1/test-cases/{testCaseId}/results")
+	assert.Contains(t, patterns, "POST /api/v1/projects/{projectKey}/github/sync")
+	assert.Contains(t, patterns, "GET /api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries")
 }
 
 func TestReadiness(t *testing.T) {

@@ -82,12 +82,16 @@ type Manual struct {
 	catalog  ManualCatalog
 	recorder ManualRecorder
 	access   ManualAccess
+	notify   RunNotifier
 }
 
 // NewManual builds a Manual.
 func NewManual(c ManualCatalog, r ManualRecorder, a ManualAccess) *Manual {
-	return &Manual{catalog: c, recorder: r, access: a}
+	return &Manual{catalog: c, recorder: r, access: a, notify: noNotifier{}}
 }
+
+// SetNotifier sets who hears of the manual runs that finish.
+func (m *Manual) SetNotifier(n RunNotifier) { m.notify = n }
 
 func newRunID() string {
 	b := make([]byte, 8)
@@ -193,5 +197,9 @@ func (m *Manual) Finish(ctx context.Context, runID int64, status execution.RunSt
 	if err := m.authorizeRun(ctx, runID); err != nil {
 		return execution.TestRun{}, err
 	}
-	return m.recorder.FinishRun(ctx, runID, status)
+	run, err := m.recorder.FinishRun(ctx, runID, status)
+	if err == nil {
+		m.notify.RunCompleted(ctx, run)
+	}
+	return run, err
 }

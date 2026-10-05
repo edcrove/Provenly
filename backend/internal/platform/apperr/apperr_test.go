@@ -41,6 +41,10 @@ func TestConstructors(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, KindPreconditionFailed, pf.Kind)
 	assert.Equal(t, "changed at 3", pf.Message)
+	up, ok := As(Upstream("github answered %d", 401))
+	require.True(t, ok)
+	assert.Equal(t, KindUpstream, up.Kind)
+	assert.Equal(t, "github answered 401", up.Message)
 
 	_, ok = As(errors.New("plain"))
 	assert.False(t, ok)

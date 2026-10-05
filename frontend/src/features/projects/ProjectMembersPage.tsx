@@ -18,7 +18,9 @@ import { positiveInt } from '@/lib/status'
 
 import { ApiKeysSection } from './ApiKeysSection'
 import { ClassificationSection } from './ClassificationSection'
+import { GitHubSection } from './GitHubSection'
 import { useProjectRole } from './useProjectRole'
+import { WebhooksSection } from './WebhooksSection'
 
 function RoleSelect({
   value,
@@ -172,6 +174,8 @@ export function ProjectMembersPage() {
       </Card>
       <ClassificationSection projectKey={projectKey} manage={manage} />
       {manage ? <ApiKeysSection projectKey={projectKey} /> : null}
+      {manage ? <WebhooksSection projectKey={projectKey} /> : null}
+      {manage ? <GitHubSection projectKey={projectKey} /> : null}
     </div>
   )
 }

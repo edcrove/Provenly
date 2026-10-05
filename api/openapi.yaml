@@ -564,6 +564,165 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/projects/{projectKey}/dimensions:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [projects]
+      operationId: listDimensions
+      summary: List the project's classification dimensions and their values (anyone who can see the project)
+      responses:
+        "200":
+          description: The project's dimensions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DimensionList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [projects]
+      operationId: createDimension
+      summary: Add a project-specific dimension (maintainers and administrators)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDimensionRequest"
+      responses:
+        "201":
+          description: The dimension
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dimension"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/dimensions/{dimensionKey}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/DimensionKey"
+    patch:
+      tags: [projects]
+      operationId: updateDimension
+      summary: Rename, archive or restore a dimension (maintainers and administrators)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDimensionRequest"
+      responses:
+        "200":
+          description: The dimension
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dimension"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/DimensionKey"
+    post:
+      tags: [projects]
+      operationId: createDimensionValue
+      summary: Append a controlled value to a dimension (maintainers and administrators)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDimensionValueRequest"
+      responses:
+        "201":
+          description: The dimension
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dimension"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+      - $ref: "#/components/parameters/DimensionKey"
+      - $ref: "#/components/parameters/ValueKey"
+    patch:
+      tags: [projects]
+      operationId: updateDimensionValue
+      summary: Rename, archive or restore a value (maintainers and administrators)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDimensionRequest"
+      responses:
+        "200":
+          description: The dimension
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dimension"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/test-cases:
     get:
       tags: [test-cases]
@@ -578,6 +737,20 @@ paths:
           schema:
             $ref: "#/components/schemas/TestCaseStatus"
         - $ref: "#/components/parameters/ProjectFilter"
+        - name: tag
+          in: query
+          required: false
+          description: Only test cases with this tag.
+          schema:
+            $ref: "#/components/schemas/Tag"
+        - name: classification
+          in: query
+          required: false
+          description: Up to 10 comma-separated `dimension:value` pairs that must all hold.
+          schema:
+            type: string
+            pattern: "^[a-z][a-z0-9-]{0,29}:[a-z0-9][a-z0-9-]{0,29}(,[a-z][a-z0-9-]{0,29}:[a-z0-9][a-z0-9-]{0,29}){0,9}$"
+          example: risk:critical,feature:payments
       responses:
         "200":
           description: Page of test cases
@@ -1317,6 +1490,22 @@ components:
         type: string
         pattern: "^[A-Z][A-Z0-9]{1,9}$"
       example: CHK
+    DimensionKey:
+      name: dimensionKey
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-z][a-z0-9-]{0,29}$"
+      example: risk
+    ValueKey:
+      name: valueKey
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-z0-9][a-z0-9-]{0,29}$"
+      example: critical
     ProjectFilter:
       name: project
       in: query
@@ -1525,13 +1714,20 @@ components:
     TestCase:
       type: object
       additionalProperties: false
-      required: [id, key, projectId, projectKey, number, title, description, expectedResult, status, automated, createdAt, updatedAt, version]
+      required: [id, key, projectId, projectKey, number, title, description, expectedResult, status, automated, createdAt, updatedAt, version, tags, classification]
       properties:
+        tags:
+          type: array
+          description: Free labels, lower-case and sorted.
+          items:
+            $ref: "#/components/schemas/Tag"
+        classification:
+          $ref: "#/components/schemas/Classification"
         version:
           type: integer
           format: int64
           minimum: 1
-          description: Advances with every change to the test case or its steps; also sent as the `ETag` header.
+          description: Advances with every change to the test case, its steps, tags or classification; also sent as the `ETag` header.
           example: 7
         id:
           type: integer
@@ -1960,6 +2156,16 @@ components:
         automated:
           type: boolean
           default: false
+        tags:
+          type: array
+          description: Free labels; trimmed, lower-cased and deduplicated by the server (at most 20).
+          items:
+            type: string
+        classification:
+          type: object
+          description: Dimension key → value key; each must be an active value of an active dimension of the project.
+          additionalProperties:
+            type: string
 
     UpdateTestCaseRequest:
       type: object
@@ -1978,6 +2184,127 @@ components:
           maxLength: 10000
         automated:
           type: boolean
+        tags:
+          type: array
+          description: Replaces every tag; trimmed, lower-cased and deduplicated by the server (at most 20).
+          items:
+            type: string
+        classification:
+          type: object
+          description: |
+            Merged into the current classification: a dimension mapped to a value key takes it, one mapped to
+            `null` loses its value, absent dimensions keep theirs. Archived values and dimensions cannot be newly
+            assigned (sending the current value again is accepted).
+          additionalProperties:
+            type: string
+            nullable: true
+
+    Tag:
+      type: string
+      pattern: "^[a-z0-9][a-z0-9._-]{0,39}$"
+      example: smoke
+
+    Classification:
+      type: object
+      description: Dimension key → value key of the test case (at most one value per dimension).
+      additionalProperties:
+        type: string
+      example:
+        risk: critical
+        feature: payments
+
+    Dimension:
+      type: object
+      additionalProperties: false
+      required: [key, name, builtIn, archivedAt, values]
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z][a-z0-9-]{0,29}$"
+          description: Never changes.
+          example: risk
+        name:
+          type: string
+          example: Risk
+        builtIn:
+          type: boolean
+          description: Seeded with every project (feature, component, level, depth, type, risk, platform).
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Archived dimensions keep their test case values but cannot be assigned.
+        values:
+          type: array
+          items:
+            $ref: "#/components/schemas/DimensionValue"
+
+    DimensionValue:
+      type: object
+      additionalProperties: false
+      required: [key, name, archivedAt]
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{0,29}$"
+          description: Never changes.
+          example: critical
+        name:
+          type: string
+          example: Critical
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    DimensionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Dimension"
+
+    CreateDimensionRequest:
+      type: object
+      additionalProperties: false
+      required: [key, name]
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z][a-z0-9-]{0,29}$"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+
+    CreateDimensionValueRequest:
+      type: object
+      additionalProperties: false
+      required: [key, name]
+      properties:
+        key:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{0,29}$"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+
+    UpdateDimensionRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        archived:
+          type: boolean
+          description: true archives (idempotent), false restores.
 
     TestStep:
       type: object

@@ -68,7 +68,43 @@ func (s *Store) one(ctx context.Context, r catalogdb.TestCase, err error) (catal
 	if err != nil {
 		return catalog.TestCase{}, notFound(err)
 	}
-	return s.testCase(ctx, r)
+	tc, err := s.testCase(ctx, r)
+	if err != nil {
+		return catalog.TestCase{}, err
+	}
+	list := []catalog.TestCase{tc}
+	if err := s.withTaxonomy(ctx, list); err != nil {
+		return catalog.TestCase{}, err
+	}
+	return list[0], nil
+}
+
+// withTaxonomy fills in the tags and classification of test cases, with one query each.
+func (s *Store) withTaxonomy(ctx context.Context, list []catalog.TestCase) error {
+	ids := make([]int64, len(list))
+	at := make(map[int64]int, len(list))
+	for i := range list {
+		ids[i] = list[i].ID
+		at[list[i].ID] = i
+		list[i].Tags = []string{}
+		list[i].Classification = map[string]string{}
+	}
+	tags, err := s.q.ListTestCaseTags(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for _, t := range tags {
+		tc := &list[at[t.TestCaseID]]
+		tc.Tags = append(tc.Tags, t.Tag)
+	}
+	classes, err := s.q.ListTestCaseClassifications(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for _, c := range classes {
+		list[at[c.TestCaseID]].Classification[c.Dimension] = c.Value
+	}
+	return nil
 }
 
 var _ catalog.Repository = (*Store)(nil)
@@ -154,7 +190,7 @@ func (s *Store) LockTestCase(ctx context.Context, id int64) (int64, error) {
 // ListTestCases implements catalog.Repository.
 func (s *Store) ListTestCases(ctx context.Context, f catalog.ListFilter, limit, offset int32) ([]catalog.TestCase, error) {
 	rows, err := s.q.ListTestCases(ctx, catalogdb.ListTestCasesParams{
-		Status: statusText(f.Status), ProjectIds: f.ProjectIDs, PageLimit: limit, PageOffset: offset,
+		Status: statusText(f.Status), ProjectIds: f.ProjectIDs, Tag: text(f.Tag), Classified: f.Classified, PageLimit: limit, PageOffset: offset,
 	})
 	if err != nil {
 		return nil, err
@@ -165,12 +201,14 @@ func (s *Store) ListTestCases(ctx context.Context, f catalog.ListFilter, limit, 
 			return nil, err
 		}
 	}
-	return out, nil
+	return out, s.withTaxonomy(ctx, out)
 }
 
 // CountTestCases implements catalog.Repository.
 func (s *Store) CountTestCases(ctx context.Context, f catalog.ListFilter) (int64, error) {
-	return s.q.CountTestCases(ctx, catalogdb.CountTestCasesParams{Status: statusText(f.Status), ProjectIds: f.ProjectIDs})
+	return s.q.CountTestCases(ctx, catalogdb.CountTestCasesParams{
+		Status: statusText(f.Status), ProjectIds: f.ProjectIDs, Tag: text(f.Tag), Classified: f.Classified,
+	})
 }
 
 // UpdateTestCase implements catalog.Repository.
@@ -352,4 +390,97 @@ func (s *Store) CloseTestStepGap(ctx context.Context, testCaseID int64, afterPos
 // SetTestStepPosition implements catalog.Repository.
 func (s *Store) SetTestStepPosition(ctx context.Context, testCaseID, stepID int64, position int32) error {
 	return s.q.SetTestStepPosition(ctx, catalogdb.SetTestStepPositionParams{TestCaseID: testCaseID, ID: stepID, Position: position})
+}
+
+func toDimension(r catalogdb.ClassificationDimension) catalog.Dimension {
+	return catalog.Dimension{
+		ID: r.ID, ProjectID: r.ProjectID, Key: r.Key, Name: r.Name, BuiltIn: r.BuiltIn,
+		ArchivedAt: timePtr(r.ArchivedAt), CreatedAt: r.CreatedAt.Time, Values: []catalog.DimensionValue{},
+	}
+}
+
+func toValue(r catalogdb.ClassificationValue) catalog.DimensionValue {
+	return catalog.DimensionValue{
+		ID: r.ID, DimensionID: r.DimensionID, Key: r.Key, Name: r.Name, Position: r.Position,
+		ArchivedAt: timePtr(r.ArchivedAt), CreatedAt: r.CreatedAt.Time,
+	}
+}
+
+func boolArg(b *bool) pgtype.Bool {
+	if b == nil {
+		return pgtype.Bool{}
+	}
+	return pgtype.Bool{Bool: *b, Valid: true}
+}
+
+// ListDimensions implements catalog.Repository.
+func (s *Store) ListDimensions(ctx context.Context, projectID int64) ([]catalog.Dimension, error) {
+	dims, err := s.q.ListDimensions(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	values, err := s.q.ListDimensionValues(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]catalog.Dimension, len(dims))
+	at := make(map[int64]int, len(dims))
+	for i, d := range dims {
+		out[i] = toDimension(d)
+		at[d.ID] = i
+	}
+	for _, v := range values {
+		d := &out[at[v.DimensionID]]
+		d.Values = append(d.Values, toValue(v))
+	}
+	return out, nil
+}
+
+// CreateDimension implements catalog.Repository.
+func (s *Store) CreateDimension(ctx context.Context, projectID int64, in catalog.DimensionInput) (catalog.Dimension, error) {
+	r, err := s.q.CreateDimension(ctx, catalogdb.CreateDimensionParams{ProjectID: projectID, Key: in.Key, Name: in.Name})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return catalog.Dimension{}, catalog.ErrConflict
+	}
+	return toDimension(r), err
+}
+
+// UpdateDimension implements catalog.Repository.
+func (s *Store) UpdateDimension(ctx context.Context, projectID int64, key string, in catalog.UpdateDimensionInput) (catalog.Dimension, error) {
+	r, err := s.q.UpdateDimension(ctx, catalogdb.UpdateDimensionParams{ProjectID: projectID, Key: key, Name: text(in.Name), Archived: boolArg(in.Archived)})
+	return toDimension(r), notFound(err)
+}
+
+// CreateDimensionValue implements catalog.Repository.
+func (s *Store) CreateDimensionValue(ctx context.Context, dimensionID int64, in catalog.DimensionInput) (catalog.DimensionValue, error) {
+	r, err := s.q.CreateDimensionValue(ctx, catalogdb.CreateDimensionValueParams{DimensionID: dimensionID, Key: in.Key, Name: in.Name})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return catalog.DimensionValue{}, catalog.ErrConflict
+	}
+	return toValue(r), err
+}
+
+// UpdateDimensionValue implements catalog.Repository.
+func (s *Store) UpdateDimensionValue(ctx context.Context, dimensionID int64, key string, in catalog.UpdateDimensionInput) (catalog.DimensionValue, error) {
+	r, err := s.q.UpdateDimensionValue(ctx, catalogdb.UpdateDimensionValueParams{DimensionID: dimensionID, Key: key, Name: text(in.Name), Archived: boolArg(in.Archived)})
+	return toValue(r), notFound(err)
+}
+
+// SetTags implements catalog.Repository. Unchanged tags are neither deleted nor inserted, so a no-op
+// does not advance the version.
+func (s *Store) SetTags(ctx context.Context, testCaseID int64, tags []string) error {
+	if err := s.q.DeleteTestCaseTags(ctx, catalogdb.DeleteTestCaseTagsParams{TestCaseID: testCaseID, Keep: tags}); err != nil {
+		return err
+	}
+	return s.q.AddTestCaseTags(ctx, catalogdb.AddTestCaseTagsParams{TestCaseID: testCaseID, Tags: tags})
+}
+
+// SetClassification implements catalog.Repository.
+func (s *Store) SetClassification(ctx context.Context, testCaseID, projectID, dimensionID, valueID int64) error {
+	if valueID == 0 {
+		return s.q.ClearTestCaseClassification(ctx, catalogdb.ClearTestCaseClassificationParams{TestCaseID: testCaseID, DimensionID: dimensionID})
+	}
+	return s.q.SetTestCaseClassification(ctx, catalogdb.SetTestCaseClassificationParams{
+		TestCaseID: testCaseID, ProjectID: projectID, DimensionID: dimensionID, ValueID: valueID,
+	})
 }

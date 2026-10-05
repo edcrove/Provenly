@@ -58,16 +58,32 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (TestCase, error) 
 	v.CheckText("title", in.Title)
 	v.CheckText("description", in.Description)
 	v.CheckText("expectedResult", in.ExpectedResult)
+	tags := normalizeTags(&v, in.Tags)
 	if err := v.Err(); err != nil {
 		return TestCase{}, err
 	}
 	if in.ProjectID == 0 {
 		in.ProjectID = DefaultProjectID
 	}
-	tc, err := s.repo.CreateTestCase(ctx, in)
-	if errors.Is(err, ErrNotFound) {
-		return TestCase{}, apperr.NotFound("project %d not found", in.ProjectID)
+	classification := make(map[string]*string, len(in.Classification))
+	for k, val := range in.Classification {
+		classification[k] = &val
 	}
+	var tc TestCase
+	err := s.repo.InTx(ctx, func(r Repository) (err error) {
+		tc, err = r.CreateTestCase(ctx, in)
+		if errors.Is(err, ErrNotFound) {
+			return apperr.NotFound("project %d not found", in.ProjectID)
+		}
+		if err != nil || (len(tags) == 0 && len(classification) == 0) {
+			return err
+		}
+		if err := applyTaxonomy(ctx, r, tc, &tags, classification); err != nil {
+			return err
+		}
+		tc, err = r.GetTestCase(ctx, tc.ID)
+		return err
+	})
 	return tc, err
 }
 
@@ -131,7 +147,12 @@ func (s *Service) guarded(ctx context.Context, id int64, m etag.Match, write fun
 // Update edits content fields. The TC-ID never changes; the version advances (If-Match is checked first).
 func (s *Service) Update(ctx context.Context, id int64, in UpdateInput, m etag.Match) (TestCase, error) {
 	var v apperr.Validator
-	v.Check(in.Title != nil || in.Description != nil || in.ExpectedResult != nil || in.Automated != nil, "body", "at least one field is required")
+	v.Check(in.Title != nil || in.Description != nil || in.ExpectedResult != nil || in.Automated != nil || in.Tags != nil || len(in.Classification) > 0,
+		"body", "at least one field is required")
+	if in.Tags != nil {
+		tags := normalizeTags(&v, *in.Tags)
+		in.Tags = &tags
+	}
 	if in.Title != nil {
 		t := strings.TrimSpace(*in.Title)
 		in.Title = &t
@@ -152,7 +173,16 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput, m etag.M
 	}
 	var tc TestCase
 	_, err := s.guarded(ctx, id, m, func(r Repository) (err error) {
-		tc, err = r.UpdateTestCase(ctx, id, in)
+		if tc, err = r.UpdateTestCase(ctx, id, in); err != nil {
+			return err
+		}
+		if in.Tags == nil && len(in.Classification) == 0 {
+			return nil
+		}
+		if err := applyTaxonomy(ctx, r, tc, in.Tags, in.Classification); err != nil {
+			return err
+		}
+		tc, err = r.GetTestCase(ctx, id)
 		return err
 	})
 	return tc, err

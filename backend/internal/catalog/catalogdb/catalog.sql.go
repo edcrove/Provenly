@@ -11,6 +11,36 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addTestCaseTags = `-- name: AddTestCaseTags :exec
+INSERT INTO test_case_tags (test_case_id, tag)
+SELECT $1, unnest($2::text[])
+ON CONFLICT DO NOTHING
+`
+
+type AddTestCaseTagsParams struct {
+	TestCaseID int64
+	Tags       []string
+}
+
+func (q *Queries) AddTestCaseTags(ctx context.Context, arg AddTestCaseTagsParams) error {
+	_, err := q.db.Exec(ctx, addTestCaseTags, arg.TestCaseID, arg.Tags)
+	return err
+}
+
+const clearTestCaseClassification = `-- name: ClearTestCaseClassification :exec
+DELETE FROM test_case_classifications WHERE test_case_id = $1 AND dimension_id = $2
+`
+
+type ClearTestCaseClassificationParams struct {
+	TestCaseID  int64
+	DimensionID int64
+}
+
+func (q *Queries) ClearTestCaseClassification(ctx context.Context, arg ClearTestCaseClassificationParams) error {
+	_, err := q.db.Exec(ctx, clearTestCaseClassification, arg.TestCaseID, arg.DimensionID)
+	return err
+}
+
 const closeTestStepGap = `-- name: CloseTestStepGap :exec
 UPDATE test_steps SET position = position - 1
 WHERE test_case_id = $1 AND position > $2
@@ -42,15 +72,29 @@ const countTestCases = `-- name: CountTestCases :one
 SELECT count(*) FROM test_cases
 WHERE ($1::text IS NULL OR status = $1::text)
   AND ($2::bigint[] IS NULL OR project_id = ANY($2::bigint[]))
+  AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM test_case_tags t WHERE t.test_case_id = test_cases.id AND t.tag = $3::text))
+  AND (coalesce(cardinality($4::text[]), 0) = 0 OR (
+      SELECT count(*) FROM test_case_classifications c
+      JOIN classification_dimensions d ON d.id = c.dimension_id
+      JOIN classification_values v ON v.id = c.value_id
+      WHERE c.test_case_id = test_cases.id AND d.key || ':' || v.key = ANY($4::text[])
+  ) = cardinality($4::text[]))
 `
 
 type CountTestCasesParams struct {
 	Status     pgtype.Text
 	ProjectIds []int64
+	Tag        pgtype.Text
+	Classified []string
 }
 
 func (q *Queries) CountTestCases(ctx context.Context, arg CountTestCasesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countTestCases, arg.Status, arg.ProjectIds)
+	row := q.db.QueryRow(ctx, countTestCases,
+		arg.Status,
+		arg.ProjectIds,
+		arg.Tag,
+		arg.Classified,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -65,6 +109,63 @@ func (q *Queries) CountTestSteps(ctx context.Context, testCaseID int64) (int64, 
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const createDimension = `-- name: CreateDimension :one
+INSERT INTO classification_dimensions (project_id, key, name)
+VALUES ($1, $2, $3)
+ON CONFLICT (project_id, key) DO NOTHING
+RETURNING id, project_id, key, name, built_in, archived_at, created_at
+`
+
+type CreateDimensionParams struct {
+	ProjectID int64
+	Key       string
+	Name      string
+}
+
+func (q *Queries) CreateDimension(ctx context.Context, arg CreateDimensionParams) (ClassificationDimension, error) {
+	row := q.db.QueryRow(ctx, createDimension, arg.ProjectID, arg.Key, arg.Name)
+	var i ClassificationDimension
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Key,
+		&i.Name,
+		&i.BuiltIn,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createDimensionValue = `-- name: CreateDimensionValue :one
+INSERT INTO classification_values (dimension_id, key, name, position)
+SELECT $1, $2, $3, coalesce(max(position), 0) + 1 FROM classification_values WHERE dimension_id = $1
+ON CONFLICT (dimension_id, key) DO NOTHING
+RETURNING id, dimension_id, key, name, position, archived_at, created_at
+`
+
+type CreateDimensionValueParams struct {
+	DimensionID int64
+	Key         string
+	Name        string
+}
+
+// Appended after the dimension's last value; no row when the key already exists in the dimension.
+func (q *Queries) CreateDimensionValue(ctx context.Context, arg CreateDimensionValueParams) (ClassificationValue, error) {
+	row := q.db.QueryRow(ctx, createDimensionValue, arg.DimensionID, arg.Key, arg.Name)
+	var i ClassificationValue
+	err := row.Scan(
+		&i.ID,
+		&i.DimensionID,
+		&i.Key,
+		&i.Name,
+		&i.Position,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const createProject = `-- name: CreateProject :one
@@ -174,6 +275,21 @@ func (q *Queries) CreateTestStep(ctx context.Context, arg CreateTestStepParams) 
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteTestCaseTags = `-- name: DeleteTestCaseTags :exec
+DELETE FROM test_case_tags WHERE test_case_id = $1 AND NOT (tag = ANY(coalesce($2::text[], '{}')))
+`
+
+type DeleteTestCaseTagsParams struct {
+	TestCaseID int64
+	Keep       []string
+}
+
+// Removes the tags not in keep (all of them when keep is empty).
+func (q *Queries) DeleteTestCaseTags(ctx context.Context, arg DeleteTestCaseTagsParams) error {
+	_, err := q.db.Exec(ctx, deleteTestCaseTags, arg.TestCaseID, arg.Keep)
+	return err
 }
 
 const deleteTestStep = `-- name: DeleteTestStep :one
@@ -316,6 +432,75 @@ func (q *Queries) ListAllTestSteps(ctx context.Context, testCaseID int64) ([]Tes
 	return items, nil
 }
 
+const listDimensionValues = `-- name: ListDimensionValues :many
+SELECT v.id, v.dimension_id, v.key, v.name, v.position, v.archived_at, v.created_at FROM classification_values v
+JOIN classification_dimensions d ON d.id = v.dimension_id
+WHERE d.project_id = $1
+ORDER BY v.dimension_id, v.position, v.id
+`
+
+func (q *Queries) ListDimensionValues(ctx context.Context, projectID int64) ([]ClassificationValue, error) {
+	rows, err := q.db.Query(ctx, listDimensionValues, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClassificationValue
+	for rows.Next() {
+		var i ClassificationValue
+		if err := rows.Scan(
+			&i.ID,
+			&i.DimensionID,
+			&i.Key,
+			&i.Name,
+			&i.Position,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDimensions = `-- name: ListDimensions :many
+SELECT id, project_id, key, name, built_in, archived_at, created_at FROM classification_dimensions WHERE project_id = $1
+ORDER BY built_in DESC, id
+`
+
+// A project's classification dimensions: built-ins first in their seeded order, then the project's own by key.
+func (q *Queries) ListDimensions(ctx context.Context, projectID int64) ([]ClassificationDimension, error) {
+	rows, err := q.db.Query(ctx, listDimensions, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClassificationDimension
+	for rows.Next() {
+		var i ClassificationDimension
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.Key,
+			&i.Name,
+			&i.BuiltIn,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIngestionView = `-- name: ListIngestionView :many
 SELECT id, number, status, (status = 'active' AND automated)::boolean AS expected, coalesce(number = ANY($1::bigint[]), false)::boolean AS referenced
 FROM test_cases
@@ -406,6 +591,42 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 	return items, nil
 }
 
+const listTestCaseClassifications = `-- name: ListTestCaseClassifications :many
+SELECT c.test_case_id, d.key AS dimension, v.key AS value
+FROM test_case_classifications c
+JOIN classification_dimensions d ON d.id = c.dimension_id
+JOIN classification_values v ON v.id = c.value_id
+WHERE c.test_case_id = ANY($1::bigint[])
+ORDER BY c.test_case_id, d.id
+`
+
+type ListTestCaseClassificationsRow struct {
+	TestCaseID int64
+	Dimension  string
+	Value      string
+}
+
+// The classification of the given test cases as dimension and value keys.
+func (q *Queries) ListTestCaseClassifications(ctx context.Context, ids []int64) ([]ListTestCaseClassificationsRow, error) {
+	rows, err := q.db.Query(ctx, listTestCaseClassifications, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTestCaseClassificationsRow
+	for rows.Next() {
+		var i ListTestCaseClassificationsRow
+		if err := rows.Scan(&i.TestCaseID, &i.Dimension, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTestCaseKeys = `-- name: ListTestCaseKeys :many
 SELECT id, project_id, number FROM test_cases WHERE id = ANY($1::bigint[])
 `
@@ -437,25 +658,63 @@ func (q *Queries) ListTestCaseKeys(ctx context.Context, ids []int64) ([]ListTest
 	return items, nil
 }
 
+const listTestCaseTags = `-- name: ListTestCaseTags :many
+SELECT test_case_id, tag FROM test_case_tags WHERE test_case_id = ANY($1::bigint[])
+ORDER BY test_case_id, tag
+`
+
+func (q *Queries) ListTestCaseTags(ctx context.Context, ids []int64) ([]TestCaseTag, error) {
+	rows, err := q.db.Query(ctx, listTestCaseTags, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TestCaseTag
+	for rows.Next() {
+		var i TestCaseTag
+		if err := rows.Scan(&i.TestCaseID, &i.Tag); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTestCases = `-- name: ListTestCases :many
 SELECT id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number, version FROM test_cases
 WHERE ($1::text IS NULL OR status = $1::text)
   AND ($2::bigint[] IS NULL OR project_id = ANY($2::bigint[]))
+  AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM test_case_tags t WHERE t.test_case_id = test_cases.id AND t.tag = $3::text))
+  AND (coalesce(cardinality($4::text[]), 0) = 0 OR (
+      SELECT count(*) FROM test_case_classifications c
+      JOIN classification_dimensions d ON d.id = c.dimension_id
+      JOIN classification_values v ON v.id = c.value_id
+      WHERE c.test_case_id = test_cases.id AND d.key || ':' || v.key = ANY($4::text[])
+  ) = cardinality($4::text[]))
 ORDER BY id DESC
-LIMIT $4 OFFSET $3
+LIMIT $6 OFFSET $5
 `
 
 type ListTestCasesParams struct {
 	Status     pgtype.Text
 	ProjectIds []int64
+	Tag        pgtype.Text
+	Classified []string
 	PageOffset int32
 	PageLimit  int32
 }
 
+// classified holds distinct dimension:value pairs that must all hold (AND); a test case has one value per
+// dimension, so two values of one dimension match nothing.
 func (q *Queries) ListTestCases(ctx context.Context, arg ListTestCasesParams) ([]TestCase, error) {
 	rows, err := q.db.Query(ctx, listTestCases,
 		arg.Status,
 		arg.ProjectIds,
+		arg.Tag,
+		arg.Classified,
 		arg.PageOffset,
 		arg.PageLimit,
 	)
@@ -572,6 +831,31 @@ func (q *Queries) ReactivateTestCase(ctx context.Context, id int64) (TestCase, e
 	return i, err
 }
 
+const setTestCaseClassification = `-- name: SetTestCaseClassification :exec
+INSERT INTO test_case_classifications (test_case_id, project_id, dimension_id, value_id)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (test_case_id, dimension_id) DO UPDATE SET value_id = EXCLUDED.value_id
+WHERE test_case_classifications.value_id <> EXCLUDED.value_id
+`
+
+type SetTestCaseClassificationParams struct {
+	TestCaseID  int64
+	ProjectID   int64
+	DimensionID int64
+	ValueID     int64
+}
+
+// Sets the value of one dimension; unchanged when it already has that value (so the version does not advance).
+func (q *Queries) SetTestCaseClassification(ctx context.Context, arg SetTestCaseClassificationParams) error {
+	_, err := q.db.Exec(ctx, setTestCaseClassification,
+		arg.TestCaseID,
+		arg.ProjectID,
+		arg.DimensionID,
+		arg.ValueID,
+	)
+	return err
+}
+
 const setTestStepPosition = `-- name: SetTestStepPosition :exec
 UPDATE test_steps SET position = $1, updated_at = now()
 WHERE test_case_id = $2 AND id = $3
@@ -601,6 +885,80 @@ type ShiftTestStepsDownParams struct {
 func (q *Queries) ShiftTestStepsDown(ctx context.Context, arg ShiftTestStepsDownParams) error {
 	_, err := q.db.Exec(ctx, shiftTestStepsDown, arg.TestCaseID, arg.FromPosition)
 	return err
+}
+
+const updateDimension = `-- name: UpdateDimension :one
+UPDATE classification_dimensions SET
+    name        = coalesce($1, name),
+    archived_at = CASE WHEN $2::boolean IS NULL THEN archived_at
+                       WHEN $2::boolean THEN coalesce(archived_at, now())
+                       ELSE NULL END
+WHERE project_id = $3 AND key = $4
+RETURNING id, project_id, key, name, built_in, archived_at, created_at
+`
+
+type UpdateDimensionParams struct {
+	Name      pgtype.Text
+	Archived  pgtype.Bool
+	ProjectID int64
+	Key       string
+}
+
+func (q *Queries) UpdateDimension(ctx context.Context, arg UpdateDimensionParams) (ClassificationDimension, error) {
+	row := q.db.QueryRow(ctx, updateDimension,
+		arg.Name,
+		arg.Archived,
+		arg.ProjectID,
+		arg.Key,
+	)
+	var i ClassificationDimension
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.Key,
+		&i.Name,
+		&i.BuiltIn,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateDimensionValue = `-- name: UpdateDimensionValue :one
+UPDATE classification_values SET
+    name        = coalesce($1, name),
+    archived_at = CASE WHEN $2::boolean IS NULL THEN archived_at
+                       WHEN $2::boolean THEN coalesce(archived_at, now())
+                       ELSE NULL END
+WHERE dimension_id = $3 AND key = $4
+RETURNING id, dimension_id, key, name, position, archived_at, created_at
+`
+
+type UpdateDimensionValueParams struct {
+	Name        pgtype.Text
+	Archived    pgtype.Bool
+	DimensionID int64
+	Key         string
+}
+
+func (q *Queries) UpdateDimensionValue(ctx context.Context, arg UpdateDimensionValueParams) (ClassificationValue, error) {
+	row := q.db.QueryRow(ctx, updateDimensionValue,
+		arg.Name,
+		arg.Archived,
+		arg.DimensionID,
+		arg.Key,
+	)
+	var i ClassificationValue
+	err := row.Scan(
+		&i.ID,
+		&i.DimensionID,
+		&i.Key,
+		&i.Name,
+		&i.Position,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const updateProject = `-- name: UpdateProject :one

@@ -23,7 +23,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 6 | Snapshot amendment per run | DEC-42 | ✅ | proto/06-snapshot-amendment |
 | 7 | Retries, logical result and flaky | MVP D1 | ✅ | proto/07-retries-flaky |
 | 8 | Compressed (gzip) report ingestion | MVP D6 | ✅ | proto/08-gzip-ingestion |
-| 9 | Taxonomy: tags and custom dimensions | Planning #26 | ⏳ | |
+| 9 | Taxonomy: tags and custom dimensions | Planning #26 | ✅ | proto/09-taxonomy |
 | 10 | Test suites (static and query) and partial-run scope | Planning #27, MVP D2, Incubator | ⏳ | |
 | 11 | Manual execution (manual runs, step results) | MVP D3, Planning #4, Incubator | ⏳ | |
 | 12 | Requirements and requirement ↔ test traceability | Incubator (Requirements Federation) | ⏳ | |
@@ -96,6 +96,14 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P8-2 | Size limit | `PROVENLY_MAX_INGEST_BYTES` applies to the decompressed report (413 problem past it) and the compressed body is read through the same limit | D6; a gzip bomb never expands past the limit in memory |
 | P8-3 | Broken streams | Not gzip, truncated or corrupt: 400 `validation_error` on `body` | Client error with the reason, never a 500 |
 | P8-4 | CI step | The API key page's ready-to-paste step now gzips the report (`gzip -c junit.xml \| curl ... --data-binary @-`) | Smaller uploads by default |
+| P9-1 | Model | Per-project **dimensions** with controlled **values** (key + display name) and free **tags** per test case; one value per dimension per test case | Planning #26: orthogonal dimensions, structured data for reporting, tags complement but do not replace them; multi-valued needs (several platforms) use tags |
+| P9-2 | Built-ins | Every project (existing ones by migration, new ones by a database trigger) gets feature, component, level, depth, type, risk and platform; level, depth, type and risk come with standard values, feature/component/platform start empty | Planning #26 list; **execution mode is not a dimension**: it is the existing `automated` flag (one source of truth) |
+| P9-3 | Stability | Dimensions and values are archived, never deleted, and their keys never change (database triggers); archived ones stay on test cases but cannot be newly assigned (re-sending the current value is accepted) | "Values used for reporting must be stable and auditable" (Planning #26) |
+| P9-4 | Content | Tags and classification are test case content: part of the test case body, written with PATCH (tags replace, classification merges per dimension, `null` clears), advance the version and honour If-Match | Same optimistic locking as every other edit (P5); a dimension-level merge lets two people classify different dimensions without conflict in the UI |
+| P9-5 | Tags | Trimmed, lower-cased, deduplicated, sorted; `^[a-z0-9][a-z0-9._-]{0,39}$`, at most 20 per test case | Predictable filtering; bounded input |
+| P9-6 | Filters | `GET /test-cases?tag=` and `?classification=dim:value,...` (up to 10 pairs, all must hold); the UI offers the classification filter only within a project | AND is what Smart Suites (feature 10) need; dimensions are per project |
+| P9-7 | Permissions | Viewers read dimensions; maintainers add, rename and archive dimensions and values; members classify and tag the test cases they can edit | Taxonomy shapes reporting for the whole project (maintainer), classifying is everyday editing (member) |
+| P9-8 | Deferred | Reporter metadata suggesting a classification goes to feature 16 (Playwright reporter); reporting by dimension to feature 14; dynamic suites to feature 10 | Never overwrite human classification without a policy (Planning #26) |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
 ## What each feature does
@@ -222,3 +230,18 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **Tests**: handler unit tests (encodings, exact limit, bomb, incompressible body over the limit, broken streams),
   contract (201, 400, 413, 415), BE-E2E-014, probe gzip sweep through nginx.
 
+### 9. Taxonomy: tags and classification dimensions (Planning #26)
+
+- **Behavior**: each project classifies its test cases along dimensions with controlled values (seven built-ins
+  seeded per project, plus its own); test cases also carry free tags. Archiving keeps history meaningful; nothing is
+  deleted. The list filters by tag and by `dimension:value` pairs.
+- **API**: `GET/POST /projects/{key}/dimensions`, `PATCH /projects/{key}/dimensions/{dimensionKey}`,
+  `POST .../values`, `PATCH .../values/{valueKey}`; `tags` and `classification` on the test case (create, read,
+  PATCH); `tag` and `classification` query parameters on the test case list.
+- **Data**: migration 00020 (`classification_dimensions`, `classification_values`, `test_case_classifications` with
+  composite foreign keys so a value always belongs to its dimension and the test case's project, `test_case_tags`),
+  version triggers reused from P5.
+- **UI**: Classification section on the project page; tags and one select per dimension on the test case form; badges
+  on the test case; tags column and tag/classification filters on the list (screenshots 49–52).
+- **Tests**: unit (service, handlers, helpers), BE-INT-045, backend and frontend contract, FE-INT-037, BE-E2E-015,
+  FE-E2E-017, probe taxonomy sweep (keys, names, limits, filters, concurrent creations).

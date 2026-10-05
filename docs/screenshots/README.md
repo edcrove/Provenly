@@ -53,3 +53,7 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 46 | A run edited after creation: a reported manual test case included by a maintainer, with its history | `46-test-run-amended.png` |
 | 47 | A run with a flaky test: passed on a retry, every attempt kept and marked | `47-test-run-flaky.png` |
 | 48 | A viewer reads a test case without editing actions | `48-viewer-test-case.png` |
+| 49 | Project classification: built-in dimensions, a project's feature values and how to add or archive them | `49-project-classification.png` |
+| 50 | Editing a test case's tags and classification (one value per dimension) | `50-test-case-classification-form.png` |
+| 51 | A classified and tagged test case | `51-test-case-classified.png` |
+| 52 | The project's test cases filtered by classification (Risk: Critical) | `52-test-cases-filtered-by-classification.png` |

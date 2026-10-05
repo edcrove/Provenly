@@ -304,6 +304,53 @@ def main():
     st, body = attempts("", '<flakyFailure message="a"/><flakyError message="b"/>')
     check("flaky elements are attempts", body.get("persisted") if isinstance(body, dict) else st, 3)
 
+    # Taxonomy (prototype feature 9): keys and names are validated before any lookup, duplicates are 409s, tags are
+    # normalized and bounded, classification values must exist and be active, list filters are validated; concurrent
+    # creations of one key: exactly one wins.
+    dims = f"/projects/{key}/dimensions"
+    st, listed = call(base, "GET", dims)
+    check("list dimensions", f"{st} {len(listed.get('items', [])) if isinstance(listed, dict) else 0}", "200 7")
+    for path, exp in [("/projects/bad/dimensions", 400), ("/projects/NOPE99/dimensions", 404)]:
+        check(f"GET {path}", call(base, "GET", path)[0], exp)
+    for body, exp in [({"key": "Browser", "name": "x"}, 400), ({"key": "1x", "name": "x"}, 400), ({"key": "b" * 31, "name": "x"}, 400),
+                      ({"key": "x", "name": ""}, 400), ({"key": "x", "name": "n" * 61}, 400), ({"key": "x", "name": "a\u0000"}, 400),
+                      ({"key": "x"}, 400), ({"key": 1, "name": "x"}, 400), ({"key": "risk", "name": "again"}, 409), ({"key": "probe-dim", "name": "ñ" * 60}, 201)]:
+        check(f"create dimension {str(body)[:40]}", call(base, "POST", dims, body)[0], exp)
+    check("create dimension text/plain", call(base, "POST", dims, raw=b'{"key":"y","name":"y"}', ctype="text/plain")[0], 415)
+    for path, body, exp in [(f"{dims}/Risk", {"name": "x"}, 400), (f"{dims}/nope", {"name": "x"}, 404), (f"{dims}/risk", {}, 400),
+                            (f"{dims}/risk", {"archived": "yes"}, 400), (f"{dims}/risk/values/Low", {"name": "x"}, 400),
+                            (f"{dims}/risk/values/nope", {"name": "x"}, 404), (f"{dims}/nope/values/low", {"name": "x"}, 404),
+                            (f"{dims}/risk/values/low", {"name": " "}, 400), (f"{dims}/%00/values/low", {"name": "x"}, 400)]:
+        check(f"PATCH {path[len(dims):]} {body}", call(base, "PATCH", path, body)[0], exp)
+    for body, exp in [({"key": "-x", "name": "x"}, 400), ({"key": "low", "name": "again"}, 409), ({"key": "probe-v", "name": "V"}, 201)]:
+        check(f"add value {body}", call(base, "POST", f"{dims}/risk/values", body)[0], exp)
+    check("add value to unknown dimension", call(base, "POST", f"{dims}/nope/values", {"key": "x", "name": "x"})[0], 404)
+    codes = []
+    threads = [threading.Thread(target=lambda: codes.append(call(base, "POST", dims, {"key": "probe-race", "name": "race"})[0])) for _ in range(20)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    check("20 concurrent dimension creations: one wins", f"{codes.count(201)} created, {codes.count(409)} conflicts", "1 created, 19 conflicts")
+    codes = []
+    threads = [threading.Thread(target=lambda: codes.append(call(base, "POST", f"{dims}/risk/values", {"key": "probe-race", "name": "race"})[0])) for _ in range(20)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    check("20 concurrent value creations: one wins", f"{codes.count(201)} created, {codes.count(409)} conflicts", "1 created, 19 conflicts")
+    many = [f"t{i}" for i in range(20)]
+    for body, exp in [({"tags": many + ["T0", " t1 "]}, 201), ({"tags": many + ["t20"]}, 400), ({"tags": ["a" * 41]}, 400),
+                      ({"tags": ["a\u0000"]}, 400), ({"tags": ["ñ"]}, 400), ({"tags": "smoke"}, 400), ({"tags": [1]}, 400),
+                      ({"classification": {"risk": "critical"}}, 201), ({"classification": {"risk": None}}, 400),
+                      ({"classification": {"nope": "x"}}, 400), ({"classification": {"risk": "nope"}}, 400),
+                      ({"classification": {"risk": 1}}, 400), ({"classification": ["risk"]}, 400), ({"classification": {"%00": "x"}}, 400)]:
+        check(f"create test case {str(body)[:50]}", call(base, "POST", "/test-cases", {"title": "probe-tax", "project": key, **body})[0], exp)
+    check("archive a value", call(base, "PATCH", f"{dims}/risk/values/probe-v", {"archived": True})[0], 200)
+    check("assign an archived value", call(base, "POST", "/test-cases", {"title": "probe-tax", "project": key, "classification": {"risk": "probe-v"}})[0], 400)
+    for qs, exp in [("tag=t0", 200), ("tag=", 400), ("tag=T0", 400), ("tag=%00", 400), ("tag=" + "a" * 41, 400),
+                    ("classification=risk:critical", 200), ("classification=risk:critical,risk:critical", 200), ("classification=risk", 400),
+                    ("classification=", 400), ("classification=" + ",".join(f"d{i}:v" for i in range(11)), 400), ("classification=%C3%B1:x", 400)]:
+        check(f"list ?{qs[:40]}", call(base, "GET", f"/test-cases?project={key}&{qs}")[0], exp)
+    st, page = call(base, "GET", f"/test-cases?project={key}&tag=t0")
+    check("tag filter finds the normalized tags", page.get("totalItems") if isinstance(page, dict) else st, 1)
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

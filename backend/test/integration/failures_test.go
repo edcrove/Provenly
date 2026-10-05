@@ -58,6 +58,26 @@ func TestPersistenceFailures(t *testing.T) {
 			"catalog.CloseTestStepGap":    func() error { return cat.CloseTestStepGap(ctx, 1, 1) },
 			"catalog.SetTestStepPosition": func() error { return cat.SetTestStepPosition(ctx, 1, 1, 1) },
 			"catalog.ListTestCaseKeys":    func() error { _, err := cat.ListTestCaseKeys(ctx, []int64{1}); return err },
+			"catalog.ListDimensions":      func() error { _, err := cat.ListDimensions(ctx, 1); return err },
+			"catalog.CreateDimension": func() error {
+				_, err := cat.CreateDimension(ctx, 1, catalog.DimensionInput{Key: "x", Name: "x"})
+				return err
+			},
+			"catalog.UpdateDimension": func() error {
+				_, err := cat.UpdateDimension(ctx, 1, "risk", catalog.UpdateDimensionInput{Name: str("x")})
+				return err
+			},
+			"catalog.CreateDimensionValue": func() error {
+				_, err := cat.CreateDimensionValue(ctx, 1, catalog.DimensionInput{Key: "x", Name: "x"})
+				return err
+			},
+			"catalog.UpdateDimensionValue": func() error {
+				_, err := cat.UpdateDimensionValue(ctx, 1, "x", catalog.UpdateDimensionInput{Name: str("x")})
+				return err
+			},
+			"catalog.SetTags":             func() error { return cat.SetTags(ctx, 1, []string{"a"}) },
+			"catalog.SetClassification":   func() error { return cat.SetClassification(ctx, 1, 1, 1, 1) },
+			"catalog.ClearClassification": func() error { return cat.SetClassification(ctx, 1, 1, 1, 0) },
 			"catalog.CreateProject": func() error {
 				_, err := cat.CreateProject(ctx, catalog.CreateProjectInput{Key: "XX", Name: "x"})
 				return err
@@ -146,5 +166,32 @@ func TestPersistenceFailures(t *testing.T) {
 		assert.ErrorContains(t, err, "projects")
 		_, err = cold.ListTestCaseKeys(ctx, []int64{tc.ID})
 		assert.ErrorContains(t, err, "projects")
+		_, err = cold.GetTestCase(ctx, tc.ID)
+		assert.ErrorContains(t, err, "projects")
+	})
+
+	t.Run("BE-INT-046_taxonomy_read_and_write_failures_propagate", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, err := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a"})
+		require.NoError(t, err)
+		store := catalogpg.NewStore(db.Pool)
+		// Each table disappears after the queries before it succeeded: the error surfaces instead of a partial result.
+		hidden := func(table string, calls ...func() error) {
+			_, err := db.Pool.Exec(ctx, `ALTER TABLE `+table+` RENAME TO `+table+`_hidden`)
+			require.NoError(t, err)
+			defer func() {
+				_, err := db.Pool.Exec(ctx, `ALTER TABLE `+table+`_hidden RENAME TO `+table)
+				require.NoError(t, err)
+			}()
+			for _, call := range calls {
+				assert.ErrorContains(t, call(), table)
+			}
+		}
+		get := func() error { _, err := store.GetTestCase(ctx, tc.ID); return err }
+		list := func() error { _, err := store.ListTestCases(ctx, catalog.ListFilter{}, 10, 0); return err }
+		dims := func() error { _, err := store.ListDimensions(ctx, catalog.DefaultProjectID); return err }
+		hidden("test_case_tags", get, list, func() error { return store.SetTags(ctx, tc.ID, []string{"a"}) })
+		hidden("test_case_classifications", get, list)
+		hidden("classification_values", dims)
 	})
 }

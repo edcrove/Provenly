@@ -19,16 +19,32 @@ SELECT * FROM test_cases WHERE id = @id;
 SELECT version FROM test_cases WHERE id = @id FOR UPDATE;
 
 -- name: ListTestCases :many
+-- classified holds distinct dimension:value pairs that must all hold (AND); a test case has one value per
+-- dimension, so two values of one dimension match nothing.
 SELECT * FROM test_cases
 WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
   AND (sqlc.narg('project_ids')::bigint[] IS NULL OR project_id = ANY(sqlc.narg('project_ids')::bigint[]))
+  AND (sqlc.narg('tag')::text IS NULL OR EXISTS (SELECT 1 FROM test_case_tags t WHERE t.test_case_id = test_cases.id AND t.tag = sqlc.narg('tag')::text))
+  AND (coalesce(cardinality(@classified::text[]), 0) = 0 OR (
+      SELECT count(*) FROM test_case_classifications c
+      JOIN classification_dimensions d ON d.id = c.dimension_id
+      JOIN classification_values v ON v.id = c.value_id
+      WHERE c.test_case_id = test_cases.id AND d.key || ':' || v.key = ANY(@classified::text[])
+  ) = cardinality(@classified::text[]))
 ORDER BY id DESC
 LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountTestCases :one
 SELECT count(*) FROM test_cases
 WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
-  AND (sqlc.narg('project_ids')::bigint[] IS NULL OR project_id = ANY(sqlc.narg('project_ids')::bigint[]));
+  AND (sqlc.narg('project_ids')::bigint[] IS NULL OR project_id = ANY(sqlc.narg('project_ids')::bigint[]))
+  AND (sqlc.narg('tag')::text IS NULL OR EXISTS (SELECT 1 FROM test_case_tags t WHERE t.test_case_id = test_cases.id AND t.tag = sqlc.narg('tag')::text))
+  AND (coalesce(cardinality(@classified::text[]), 0) = 0 OR (
+      SELECT count(*) FROM test_case_classifications c
+      JOIN classification_dimensions d ON d.id = c.dimension_id
+      JOIN classification_values v ON v.id = c.value_id
+      WHERE c.test_case_id = test_cases.id AND d.key || ':' || v.key = ANY(@classified::text[])
+  ) = cardinality(@classified::text[]));
 
 -- name: UpdateTestCase :one
 UPDATE test_cases SET
@@ -139,3 +155,77 @@ UPDATE projects SET
     updated_at  = now()
 WHERE key = @key
 RETURNING *;
+
+-- name: ListDimensions :many
+-- A project's classification dimensions: built-ins first in their seeded order, then the project's own by key.
+SELECT * FROM classification_dimensions WHERE project_id = @project_id
+ORDER BY built_in DESC, id;
+
+-- name: ListDimensionValues :many
+SELECT v.* FROM classification_values v
+JOIN classification_dimensions d ON d.id = v.dimension_id
+WHERE d.project_id = @project_id
+ORDER BY v.dimension_id, v.position, v.id;
+
+-- name: CreateDimension :one
+INSERT INTO classification_dimensions (project_id, key, name)
+VALUES (@project_id, @key, @name)
+ON CONFLICT (project_id, key) DO NOTHING
+RETURNING *;
+
+-- name: UpdateDimension :one
+UPDATE classification_dimensions SET
+    name        = coalesce(sqlc.narg('name'), name),
+    archived_at = CASE WHEN sqlc.narg('archived')::boolean IS NULL THEN archived_at
+                       WHEN sqlc.narg('archived')::boolean THEN coalesce(archived_at, now())
+                       ELSE NULL END
+WHERE project_id = @project_id AND key = @key
+RETURNING *;
+
+-- name: CreateDimensionValue :one
+-- Appended after the dimension's last value; no row when the key already exists in the dimension.
+INSERT INTO classification_values (dimension_id, key, name, position)
+SELECT @dimension_id, @key, @name, coalesce(max(position), 0) + 1 FROM classification_values WHERE dimension_id = @dimension_id
+ON CONFLICT (dimension_id, key) DO NOTHING
+RETURNING *;
+
+-- name: UpdateDimensionValue :one
+UPDATE classification_values SET
+    name        = coalesce(sqlc.narg('name'), name),
+    archived_at = CASE WHEN sqlc.narg('archived')::boolean IS NULL THEN archived_at
+                       WHEN sqlc.narg('archived')::boolean THEN coalesce(archived_at, now())
+                       ELSE NULL END
+WHERE dimension_id = @dimension_id AND key = @key
+RETURNING *;
+
+-- name: ListTestCaseTags :many
+SELECT test_case_id, tag FROM test_case_tags WHERE test_case_id = ANY(@ids::bigint[])
+ORDER BY test_case_id, tag;
+
+-- name: ListTestCaseClassifications :many
+-- The classification of the given test cases as dimension and value keys.
+SELECT c.test_case_id, d.key AS dimension, v.key AS value
+FROM test_case_classifications c
+JOIN classification_dimensions d ON d.id = c.dimension_id
+JOIN classification_values v ON v.id = c.value_id
+WHERE c.test_case_id = ANY(@ids::bigint[])
+ORDER BY c.test_case_id, d.id;
+
+-- name: DeleteTestCaseTags :exec
+-- Removes the tags not in keep (all of them when keep is empty).
+DELETE FROM test_case_tags WHERE test_case_id = @test_case_id AND NOT (tag = ANY(coalesce(@keep::text[], '{}')));
+
+-- name: AddTestCaseTags :exec
+INSERT INTO test_case_tags (test_case_id, tag)
+SELECT @test_case_id, unnest(@tags::text[])
+ON CONFLICT DO NOTHING;
+
+-- name: SetTestCaseClassification :exec
+-- Sets the value of one dimension; unchanged when it already has that value (so the version does not advance).
+INSERT INTO test_case_classifications (test_case_id, project_id, dimension_id, value_id)
+VALUES (@test_case_id, @project_id, @dimension_id, @value_id)
+ON CONFLICT (test_case_id, dimension_id) DO UPDATE SET value_id = EXCLUDED.value_id
+WHERE test_case_classifications.value_id <> EXCLUDED.value_id;
+
+-- name: ClearTestCaseClassification :exec
+DELETE FROM test_case_classifications WHERE test_case_id = @test_case_id AND dimension_id = @dimension_id;

@@ -29,3 +29,5 @@ targets:
     description: retries through the public API - Surefire flaky and rerun attempts are stored with their attempt and details; the last attempt is the logical result in run outcome, summary (flaky) and results (retried flag)
   - id: BE-E2E-014
     description: gzip reports through the public API - a gzip report is ingested like a plain one; a gzip bomb is a 413 problem (limit on the decompressed body); a broken stream is 400 and other encodings 415
+  - id: BE-E2E-015
+    description: taxonomy through the public API - a new project gets the built-in dimensions; values and dimensions are added (duplicates 409); test cases are created with normalized tags and a classification and filtered by tag and by dimension:value pairs; archived values cannot be assigned (400 on the dimension field); clearing tags and a dimension advances the ETag

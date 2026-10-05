@@ -91,8 +91,11 @@ type TestCase struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	DeprecatedAt   *time.Time
-	// Version advances with every change to the test case or its steps (optimistic locking, ETag).
+	// Version advances with every change to the test case, its steps, tags or classification (optimistic locking, ETag).
 	Version int64
+	// Tags are free labels, sorted; Classification maps a dimension key to the value key of the test case.
+	Tags           []string
+	Classification map[string]string
 }
 
 // Key is the test case key, e.g. CHK-12 (TC-153 in the default project).
@@ -121,6 +124,9 @@ type CreateInput struct {
 	Description    string
 	ExpectedResult string
 	Automated      bool
+	Tags           []string
+	// Classification maps dimension keys to value keys.
+	Classification map[string]string
 }
 
 // UpdateInput holds the fields to change; nil means unchanged.
@@ -129,12 +135,65 @@ type UpdateInput struct {
 	Description    *string
 	ExpectedResult *string
 	Automated      *bool
+	// Tags, when not nil, replaces every tag.
+	Tags *[]string
+	// Classification merges into the current one: a dimension mapped to nil loses its value, absent ones keep theirs.
+	Classification map[string]*string
 }
 
 // ListFilter narrows a test case list; nil fields do not filter.
 type ListFilter struct {
 	Status     *Status
 	ProjectIDs []int64
+	Tag        *string
+	// Classified holds dimension:value pairs that must all hold.
+	Classified []string
+}
+
+// Dimension is a project's classification axis (feature, risk, ...) with its controlled values.
+// Dimensions and values are archived, never deleted, and their keys never change.
+type Dimension struct {
+	ID         int64
+	ProjectID  int64
+	Key        string
+	Name       string
+	BuiltIn    bool
+	ArchivedAt *time.Time
+	CreatedAt  time.Time
+	Values     []DimensionValue
+}
+
+// DimensionValue is one controlled value of a dimension.
+type DimensionValue struct {
+	ID          int64
+	DimensionID int64
+	Key         string
+	Name        string
+	Position    int32
+	ArchivedAt  *time.Time
+	CreatedAt   time.Time
+}
+
+// value returns the dimension's value with the given key.
+func (d Dimension) value(key string) (DimensionValue, bool) {
+	for _, v := range d.Values {
+		if v.Key == key {
+			return v, true
+		}
+	}
+	return DimensionValue{}, false
+}
+
+// DimensionInput is a new dimension or value.
+type DimensionInput struct {
+	Key  string
+	Name string
+}
+
+// UpdateDimensionInput holds the dimension or value fields to change; nil means unchanged.
+type UpdateDimensionInput struct {
+	Name     *string
+	Archived *bool
 }
 
 // CreateStepInput is the content of a new step. Position nil appends at the end.
@@ -181,6 +240,17 @@ type Repository interface {
 	DeleteTestStep(ctx context.Context, testCaseID, stepID int64) (int32, error)
 	CloseTestStepGap(ctx context.Context, testCaseID int64, afterPosition int32) error
 	SetTestStepPosition(ctx context.Context, testCaseID, stepID int64, position int32) error
+
+	// ListDimensions returns a project's dimensions with their values.
+	ListDimensions(ctx context.Context, projectID int64) ([]Dimension, error)
+	CreateDimension(ctx context.Context, projectID int64, in DimensionInput) (Dimension, error)
+	UpdateDimension(ctx context.Context, projectID int64, key string, in UpdateDimensionInput) (Dimension, error)
+	CreateDimensionValue(ctx context.Context, dimensionID int64, in DimensionInput) (DimensionValue, error)
+	UpdateDimensionValue(ctx context.Context, dimensionID int64, key string, in UpdateDimensionInput) (DimensionValue, error)
+	// SetTags replaces the tags of a test case.
+	SetTags(ctx context.Context, testCaseID int64, tags []string) error
+	// SetClassification sets (valueID > 0) or clears (valueID 0) the value of one dimension of a test case.
+	SetClassification(ctx context.Context, testCaseID, projectID, dimensionID, valueID int64) error
 
 	// InTx runs fn inside one database transaction.
 	InTx(ctx context.Context, fn func(Repository) error) error

@@ -3,6 +3,7 @@ import { http, HttpResponse, type JsonBodyType } from 'msw'
 import type {
   Amendment,
   ApiKey,
+  Dimension,
   Invitation,
   ParseError,
   Project,
@@ -35,6 +36,8 @@ export interface MockDb {
   apiKeys: (ApiKey & { projectId: number })[]
   /** Snapshot amendments (DEC-42), all runs. */
   amendments: Amendment[]
+  /** Classification dimensions by project id. */
+  dimensions: (Dimension & { projectId: number })[]
   /** The signed-in user's id (the session cookie), or null when signed out. */
   session: number | null
   projects: Project[]
@@ -62,6 +65,7 @@ export function seed(): MockDb {
     members: [],
     apiKeys: [],
     amendments: [],
+    dimensions: seedDimensions(1),
     projects: [project()],
     testCases: [tc, testCase({ id: 154, title: 'Logout works' })],
     steps: [
@@ -92,6 +96,22 @@ export function seed(): MockDb {
     failingMe: false,
     nextId: 1000,
   }
+}
+
+/** A reduced set of the built-in dimensions the server seeds in every project. */
+export function seedDimensions(projectId: number): MockDb['dimensions'] {
+  const value = (key: string, name: string) => ({ key, name, archivedAt: null })
+  return [
+    { projectId, key: 'feature', name: 'Feature', builtIn: true, archivedAt: null, values: [] },
+    {
+      projectId,
+      key: 'risk',
+      name: 'Risk',
+      builtIn: true,
+      archivedAt: null,
+      values: [value('critical', 'Critical'), value('high', 'High'), value('low', 'Low')],
+    },
+  ]
 }
 
 export const db: MockDb = seed()
@@ -267,10 +287,155 @@ function maintainedProject(raw: string | readonly string[] | undefined): Project
   return requireRole(p.id, 'maintainer', () => notFound(`project ${String(raw)}`)) ?? p
 }
 
+const DIMENSION = /^[a-z][a-z0-9-]{0,29}$/
+const VALUE = /^[a-z0-9][a-z0-9-]{0,29}$/
+const TAG = /^[a-z0-9][a-z0-9._-]{0,39}$/
+const PAIR = '[a-z][a-z0-9-]{0,29}:[a-z0-9][a-z0-9-]{0,29}'
+const CLASSIFIED = new RegExp(`^${PAIR}(,${PAIR}){0,9}$`)
+
+/** The wire form of a mock dimension (the project is in the URL). */
+function dimensionDto({ projectId, ...d }: MockDb['dimensions'][number]): Dimension {
+  void projectId
+  return d
+}
+
+/** A project the signed-in user sees (viewer and up), like the server. */
+function visibleProject(raw: string | readonly string[] | undefined): Project | Response {
+  if (!KEY.test(String(raw))) return validation('projectKey', 'must be a project key')
+  const p = db.projects.find((x) => x.key === raw)
+  if (!p || !roleIn(p.id)) return notFound(`project ${String(raw)}`)
+  return p
+}
+
+/** A dimension of a project the user maintains: else 400, 403 or 404. */
+function maintainedDimension(params: Record<string, string | readonly string[] | undefined>) {
+  if (!DIMENSION.test(String(params.dimensionKey)))
+    return validation('dimensionKey', 'must be a dimension key')
+  const p = maintainedProject(params.projectKey)
+  if (p instanceof Response) return p
+  return (
+    db.dimensions.find((d) => d.projectId === p.id && d.key === params.dimensionKey) ??
+    notFound(`dimension ${String(params.dimensionKey)}`)
+  )
+}
+
+/** Validates a key and name body like the server. */
+function keyAndName(body: Record<string, unknown> | undefined, pattern: RegExp) {
+  if (!body) return validation('body', 'malformed JSON body')
+  if (!pattern.test(String(body.key))) return validation('key', 'is not a valid key')
+  const name = typeof body.name === 'string' ? body.name.trim() : ''
+  if (!name) return validation('name', 'must not be empty')
+  return { key: String(body.key), name }
+}
+
+/** Applies a rename or archive body like the server. */
+function renameOrArchive(
+  target: { name: string; archivedAt: string | null },
+  body: Record<string, unknown> | undefined,
+) {
+  if (!body || Object.keys(body).length === 0) return validation('body', 'at least one field is required')
+  if (body.name !== undefined) {
+    if (!String(body.name).trim()) return validation('name', 'must not be empty')
+    target.name = String(body.name).trim()
+  }
+  if (body.archived === true) target.archivedAt ??= now()
+  if (body.archived === false) target.archivedAt = null
+  return undefined
+}
+
+/** Normalizes tags like the server, or answers 400. */
+function normalizeTags(raw: unknown): string[] | Response {
+  const tags = [...new Set((Array.isArray(raw) ? raw : []).map((t) => String(t).trim().toLowerCase()))].sort()
+  const bad = tags.find((t) => !TAG.test(t))
+  return bad === undefined ? tags : validation('tags', `"${bad}" is not a valid tag`)
+}
+
+/** Applies a classification change like the server (null clears; archived only when already current). */
+function classify(tc: TestCase, raw: unknown): Response | undefined {
+  const next = { ...tc.classification }
+  for (const [dim, value] of Object.entries((raw ?? {}) as Record<string, string | null>)) {
+    const d = db.dimensions.find((x) => x.projectId === tc.projectId && x.key === dim)
+    if (!d) return validation(`classification.${dim}`, 'is not a dimension of the project')
+    if (value === null) {
+      delete next[dim]
+      continue
+    }
+    const v = d.values.find((x) => x.key === value)
+    if (!v) return validation(`classification.${dim}`, `"${value}" is not a value of ${d.name}`)
+    if ((v.archivedAt || d.archivedAt) && tc.classification[dim] !== value)
+      return validation(`classification.${dim}`, `"${value}" is archived`)
+    next[dim] = value
+  }
+  tc.classification = next
+  return undefined
+}
+
 const stepsOf = (tcId: number) =>
   db.steps.filter((s) => s.testCaseId === tcId).sort((a, b) => a.position - b.position)
 
 export const handlers = [
+  http.get(
+    `${BASE}/projects/:projectKey/dimensions`,
+    guard(({ params }) => {
+      const p = visibleProject(params.projectKey)
+      if (p instanceof Response) return p
+      return respond({ items: db.dimensions.filter((d) => d.projectId === p.id).map(dimensionDto) })
+    }),
+  ),
+  http.post(
+    `${BASE}/projects/:projectKey/dimensions`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const p = maintainedProject(params.projectKey)
+        if (p instanceof Response) return p
+        const input = keyAndName(await readBody(request), DIMENSION)
+        if (input instanceof Response) return input
+        if (db.dimensions.some((d) => d.projectId === p.id && d.key === input.key))
+          return problem(409, 'conflict', `dimension ${input.key} already exists`)
+        const d = { projectId: p.id, ...input, builtIn: false, archivedAt: null, values: [] }
+        db.dimensions.push(d)
+        return respond(dimensionDto(d), 201)
+      }),
+    ),
+  ),
+  http.patch(
+    `${BASE}/projects/:projectKey/dimensions/:dimensionKey`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const d = maintainedDimension(params)
+        if (d instanceof Response) return d
+        return renameOrArchive(d, await readBody(request)) ?? respond(dimensionDto(d))
+      }),
+    ),
+  ),
+  http.post(
+    `${BASE}/projects/:projectKey/dimensions/:dimensionKey/values`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const d = maintainedDimension(params)
+        if (d instanceof Response) return d
+        const input = keyAndName(await readBody(request), VALUE)
+        if (input instanceof Response) return input
+        if (d.values.some((v) => v.key === input.key))
+          return problem(409, 'conflict', `${d.key} already has the value ${input.key}`)
+        d.values.push({ ...input, archivedAt: null })
+        return respond(dimensionDto(d), 201)
+      }),
+    ),
+  ),
+  http.patch(
+    `${BASE}/projects/:projectKey/dimensions/:dimensionKey/values/:valueKey`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        if (!VALUE.test(String(params.valueKey))) return validation('valueKey', 'must be a value key')
+        const d = maintainedDimension(params)
+        if (d instanceof Response) return d
+        const v = d.values.find((x) => x.key === params.valueKey)
+        if (!v) return notFound(`value ${String(params.valueKey)} of dimension ${d.key}`)
+        return renameOrArchive(v, await readBody(request)) ?? respond(dimensionDto(d))
+      }),
+    ),
+  ),
   http.get(
     `${BASE}/projects/:projectKey/members`,
     guard(({ params, request }) => {
@@ -548,6 +713,7 @@ export const handlers = [
           updatedAt: now(),
         })
         db.projects.push(p)
+        db.dimensions.push(...seedDimensions(p.id))
         return respond(p, 201)
       }),
     ),
@@ -578,8 +744,20 @@ export const handlers = [
       if (status && status !== 'active' && status !== 'deprecated') return validation('status', 'invalid')
       const p = projectFilter(url)
       if (p instanceof Response) return p
+      const tag = url.searchParams.get('tag')
+      if (tag !== null && !TAG.test(tag)) return validation('tag', 'is not a valid tag')
+      const classified = url.searchParams.get('classification')
+      if (classified !== null && !CLASSIFIED.test(classified))
+        return validation('classification', 'must be dimension:value pairs')
+      const pairs = (classified ?? '').split(',').filter(Boolean)
       const items = db.testCases
-        .filter((t) => (!status || t.status === status) && (!p || t.projectId === p.id))
+        .filter(
+          (t) =>
+            (!status || t.status === status) &&
+            (!p || t.projectId === p.id) &&
+            (tag === null || t.tags.includes(tag)) &&
+            pairs.every((pair) => `${pair.split(':')[0]}:${t.classification[pair.split(':')[0]]}` === pair),
+        )
         .sort((a, b) => b.id - a.id)
       return respond(pageOf(url, items))
     }),
@@ -598,6 +776,8 @@ export const handlers = [
         if (!p) return notFound(`project ${key}`)
         const denied = requireRole(p.id, 'member', () => notFound(`project ${key}`))
         if (denied) return denied
+        const tags = normalizeTags(body.tags)
+        if (tags instanceof Response) return tags
         const id = ++db.nextId
         const tc = testCase({
           id,
@@ -610,7 +790,10 @@ export const handlers = [
           automated: Boolean(body.automated),
           createdAt: now(),
           updatedAt: now(),
+          tags,
         })
+        const invalid = classify(tc, body.classification)
+        if (invalid) return invalid
         db.testCases.push(tc)
         return respond(tc, 201)
       }),
@@ -636,7 +819,16 @@ export const handlers = [
           return validation('title', 'must not be empty')
         const conflict = stale(request, tc)
         if (conflict) return conflict
-        Object.assign(tc, body, { updatedAt: now(), version: tc.version + 1 })
+        const { tags: rawTags, classification, ...content } = body
+        const tags = rawTags === undefined ? tc.tags : normalizeTags(rawTags)
+        if (tags instanceof Response) return tags
+        const before = tc.classification
+        const invalid = classify(tc, classification)
+        if (invalid) {
+          tc.classification = before
+          return invalid
+        }
+        Object.assign(tc, content, { tags, updatedAt: now(), version: tc.version + 1 })
         return tagged(tc, tc)
       }),
     ),

@@ -19,6 +19,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/insights"
 	"github.com/edcrove/provenly/backend/internal/integrations"
 	integrationspg "github.com/edcrove/provenly/backend/internal/integrations/postgres"
+	"github.com/edcrove/provenly/backend/internal/mcp"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/secrets"
 	"github.com/edcrove/provenly/backend/internal/platform/telemetry"
@@ -90,13 +91,19 @@ func NewServicesConfig(pool *pgxpool.Pool, now func() time.Time, cfg Config) Ser
 	}
 }
 
+// Version is the version of the Provenly server (reported to MCP clients).
+const Version = "0.1.0-prototype"
+
 // readyTimeout bounds the readiness probe so a hung database fails it quickly.
 const readyTimeout = 2 * time.Second
 
 // NewHandler builds the REST API handler.
 func NewHandler(s Services, maxIngestBytes int64) http.Handler {
 	mux := http.NewServeMux()
-	register(mux, s, maxIngestBytes)
+	agents := mcp.NewHandler(Version)
+	register(mux, s, maxIngestBytes, agents)
+	// MCP tools call the API in-process, as the caller (same routing, authorization and problem answers).
+	agents.Bind(httpx.Routes(mux))
 	return httpx.Recover(telemetry.Middleware(httpx.AccessLog(httpx.Routes(mux))))
 }
 
@@ -104,11 +111,11 @@ func NewHandler(s Services, maxIngestBytes int64) http.Handler {
 // can check the router against the OpenAPI contract.
 func RoutePatterns() []string {
 	var rec patternRecorder
-	register(&rec, Services{}, 0)
+	register(&rec, Services{}, 0, mcp.NewHandler(Version))
 	return rec
 }
 
-func register(r httpx.Router, s Services, maxIngestBytes int64) {
+func register(r httpx.Router, s Services, maxIngestBytes int64, agents *mcp.Handler) {
 	r.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -136,6 +143,7 @@ func register(r httpx.Router, s Services, maxIngestBytes int64) {
 	ingestion.NewManualHandler(s.Manual).Register(p)
 	insights.NewHandler(s.Insights).Register(p)
 	integrations.NewHandler(s.Integrations).Register(p)
+	agents.Register(p)
 }
 
 type patternRecorder []string

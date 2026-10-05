@@ -33,7 +33,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 16 | Playwright reporter (`@provenly/playwright-reporter`) | Trello, DEC-15 | ✅ | proto/16-playwright-reporter |
 | 17 | OpenTelemetry basic instrumentation | Trello, DEC-11 | ✅ | proto/17-otel |
 | 18 | Export sink (webhooks) and GitHub connector, secrets at rest | Planning #3, #21, Incubator, MVP D4 | ✅ | proto/18-integrations |
-| 19 | MCP server (agent interface) | Incubator, DEC-10 | ⏳ | |
+| 19 | MCP server (agent interface) | Incubator, DEC-10 | ✅ | proto/19-mcp |
 | 20 | Audit log | Incubator (Project & Authorization) | ⏳ | |
 | 21 | Release pipeline, self-hosting guide, dogfooding, public readiness | Trello phase 4 | ⏳ | |
 
@@ -155,6 +155,11 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P18-4 | GitHub connector | One repository per project, a token (fine-grained, issues read) and optional labels; "Sync" mirrors up to 500 issues (no pull requests) into the project's issues by number with their open/closed state, through the issue import of feature 13; failures are 502 and kept on the connection; disconnecting keeps the mirrored issues | Planning #21; read-only sync, manual trigger, reuses DEC-8 verification |
 | P18-5 | UI | Webhooks and GitHub Issues are sections of the project page, for maintainers (like API keys) | Project-level configuration lives in one place |
 | P18-6 | Not now | No scheduled GitHub sync or GitHub webhooks in, no other events (run.started, issue changes), no Jira connector, no key rotation command, no delivery replay button | Kept small; the outbox and secrets box are the foundations for them |
+| P19-1 | Transport | MCP over Streamable HTTP at `POST /api/v1/mcp` (protocol 2025-06-18, also 2025-03-26), one JSON-RPC message per request, JSON responses (no SSE stream, no batches); notifications are 202. No SDK dependency: the subset (initialize, ping, tools/list, tools/call) is small | Works with Claude Code and other HTTP MCP clients; nothing to deploy beside the API |
+| P19-2 | Tools as API calls | Each tool is a read-only GET to the public API made in-process with the caller's own credentials; results are the API's JSON (`structuredContent` and text), API errors are tool results with `isError` and the problem text | One authorization model and one set of shapes (the contract); agents can never see more than the user through the API |
+| P19-3 | Tools | 13 read tools: projects, test case search/detail/steps/history, runs, run detail/summary/results/live, project quality, issues, requirements. Arguments are validated (types, positive integers, key-shaped path segments, no unknown arguments) before any call | Covers "what is failing, since when, is it known" questions; write tools wait for a decision on agent writes |
+| P19-4 | Authentication | Agents use a session token (`POST /auth/login`, 12 h); the account page shows the commands to connect Claude Code | No new credential type in the prototype; API keys stay CI-only (P4) |
+| P19-5 | Not now | No write tools, no resources or prompts, no personal access tokens, no SSE notifications | DEC-10 keeps v0 read-only; tokens and writes need Ed's decision on agent permissions |
 | P12-6 | UI | A Requirements page (list with coverage, native creation and external registration), a requirement page (covering test cases, latest results, link/unlink, archive) and "Requirements" on the test case page | Traceability is visible from both sides |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
@@ -328,6 +333,18 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: new manual run page, manual execution panel on the run page, running/manual badges (screenshots 56–57).
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
+
+### 19. MCP server (Incubator, DEC-10)
+
+- **Behavior**: an MCP client (e.g. `claude mcp add --transport http provenly <url>/api/v1/mcp --header "Authorization:
+  Bearer <token>"`) gets 13 read-only tools over Provenly's data, seeing exactly what its user sees. The account page
+  shows the commands (screenshot 40).
+- **Code**: `internal/mcp` (JSON-RPC, tool table, in-process API calls), mounted by `internal/app` on the session
+  routes; `api/openapi.yaml` documents `POST /api/v1/mcp`; frontend `lib/mcpSnippet.ts` and the account page card.
+- **Tests**: unit at 100% (protocol messages, negotiation, errors, argument validation, credentials passed through,
+  API errors as tool errors), backend contract (initialize, notification, tools over a real database, a user without
+  access gets a tool error, 413/415, 401 via the sweep), FE-INT-045, snippet unit test, BE-E2E-025, FE-E2E-025, probe
+  MCP sweep.
 
 ### 18. Integrations: webhooks and GitHub Issues (Planning #3, #21, MVP D4)
 

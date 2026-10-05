@@ -50,6 +50,7 @@ tags:
   - name: issues
   - name: insights
   - name: integrations
+  - name: agents
   - name: ingestion
 paths:
   /healthz:
@@ -1092,6 +1093,38 @@ paths:
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
+
+  /api/v1/mcp:
+    post:
+      tags: [agents]
+      operationId: mcp
+      summary: Model Context Protocol endpoint (Streamable HTTP, JSON responses) with read-only tools for agents
+      description: >-
+        One JSON-RPC 2.0 message per request (no batches): `initialize`, `ping`, `tools/list` and `tools/call`.
+        Notifications and responses are accepted with 202 and no body. Tools are read-only and call this API
+        in-process as the signed-in user, so they see what the user may see; an API error is a tool result with
+        `isError: true` and the problem as text. Agents authenticate with a session token (`POST /auth/login`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JsonRpcMessage"
+      responses:
+        "200":
+          description: The JSON-RPC response (a result or a JSON-RPC error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JsonRpcResponse"
+        "202":
+          description: A notification or response, accepted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
 
   /api/v1/projects/{projectKey}/webhooks:
     parameters:
@@ -4206,6 +4239,47 @@ components:
           items:
             type: integer
             format: int64
+
+    JsonRpcMessage:
+      type: object
+      description: A JSON-RPC 2.0 request, notification or response (MCP).
+      required: [jsonrpc]
+      properties:
+        jsonrpc:
+          type: string
+          example: "2.0"
+        id:
+          description: Request id (string or number); absent in notifications.
+        method:
+          type: string
+          example: tools/call
+        params:
+          type: object
+          additionalProperties: true
+
+    JsonRpcResponse:
+      type: object
+      additionalProperties: false
+      required: [jsonrpc, id]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        id:
+          description: The request's id (null when the request could not be read).
+          nullable: true
+        result:
+          type: object
+          additionalProperties: true
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: integer
+            message:
+              type: string
 
     WebhookEvent:
       type: string

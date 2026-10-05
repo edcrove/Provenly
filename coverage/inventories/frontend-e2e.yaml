@@ -48,3 +48,5 @@ targets:
     description: the run page follows a live run - provisional progress and per-test states update as CI streams events; when the final report arrives the page shows the completed run, its verdict and the reconciliation mismatch
   - id: FE-E2E-024
     description: a maintainer adds a webhook on the project page (secret shown once), pings it and sees the delivery succeed with its answer; connects GitHub Issues, syncs and finds the mirrored issue on the issues page
+  - id: FE-E2E-025
+    description: the account page shows the command that connects an MCP client to the instance's endpoint as the signed-in user

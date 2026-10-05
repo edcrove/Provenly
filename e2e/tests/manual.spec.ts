@@ -45,5 +45,10 @@ test.describe('Manual execution (MVP D3)', () => {
     await expect(page.getByTestId('manual-execution')).toBeHidden()
     await expect(page.getByTestId('verdict-badge').first()).toHaveText('passed')
     await expect(page.getByText('Refund amount wrong')).toBeVisible()
+
+    // Results of a manual run are what a manual test case expects: no "receives automated results" warning.
+    await page.goto(`/test-cases/${tc.id}`)
+    await expect(page.getByRole('link', { name: /^manual:/ }).first()).toBeVisible()
+    await expect(page.getByTestId('manual-with-results')).toBeHidden()
   })
 })

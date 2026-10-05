@@ -70,6 +70,6 @@ test.describe('Live runs', () => {
     await expect(page.getByTestId('reconciliation')).toHaveText('mismatch')
     await expect(page.getByTestId('mismatch')).toContainText('In the report, never seen live')
     await expect(page.getByTestId('verdict-badge').first()).toHaveText('passed')
-    await expect(page.getByTestId('live-progress')).toContainText('As streamed live: 1 of 2 finished · 0 still running · 1 never started')
+    await expect(page.getByTestId('live-progress')).toContainText('As streamed live: 1 of 2 finished · 0 started but never finished · 1 never started')
   })
 })

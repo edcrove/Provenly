@@ -749,6 +749,7 @@ SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlat
     ) AS retried,
     r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
+    r.report_sha256, r.suite_key, r.suite_name, r.mode AS run_mode, r.started_by AS run_started_by,
     c.expected_count AS run_expected_count, c.result_count AS run_result_count, c.amendment_count AS run_amendment_count
 FROM test_results t
 JOIN test_runs r ON r.id = t.test_run_id
@@ -778,6 +779,11 @@ type ListResultsForTestCaseRow struct {
 	RunCreatedAt      pgtype.Timestamptz
 	RunStartedAt      pgtype.Timestamptz
 	RunCompletedAt    pgtype.Timestamptz
+	ReportSha256      string
+	SuiteKey          pgtype.Text
+	SuiteName         pgtype.Text
+	RunMode           string
+	RunStartedBy      pgtype.Text
 	RunExpectedCount  int32
 	RunResultCount    int32
 	RunAmendmentCount int32
@@ -824,6 +830,11 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 			&i.RunCreatedAt,
 			&i.RunStartedAt,
 			&i.RunCompletedAt,
+			&i.ReportSha256,
+			&i.SuiteKey,
+			&i.SuiteName,
+			&i.RunMode,
+			&i.RunStartedBy,
 			&i.RunExpectedCount,
 			&i.RunResultCount,
 			&i.RunAmendmentCount,

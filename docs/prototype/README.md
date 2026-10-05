@@ -364,15 +364,18 @@ that fails without the fix.
 - **F4** Issue and requirement pages ran the tracker link and "All issues/requirements" together; they are separated.
 - **F5** The project page (members, classification, API keys, webhooks, GitHub) was titled "<KEY> members"; it is
   now "Project <KEY>" with a "Members" section.
-- **F6** A finished live panel still counted tests as "running"; it now reads "As streamed live: … still running ·
+- **F6** A finished live panel still counted tests as "running"; it now reads "As streamed live: … started but never finished ·
   … never started".
 - **F7/F8** The runs-list breakdown and mobile dates broke mid-phrase; they wrap only between parts.
 - **F9** The GitHub token hint showed the last four characters of any token, the whole of a short one; tokens under
   12 characters show only "…".
 - **F11** A manual test case with results from manual runs warned "Receives automated results but is marked
   manual"; only results of batch or live runs warn now.
-- **Tests**: FE-INT-048 (new), FE-INT-014, FE-INT-009, FE-INT-044, FE-E2E-023 (provisional
-  badge and finished live panel), integrations unit tests (short-token hint).
+- **F12** The test case history returned its runs without their mode, suite, starter and report digest (every run
+  read as a batch run without suite); the history query now selects them, so the history matches the run itself.
+- **Tests**: FE-INT-048 (new), FE-INT-014, FE-INT-009, FE-INT-043, FE-INT-044, FE-E2E-023 (provisional badge and
+  finished live panel), FE-E2E-019 (no warning after a manual run), BE-INT-047/048 (history carries suite, mode and
+  starter), integrations unit tests (short-token hint).
 - **Kept as is** (judged correct): mobile tables scroll horizontally; requirements without linked test cases read
   "0/0 passing"; coverage counts results of running runs (they are the latest known status).
 

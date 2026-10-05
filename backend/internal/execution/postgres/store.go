@@ -328,6 +328,7 @@ func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, li
 					ID: r.TestResult.TestRunID, ProjectID: r.RunProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 					RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.RunStatus,
 					CreatedAt: r.RunCreatedAt, StartedAt: r.RunStartedAt, CompletedAt: r.RunCompletedAt,
+					ReportSha256: r.ReportSha256, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName, Mode: r.RunMode, StartedBy: r.RunStartedBy,
 				},
 				ExpectedCount: r.RunExpectedCount, ResultCount: r.RunResultCount, AmendmentCount: r.RunAmendmentCount,
 			}),

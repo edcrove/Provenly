@@ -44,7 +44,7 @@ jobs:
         run: |
           # Retry: module downloads/checksum lookups occasionally fail on the runner network.
           for attempt in 1 2 3; do
-            go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION} && break
+            go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}" && break
             [ "$attempt" = 3 ] && exit 1
             sleep $((attempt * 10))
           done

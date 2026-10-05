@@ -13,3 +13,5 @@ targets:
     description: resending an attempt is idempotent (a different report is warned, not applied) and a rerun creates a new run
   - id: BE-E2E-006
     description: result history across runs and snapshot stability after catalog changes
+  - id: BE-E2E-007
+    description: projects through the public API - per-project numbering, ingestion with ?project= (its universe, wrong_project for another project's key), externalRunId unique per project, run filter and summary keys

@@ -20,6 +20,8 @@ const (
 	KindNotFound
 	// KindInvalidDocument means an uploaded document could not be read at all.
 	KindInvalidDocument
+	// KindConflict means the request conflicts with the current state (e.g. a duplicate key).
+	KindConflict
 )
 
 // FieldError points a validation problem at a specific input field.
@@ -48,6 +50,11 @@ func Validation(message string, fields ...FieldError) error {
 // NotFound builds a KindNotFound error.
 func NotFound(format string, args ...any) error {
 	return &Error{Kind: KindNotFound, Message: fmt.Sprintf(format, args...)}
+}
+
+// Conflict builds a KindConflict error.
+func Conflict(format string, args ...any) error {
+	return &Error{Kind: KindConflict, Message: fmt.Sprintf(format, args...)}
 }
 
 // InvalidDocument builds a KindInvalidDocument error.

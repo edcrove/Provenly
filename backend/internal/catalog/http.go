@@ -1,10 +1,12 @@
 package catalog
 
 import (
+	"cmp"
 	"context"
 	"net/http"
 	"time"
 
+	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
@@ -13,7 +15,7 @@ import (
 type API interface {
 	Create(ctx context.Context, in CreateInput) (TestCase, error)
 	Get(ctx context.Context, id int64) (TestCase, error)
-	List(ctx context.Context, status *Status, page pagination.Page) (pagination.Result[TestCase], error)
+	List(ctx context.Context, f ListFilter, page pagination.Page) (pagination.Result[TestCase], error)
 	Update(ctx context.Context, id int64, in UpdateInput) (TestCase, error)
 	Deprecate(ctx context.Context, id int64) (TestCase, error)
 	Reactivate(ctx context.Context, id int64) (TestCase, error)
@@ -22,12 +24,59 @@ type API interface {
 	UpdateStep(ctx context.Context, testCaseID, stepID int64, in UpdateStepInput) (TestStep, error)
 	DeleteStep(ctx context.Context, testCaseID, stepID int64) error
 	ReorderSteps(ctx context.Context, testCaseID int64, stepIDs []int64) ([]TestStep, error)
+	CreateProject(ctx context.Context, in CreateProjectInput) (Project, error)
+	ProjectByKey(ctx context.Context, key string) (Project, error)
+	ListProjects(ctx context.Context, page pagination.Page) (pagination.Result[Project], error)
+	UpdateProject(ctx context.Context, key string, in UpdateProjectInput) (Project, error)
+}
+
+// ProjectKeyMessage is the validation message of a malformed project key.
+const ProjectKeyMessage = "must be a project key: 2 to 10 upper-case letters or digits, starting with a letter"
+
+// ProjectDTO is the wire form of Project.
+type ProjectDTO struct {
+	ID          int64     `json:"id"`
+	Key         string    `json:"key"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// ProjectToDTO converts a Project to its wire form.
+func ProjectToDTO(p Project) ProjectDTO { return ProjectDTO(p) }
+
+type createProjectRequest struct {
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type updateProjectRequest struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+}
+
+// ProjectQuery resolves the optional ?project=<KEY> filter to a project id.
+func ProjectQuery(r *http.Request, byKey func(context.Context, string) (Project, error)) (*int64, error) {
+	key, err := httpx.PatternQuery(r, "project", ProjectKeyPattern, ProjectKeyMessage)
+	if err != nil || key == nil {
+		return nil, err
+	}
+	p, err := byKey(r.Context(), *key)
+	if err != nil {
+		return nil, err
+	}
+	return &p.ID, nil
 }
 
 // TestCaseDTO is the wire form of TestCase.
 type TestCaseDTO struct {
 	ID             int64      `json:"id"`
 	Key            string     `json:"key"`
+	ProjectID      int64      `json:"projectId"`
+	ProjectKey     string     `json:"projectKey"`
+	Number         int64      `json:"number"`
 	Title          string     `json:"title"`
 	Description    string     `json:"description"`
 	ExpectedResult string     `json:"expectedResult"`
@@ -41,7 +90,7 @@ type TestCaseDTO struct {
 // ToDTO converts a TestCase to its wire form.
 func ToDTO(tc TestCase) TestCaseDTO {
 	return TestCaseDTO{
-		ID: tc.ID, Key: tc.Key(), Title: tc.Title, Description: tc.Description,
+		ID: tc.ID, Key: tc.Key(), ProjectID: tc.ProjectID, ProjectKey: tc.ProjectKey, Number: tc.Number, Title: tc.Title, Description: tc.Description,
 		ExpectedResult: tc.ExpectedResult, Status: tc.Status, Automated: tc.Automated,
 		CreatedAt: tc.CreatedAt, UpdatedAt: tc.UpdatedAt, DeprecatedAt: tc.DeprecatedAt,
 	}
@@ -61,6 +110,7 @@ type TestStepDTO struct {
 func stepDTO(s TestStep) TestStepDTO { return TestStepDTO(s) }
 
 type createTestCaseRequest struct {
+	Project        string `json:"project"`
 	Title          string `json:"title"`
 	Description    string `json:"description"`
 	ExpectedResult string `json:"expectedResult"`
@@ -103,6 +153,10 @@ func NewHandler(api API) *Handler { return &Handler{api: api} }
 
 // Register mounts the catalog routes.
 func (h *Handler) Register(mux httpx.Router) {
+	mux.HandleFunc("GET /api/v1/projects", h.listProjects)
+	mux.HandleFunc("POST /api/v1/projects", h.createProject)
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}", h.getProject)
+	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}", h.updateProject)
 	mux.HandleFunc("GET /api/v1/test-cases", h.list)
 	mux.HandleFunc("POST /api/v1/test-cases", h.create)
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}", h.get)
@@ -127,12 +181,16 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	var status *Status
+	var f ListFilter
 	if raw != nil {
 		s := Status(*raw)
-		status = &s
+		f.Status = &s
 	}
-	res, err := h.api.List(r.Context(), status, page)
+	if f.ProjectID, err = ProjectQuery(r, h.api.ProjectByKey); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	res, err := h.api.List(r.Context(), f, page)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -146,7 +204,19 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	tc, err := h.api.Create(r.Context(), CreateInput(req))
+	key := cmp.Or(req.Project, DefaultProjectKey)
+	if !ProjectKeyPattern.MatchString(key) {
+		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "project", Message: ProjectKeyMessage}))
+		return
+	}
+	p, err := h.api.ProjectByKey(r.Context(), key)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	tc, err := h.api.Create(r.Context(), CreateInput{
+		ProjectID: p.ID, Title: req.Title, Description: req.Description, ExpectedResult: req.ExpectedResult, Automated: req.Automated,
+	})
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -317,4 +387,72 @@ func (h *Handler) deleteStep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) projectKey(w http.ResponseWriter, r *http.Request) (string, bool) {
+	key := r.PathValue("projectKey")
+	if !ProjectKeyPattern.MatchString(key) {
+		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "projectKey", Message: ProjectKeyMessage}))
+		return "", false
+	}
+	return key, true
+}
+
+func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	res, err := h.api.ListProjects(r.Context(), page)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, ProjectToDTO))
+}
+
+func (h *Handler) createProject(w http.ResponseWriter, r *http.Request) {
+	var req createProjectRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	p, err := h.api.CreateProject(r.Context(), CreateProjectInput(req))
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, ProjectToDTO(p))
+}
+
+func (h *Handler) getProject(w http.ResponseWriter, r *http.Request) {
+	key, ok := h.projectKey(w, r)
+	if !ok {
+		return
+	}
+	p, err := h.api.ProjectByKey(r.Context(), key)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, ProjectToDTO(p))
+}
+
+func (h *Handler) updateProject(w http.ResponseWriter, r *http.Request) {
+	key, ok := h.projectKey(w, r)
+	if !ok {
+		return
+	}
+	var req updateProjectRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	p, err := h.api.UpdateProject(r.Context(), key, UpdateProjectInput(req))
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, ProjectToDTO(p))
 }

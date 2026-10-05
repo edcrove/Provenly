@@ -22,10 +22,12 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 | Invariant | Enforcement |
 |---|---|
 | TC-ID numeric, server-assigned, immutable, never reused | `GENERATED ALWAYS AS IDENTITY (NO CYCLE)`; trigger forbids `DELETE` and id changes; API rejects unknown fields (e.g. `id`) |
+| Every test case and run belongs to a project; the displayed key is `<projectKey>-<number>` (e.g. `CHK-12`), numbers per project, contiguous, never reused | `projects.next_number` incremented in the same statement that inserts the test case (`CreateTestCase` CTE, row lock serializes creators); `UNIQUE(project_id, number)`; triggers forbid deleting projects, changing a key or lowering the counter, and changing a test case's project or number (migration 00012). Existing test cases became `TC-<id>` in the default project `TC` |
+| Runs are per project | `test_runs.project_id NOT NULL`, `UNIQUE(project_id, external_run_id)` (the same CI run id in two projects is two runs); the project is part of the run's protected identity (migration 00013) |
 | Test case content rules hold in the database too | `CHECK`s: non-blank title (1..200), description and expected result at most 10000 characters, `deprecated_at` set exactly while deprecated, `updated_at >= created_at` (migration 00011) |
 | Content does not version identity | `PATCH` only edits content columns; results reference the TC-ID only |
 | Snapshot and correlations agree | the expected universe and the statuses of the referenced TC-IDs come from one catalog statement (`ListIngestionView`) |
-| Idempotent TestRun per `{provider}:{run_id}:{run_attempt}` | `UNIQUE(external_run_id)` + `INSERT … ON CONFLICT DO NOTHING` in one transaction with snapshot and results |
+| Idempotent TestRun per project and `{provider}:{run_id}:{run_attempt}` | `UNIQUE(project_id, external_run_id)` + `INSERT … ON CONFLICT DO NOTHING` in one transaction with snapshot and results |
 | Expected-universe snapshot is immutable | written once at run creation; triggers forbid `UPDATE`/`DELETE` and any `INSERT` outside the run's creating transaction (migration 00009) |
 | A run's identity and history are permanent | trigger forbids deleting runs and changing `external_run_id`, provider, run id, attempt, report digest or `created_at` (status and timestamps stay open for the live lifecycle); `CHECK started_at <= completed_at`; a suite timestamp later than the ingestion leaves `startedAt` unknown with a warning |
 | Steps belong to one test case, ordered 1..n without gaps, at most 100 | FK to `test_cases`; `UNIQUE(test_case_id, position) DEFERRABLE` + `CHECK (position >= 1)`; the service locks the test case row to shift/renumber and to enforce the 100 limit; trigger forbids moving a step to another test case |
@@ -54,10 +56,14 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 
 ## JUnit → TC-ID extraction
 
-1. `<properties><property name="tc-id" value="153"/></properties>` inside the `<testcase>` (value `153` or `TC-153`).
-2. Otherwise the `TC-<id>` pattern in the `name` attribute.
+A run belongs to the project named by `?project=<KEY>` (default `TC`); numbers are resolved inside that project.
 
-Outcomes: `valid`, `missing` (none declared; only uppercase `TC-` counts), `malformed` (not a single positive
+1. `<properties><property name="tc-id" value="153"/></properties>` inside the `<testcase>` (value `153`, `TC-153`,
+   or any project key such as `CHK-12`; a bare number is the run's project).
+2. Otherwise the `<runKey>-<n>` pattern in the `name` attribute (only the run's own key, upper-case).
+
+Outcomes: `valid`, `missing` (none declared; only uppercase `TC-` counts), `wrong_project` (a property with another
+project's key: never correlated across projects), `malformed` (not a single positive
 integer — leading zeros are accepted, `TC-0153` = `TC-153` — or several different ids in one `<testcase>`),
 `unknown` (no such TC), `deprecated`. Problems with individual testcases never stop the batch: a testcase without a
 name is discarded, an invalid `time` keeps the result with an unknown (`null`) duration; both are stored as run parse

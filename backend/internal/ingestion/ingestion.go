@@ -25,7 +25,8 @@ import (
 
 // Catalog is what ingestion needs from the catalog module.
 type Catalog interface {
-	IngestionView(ctx context.Context, ids []int64) (catalog.IngestionView, error)
+	ProjectByKey(ctx context.Context, key string) (catalog.Project, error)
+	IngestionView(ctx context.Context, projectID int64, numbers []int64) (catalog.IngestionView, error)
 }
 
 // Recorder is what ingestion needs from the execution module.
@@ -37,6 +38,8 @@ type Recorder interface {
 
 // RunMeta is the CI metadata sent with a report.
 type RunMeta struct {
+	// ProjectKey is the project the run belongs to (default TC).
+	ProjectKey    string
 	Provider      string
 	ProviderRunID string
 	RunAttempt    int32
@@ -113,6 +116,7 @@ func ValidateMeta(m RunMeta) error {
 	v.CheckText("branch", m.Branch)
 	v.CheckText("commit", m.Commit)
 	v.Check(m.Status == "" || slices.Contains(execution.ExecutionStatuses, m.Status), "status", "must be one of completed, interrupted, cancelled")
+	v.Check(m.ProjectKey == "" || catalog.ProjectKeyPattern.MatchString(m.ProjectKey), "project", catalog.ProjectKeyMessage)
 	return v.Err()
 }
 
@@ -121,36 +125,40 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	if err := ValidateMeta(meta); err != nil {
 		return Outcome{}, err
 	}
+	project, err := s.catalog.ProjectByKey(ctx, cmp.Or(meta.ProjectKey, catalog.DefaultProjectKey))
+	if err != nil {
+		return Outcome{}, err
+	}
 	raw, err := io.ReadAll(body)
 	if err != nil {
 		return Outcome{}, err
 	}
 	digest := sha256.Sum256(raw)
 	reportSHA := hex.EncodeToString(digest[:])
-	report, err := junit.ParseWithCharset(bytes.NewReader(raw), meta.Charset)
+	report, err := junit.ParseWith(bytes.NewReader(raw), junit.Options{Charset: meta.Charset, ProjectKey: project.Key})
 	if err != nil {
 		return Outcome{}, apperr.InvalidDocument("%s", err.Error())
 	}
-	var ids []int64
+	var numbers []int64
 	for _, r := range report.Results {
-		if r.Ref.Kind == junit.RefFound {
-			ids = append(ids, r.Ref.ID)
+		if r.Ref.Kind == junit.RefFound && ownProject(r.Ref, project.Key) {
+			numbers = append(numbers, r.Ref.ID)
 		}
 	}
 	// One catalog read: the snapshot and the correlation agree even if a test
 	// case is deprecated while the report is being ingested.
-	view, err := s.catalog.IngestionView(ctx, ids)
+	view, err := s.catalog.IngestionView(ctx, project.ID, numbers)
 	if err != nil {
 		return Outcome{}, err
 	}
-	results := correlate(report.Results, view.Statuses)
+	results := correlate(report.Results, project.Key, view.Entries)
 	expected := view.Expected
 	parseErrors := make([]execution.ParseError, len(report.Errors))
 	for i, e := range report.Errors {
 		parseErrors[i] = execution.ParseError{Index: int32(e.Index), TestName: e.TestName, Message: e.Message, Persisted: e.Persisted, Severity: string(e.Severity)}
 	}
 	run, created, err := s.recorder.RecordRun(ctx, execution.NewRun{
-		Provider: meta.Provider, ProviderRunID: meta.ProviderRunID, RunAttempt: meta.RunAttempt,
+		ProjectID: project.ID, Provider: meta.Provider, ProviderRunID: meta.ProviderRunID, RunAttempt: meta.RunAttempt,
 		Pipeline: meta.Pipeline, Branch: meta.Branch, Commit: meta.Commit, StartedAt: report.StartedAt,
 		ReportSHA256: reportSHA, Status: meta.Status,
 	}, expected, results, parseErrors)
@@ -198,7 +206,11 @@ func (s *Service) IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	return out, nil
 }
 
-func correlate(parsed []junit.Result, statuses map[int64]catalog.Status) []execution.NewResult {
+// ownProject tells whether a reference points into the run's project: a bare
+// number does, <KEY>-<n> does when KEY is the project's key.
+func ownProject(ref junit.TCRef, key string) bool { return ref.Prefix == "" || ref.Prefix == key }
+
+func correlate(parsed []junit.Result, key string, entries map[int64]catalog.IngestionEntry) []execution.NewResult {
 	out := make([]execution.NewResult, len(parsed))
 	for i, r := range parsed {
 		nr := execution.NewResult{
@@ -216,18 +228,21 @@ func correlate(parsed []junit.Result, statuses map[int64]catalog.Status) []execu
 		case junit.RefMalformed:
 			nr.Correlation = execution.CorrelationMalformed
 		default:
-			switch statuses[r.Ref.ID] {
-			case catalog.StatusActive:
-				id := r.Ref.ID
+			entry, exists := entries[r.Ref.ID]
+			switch {
+			case !ownProject(r.Ref, key):
+				nr.Correlation = execution.CorrelationWrongProject
+			case !exists:
+				nr.Correlation = execution.CorrelationUnknown
+			case entry.Status == catalog.StatusActive:
+				id := entry.ID
 				nr.TestCaseID = &id
 				nr.Correlation = execution.CorrelationValid
-			case catalog.StatusDeprecated:
-				// Kept linked for history; excluded from summaries as a diagnostic.
-				id := r.Ref.ID
+			default:
+				// Deprecated: kept linked for history; excluded from summaries as a diagnostic.
+				id := entry.ID
 				nr.TestCaseID = &id
 				nr.Correlation = execution.CorrelationDeprecated
-			default:
-				nr.Correlation = execution.CorrelationUnknown
 			}
 		}
 		out[i] = nr
@@ -242,11 +257,13 @@ func diagnosticMessage(d execution.Diagnostic) string {
 	}
 	switch d.Correlation {
 	case execution.CorrelationMissing:
-		return `no TC-ID declared: add <property name="tc-id" value="<id>"/> or TC-<id> in the testcase name`
+		return `no TC-ID declared: add <property name="tc-id" value="<KEY>-<n>"/> or <KEY>-<n> in the testcase name`
 	case execution.CorrelationMalformed:
-		return fmt.Sprintf("TC-ID reference %q is malformed: expected a single positive integer id", ref)
+		return fmt.Sprintf("TC-ID reference %q is malformed: expected a single <KEY>-<n> or positive integer", ref)
 	case execution.CorrelationUnknown:
 		return fmt.Sprintf("TC-ID reference %q does not exist; test cases are never created automatically", ref)
+	case execution.CorrelationWrongProject:
+		return fmt.Sprintf("TC-ID reference %q belongs to another project than the run's; it is not correlated", ref)
 	default:
 		return fmt.Sprintf("TC-ID reference %q points to a deprecated test case", ref)
 	}

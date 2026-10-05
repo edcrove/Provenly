@@ -88,7 +88,7 @@ type runRow struct {
 
 func toRun(r runRow) execution.TestRun {
 	return execution.TestRun{
-		ID: r.ID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
+		ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.CommitSha,
 		Status: execution.RunStatus(r.Status), ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount,
 		CreatedAt: r.CreatedAt.Time, StartedAt: timePtr(r.StartedAt), CompletedAt: timePtr(r.CompletedAt),
@@ -108,7 +108,7 @@ func toResult(r executiondb.TestResult) execution.TestResult {
 // InsertTestRun implements execution.Repository.
 func (s *Store) InsertTestRun(ctx context.Context, p execution.InsertRunParams) (int64, bool, error) {
 	id, err := s.q.InsertTestRun(ctx, executiondb.InsertTestRunParams{
-		ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID, RunAttempt: p.RunAttempt,
+		ProjectID: p.ProjectID, ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID, RunAttempt: p.RunAttempt,
 		Pipeline: p.Pipeline, Branch: p.Branch, CommitSha: p.Commit, Status: string(p.Status),
 		StartedAt: timestamptz(p.StartedAt), CompletedAt: timestamptz(&p.CompletedAt), ReportSha256: p.ReportSHA256,
 	})
@@ -122,8 +122,8 @@ func (s *Store) InsertTestRun(ctx context.Context, p execution.InsertRunParams) 
 }
 
 // GetTestRunIDByExternalID implements execution.Repository.
-func (s *Store) GetTestRunIDByExternalID(ctx context.Context, externalRunID string) (int64, error) {
-	id, err := s.q.GetTestRunIDByExternalID(ctx, externalRunID)
+func (s *Store) GetTestRunIDByExternalID(ctx context.Context, projectID int64, externalRunID string) (int64, error) {
+	id, err := s.q.GetTestRunIDByExternalID(ctx, executiondb.GetTestRunIDByExternalIDParams{ProjectID: projectID, ExternalRunID: externalRunID})
 	return id, notFound(err)
 }
 
@@ -192,7 +192,7 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 	}
 	return toRun(runRow{
 		TestRun: executiondb.TestRun{
-			ID: r.ID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
+			ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 			RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
 			CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, ReportSha256: r.ReportSha256,
 		},
@@ -201,8 +201,8 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 }
 
 // ListTestRuns implements execution.Repository.
-func (s *Store) ListTestRuns(ctx context.Context, limit, offset int32) ([]execution.TestRun, error) {
-	rows, err := s.q.ListTestRuns(ctx, executiondb.ListTestRunsParams{PageLimit: limit, PageOffset: offset})
+func (s *Store) ListTestRuns(ctx context.Context, projectID *int64, limit, offset int32) ([]execution.TestRun, error) {
+	rows, err := s.q.ListTestRuns(ctx, executiondb.ListTestRunsParams{ProjectID: optInt8(projectID), PageLimit: limit, PageOffset: offset})
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func (s *Store) ListTestRuns(ctx context.Context, limit, offset int32) ([]execut
 	for i, r := range rows {
 		out[i] = toRun(runRow{
 			TestRun: executiondb.TestRun{
-				ID: r.ID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
+				ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 				RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
 				CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,
 			},
@@ -221,8 +221,15 @@ func (s *Store) ListTestRuns(ctx context.Context, limit, offset int32) ([]execut
 }
 
 // CountTestRuns implements execution.Repository.
-func (s *Store) CountTestRuns(ctx context.Context) (int64, error) {
-	return s.q.CountTestRuns(ctx)
+func (s *Store) CountTestRuns(ctx context.Context, projectID *int64) (int64, error) {
+	return s.q.CountTestRuns(ctx, optInt8(projectID))
+}
+
+func optInt8(v *int64) pgtype.Int8 {
+	if v == nil {
+		return pgtype.Int8{}
+	}
+	return pgtype.Int8{Int64: *v, Valid: true}
 }
 
 // ListRunResults implements execution.Repository.
@@ -293,7 +300,7 @@ func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, li
 			Result: toResult(r.TestResult),
 			Run: toRun(runRow{
 				TestRun: executiondb.TestRun{
-					ID: r.TestResult.TestRunID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
+					ID: r.TestResult.TestRunID, ProjectID: r.RunProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 					RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.RunStatus,
 					CreatedAt: r.RunCreatedAt, StartedAt: r.RunStartedAt, CompletedAt: r.RunCompletedAt,
 				},

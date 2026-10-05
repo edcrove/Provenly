@@ -410,12 +410,15 @@ func TestExtractRef(t *testing.T) {
 		{"TC-12\u00f1 accented letter", nil, TCRef{Kind: RefMalformed, Source: SourceName, Raw: "TC-12\u00f1"}},
 		{"TC-153-login dash ends the id", nil, TCRef{Kind: RefFound, Source: SourceName, Raw: "TC-153", ID: 153}},
 		{"TC-9 in name ignored", prop("153"), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "153", ID: 153}},
-		{"x", prop(" TC-42 "), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "TC-42", ID: 42}},
+		{"x", prop(" TC-42 "), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "TC-42", Prefix: "TC", ID: 42}},
 		{"x", []xmlProperty{{Name: "TC-ID", Value: "5"}}, TCRef{Kind: RefFound, Source: SourceProperty, Raw: "5", ID: 5}},
 		{"x", prop("5", "5"), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "5", ID: 5}},
 		{"x", prop("5", "6"), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "5,6"}},
 		{"x", prop("0153"), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "0153", ID: 153}},
-		{"x", prop("153", "TC-0153"), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "153,TC-0153", ID: 153}},
+		{"x", prop("153", "TC-0153"), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "153,TC-0153", Prefix: "TC", ID: 153}},
+		{"x", prop("chk-7", "7"), TCRef{Kind: RefFound, Source: SourceProperty, Raw: "chk-7,7", Prefix: "CHK", ID: 7}},
+		{"x", prop("CHK-7", "WEB-7"), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "CHK-7,WEB-7"}},
+		{"x", prop("T-7"), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "T-7"}},
 		{"x", prop("0"), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "0"}},
 		{"x", prop("TC-0"), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "TC-0"}},
 		{"x", prop("abc"), TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: "abc"}},
@@ -424,8 +427,11 @@ func TestExtractRef(t *testing.T) {
 		{"TC-3", []xmlProperty{{Name: "browser", Value: "chrome"}}, TCRef{Kind: RefFound, Source: SourceName, Raw: "TC-3", ID: 3}},
 	}
 	for _, c := range cases {
-		assert.Equal(t, c.want, extractRef(c.name, c.props), "%s %v", c.name, c.props)
+		assert.Equal(t, c.want, extractRef(c.name, c.props, defaultNameRef), "%s %v", c.name, c.props)
 	}
+	chk := nameRefFor("CHK")
+	assert.Equal(t, TCRef{Kind: RefFound, Source: SourceName, Raw: "CHK-12", ID: 12}, extractRef("checkout CHK-12", nil, chk))
+	assert.Equal(t, TCRef{Kind: RefMissing, Source: SourceNone}, extractRef("login TC-12", nil, chk), "the name fallback only reads the run's key")
 }
 
 // FuzzParse: arbitrary input never panics; a parsed report only holds known
@@ -459,4 +465,26 @@ func FuzzParse(f *testing.F) {
 			}
 		}
 	})
+}
+
+// The name fallback reads the run's project key only; properties may carry any key.
+func TestParseWithProjectKey(t *testing.T) {
+	doc := `<testsuite name="s">
+<testcase name="checkout CHK-12"/>
+<testcase name="login TC-3"/>
+<testcase name="x"><properties><property name="tc-id" value="WEB-4"/></properties></testcase>
+</testsuite>`
+	rep, err := ParseWith(strings.NewReader(doc), Options{ProjectKey: "CHK"})
+	require.NoError(t, err)
+	require.Len(t, rep.Results, 3)
+	assert.Equal(t, TCRef{Kind: RefFound, Source: SourceName, Raw: "CHK-12", ID: 12}, rep.Results[0].Ref)
+	assert.Equal(t, RefMissing, rep.Results[1].Ref.Kind)
+	assert.Equal(t, TCRef{Kind: RefFound, Source: SourceProperty, Raw: "WEB-4", Prefix: "WEB", ID: 4}, rep.Results[2].Ref)
+
+	for _, key := range []string{"", DefaultProjectKey} {
+		rep, err = ParseWith(strings.NewReader(doc), Options{ProjectKey: key})
+		require.NoError(t, err)
+		assert.Equal(t, RefMissing, rep.Results[0].Ref.Kind, key)
+		assert.Equal(t, int64(3), rep.Results[1].Ref.ID, key)
+	}
 }

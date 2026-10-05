@@ -9,7 +9,7 @@ import { CorrelationBadge, StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatDuration, tcKey } from '@/lib/format'
+import { formatDuration } from '@/lib/format'
 import { correlationExplanation, correlations, pickEnum, positiveInt, resultStatuses } from '@/lib/status'
 
 /** Individual results of a run as ingested, filterable by status and TC-ID correlation. */
@@ -96,7 +96,7 @@ export function RunResults({ testRunId }: { testRunId: number }) {
                         >
                           {r.testCaseId ? (
                             <Link to={`/test-cases/${r.testCaseId}`} className="font-mono underline">
-                              {tcKey(r.testCaseId)}
+                              {r.testCaseKey ?? `#${r.testCaseId}`}
                             </Link>
                           ) : null}
                           {r.correlation !== 'valid' ? (

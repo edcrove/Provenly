@@ -32,13 +32,13 @@ func setup(t *testing.T) (*Service, *fakeRepo, context.Context) {
 }
 
 func TestFormatKey(t *testing.T) {
-	assert.Equal(t, "TC-153", FormatKey(153))
-	assert.Equal(t, "TC-7", TestCase{ID: 7}.Key())
+	assert.Equal(t, "TC-153", FormatKey("TC", 153))
+	assert.Equal(t, "CHK-7", TestCase{ID: 40, ProjectKey: "CHK", Number: 7}.Key())
 }
 
 func TestCreateAssignsIDAndTrims(t *testing.T) {
 	svc, _, ctx := setup(t)
-	tc, err := svc.Create(ctx, CreateInput{Title: "  Login  ", ExpectedResult: "ok", Automated: true})
+	tc, err := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "  Login  ", ExpectedResult: "ok", Automated: true})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), tc.ID)
 	assert.Equal(t, "Login", tc.Title)
@@ -67,10 +67,10 @@ func TestCreateValidation(t *testing.T) {
 // the API rejects it before the database CHECK would (found validating Test Steps Management).
 func TestUnicodeWhitespaceIsBlank(t *testing.T) {
 	svc, _, ctx := setup(t)
-	tc, err := svc.Create(ctx, CreateInput{Title: "ok"})
+	tc, err := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "ok"})
 	require.NoError(t, err)
 	for _, ws := range []string{"\t\n", "\u00a0", "\u3000", "\u2028", "\u2003\u2009", "\u0085"} {
-		_, err := svc.Create(ctx, CreateInput{Title: ws})
+		_, err := svc.Create(ctx, CreateInput{ProjectID: 1, Title: ws})
 		assert.Equal(t, apperr.KindValidation, kindOf(t, err), "title %q", ws)
 		_, err = svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: ws})
 		assert.Equal(t, apperr.KindValidation, kindOf(t, err), "action %q", ws)
@@ -80,13 +80,13 @@ func TestUnicodeWhitespaceIsBlank(t *testing.T) {
 func TestCreateRepoError(t *testing.T) {
 	svc, repo, ctx := setup(t)
 	repo.errs["CreateTestCase"] = errBoom
-	_, err := svc.Create(ctx, CreateInput{Title: "a"})
+	_, err := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
 	assert.ErrorIs(t, err, errBoom)
 }
 
 func TestGetAndEnsureExists(t *testing.T) {
 	svc, _, ctx := setup(t)
-	created, _ := svc.Create(ctx, CreateInput{Title: "a"})
+	created, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
 	got, err := svc.Get(ctx, created.ID)
 	require.NoError(t, err)
 	assert.Equal(t, created, got)
@@ -94,36 +94,36 @@ func TestGetAndEnsureExists(t *testing.T) {
 
 	_, err = svc.Get(ctx, 99)
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
-	assert.Contains(t, err.Error(), "TC-99")
+	assert.Contains(t, err.Error(), "test case 99 not found")
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, svc.EnsureExists(ctx, 99)))
 }
 
 func TestList(t *testing.T) {
 	svc, repo, ctx := setup(t)
 	for _, title := range []string{"a", "b", "c"} {
-		_, _ = svc.Create(ctx, CreateInput{Title: title})
+		_, _ = svc.Create(ctx, CreateInput{ProjectID: 1, Title: title})
 	}
 	_, _ = svc.Deprecate(ctx, 2)
-	res, err := svc.List(ctx, nil, pagination.Page{Number: 1, Size: 2})
+	res, err := svc.List(ctx, ListFilter{}, pagination.Page{Number: 1, Size: 2})
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), res.Total)
 	assert.Equal(t, []int64{3, 2}, []int64{res.Items[0].ID, res.Items[1].ID})
 
-	res, err = svc.List(ctx, ptr(StatusDeprecated), pagination.Default())
+	res, err = svc.List(ctx, ListFilter{Status: ptr(StatusDeprecated)}, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), res.Total)
 
 	repo.errs["CountTestCases"] = errBoom
-	_, err = svc.List(ctx, nil, pagination.Default())
+	_, err = svc.List(ctx, ListFilter{}, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 	repo.errs["ListTestCases"] = errBoom
-	_, err = svc.List(ctx, nil, pagination.Default())
+	_, err = svc.List(ctx, ListFilter{}, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 }
 
 func TestUpdateKeepsIdentity(t *testing.T) {
 	svc, _, ctx := setup(t)
-	tc, _ := svc.Create(ctx, CreateInput{Title: "old"})
+	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "old"})
 	up, err := svc.Update(ctx, tc.ID, UpdateInput{Title: ptr(" new "), Description: ptr("d"), ExpectedResult: ptr("e"), Automated: ptr(true)})
 	require.NoError(t, err)
 	assert.Equal(t, tc.ID, up.ID)
@@ -156,7 +156,7 @@ func TestUpdateValidation(t *testing.T) {
 
 func TestDeprecate(t *testing.T) {
 	svc, _, ctx := setup(t)
-	tc, _ := svc.Create(ctx, CreateInput{Title: "a", Automated: true})
+	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a", Automated: true})
 	dep, err := svc.Deprecate(ctx, tc.ID)
 	require.NoError(t, err)
 	assert.Equal(t, StatusDeprecated, dep.Status)
@@ -166,13 +166,13 @@ func TestDeprecate(t *testing.T) {
 
 func TestReactivate(t *testing.T) {
 	svc, _, ctx := setup(t)
-	tc, _ := svc.Create(ctx, CreateInput{Title: "a", Automated: true})
+	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a", Automated: true})
 	_, _ = svc.Deprecate(ctx, tc.ID)
 	back, err := svc.Reactivate(ctx, tc.ID)
 	require.NoError(t, err)
 	assert.Equal(t, tc.ID, back.ID, "same TC-ID")
 	assert.Equal(t, StatusActive, back.Status)
-	view, _ := svc.IngestionView(ctx, nil)
+	view, _ := svc.IngestionView(ctx, 1, nil)
 	assert.Equal(t, []int64{tc.ID}, view.Expected, "future runs include it again")
 	_, err = svc.Reactivate(ctx, 99)
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
@@ -180,24 +180,24 @@ func TestReactivate(t *testing.T) {
 
 func TestExpectedUniverseAndStatuses(t *testing.T) {
 	svc, _, ctx := setup(t)
-	_, _ = svc.Create(ctx, CreateInput{Title: "auto", Automated: true})
-	_, _ = svc.Create(ctx, CreateInput{Title: "manual"})
-	_, _ = svc.Create(ctx, CreateInput{Title: "auto-deprecated", Automated: true})
+	_, _ = svc.Create(ctx, CreateInput{ProjectID: 1, Title: "auto", Automated: true})
+	_, _ = svc.Create(ctx, CreateInput{ProjectID: 1, Title: "manual"})
+	_, _ = svc.Create(ctx, CreateInput{ProjectID: 1, Title: "auto-deprecated", Automated: true})
 	_, _ = svc.Deprecate(ctx, 3)
 
-	view, err := svc.IngestionView(ctx, []int64{1, 3, 42})
+	view, err := svc.IngestionView(ctx, 1, []int64{1, 3, 42})
 	require.NoError(t, err)
 	assert.Equal(t, []int64{1}, view.Expected)
-	assert.Equal(t, map[int64]Status{1: StatusActive, 3: StatusDeprecated}, view.Statuses)
+	assert.Equal(t, map[int64]IngestionEntry{1: {ID: 1, Status: StatusActive}, 3: {ID: 3, Status: StatusDeprecated}}, view.Entries)
 
-	view, err = svc.IngestionView(ctx, nil)
+	view, err = svc.IngestionView(ctx, 1, nil)
 	require.NoError(t, err)
-	assert.Empty(t, view.Statuses)
+	assert.Empty(t, view.Entries)
 }
 
 func TestStepsLifecycle(t *testing.T) {
 	svc, _, ctx := setup(t)
-	tc, _ := svc.Create(ctx, CreateInput{Title: "a"})
+	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
 	s1, err := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "open", ExpectedResult: "page"})
 	require.NoError(t, err)
 	s2, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "click"})
@@ -247,7 +247,7 @@ func positions(st []TestStep) []int32 {
 
 func TestStepValidationAndNotFound(t *testing.T) {
 	svc, _, ctx := setup(t)
-	tc, _ := svc.Create(ctx, CreateInput{Title: "a"})
+	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
 	for _, in := range []CreateStepInput{
 		{Action: " "},
 		{Action: strings.Repeat("a", 2001)},
@@ -287,7 +287,7 @@ func TestStepValidationAndNotFound(t *testing.T) {
 
 func TestStepLimit(t *testing.T) {
 	svc, _, ctx := setup(t)
-	tc, _ := svc.Create(ctx, CreateInput{Title: "a"})
+	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
 	for i := 0; i < MaxSteps; i++ {
 		_, err := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "s"})
 		require.NoError(t, err)
@@ -328,7 +328,7 @@ func TestStepRepositoryErrors(t *testing.T) {
 	}
 	for _, c := range cases {
 		svc, repo, ctx := setup(t)
-		tc, _ := svc.Create(ctx, CreateInput{Title: "a"})
+		tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
 		st, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "s"})
 		repo.errs[c.method] = errBoom
 		assert.ErrorIs(t, c.op(svc, ctx, tc.ID, st.ID), errBoom, c.method)
@@ -337,7 +337,7 @@ func TestStepRepositoryErrors(t *testing.T) {
 
 func TestReorderFinalListError(t *testing.T) {
 	svc, repo, ctx := setup(t)
-	tc, _ := svc.Create(ctx, CreateInput{Title: "a"})
+	tc, _ := svc.Create(ctx, CreateInput{ProjectID: 1, Title: "a"})
 	st, _ := svc.CreateStep(ctx, tc.ID, CreateStepInput{Action: "s"})
 	failing := &failSecondListRepo{fakeRepo: repo}
 	svc = NewService(failing)
@@ -369,7 +369,7 @@ func FuzzCreateText(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, title, description string) {
 		svc, _, ctx := setup(t)
-		tc, err := svc.Create(ctx, CreateInput{Title: title, Description: description})
+		tc, err := svc.Create(ctx, CreateInput{ProjectID: 1, Title: title, Description: description})
 		if err != nil {
 			require.Equal(t, apperr.KindValidation, kindOf(t, err))
 			return
@@ -378,4 +378,110 @@ func FuzzCreateText(f *testing.F) {
 			require.True(t, utf8.ValidString(s) && !strings.ContainsRune(s, 0), "%q", s)
 		}
 	})
+}
+
+func TestProjectsLifecycle(t *testing.T) {
+	svc, repo, ctx := setup(t)
+	p, err := svc.CreateProject(ctx, CreateProjectInput{Key: " chk ", Name: "  Checkout ", Description: "web shop"})
+	require.NoError(t, err)
+	assert.Equal(t, "CHK", p.Key, "keys are upper-cased")
+	assert.Equal(t, "Checkout", p.Name)
+
+	_, err = svc.CreateProject(ctx, CreateProjectInput{Key: "CHK", Name: "again"})
+	assert.Equal(t, apperr.KindConflict, kindOf(t, err))
+
+	got, err := svc.ProjectByKey(ctx, "CHK")
+	require.NoError(t, err)
+	assert.Equal(t, p.ID, got.ID)
+	id, err := svc.ProjectIDByKey(ctx, "CHK")
+	require.NoError(t, err)
+	assert.Equal(t, p.ID, id)
+	_, err = svc.ProjectByKey(ctx, "NOPE")
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
+	byID, err := svc.ProjectByID(ctx, p.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "CHK", byID.Key)
+	_, err = svc.ProjectByID(ctx, 99)
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
+
+	res, err := svc.ListProjects(ctx, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), res.Total)
+	assert.Equal(t, []string{"CHK", "TC"}, []string{res.Items[0].Key, res.Items[1].Key})
+
+	up, err := svc.UpdateProject(ctx, "CHK", UpdateProjectInput{Name: ptr(" Shop "), Description: ptr("")})
+	require.NoError(t, err)
+	assert.Equal(t, "Shop", up.Name)
+	assert.Equal(t, "CHK", up.Key, "the key never changes")
+	_, err = svc.UpdateProject(ctx, "NOPE", UpdateProjectInput{Name: ptr("x")})
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
+
+	for _, method := range []string{"CreateProject", "GetProjectByKey", "GetProject", "UpdateProject"} {
+		repo.errs[method] = errBoom
+	}
+	_, err = svc.CreateProject(ctx, CreateProjectInput{Key: "WEB", Name: "w"})
+	assert.ErrorIs(t, err, errBoom)
+	_, err = svc.ProjectByKey(ctx, "CHK")
+	assert.ErrorIs(t, err, errBoom)
+	_, err = svc.ProjectByID(ctx, 1)
+	assert.ErrorIs(t, err, errBoom)
+	_, err = svc.UpdateProject(ctx, "CHK", UpdateProjectInput{Name: ptr("x")})
+	assert.ErrorIs(t, err, errBoom)
+	repo.errs["CountProjects"] = errBoom
+	_, err = svc.ListProjects(ctx, pagination.Default())
+	assert.ErrorIs(t, err, errBoom)
+	repo.errs["ListProjects"] = errBoom
+	_, err = svc.ListProjects(ctx, pagination.Default())
+	assert.ErrorIs(t, err, errBoom)
+}
+
+func TestProjectValidation(t *testing.T) {
+	svc, _, ctx := setup(t)
+	for _, in := range []CreateProjectInput{
+		{Key: "C", Name: "n"},
+		{Key: "1AB", Name: "n"},
+		{Key: "TOOLONGKEY1", Name: "n"},
+		{Key: "C-K", Name: "n"},
+		{Key: "CK", Name: "  "},
+		{Key: "CK", Name: strings.Repeat("n", 101)},
+		{Key: "CK", Name: "n", Description: strings.Repeat("d", 2001)},
+		{Key: "CK", Name: "a\x00"},
+	} {
+		_, err := svc.CreateProject(ctx, in)
+		assert.Equal(t, apperr.KindValidation, kindOf(t, err), "%+v", in)
+	}
+	for _, in := range []UpdateProjectInput{{}, {Name: ptr(" ")}, {Description: ptr("\x00")}} {
+		_, err := svc.UpdateProject(ctx, "TC", in)
+		assert.Equal(t, apperr.KindValidation, kindOf(t, err), "%+v", in)
+	}
+}
+
+// Numbers are assigned per project; the key is <PROJECT>-<number>.
+func TestTestCaseNumbersPerProject(t *testing.T) {
+	svc, _, ctx := setup(t)
+	chk, err := svc.CreateProject(ctx, CreateProjectInput{Key: "CHK", Name: "Checkout"})
+	require.NoError(t, err)
+	a, _ := svc.Create(ctx, CreateInput{Title: "a", Automated: true})
+	b, _ := svc.Create(ctx, CreateInput{ProjectID: chk.ID, Title: "b", Automated: true})
+	c, _ := svc.Create(ctx, CreateInput{ProjectID: chk.ID, Title: "c"})
+	assert.Equal(t, []string{"TC-1", "CHK-1", "CHK-2"}, []string{a.Key(), b.Key(), c.Key()}, "no project means the default one")
+
+	res, err := svc.List(ctx, ListFilter{ProjectID: &chk.ID}, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), res.Total)
+
+	view, err := svc.IngestionView(ctx, chk.ID, []int64{1, 2})
+	require.NoError(t, err)
+	assert.Equal(t, []int64{b.ID}, view.Expected, "only the project's expected universe")
+	assert.Equal(t, IngestionEntry{ID: c.ID, Status: StatusActive}, view.Entries[2])
+
+	_, err = svc.Create(ctx, CreateInput{ProjectID: 99, Title: "x"})
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
+
+	keys, err := svc.Keys(ctx, []int64{a.ID, c.ID, 999})
+	require.NoError(t, err)
+	assert.Equal(t, map[int64]string{a.ID: "TC-1", c.ID: "CHK-2"}, keys, "unknown ids have no key")
+	keys, err = svc.Keys(ctx, nil)
+	require.NoError(t, err)
+	assert.Empty(t, keys)
 }

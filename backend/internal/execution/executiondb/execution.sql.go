@@ -55,17 +55,18 @@ func (q *Queries) CountRunResults(ctx context.Context, arg CountRunResultsParams
 
 const countTestRuns = `-- name: CountTestRuns :one
 SELECT count(*) FROM test_runs
+WHERE $1::bigint IS NULL OR project_id = $1::bigint
 `
 
-func (q *Queries) CountTestRuns(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countTestRuns)
+func (q *Queries) CountTestRuns(ctx context.Context, projectID pgtype.Int8) (int64, error) {
+	row := q.db.QueryRow(ctx, countTestRuns, projectID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const getTestRun = `-- name: GetTestRun :one
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count
 FROM test_runs r WHERE r.id = $1
@@ -85,6 +86,7 @@ type GetTestRunRow struct {
 	StartedAt     pgtype.Timestamptz
 	CompletedAt   pgtype.Timestamptz
 	ReportSha256  string
+	ProjectID     int64
 	ExpectedCount int32
 	ResultCount   int32
 }
@@ -106,6 +108,7 @@ func (q *Queries) GetTestRun(ctx context.Context, id int64) (GetTestRunRow, erro
 		&i.StartedAt,
 		&i.CompletedAt,
 		&i.ReportSha256,
+		&i.ProjectID,
 		&i.ExpectedCount,
 		&i.ResultCount,
 	)
@@ -113,11 +116,16 @@ func (q *Queries) GetTestRun(ctx context.Context, id int64) (GetTestRunRow, erro
 }
 
 const getTestRunIDByExternalID = `-- name: GetTestRunIDByExternalID :one
-SELECT id FROM test_runs WHERE external_run_id = $1
+SELECT id FROM test_runs WHERE project_id = $1 AND external_run_id = $2
 `
 
-func (q *Queries) GetTestRunIDByExternalID(ctx context.Context, externalRunID string) (int64, error) {
-	row := q.db.QueryRow(ctx, getTestRunIDByExternalID, externalRunID)
+type GetTestRunIDByExternalIDParams struct {
+	ProjectID     int64
+	ExternalRunID string
+}
+
+func (q *Queries) GetTestRunIDByExternalID(ctx context.Context, arg GetTestRunIDByExternalIDParams) (int64, error) {
+	row := q.db.QueryRow(ctx, getTestRunIDByExternalID, arg.ProjectID, arg.ExternalRunID)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
@@ -162,13 +170,14 @@ type InsertTestResultsParams struct {
 }
 
 const insertTestRun = `-- name: InsertTestRun :one
-INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-ON CONFLICT (external_run_id) DO NOTHING
+INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+ON CONFLICT (project_id, external_run_id) DO NOTHING
 RETURNING id
 `
 
 type InsertTestRunParams struct {
+	ProjectID     int64
 	ExternalRunID string
 	Provider      string
 	ProviderRunID string
@@ -184,6 +193,7 @@ type InsertTestRunParams struct {
 
 func (q *Queries) InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error) {
 	row := q.db.QueryRow(ctx, insertTestRun,
+		arg.ProjectID,
 		arg.ExternalRunID,
 		arg.Provider,
 		arg.ProviderRunID,
@@ -292,7 +302,7 @@ WITH page AS (
     WHERE r.id IN (SELECT q.test_run_id FROM test_results q WHERE q.id IN (SELECT id FROM page))
 )
 SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at,
-    r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
+    r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
     c.expected_count AS run_expected_count, c.result_count AS run_result_count
 FROM test_results t
@@ -310,6 +320,7 @@ type ListResultsForTestCaseParams struct {
 
 type ListResultsForTestCaseRow struct {
 	TestResult       TestResult
+	RunProjectID     int64
 	ExternalRunID    string
 	Provider         string
 	ProviderRunID    string
@@ -350,6 +361,7 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 			&i.TestResult.ErrorMessage,
 			&i.TestResult.ErrorDetails,
 			&i.TestResult.CreatedAt,
+			&i.RunProjectID,
 			&i.ExternalRunID,
 			&i.Provider,
 			&i.ProviderRunID,
@@ -468,15 +480,20 @@ func (q *Queries) ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]
 }
 
 const listTestRuns = `-- name: ListTestRuns :many
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count
 FROM test_runs r
-WHERE r.id IN (SELECT p.id FROM test_runs p ORDER BY p.id DESC LIMIT $2 OFFSET $1)
+WHERE r.id IN (
+    SELECT p.id FROM test_runs p
+    WHERE $1::bigint IS NULL OR p.project_id = $1::bigint
+    ORDER BY p.id DESC LIMIT $3 OFFSET $2
+)
 ORDER BY r.id DESC
 `
 
 type ListTestRunsParams struct {
+	ProjectID  pgtype.Int8
 	PageOffset int32
 	PageLimit  int32
 }
@@ -495,6 +512,7 @@ type ListTestRunsRow struct {
 	StartedAt     pgtype.Timestamptz
 	CompletedAt   pgtype.Timestamptz
 	ReportSha256  string
+	ProjectID     int64
 	ExpectedCount int32
 	ResultCount   int32
 }
@@ -502,7 +520,7 @@ type ListTestRunsRow struct {
 // The page is chosen first: the per-run counts are only computed for its rows,
 // not for every row skipped by OFFSET.
 func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]ListTestRunsRow, error) {
-	rows, err := q.db.Query(ctx, listTestRuns, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listTestRuns, arg.ProjectID, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -524,6 +542,7 @@ func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]L
 			&i.StartedAt,
 			&i.CompletedAt,
 			&i.ReportSha256,
+			&i.ProjectID,
 			&i.ExpectedCount,
 			&i.ResultCount,
 		); err != nil {

@@ -14,6 +14,7 @@ export const invalidCorrelations: Exclude<Correlation, 'valid'>[] = [
   'malformed',
   'unknown',
   'deprecated',
+  'wrong_project',
 ]
 export const correlations: Correlation[] = ['valid', ...invalidCorrelations]
 
@@ -35,10 +36,20 @@ export function correlationVariant(c: Correlation): BadgeVariant {
 
 const explanations: Record<Correlation, string> = {
   valid: 'Linked to an active test case.',
-  missing: 'The test declares no TC-ID (tc-id property or TC-<id> in its name).',
-  malformed: 'The declared TC-ID reference is not a single positive integer id.',
-  unknown: 'The declared TC-ID does not exist. Test cases are never created automatically.',
+  missing: "The test declares no TC-ID (tc-id property, or the run's project key, e.g. TC-12, in its name).",
+  malformed: 'The declared TC-ID reference is not a single <KEY>-<n> or positive number.',
+  unknown:
+    "The declared TC-ID does not exist in the run's project. Test cases are never created automatically.",
   deprecated: 'The declared TC-ID belongs to a deprecated test case.',
+  wrong_project:
+    "The declared TC-ID has another project's key; a run only links test cases of its own project.",
+}
+
+type DiagnosticCounts = components['schemas']['DiagnosticCounts']
+
+/** Count of one invalid correlation in a run summary (the wire field of wrong_project is wrongProject). */
+export function diagnosticCount(d: DiagnosticCounts, c: Exclude<Correlation, 'valid'>): number {
+  return c === 'wrong_project' ? d.wrongProject : d[c]
 }
 
 export function correlationExplanation(c: Correlation): string {

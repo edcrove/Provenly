@@ -11,11 +11,18 @@ import { previousPage } from '@/lib/paging'
 import { unwrap } from '@/lib/problem'
 import type { Correlation, ResultStatus } from '@/lib/status'
 
-import { api, type CreateTestCaseRequest, type UpdateTestCaseRequest } from './client'
+import {
+  api,
+  type CreateProjectRequest,
+  type CreateTestCaseRequest,
+  type UpdateProjectRequest,
+  type UpdateTestCaseRequest,
+} from './client'
 
 const MAX_PAGE = 100
 
 export const keys = {
+  projects: ['projects'] as const,
   testCases: ['test-cases'] as const,
   testCase: (id: number) => ['test-cases', id] as const,
   steps: (id: number) => ['test-cases', id, 'steps'] as const,
@@ -48,11 +55,40 @@ function useExclusiveMutation<TData, TVariables = void>(
   return { ...mutation, mutate }
 }
 
-export function useTestCases(page: number, status?: 'active' | 'deprecated') {
+export function useProjects(page = 1, pageSize = MAX_PAGE) {
   return useQuery({
-    queryKey: [...keys.testCases, 'list', status, page],
-    placeholderData: (prev, q) => previousPage([...keys.testCases, 'list', status, page], prev, q?.queryKey),
-    queryFn: async () => unwrap(await api.GET('/api/v1/test-cases', { params: { query: { page, status } } })),
+    queryKey: [...keys.projects, 'list', pageSize, page],
+    placeholderData: (prev, q) => previousPage([...keys.projects, 'list', pageSize, page], prev, q?.queryKey),
+    queryFn: async () => unwrap(await api.GET('/api/v1/projects', { params: { query: { page, pageSize } } })),
+  })
+}
+
+export function useCreateProject() {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async (body: CreateProjectRequest) => unwrap(await api.POST('/api/v1/projects', { body })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
+  })
+}
+
+export function useUpdateProject(key: string) {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async (body: UpdateProjectRequest) =>
+      unwrap(
+        await api.PATCH('/api/v1/projects/{projectKey}', { params: { path: { projectKey: key } }, body }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
+  })
+}
+
+export function useTestCases(page: number, status?: 'active' | 'deprecated', project?: string) {
+  return useQuery({
+    queryKey: [...keys.testCases, 'list', project, status, page],
+    placeholderData: (prev, q) =>
+      previousPage([...keys.testCases, 'list', project, status, page], prev, q?.queryKey),
+    queryFn: async () =>
+      unwrap(await api.GET('/api/v1/test-cases', { params: { query: { page, status, project } } })),
   })
 }
 
@@ -176,11 +212,11 @@ export function useTestCaseHistory(id: number, page: number) {
   })
 }
 
-export function useTestRuns(page: number) {
+export function useTestRuns(page: number, project?: string) {
   return useQuery({
-    queryKey: [...keys.testRuns, 'list', page],
-    placeholderData: (prev, q) => previousPage([...keys.testRuns, 'list', page], prev, q?.queryKey),
-    queryFn: async () => unwrap(await api.GET('/api/v1/test-runs', { params: { query: { page } } })),
+    queryKey: [...keys.testRuns, 'list', project, page],
+    placeholderData: (prev, q) => previousPage([...keys.testRuns, 'list', project, page], prev, q?.queryKey),
+    queryFn: async () => unwrap(await api.GET('/api/v1/test-runs', { params: { query: { page, project } } })),
   })
 }
 

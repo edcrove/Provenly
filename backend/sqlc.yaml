@@ -3,7 +3,9 @@
 version: "2"
 sql:
   - engine: postgresql
-    schema: migrations/00001_catalog.sql
+    schema:
+      - migrations/00001_catalog.sql
+      - migrations/00012_projects.sql
     queries: queries/catalog.sql
     gen:
       go:
@@ -19,6 +21,8 @@ sql:
       - migrations/00004_parse_errors_and_nullable_duration.sql
       - migrations/00005_parse_error_severity.sql
       - migrations/00006_run_report_digest.sql
+      - migrations/00007_run_execution_status.sql
+      - migrations/00013_run_projects.sql
     queries: queries/execution.sql
     gen:
       go:

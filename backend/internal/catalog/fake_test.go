@@ -8,19 +8,25 @@ import (
 
 // fakeRepo is an in-memory Repository with per-method error injection.
 type fakeRepo struct {
-	cases   map[int64]TestCase
-	steps   map[int64][]TestStep
-	nextID  int64
-	nextSID int64
-	errs    map[string]error
-	now     time.Time
+	projects map[int64]Project
+	nextNum  map[int64]int64
+	nextPID  int64
+	cases    map[int64]TestCase
+	steps    map[int64][]TestStep
+	nextID   int64
+	nextSID  int64
+	errs     map[string]error
+	now      time.Time
 }
 
 func newFakeRepo() *fakeRepo {
-	return &fakeRepo{
+	f := &fakeRepo{
+		projects: map[int64]Project{}, nextNum: map[int64]int64{},
 		cases: map[int64]TestCase{}, steps: map[int64][]TestStep{}, errs: map[string]error{},
 		now: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
 	}
+	_, _ = f.CreateProject(context.Background(), CreateProjectInput{Key: DefaultProjectKey, Name: "Default"})
+	return f
 }
 
 func (f *fakeRepo) fail(method string) error { return f.errs[method] }
@@ -29,8 +35,13 @@ func (f *fakeRepo) CreateTestCase(_ context.Context, in CreateInput) (TestCase, 
 	if err := f.fail("CreateTestCase"); err != nil {
 		return TestCase{}, err
 	}
+	p, ok := f.projects[in.ProjectID]
+	if !ok {
+		return TestCase{}, ErrNotFound
+	}
 	f.nextID++
-	tc := TestCase{ID: f.nextID, Title: in.Title, Description: in.Description, ExpectedResult: in.ExpectedResult,
+	f.nextNum[p.ID]++
+	tc := TestCase{ID: f.nextID, ProjectID: p.ID, ProjectKey: p.Key, Number: f.nextNum[p.ID], Title: in.Title, Description: in.Description, ExpectedResult: in.ExpectedResult,
 		Automated: in.Automated, Status: StatusActive, CreatedAt: f.now, UpdatedAt: f.now}
 	f.cases[tc.ID] = tc
 	return tc, nil
@@ -57,10 +68,10 @@ func (f *fakeRepo) LockTestCase(_ context.Context, id int64) error {
 	return nil
 }
 
-func (f *fakeRepo) filtered(status *Status) []TestCase {
+func (f *fakeRepo) filtered(lf ListFilter) []TestCase {
 	var out []TestCase
 	for _, tc := range f.cases {
-		if status == nil || tc.Status == *status {
+		if (lf.Status == nil || tc.Status == *lf.Status) && (lf.ProjectID == nil || tc.ProjectID == *lf.ProjectID) {
 			out = append(out, tc)
 		}
 	}
@@ -68,11 +79,11 @@ func (f *fakeRepo) filtered(status *Status) []TestCase {
 	return out
 }
 
-func (f *fakeRepo) ListTestCases(_ context.Context, status *Status, limit, offset int32) ([]TestCase, error) {
+func (f *fakeRepo) ListTestCases(_ context.Context, lf ListFilter, limit, offset int32) ([]TestCase, error) {
 	if err := f.fail("ListTestCases"); err != nil {
 		return nil, err
 	}
-	all := f.filtered(status)
+	all := f.filtered(lf)
 	end := min(int(offset+limit), len(all))
 	if int(offset) >= len(all) {
 		return []TestCase{}, nil
@@ -80,11 +91,11 @@ func (f *fakeRepo) ListTestCases(_ context.Context, status *Status, limit, offse
 	return all[offset:end], nil
 }
 
-func (f *fakeRepo) CountTestCases(_ context.Context, status *Status) (int64, error) {
+func (f *fakeRepo) CountTestCases(_ context.Context, lf ListFilter) (int64, error) {
 	if err := f.fail("CountTestCases"); err != nil {
 		return 0, err
 	}
-	return int64(len(f.filtered(status))), nil
+	return int64(len(f.filtered(lf))), nil
 }
 
 func (f *fakeRepo) UpdateTestCase(_ context.Context, id int64, in UpdateInput) (TestCase, error) {
@@ -137,22 +148,114 @@ func (f *fakeRepo) ReactivateTestCase(_ context.Context, id int64) (TestCase, er
 	return tc, nil
 }
 
-func (f *fakeRepo) ListIngestionView(_ context.Context, ids []int64) (IngestionView, error) {
+func (f *fakeRepo) ListIngestionView(_ context.Context, projectID int64, numbers []int64) (IngestionView, error) {
 	if err := f.fail("ListIngestionView"); err != nil {
 		return IngestionView{}, err
 	}
-	view := IngestionView{Statuses: map[int64]Status{}}
-	for _, tc := range f.filtered(nil) {
+	view := IngestionView{Entries: map[int64]IngestionEntry{}}
+	for _, tc := range f.filtered(ListFilter{ProjectID: &projectID}) {
 		if tc.Status == StatusActive && tc.Automated {
 			view.Expected = append(view.Expected, tc.ID)
 		}
-	}
-	for _, id := range ids {
-		if tc, ok := f.cases[id]; ok {
-			view.Statuses[id] = tc.Status
+		for _, n := range numbers {
+			if n == tc.Number {
+				view.Entries[n] = IngestionEntry{ID: tc.ID, Status: tc.Status}
+			}
 		}
 	}
 	return view, nil
+}
+
+func (f *fakeRepo) ListTestCaseKeys(_ context.Context, ids []int64) (map[int64]string, error) {
+	if err := f.fail("ListTestCaseKeys"); err != nil {
+		return nil, err
+	}
+	keys := map[int64]string{}
+	for _, id := range ids {
+		if tc, ok := f.cases[id]; ok {
+			keys[id] = tc.Key()
+		}
+	}
+	return keys, nil
+}
+
+func (f *fakeRepo) CreateProject(_ context.Context, in CreateProjectInput) (Project, error) {
+	if err := f.fail("CreateProject"); err != nil {
+		return Project{}, err
+	}
+	for _, p := range f.projects {
+		if p.Key == in.Key {
+			return Project{}, ErrConflict
+		}
+	}
+	f.nextPID++
+	p := Project{ID: f.nextPID, Key: in.Key, Name: in.Name, Description: in.Description, CreatedAt: f.now, UpdatedAt: f.now}
+	f.projects[p.ID] = p
+	return p, nil
+}
+
+func (f *fakeRepo) GetProject(_ context.Context, id int64) (Project, error) {
+	if err := f.fail("GetProject"); err != nil {
+		return Project{}, err
+	}
+	p, ok := f.projects[id]
+	if !ok {
+		return Project{}, ErrNotFound
+	}
+	return p, nil
+}
+
+func (f *fakeRepo) GetProjectByKey(_ context.Context, key string) (Project, error) {
+	if err := f.fail("GetProjectByKey"); err != nil {
+		return Project{}, err
+	}
+	for _, p := range f.projects {
+		if p.Key == key {
+			return p, nil
+		}
+	}
+	return Project{}, ErrNotFound
+}
+
+func (f *fakeRepo) ListProjects(_ context.Context, limit, offset int32) ([]Project, error) {
+	if err := f.fail("ListProjects"); err != nil {
+		return nil, err
+	}
+	var all []Project
+	for _, p := range f.projects {
+		all = append(all, p)
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].Key < all[j].Key })
+	if int(offset) >= len(all) {
+		return []Project{}, nil
+	}
+	return all[offset:min(int(offset+limit), len(all))], nil
+}
+
+func (f *fakeRepo) CountProjects(_ context.Context) (int64, error) {
+	if err := f.fail("CountProjects"); err != nil {
+		return 0, err
+	}
+	return int64(len(f.projects)), nil
+}
+
+func (f *fakeRepo) UpdateProject(_ context.Context, key string, in UpdateProjectInput) (Project, error) {
+	if err := f.fail("UpdateProject"); err != nil {
+		return Project{}, err
+	}
+	for id, p := range f.projects {
+		if p.Key == key {
+			if in.Name != nil {
+				p.Name = *in.Name
+			}
+			if in.Description != nil {
+				p.Description = *in.Description
+			}
+			f.projects[id] = p
+			return p, nil
+		}
+	}
+	return Project{}, ErrNotFound
 }
 
 func (f *fakeRepo) sorted(tcID int64) []TestStep {

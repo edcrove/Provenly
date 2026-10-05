@@ -17,6 +17,7 @@ const (
 	CodeValidation           = "validation_error"
 	CodeInvalidJUnit         = "invalid_junit"
 	CodeNotFound             = "not_found"
+	CodeConflict             = "conflict"
 	CodeMethodNotAllowed     = "method_not_allowed"
 	CodePayloadTooLarge      = "payload_too_large"
 	CodeUnsupportedMediaType = "unsupported_media_type"
@@ -70,6 +71,9 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 		switch e.Kind {
 		case apperr.KindNotFound:
 			WriteProblem(w, http.StatusNotFound, CodeNotFound, e.Message)
+			return
+		case apperr.KindConflict:
+			WriteProblem(w, http.StatusConflict, CodeConflict, e.Message)
 			return
 		case apperr.KindInvalidDocument:
 			WriteProblem(w, http.StatusBadRequest, CodeInvalidJUnit, e.Message)

@@ -38,6 +38,7 @@ type TestRun struct {
 	StartedAt     pgtype.Timestamptz
 	CompletedAt   pgtype.Timestamptz
 	ReportSha256  string
+	ProjectID     int64
 }
 
 type TestRunExpectedCase struct {

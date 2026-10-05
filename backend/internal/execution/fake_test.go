@@ -28,23 +28,27 @@ func (f *fakeRepo) InsertTestRun(_ context.Context, p InsertRunParams) (int64, b
 	if err := f.errs["InsertTestRun"]; err != nil {
 		return 0, false, err
 	}
-	if _, ok := f.byExt[p.ExternalRunID]; ok {
+	ext := extKey(p.ProjectID, p.ExternalRunID)
+	if _, ok := f.byExt[ext]; ok {
 		return 0, false, nil
 	}
 	f.nextRun++
 	completed := p.CompletedAt
-	f.runs[f.nextRun] = TestRun{ID: f.nextRun, ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID,
+	f.runs[f.nextRun] = TestRun{ID: f.nextRun, ProjectID: p.ProjectID, ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID,
 		RunAttempt: p.RunAttempt, Pipeline: p.Pipeline, Branch: p.Branch, Commit: p.Commit, Status: p.Status,
 		StartedAt: p.StartedAt, CompletedAt: &completed, CreatedAt: completed}
-	f.byExt[p.ExternalRunID] = f.nextRun
+	f.byExt[ext] = f.nextRun
 	return f.nextRun, true, nil
 }
 
-func (f *fakeRepo) GetTestRunIDByExternalID(_ context.Context, ext string) (int64, error) {
+// extKey is the per-project uniqueness key of an externalRunId.
+func extKey(projectID int64, ext string) string { return string(rune('0'+projectID)) + "|" + ext }
+
+func (f *fakeRepo) GetTestRunIDByExternalID(_ context.Context, projectID int64, ext string) (int64, error) {
 	if err := f.errs["GetTestRunIDByExternalID"]; err != nil {
 		return 0, err
 	}
-	return f.byExt[ext], nil
+	return f.byExt[extKey(projectID, ext)], nil
 }
 
 func (f *fakeRepo) InsertExpectedCases(_ context.Context, runID int64, ids []int64) error {
@@ -106,12 +110,15 @@ func (f *fakeRepo) GetTestRun(_ context.Context, id int64) (TestRun, error) {
 	return r, nil
 }
 
-func (f *fakeRepo) ListTestRuns(ctx context.Context, limit, offset int32) ([]TestRun, error) {
+func (f *fakeRepo) ListTestRuns(ctx context.Context, projectID *int64, limit, offset int32) ([]TestRun, error) {
 	if err := f.errs["ListTestRuns"]; err != nil {
 		return nil, err
 	}
 	var out []TestRun
-	for id := range f.runs {
+	for id, run := range f.runs {
+		if projectID != nil && run.ProjectID != *projectID {
+			continue
+		}
 		r, _ := f.GetTestRun(ctx, id)
 		out = append(out, r)
 	}
@@ -122,11 +129,17 @@ func (f *fakeRepo) ListTestRuns(ctx context.Context, limit, offset int32) ([]Tes
 	return out[offset:min(len(out), int(offset+limit))], nil
 }
 
-func (f *fakeRepo) CountTestRuns(context.Context) (int64, error) {
+func (f *fakeRepo) CountTestRuns(_ context.Context, projectID *int64) (int64, error) {
 	if err := f.errs["CountTestRuns"]; err != nil {
 		return 0, err
 	}
-	return int64(len(f.runs)), nil
+	n := 0
+	for _, run := range f.runs {
+		if projectID == nil || run.ProjectID == *projectID {
+			n++
+		}
+	}
+	return int64(n), nil
 }
 
 func (f *fakeRepo) match(r TestResult, flt ResultFilter) bool {

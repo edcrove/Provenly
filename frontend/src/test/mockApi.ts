@@ -2,6 +2,7 @@ import { http, HttpResponse, type JsonBodyType } from 'msw'
 
 import type {
   ParseError,
+  Project,
   TestCase,
   TestCaseResult,
   TestResult,
@@ -10,7 +11,7 @@ import type {
   TestStep,
 } from '@/api/client'
 
-import { summary, testCase, testResult, testRun, testStep } from './fixtures'
+import { project, summary, testCase, testResult, testRun, testStep } from './fixtures'
 
 /**
  * In-memory implementation of the Provenly REST API for MSW. It is used by the
@@ -18,6 +19,7 @@ import { summary, testCase, testResult, testRun, testStep } from './fixtures'
  * validated against api/openapi.yaml by the Contract tests.
  */
 export interface MockDb {
+  projects: Project[]
   testCases: TestCase[]
   steps: TestStep[]
   runs: TestRun[]
@@ -32,6 +34,7 @@ export interface MockDb {
 export function seed(): MockDb {
   const tc = testCase()
   return {
+    projects: [project()],
     testCases: [tc, testCase({ id: 154, title: 'Logout works' })],
     steps: [
       testStep({ id: 1, position: 1 }),
@@ -82,6 +85,7 @@ const problem = (
 const statusText: Record<number, string> = {
   400: 'Bad Request',
   404: 'Not Found',
+  409: 'Conflict',
   415: 'Unsupported Media Type',
   500: 'Internal Server Error',
 }
@@ -155,17 +159,84 @@ async function readBody(request: Request): Promise<Record<string, unknown> | und
   }
 }
 
+const KEY = /^[A-Z][A-Z0-9]{1,9}$/
+
+/** Resolves ?project=<KEY> like the server: absent is every project, malformed is 400, unknown is 404. */
+function projectFilter(url: URL): Project | undefined | Response {
+  if (!url.searchParams.has('project')) return undefined
+  const key = url.searchParams.get('project') ?? ''
+  if (!KEY.test(key)) return validation('project', 'must be a project key')
+  return db.projects.find((p) => p.key === key) ?? notFound(`project ${key}`)
+}
+
 const stepsOf = (tcId: number) =>
   db.steps.filter((s) => s.testCaseId === tcId).sort((a, b) => a.position - b.position)
 
 export const handlers = [
+  http.get(
+    `${BASE}/projects`,
+    guard(({ request }) =>
+      respond(
+        pageOf(
+          new URL(request.url),
+          [...db.projects].sort((a, b) => a.key.localeCompare(b.key)),
+        ),
+      ),
+    ),
+  ),
+  http.post(
+    `${BASE}/projects`,
+    guard(
+      jsonGuard(async ({ request }) => {
+        const body = await readBody(request)
+        const key = String(body?.key ?? '')
+          .trim()
+          .toUpperCase()
+        const name = String(body?.name ?? '').trim()
+        if (!KEY.test(key)) return validation('key', 'must be a project key')
+        if (!name) return validation('name', 'must not be empty')
+        if (db.projects.some((p) => p.key === key))
+          return problem(409, 'conflict', `project ${key} already exists`)
+        const p = project({
+          id: ++db.nextId,
+          key,
+          name,
+          description: String(body?.description ?? ''),
+          createdAt: now(),
+          updatedAt: now(),
+        })
+        db.projects.push(p)
+        return respond(p, 201)
+      }),
+    ),
+  ),
+  http.patch(
+    `${BASE}/projects/:projectKey`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const p = db.projects.find((x) => x.key === params.projectKey)
+        if (!p) return notFound(`project ${String(params.projectKey)}`)
+        const body = await readBody(request)
+        if (!body || Object.keys(body).length === 0)
+          return validation('body', 'at least one field is required')
+        if (body.name !== undefined && !String(body.name).trim())
+          return validation('name', 'must not be empty')
+        Object.assign(p, body, { updatedAt: now() })
+        return respond(p)
+      }),
+    ),
+  ),
   http.get(
     `${BASE}/test-cases`,
     guard(({ request }) => {
       const url = new URL(request.url)
       const status = url.searchParams.get('status')
       if (status && status !== 'active' && status !== 'deprecated') return validation('status', 'invalid')
-      const items = db.testCases.filter((t) => !status || t.status === status).sort((a, b) => b.id - a.id)
+      const p = projectFilter(url)
+      if (p instanceof Response) return p
+      const items = db.testCases
+        .filter((t) => (!status || t.status === status) && (!p || t.projectId === p.id))
+        .sort((a, b) => b.id - a.id)
       return respond(pageOf(url, items))
     }),
   ),
@@ -177,8 +248,16 @@ export const handlers = [
         const title = typeof body?.title === 'string' ? body.title.trim() : ''
         if (!body || 'id' in body) return validation('body', 'unknown field "id"')
         if (!title) return validation('title', 'is required')
+        const key = String(body.project ?? 'TC')
+        if (!KEY.test(key)) return validation('project', 'must be a project key')
+        const p = db.projects.find((x) => x.key === key)
+        if (!p) return notFound(`project ${key}`)
+        const id = ++db.nextId
         const tc = testCase({
-          id: ++db.nextId,
+          id,
+          projectId: p.id,
+          projectKey: p.key,
+          number: Math.max(0, ...db.testCases.filter((t) => t.projectId === p.id).map((t) => t.number)) + 1,
           title,
           description: String(body.description ?? ''),
           expectedResult: String(body.expectedResult ?? ''),
@@ -327,14 +406,17 @@ export const handlers = [
   ),
   http.get(
     `${BASE}/test-runs`,
-    guard(({ request }) =>
-      respond(
+    guard(({ request }) => {
+      const url = new URL(request.url)
+      const p = projectFilter(url)
+      if (p instanceof Response) return p
+      return respond(
         pageOf(
-          new URL(request.url),
-          [...db.runs].sort((a, b) => b.id - a.id),
+          url,
+          db.runs.filter((r) => !p || r.projectId === p.id).sort((a, b) => b.id - a.id),
         ),
-      ),
-    ),
+      )
+    }),
   ),
   http.get(
     `${BASE}/test-runs/:testRunId`,

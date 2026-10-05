@@ -48,7 +48,8 @@ func TestHandlerWiring(t *testing.T) {
 
 func TestRoutePatterns(t *testing.T) {
 	patterns := RoutePatterns()
-	assert.Len(t, patterns, 20)
+	assert.Len(t, patterns, 24)
+	assert.Contains(t, patterns, "PATCH /api/v1/projects/{projectKey}")
 	assert.Contains(t, patterns, "GET /readyz")
 	assert.Contains(t, patterns, "GET /healthz")
 	assert.Contains(t, patterns, "POST /api/v1/ingestion/junit")

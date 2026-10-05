@@ -2,6 +2,9 @@ import createClient from 'openapi-fetch'
 
 import type { components, paths } from './schema'
 
+export type Project = components['schemas']['Project']
+export type CreateProjectRequest = components['schemas']['CreateProjectRequest']
+export type UpdateProjectRequest = components['schemas']['UpdateProjectRequest']
 export type TestCase = components['schemas']['TestCase']
 export type TestStep = components['schemas']['TestStep']
 export type TestRun = components['schemas']['TestRun']

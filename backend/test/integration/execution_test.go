@@ -4,6 +4,7 @@ package integration
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -189,7 +190,7 @@ func TestExecutionPersistence(t *testing.T) {
 			}
 		}
 		assert.Equal(t, 1, n, "exactly one request creates the run")
-		runs, err := s.Execution.ListRuns(ctx, pagination.Default())
+		runs, err := s.Execution.ListRuns(ctx, nil, pagination.Default())
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), runs.Total)
 		assert.Equal(t, int32(1), runs.Items[0].ResultCount)
@@ -226,7 +227,7 @@ func TestExecutionPersistence(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int32(1), old.ResultCount)
 
-		runs, err := s.Execution.ListRuns(ctx, pagination.Page{Number: 1, Size: 1})
+		runs, err := s.Execution.ListRuns(ctx, nil, pagination.Page{Number: 1, Size: 1})
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), runs.Total)
 		assert.Equal(t, second.Run.ID, runs.Items[0].ID, "newest first")
@@ -363,7 +364,7 @@ func TestExecutionPersistence(t *testing.T) {
 			start := time.Now()
 			_, err := s.Execution.History(ctx, tc.ID, pagination.Page{Number: page, Size: 20})
 			require.NoError(t, err)
-			_, err = s.Execution.ListRuns(ctx, pagination.Page{Number: page, Size: 20})
+			_, err = s.Execution.ListRuns(ctx, nil, pagination.Page{Number: page, Size: 20})
 			require.NoError(t, err)
 			return time.Since(start)
 		}
@@ -449,8 +450,8 @@ func TestExecutionPersistence(t *testing.T) {
 			require.NoError(t, err)
 			defer func() { _ = tx.Rollback(ctx) }()
 			var runID int64
-			require.NoError(t, tx.QueryRow(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status)
-				VALUES ($1, 'github', 'inv', $2, 'completed') RETURNING id`, "github:inv:"+itoa(int64(n)), n).Scan(&runID))
+			require.NoError(t, tx.QueryRow(ctx, `INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, status)
+				VALUES (1, $1, 'github', 'inv', $2, 'completed') RETURNING id`, "github:inv:"+itoa(int64(n)), n).Scan(&runID))
 			_, err = tx.Exec(ctx, `INSERT INTO test_results (test_run_id, `+cols+`) VALUES ($1, `+values+`)`, runID)
 			return err
 		}
@@ -460,19 +461,19 @@ func TestExecutionPersistence(t *testing.T) {
 			"deprecated results must keep the TC-ID link")
 		assert.Error(t, insertResult("correlation, test_name, status", "'missing', 'x', 'untested'"), "untested is never persisted")
 		assert.NoError(t, insertResult("correlation, test_name, status", "'missing', 'x', 'passed'"), "a valid row is accepted by its run's transaction")
-		_, err := db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ('x:y:1', 'github', '1', 1, 'completed')`)
+		_, err := db.Pool.Exec(ctx, `INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, status) VALUES (1, 'x:y:1', 'github', '1', 1, 'completed')`)
 		assert.ErrorContains(t, err, "external_run_id_format")
 
 		// The full lifecycle is supported by the model even though the POC only
 		// records final statuses (created/running arrive with live streaming).
 		for i, status := range []string{"created", "running", "completed", "interrupted", "cancelled"} {
-			_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ($1, 'github', 'life', $2, $3)`,
+			_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, status) VALUES (1, $1, 'github', 'life', $2, $3)`,
 				"github:life:"+itoa(int64(i+1)), i+1, status)
 			assert.NoError(t, err, status)
 		}
-		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ('github:life:9', 'github', 'life', 9, 'paused')`)
+		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, status) VALUES (1, 'github:life:9', 'github', 'life', 9, 'paused')`)
 		assert.Error(t, err, "unknown run statuses are rejected")
-		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, status) VALUES ('github:life:10', 'github', 'life', 10, 'failed')`)
+		_, err = db.Pool.Exec(ctx, `INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, status) VALUES (1, 'github:life:10', 'github', 'life', 10, 'failed')`)
 		assert.Error(t, err, "failed was renamed interrupted (migration 00007)")
 	})
 
@@ -549,7 +550,7 @@ func TestExecutionPersistence(t *testing.T) {
 			assert.Equal(t, int32(1), it.Run.ExpectedCount)
 		}
 		assert.Equal(t, "browser 249", first.Items[0].Result.TestName, "newest first")
-		runs, err := s.Execution.ListRuns(ctx, pagination.Page{Number: 2, Size: 2})
+		runs, err := s.Execution.ListRuns(ctx, nil, pagination.Page{Number: 2, Size: 2})
 		require.NoError(t, err)
 		require.Len(t, runs.Items, 1)
 		assert.Equal(t, "github:700:1", runs.Items[0].ExternalRunID)
@@ -570,4 +571,4 @@ func TestExecutionPersistence(t *testing.T) {
 	})
 }
 
-func itoa(id int64) string { return strings.TrimPrefix(catalog.FormatKey(id), "TC-") }
+func itoa(id int64) string { return strconv.FormatInt(id, 10) }

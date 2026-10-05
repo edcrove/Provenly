@@ -107,7 +107,7 @@ func TestGetAndListRuns(t *testing.T) {
 	svc, repo, ctx := setup()
 	_, _, _ = svc.RecordRun(ctx, run(1), nil, nil, nil)
 	_, _, _ = svc.RecordRun(ctx, run(2), nil, nil, nil)
-	res, err := svc.ListRuns(ctx, pagination.Page{Number: 1, Size: 1})
+	res, err := svc.ListRuns(ctx, nil, pagination.Page{Number: 1, Size: 1})
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), res.Total)
 	assert.Equal(t, int64(2), res.Items[0].ID)
@@ -122,10 +122,10 @@ func TestGetAndListRuns(t *testing.T) {
 	assert.ErrorIs(t, err, errBoom)
 
 	repo.errs["CountTestRuns"] = errBoom
-	_, err = svc.ListRuns(ctx, pagination.Default())
+	_, err = svc.ListRuns(ctx, nil, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 	repo.errs["ListTestRuns"] = errBoom
-	_, err = svc.ListRuns(ctx, pagination.Default())
+	_, err = svc.ListRuns(ctx, nil, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 }
 
@@ -237,7 +237,7 @@ func TestRunsCarryTheirOutcome(t *testing.T) {
 	got, err := svc.GetRun(ctx, r.ID)
 	require.NoError(t, err)
 	assert.Equal(t, r.Outcome, got.Outcome)
-	list, err := svc.ListRuns(ctx, pagination.Page{Number: 1, Size: 10})
+	list, err := svc.ListRuns(ctx, nil, pagination.Page{Number: 1, Size: 10})
 	require.NoError(t, err)
 	assert.Equal(t, r.Outcome, list.Items[0].Outcome)
 	hist, err := svc.History(ctx, 1, pagination.Page{Number: 1, Size: 10})
@@ -249,8 +249,33 @@ func TestRunsCarryTheirOutcome(t *testing.T) {
 	assert.ErrorIs(t, err, errBoom)
 	_, err = svc.GetRun(ctx, r.ID)
 	assert.ErrorIs(t, err, errBoom)
-	_, err = svc.ListRuns(ctx, pagination.Page{Number: 1, Size: 10})
+	_, err = svc.ListRuns(ctx, nil, pagination.Page{Number: 1, Size: 10})
 	assert.ErrorIs(t, err, errBoom)
 	_, err = svc.History(ctx, 1, pagination.Page{Number: 1, Size: 10})
 	assert.ErrorIs(t, err, errBoom)
+}
+
+// The same externalRunId in two projects is two runs; the run list can be narrowed to one project.
+func TestRunsArePerProject(t *testing.T) {
+	svc, _, ctx := setup()
+	a, b := run(1), run(1)
+	a.ProjectID, b.ProjectID = 1, 2
+	first, created, err := svc.RecordRun(ctx, a, nil, nil, nil)
+	require.NoError(t, err)
+	require.True(t, created)
+	second, created, err := svc.RecordRun(ctx, b, nil, nil, nil)
+	require.NoError(t, err)
+	assert.True(t, created, "same externalRunId, other project: a new run")
+	assert.NotEqual(t, first.ID, second.ID)
+	assert.Equal(t, int64(2), second.ProjectID)
+	replay, created, err := svc.RecordRun(ctx, b, nil, nil, nil)
+	require.NoError(t, err)
+	assert.False(t, created)
+	assert.Equal(t, second.ID, replay.ID)
+
+	two := int64(2)
+	res, err := svc.ListRuns(ctx, &two, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), res.Total)
+	assert.Equal(t, second.ID, res.Items[0].ID)
 }

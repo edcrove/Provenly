@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useCurrentProject } from '@/features/projects/currentProject'
 import { pickEnum, positiveInt } from '@/lib/status'
 
 const statuses = ['active', 'deprecated'] as const
@@ -18,7 +19,8 @@ export function TestCaseListPage() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
   const status = pickEnum(params.get('status'), statuses)
-  const query = useTestCases(page, status)
+  const { project } = useCurrentProject()
+  const query = useTestCases(page, status, project || undefined)
 
   const update = (next: Record<string, string | undefined>, replace = false) => {
     const merged = new URLSearchParams(params)
@@ -70,7 +72,8 @@ export function TestCaseListPage() {
                   {data.items.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="text-muted-foreground">
-                        {status ? `No ${status} test cases.` : 'No test cases yet.'}
+                        {status ? `No ${status} test cases` : 'No test cases yet'}
+                        {project ? ` in ${project}.` : '.'}
                       </TableCell>
                     </TableRow>
                   )}

@@ -33,7 +33,99 @@ const fail = () => {
   db.failing = true
 }
 
+const chk = { projectKey: 'CHK' }
+const addChk = () => {
+  db.projects.push({ ...db.projects[0], id: 2, key: 'CHK', name: 'Checkout' })
+}
+
 const scenarios: Scenario[] = [
+  // Projects
+  {
+    op: 'GET /api/v1/projects',
+    status: 200,
+    call: (c) => c.GET('/api/v1/projects', { params: { query: { page: 1, pageSize: 100 } } }),
+  },
+  {
+    op: 'GET /api/v1/projects',
+    status: 400,
+    call: (c) => c.GET('/api/v1/projects', { params: { query: { page: 0 } } }),
+  },
+  { op: 'GET /api/v1/projects', status: 500, setup: fail, call: (c) => c.GET('/api/v1/projects') },
+  {
+    op: 'POST /api/v1/projects',
+    status: 201,
+    call: (c) => c.POST('/api/v1/projects', { body: { key: 'CHK', name: 'Checkout', description: 'cart' } }),
+  },
+  {
+    op: 'POST /api/v1/projects',
+    status: 400,
+    call: (c) => c.POST('/api/v1/projects', { body: { key: '1X', name: 'x' } }),
+  },
+  {
+    op: 'POST /api/v1/projects',
+    status: 409,
+    call: (c) => c.POST('/api/v1/projects', { body: { key: 'TC', name: 'again' } }),
+  },
+  {
+    op: 'POST /api/v1/projects',
+    status: 415,
+    call: (c) => c.POST('/api/v1/projects', { body: { key: 'CHK', name: 'x' }, headers: textPlain }),
+  },
+  {
+    op: 'POST /api/v1/projects',
+    status: 500,
+    setup: fail,
+    call: (c) => c.POST('/api/v1/projects', { body: { key: 'CHK', name: 'x' } }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}',
+    status: 200,
+    setup: addChk,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}', { params: { path: chk }, body: { name: 'Checkout v2' } }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}',
+    status: 400,
+    setup: addChk,
+    call: (c) => c.PATCH('/api/v1/projects/{projectKey}', { params: { path: chk }, body: { name: ' ' } }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}',
+    status: 404,
+    call: (c) => c.PATCH('/api/v1/projects/{projectKey}', { params: { path: chk }, body: { name: 'x' } }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}',
+    status: 415,
+    call: (c) =>
+      c.PATCH('/api/v1/projects/{projectKey}', {
+        params: { path: chk },
+        body: { name: 'x' },
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}',
+    status: 500,
+    setup: fail,
+    call: (c) => c.PATCH('/api/v1/projects/{projectKey}', { params: { path: chk }, body: { name: 'x' } }),
+  },
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 404,
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { project: 'NOPE' } } }),
+  },
+  {
+    op: 'POST /api/v1/test-cases',
+    status: 404,
+    call: (c) => c.POST('/api/v1/test-cases', { body: { title: 'x', project: 'NOPE' } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs',
+    status: 404,
+    call: (c) => c.GET('/api/v1/test-runs', { params: { query: { project: 'NOPE' } } }),
+  },
   // Test cases
   {
     op: 'GET /api/v1/test-cases',

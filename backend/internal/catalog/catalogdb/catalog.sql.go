@@ -26,13 +26,30 @@ func (q *Queries) CloseTestStepGap(ctx context.Context, arg CloseTestStepGapPara
 	return err
 }
 
+const countProjects = `-- name: CountProjects :one
+SELECT count(*) FROM projects
+`
+
+func (q *Queries) CountProjects(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countProjects)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTestCases = `-- name: CountTestCases :one
 SELECT count(*) FROM test_cases
 WHERE ($1::text IS NULL OR status = $1::text)
+  AND ($2::bigint IS NULL OR project_id = $2::bigint)
 `
 
-func (q *Queries) CountTestCases(ctx context.Context, status pgtype.Text) (int64, error) {
-	row := q.db.QueryRow(ctx, countTestCases, status)
+type CountTestCasesParams struct {
+	Status    pgtype.Text
+	ProjectID pgtype.Int8
+}
+
+func (q *Queries) CountTestCases(ctx context.Context, arg CountTestCasesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countTestCases, arg.Status, arg.ProjectID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -49,21 +66,59 @@ func (q *Queries) CountTestSteps(ctx context.Context, testCaseID int64) (int64, 
 	return count, err
 }
 
+const createProject = `-- name: CreateProject :one
+INSERT INTO projects (key, name, description)
+VALUES ($1, $2, $3)
+ON CONFLICT (key) DO NOTHING
+RETURNING id, key, name, description, next_number, created_at, updated_at
+`
+
+type CreateProjectParams struct {
+	Key         string
+	Name        string
+	Description string
+}
+
+func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error) {
+	row := q.db.QueryRow(ctx, createProject, arg.Key, arg.Name, arg.Description)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Key,
+		&i.Name,
+		&i.Description,
+		&i.NextNumber,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createTestCase = `-- name: CreateTestCase :one
-INSERT INTO test_cases (title, description, expected_result, automated)
-VALUES ($1, $2, $3, $4)
-RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at
+WITH n AS (
+    UPDATE projects SET next_number = next_number + 1
+    WHERE id = $1
+    RETURNING next_number - 1 AS number
+)
+INSERT INTO test_cases (project_id, number, title, description, expected_result, automated)
+SELECT $1, n.number, $2, $3, $4, $5 FROM n
+RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number
 `
 
 type CreateTestCaseParams struct {
+	ProjectID      int64
 	Title          string
 	Description    string
 	ExpectedResult string
 	Automated      bool
 }
 
+// The number comes from the project's counter in the same statement: numbers
+// are assigned per project, in order, and never reused. No row when the
+// project does not exist.
 func (q *Queries) CreateTestCase(ctx context.Context, arg CreateTestCaseParams) (TestCase, error) {
 	row := q.db.QueryRow(ctx, createTestCase,
+		arg.ProjectID,
 		arg.Title,
 		arg.Description,
 		arg.ExpectedResult,
@@ -80,6 +135,8 @@ func (q *Queries) CreateTestCase(ctx context.Context, arg CreateTestCaseParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeprecatedAt,
+		&i.ProjectID,
+		&i.Number,
 	)
 	return i, err
 }
@@ -140,7 +197,7 @@ UPDATE test_cases SET
     deprecated_at = coalesce(deprecated_at, now()),
     updated_at    = CASE WHEN status = 'deprecated' THEN updated_at ELSE now() END
 WHERE id = $1
-RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at
+RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number
 `
 
 func (q *Queries) DeprecateTestCase(ctx context.Context, id int64) (TestCase, error) {
@@ -156,12 +213,52 @@ func (q *Queries) DeprecateTestCase(ctx context.Context, id int64) (TestCase, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeprecatedAt,
+		&i.ProjectID,
+		&i.Number,
+	)
+	return i, err
+}
+
+const getProject = `-- name: GetProject :one
+SELECT id, key, name, description, next_number, created_at, updated_at FROM projects WHERE id = $1
+`
+
+func (q *Queries) GetProject(ctx context.Context, id int64) (Project, error) {
+	row := q.db.QueryRow(ctx, getProject, id)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Key,
+		&i.Name,
+		&i.Description,
+		&i.NextNumber,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getProjectByKey = `-- name: GetProjectByKey :one
+SELECT id, key, name, description, next_number, created_at, updated_at FROM projects WHERE key = $1
+`
+
+func (q *Queries) GetProjectByKey(ctx context.Context, key string) (Project, error) {
+	row := q.db.QueryRow(ctx, getProjectByKey, key)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Key,
+		&i.Name,
+		&i.Description,
+		&i.NextNumber,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getTestCase = `-- name: GetTestCase :one
-SELECT id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at FROM test_cases WHERE id = $1
+SELECT id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number FROM test_cases WHERE id = $1
 `
 
 func (q *Queries) GetTestCase(ctx context.Context, id int64) (TestCase, error) {
@@ -177,6 +274,8 @@ func (q *Queries) GetTestCase(ctx context.Context, id int64) (TestCase, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeprecatedAt,
+		&i.ProjectID,
+		&i.Number,
 	)
 	return i, err
 }
@@ -214,24 +313,30 @@ func (q *Queries) ListAllTestSteps(ctx context.Context, testCaseID int64) ([]Tes
 }
 
 const listIngestionView = `-- name: ListIngestionView :many
-SELECT id, status, (status = 'active' AND automated)::boolean AS expected, coalesce(id = ANY($1::bigint[]), false)::boolean AS referenced
+SELECT id, number, status, (status = 'active' AND automated)::boolean AS expected, coalesce(number = ANY($1::bigint[]), false)::boolean AS referenced
 FROM test_cases
-WHERE (status = 'active' AND automated) OR id = ANY($1::bigint[])
+WHERE project_id = $2 AND ((status = 'active' AND automated) OR number = ANY($1::bigint[]))
 ORDER BY id
 `
 
+type ListIngestionViewParams struct {
+	Numbers   []int64
+	ProjectID int64
+}
+
 type ListIngestionViewRow struct {
 	ID         int64
+	Number     int64
 	Status     string
 	Expected   bool
 	Referenced bool
 }
 
-// One statement, so the expected universe (active AND automated) and the status
-// of the referenced TC-IDs come from the same snapshot: a deprecation committed
-// during an ingestion cannot put a TC in one and not the other.
-func (q *Queries) ListIngestionView(ctx context.Context, ids []int64) ([]ListIngestionViewRow, error) {
-	rows, err := q.db.Query(ctx, listIngestionView, ids)
+// One statement, so the expected universe of the project (active AND automated)
+// and the status of the referenced numbers come from the same snapshot: a
+// deprecation committed during an ingestion cannot put a TC in one and not the other.
+func (q *Queries) ListIngestionView(ctx context.Context, arg ListIngestionViewParams) ([]ListIngestionViewRow, error) {
+	rows, err := q.db.Query(ctx, listIngestionView, arg.Numbers, arg.ProjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -241,6 +346,7 @@ func (q *Queries) ListIngestionView(ctx context.Context, ids []int64) ([]ListIng
 		var i ListIngestionViewRow
 		if err := rows.Scan(
 			&i.ID,
+			&i.Number,
 			&i.Status,
 			&i.Expected,
 			&i.Referenced,
@@ -255,21 +361,96 @@ func (q *Queries) ListIngestionView(ctx context.Context, ids []int64) ([]ListIng
 	return items, nil
 }
 
+const listProjects = `-- name: ListProjects :many
+SELECT id, key, name, description, next_number, created_at, updated_at FROM projects ORDER BY key LIMIT $2 OFFSET $1
+`
+
+type ListProjectsParams struct {
+	PageOffset int32
+	PageLimit  int32
+}
+
+func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error) {
+	rows, err := q.db.Query(ctx, listProjects, arg.PageOffset, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Project
+	for rows.Next() {
+		var i Project
+		if err := rows.Scan(
+			&i.ID,
+			&i.Key,
+			&i.Name,
+			&i.Description,
+			&i.NextNumber,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTestCaseKeys = `-- name: ListTestCaseKeys :many
+SELECT id, project_id, number FROM test_cases WHERE id = ANY($1::bigint[])
+`
+
+type ListTestCaseKeysRow struct {
+	ID        int64
+	ProjectID int64
+	Number    int64
+}
+
+// The identity (project and number) of the given test cases, for display.
+func (q *Queries) ListTestCaseKeys(ctx context.Context, ids []int64) ([]ListTestCaseKeysRow, error) {
+	rows, err := q.db.Query(ctx, listTestCaseKeys, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTestCaseKeysRow
+	for rows.Next() {
+		var i ListTestCaseKeysRow
+		if err := rows.Scan(&i.ID, &i.ProjectID, &i.Number); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTestCases = `-- name: ListTestCases :many
-SELECT id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at FROM test_cases
+SELECT id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number FROM test_cases
 WHERE ($1::text IS NULL OR status = $1::text)
+  AND ($2::bigint IS NULL OR project_id = $2::bigint)
 ORDER BY id DESC
-LIMIT $3 OFFSET $2
+LIMIT $4 OFFSET $3
 `
 
 type ListTestCasesParams struct {
 	Status     pgtype.Text
+	ProjectID  pgtype.Int8
 	PageOffset int32
 	PageLimit  int32
 }
 
 func (q *Queries) ListTestCases(ctx context.Context, arg ListTestCasesParams) ([]TestCase, error) {
-	rows, err := q.db.Query(ctx, listTestCases, arg.Status, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listTestCases,
+		arg.Status,
+		arg.ProjectID,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -287,6 +468,8 @@ func (q *Queries) ListTestCases(ctx context.Context, arg ListTestCasesParams) ([
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeprecatedAt,
+			&i.ProjectID,
+			&i.Number,
 		); err != nil {
 			return nil, err
 		}
@@ -356,7 +539,7 @@ UPDATE test_cases SET
     deprecated_at = NULL,
     updated_at    = CASE WHEN status = 'active' THEN updated_at ELSE now() END
 WHERE id = $1
-RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at
+RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number
 `
 
 func (q *Queries) ReactivateTestCase(ctx context.Context, id int64) (TestCase, error) {
@@ -372,6 +555,8 @@ func (q *Queries) ReactivateTestCase(ctx context.Context, id int64) (TestCase, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeprecatedAt,
+		&i.ProjectID,
+		&i.Number,
 	)
 	return i, err
 }
@@ -407,6 +592,36 @@ func (q *Queries) ShiftTestStepsDown(ctx context.Context, arg ShiftTestStepsDown
 	return err
 }
 
+const updateProject = `-- name: UpdateProject :one
+UPDATE projects SET
+    name        = coalesce($1, name),
+    description = coalesce($2, description),
+    updated_at  = now()
+WHERE key = $3
+RETURNING id, key, name, description, next_number, created_at, updated_at
+`
+
+type UpdateProjectParams struct {
+	Name        pgtype.Text
+	Description pgtype.Text
+	Key         string
+}
+
+func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error) {
+	row := q.db.QueryRow(ctx, updateProject, arg.Name, arg.Description, arg.Key)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Key,
+		&i.Name,
+		&i.Description,
+		&i.NextNumber,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateTestCase = `-- name: UpdateTestCase :one
 UPDATE test_cases SET
     title           = coalesce($1, title),
@@ -415,7 +630,7 @@ UPDATE test_cases SET
     automated       = coalesce($4, automated),
     updated_at      = now()
 WHERE id = $5
-RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at
+RETURNING id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number
 `
 
 type UpdateTestCaseParams struct {
@@ -445,6 +660,8 @@ func (q *Queries) UpdateTestCase(ctx context.Context, arg UpdateTestCaseParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeprecatedAt,
+		&i.ProjectID,
+		&i.Number,
 	)
 	return i, err
 }

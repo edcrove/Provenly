@@ -58,7 +58,10 @@ type TCRef struct {
 	Source RefSource
 	// Raw is the reference exactly as declared (empty when missing).
 	Raw string
-	// ID is the numeric TC-ID when Kind is RefFound.
+	// Prefix is the project key declared with the number (CHK in CHK-12), upper-cased;
+	// empty for a bare number, which refers to the run's project.
+	Prefix string
+	// ID is the test case number in its project when Kind is RefFound.
 	ID int64
 }
 
@@ -107,6 +110,8 @@ type Report struct {
 	StartedAt *time.Time
 	// Notices are document-level remarks (e.g. an unreadable suite timestamp), each once.
 	Notices []string
+
+	nameRef *regexp.Regexp
 }
 
 // PropertyName is the testcase property that declares the TC-ID.
@@ -146,11 +151,25 @@ type xmlSuite struct {
 }
 
 var (
-	propertyValue = regexp.MustCompile(`^(?:TC-)?([0-9]+)$`)
-	// Any letters or digits after TC- are captured, so a non-ASCII id (TC-１５３)
-	// is reported as declared (malformed) instead of being cut.
-	nameRef   = regexp.MustCompile(`\bTC-([\p{L}\p{N}_]*)`)
-	numericID = regexp.MustCompile(`^0*([1-9][0-9]{0,17})$`)
+	// A tc-id property is a bare number or <KEY>-<number> with any project key.
+	propertyValue = regexp.MustCompile(`^(?:([A-Za-z][A-Za-z0-9]{1,9})-)?([0-9]+)$`)
+	numericID     = regexp.MustCompile(`^0*([1-9][0-9]{0,17})$`)
+)
+
+// DefaultProjectKey is the key the name fallback looks for when none is given.
+const DefaultProjectKey = "TC"
+
+// nameRefFor matches <KEY>-<id> references of one project in testcase names.
+// Any letters or digits after the dash are captured, so a non-ASCII id (TC-１５３)
+// is reported as declared (malformed) instead of being cut. Only the run's own
+// key is looked for: other upper-case words with a dash (HTTP-200, UTF-8) in
+// names are not references.
+func nameRefFor(key string) *regexp.Regexp {
+	return regexp.MustCompile(`\b` + regexp.QuoteMeta(key) + `-([\p{L}\p{N}_]*)`)
+}
+
+var (
+	defaultNameRef = nameRefFor(DefaultProjectKey)
 )
 
 // Parse reads a JUnit XML document with a <testsuites> or <testsuite> root.
@@ -160,10 +179,31 @@ func Parse(r io.Reader) (Report, error) {
 	return ParseWithCharset(r, "")
 }
 
+// Options configure ParseWith.
+type Options struct {
+	// Charset is the Content-Type charset; empty defers to the document.
+	Charset string
+	// ProjectKey is the key the name fallback looks for (default TC).
+	ProjectKey string
+}
+
+// ParseWith is Parse with a declared charset and the run's project key.
+func ParseWith(r io.Reader, o Options) (Report, error) {
+	nameRef := defaultNameRef
+	if o.ProjectKey != "" && o.ProjectKey != DefaultProjectKey {
+		nameRef = nameRefFor(o.ProjectKey)
+	}
+	return parse(r, o.Charset, nameRef)
+}
+
 // ParseWithCharset is Parse for a body whose charset was declared out of band
 // (the Content-Type charset parameter): it overrides the document's XML
 // declaration (RFC 7303). An empty charset defers to the document.
 func ParseWithCharset(r io.Reader, charset string) (Report, error) {
+	return parse(r, charset, defaultNameRef)
+}
+
+func parse(r io.Reader, charset string, nameRef *regexp.Regexp) (Report, error) {
 	var err error
 	if charset != "" {
 		if r, err = charsetReader(charset, r); err != nil {
@@ -188,7 +228,7 @@ func ParseWithCharset(r io.Reader, charset string) (Report, error) {
 	if err := checkNothingAfterRoot(dec); err != nil {
 		return Report{}, fmt.Errorf("invalid JUnit XML: %w", err)
 	}
-	var rep Report
+	rep := Report{nameRef: nameRef}
 	walk(&rep, root, "")
 	return rep, nil
 }
@@ -309,7 +349,7 @@ func walk(rep *Report, s xmlSuite, parent string) {
 	for _, c := range s.Cases {
 		index := rep.Received
 		rep.Received++
-		res, issues, err := normalize(c, suite, index)
+		res, issues, err := normalize(c, suite, index, rep.nameRef)
 		if err != nil {
 			rep.Errors = append(rep.Errors, CaseError{Index: index, TestName: c.Name, Message: err.Error(), Severity: SeverityError})
 			continue
@@ -358,7 +398,7 @@ func parseTimestamp(raw string) (time.Time, bool) {
 
 // normalize returns the result plus the issues on a kept result, or an error
 // when the testcase cannot be kept at all.
-func normalize(c xmlCase, suite string, index int) (Result, []CaseError, error) {
+func normalize(c xmlCase, suite string, index int, nameRef *regexp.Regexp) (Result, []CaseError, error) {
 	name := strings.TrimSpace(c.Name)
 	if name == "" {
 		return Result{}, nil, fmt.Errorf("testcase has no name; result discarded")
@@ -370,7 +410,7 @@ func normalize(c xmlCase, suite string, index int) (Result, []CaseError, error) 
 	}
 	res := Result{
 		Index: index, TestName: name, ClassName: c.ClassName, SuiteName: suite,
-		Status: Passed, DurationMs: duration, Ref: extractRef(name, c.Properties),
+		Status: Passed, DurationMs: duration, Ref: extractRef(name, c.Properties, nameRef),
 	}
 	switch {
 	case len(c.Failures) > 0:
@@ -475,11 +515,11 @@ func plainDecimal(s string) string {
 
 // extractRef resolves the TC-ID reference of a testcase: the tc-id property
 // wins; otherwise the TC-<id> pattern in the name is used.
-func extractRef(name string, props []xmlProperty) TCRef {
+func extractRef(name string, props []xmlProperty, nameRef *regexp.Regexp) TCRef {
 	if values := propertyValues(props); len(values) > 0 {
 		return fromProperty(values)
 	}
-	return fromName(name)
+	return fromName(name, nameRef)
 }
 
 // propertyValues returns the trimmed values of the tc-id properties.
@@ -520,21 +560,30 @@ func resolve(digits []string) (int64, bool) {
 func fromProperty(values []string) TCRef {
 	raw := strings.Join(uniq(values), ",")
 	digits := make([]string, len(values))
+	prefix := ""
 	for i, v := range values {
 		m := propertyValue.FindStringSubmatch(v)
 		if m == nil {
 			return TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: raw}
 		}
-		digits[i] = m[1]
+		// A bare number agrees with any key; CHK-12 and WEB-12 in one testcase are not one reference.
+		switch p := strings.ToUpper(m[1]); {
+		case p == "" || p == prefix:
+		case prefix == "":
+			prefix = p
+		default:
+			return TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: raw}
+		}
+		digits[i] = m[2]
 	}
 	id, ok := resolve(digits)
 	if !ok {
 		return TCRef{Kind: RefMalformed, Source: SourceProperty, Raw: raw}
 	}
-	return TCRef{Kind: RefFound, Source: SourceProperty, Raw: raw, ID: id}
+	return TCRef{Kind: RefFound, Source: SourceProperty, Raw: raw, Prefix: prefix, ID: id}
 }
 
-func fromName(name string) TCRef {
+func fromName(name string, nameRef *regexp.Regexp) TCRef {
 	matches := nameRef.FindAllStringSubmatch(name, -1)
 	if len(matches) == 0 {
 		return TCRef{Kind: RefMissing, Source: SourceNone}

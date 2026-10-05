@@ -104,6 +104,57 @@ func TestTestCases(t *testing.T) {
 	e.GET(path+"/results").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
 }
 
+func TestProjects(t *testing.T) {
+	e := api(t, fresh(t), 1<<20)
+
+	e.POST("/api/v1/projects").WithJSON(map[string]any{"key": "chk", "name": "Checkout", "description": "cart"}).
+		Expect().Status(http.StatusCreated).JSON().Object().HasValue("key", "CHK").HasValue("name", "Checkout")
+	e.POST("/api/v1/projects").WithJSON(map[string]any{"key": "CHK", "name": "again"}).
+		Expect().Status(http.StatusConflict).JSON(problemOpts).Object().HasValue("code", "conflict")
+	e.POST("/api/v1/projects").WithJSON(map[string]any{"key": "1X", "name": ""}).Expect().Status(http.StatusBadRequest).
+		JSON(problemOpts).Object().HasValue("code", "validation_error")
+	e.POST("/api/v1/projects").WithText(`{"key":"WEB","name":"w"}`).Expect().Status(http.StatusUnsupportedMediaType)
+
+	e.GET("/api/v1/projects").WithQuery("pageSize", 1).Expect().Status(http.StatusOK).JSON().Object().
+		HasValue("totalItems", 2).Value("items").Array().Value(0).Object().HasValue("key", "CHK")
+	e.GET("/api/v1/projects").WithQuery("page", 0).Expect().Status(http.StatusBadRequest)
+	e.GET("/api/v1/projects/CHK").Expect().Status(http.StatusOK).JSON().Object().HasValue("description", "cart")
+	e.GET("/api/v1/projects/chk").Expect().Status(http.StatusBadRequest)
+	e.GET("/api/v1/projects/NOPE").Expect().Status(http.StatusNotFound).JSON(problemOpts).Object().HasValue("code", "not_found")
+	e.PATCH("/api/v1/projects/CHK").WithJSON(map[string]any{"name": "Checkout v2"}).Expect().Status(http.StatusOK).
+		JSON().Object().HasValue("name", "Checkout v2").HasValue("key", "CHK")
+	e.PATCH("/api/v1/projects/CHK").WithJSON(map[string]any{"key": "WEB"}).Expect().Status(http.StatusBadRequest)
+	e.PATCH("/api/v1/projects/NOPE").WithJSON(map[string]any{"name": "x"}).Expect().Status(http.StatusNotFound)
+	e.PATCH("/api/v1/projects/CHK").WithText(`{"name":"x"}`).Expect().Status(http.StatusUnsupportedMediaType)
+
+	// Test cases are numbered per project; ?project= filters lists, an unknown key is a 404.
+	e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "pay", "project": "CHK", "automated": true}).
+		Expect().Status(http.StatusCreated).JSON().Object().HasValue("key", "CHK-1").HasValue("projectKey", "CHK").HasValue("number", 1)
+	e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "x", "project": "NOPE"}).Expect().Status(http.StatusNotFound)
+	e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "x", "project": "no"}).Expect().Status(http.StatusBadRequest)
+	e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "default"}).Expect().Status(http.StatusCreated).
+		JSON().Object().HasValue("key", "TC-1").HasValue("projectKey", "TC")
+	e.GET("/api/v1/test-cases").WithQuery("project", "CHK").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	e.GET("/api/v1/test-cases").WithQuery("project", "NOPE").Expect().Status(http.StatusNotFound)
+	e.GET("/api/v1/test-cases").WithQuery("project", "").Expect().Status(http.StatusBadRequest)
+
+	run := ingest(e, "77", 1, `<testsuite><testcase name="pay CHK-1"/><testcase name="x"><properties><property name="tc-id" value="TC-1"/></properties></testcase></testsuite>`).
+		WithQuery("project", "CHK").Expect().Status(http.StatusCreated).JSON().Object()
+	run.Value("testRun").Object().HasValue("expectedCount", 1)
+	run.Value("diagnostics").Array().Value(0).Object().HasValue("correlation", "wrong_project")
+	runID := int64(run.Value("testRun").Object().Value("id").Number().Raw())
+	e.GET("/api/v1/test-runs/"+strconv.FormatInt(runID, 10)+"/summary").Expect().Status(http.StatusOK).
+		JSON().Object().Value("diagnostics").Object().HasValue("wrongProject", 1)
+	e.GET("/api/v1/test-runs/"+strconv.FormatInt(runID, 10)+"/summary").Expect().Status(http.StatusOK).
+		JSON().Object().Value("testCases").Array().Value(0).Object().HasValue("testCaseKey", "CHK-1")
+	e.GET("/api/v1/test-runs/"+strconv.FormatInt(runID, 10)+"/results").WithQuery("correlation", "valid").Expect().Status(http.StatusOK).
+		JSON().Object().Value("items").Array().Value(0).Object().HasValue("testCaseKey", "CHK-1")
+	ingest(e, "77", 1, `<testsuite/>`).WithQuery("project", "NOPE").Expect().Status(http.StatusNotFound)
+	e.GET("/api/v1/test-runs").WithQuery("project", "CHK").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	e.GET("/api/v1/test-runs").WithQuery("project", "TC").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
+	e.GET("/api/v1/test-runs").WithQuery("project", "NOPE").Expect().Status(http.StatusNotFound)
+}
+
 func TestTestSteps(t *testing.T) {
 	e := api(t, fresh(t), 1<<20)
 	id := int64(e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "Steps"}).Expect().Status(http.StatusCreated).
@@ -205,6 +256,10 @@ func TestInternalErrors(t *testing.T) {
 	problem := func(r *httpexpect.Response) {
 		r.Status(http.StatusInternalServerError).JSON(problemOpts).Object().HasValue("code", "internal_error")
 	}
+	problem(e.GET("/api/v1/projects").Expect())
+	problem(e.POST("/api/v1/projects").WithJSON(map[string]any{"key": "CHK", "name": "x"}).Expect())
+	problem(e.GET("/api/v1/projects/CHK").Expect())
+	problem(e.PATCH("/api/v1/projects/CHK").WithJSON(map[string]any{"name": "x"}).Expect())
 	problem(e.GET("/api/v1/test-cases").Expect())
 	problem(e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "x"}).Expect())
 	problem(e.GET("/api/v1/test-cases/1").Expect())
@@ -241,7 +296,7 @@ func TestRobustness(t *testing.T) {
 	runID := strconv.FormatInt(int64(run.Value("id").Number().Raw()), 10)
 
 	lists := []string{
-		"/api/v1/test-cases", "/api/v1/test-runs",
+		"/api/v1/projects", "/api/v1/test-cases", "/api/v1/test-runs",
 		"/api/v1/test-cases/" + id + "/steps", "/api/v1/test-cases/" + id + "/results",
 		"/api/v1/test-runs/" + runID + "/results", "/api/v1/test-runs/" + runID + "/parse-errors",
 	}
@@ -295,6 +350,8 @@ func TestRobustness(t *testing.T) {
 	for _, op := range []struct{ method, path, body string }{
 		{"POST", "/api/v1/test-cases", `{"title":"x"}`},
 		{"PATCH", "/api/v1/test-cases/" + id, `{"title":"x"}`},
+		{"POST", "/api/v1/projects", `{"key":"XX","name":"x"}`},
+		{"PATCH", "/api/v1/projects/TC", `{"name":"x"}`},
 		{"POST", steps, `{"action":"x"}`},
 		{"PUT", steps + "/order", `{"stepIds":[1]}`},
 		{"PATCH", stepPath, `{"action":"x"}`},

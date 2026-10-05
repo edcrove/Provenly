@@ -119,7 +119,7 @@ describe('FE-INT-031 project members', () => {
     expect(row).toHaveTextContent('viewer')
     expect(within(row).queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.queryByRole('form', { name: 'Add member' })).not.toBeInTheDocument()
-    expect(document.title).toBe('TC members · Provenly')
+    expect(document.title).toBe('Project TC · Provenly')
   })
 
   it('FE-INT-031 a failed change on a row is shown there', async () => {

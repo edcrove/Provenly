@@ -126,7 +126,7 @@ function ProjectDashboard({ project }: { project: string }) {
               <Link to={`/test-runs/${latest.id}`} className="text-2xl font-semibold underline">
                 #{latest.id}
               </Link>
-              <VerdictBadge verdict={latest.outcome.verdict} />
+              <VerdictBadge verdict={latest.outcome.verdict} running={latest.executionStatus === 'running'} />
             </div>
           ) : (
             <div className="text-2xl font-semibold" data-testid="latest-run">

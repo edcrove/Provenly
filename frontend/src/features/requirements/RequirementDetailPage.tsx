@@ -138,7 +138,8 @@ export function RequirementDetailPage() {
                   <a href={r.url} className="underline" target="_blank" rel="noreferrer">
                     Open in the source
                   </a>
-                ) : null}{' '}
+                ) : null}
+                {r.url ? ' · ' : null}
                 <Link to="/requirements" className="underline">
                   All requirements
                 </Link>

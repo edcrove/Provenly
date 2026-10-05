@@ -156,3 +156,6 @@ targets:
   - id: FE-INT-047
     description: sign-in throttle - after five failed sign-ins the login page shows that the username is locked and for how long
     surfaces: [src/features/auth/LoginPage.tsx]
+  - id: FE-INT-048
+    description: audit fixes - a running run's verdict is provisional ("failed so far") in detail and list; the summary total shows "—" when nothing was executed; an unfiltered run without results says "No results yet."; issue and requirement detail links are separated
+    surfaces: [src/components/StatusBadge.tsx, src/features/test-runs/RunSummary.tsx, src/features/test-runs/RunResults.tsx, src/features/issues/IssueDetailPage.tsx, src/features/requirements/RequirementDetailPage.tsx]

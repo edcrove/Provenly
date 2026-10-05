@@ -1385,7 +1385,7 @@ export const handlers = [
           projectId: p.id,
           repository,
           labels: String(body.labels ?? ''),
-          tokenHint: token ? `…${token.slice(-4)}` : current!.tokenHint,
+          tokenHint: token ? (token.length >= 12 ? `…${token.slice(-4)}` : '…') : current!.tokenHint,
           lastSyncedAt: current?.lastSyncedAt ?? null,
           lastError: null,
           updatedAt: now(),

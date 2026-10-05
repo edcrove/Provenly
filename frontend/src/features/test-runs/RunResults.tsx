@@ -82,7 +82,7 @@ export function RunResults({ testRunId }: { testRunId: number }) {
                 {data.items.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-muted-foreground">
-                      No results match the filters.
+                      {status || correlation ? 'No results match the filters.' : 'No results yet.'}
                     </TableCell>
                   </TableRow>
                 )}

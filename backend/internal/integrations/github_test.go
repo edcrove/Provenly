@@ -101,7 +101,7 @@ func TestConnectGitHub(t *testing.T) {
 	assert.Equal(t, "…1234", v.TokenHint)
 	v, err = f.svc.ConnectGitHub(ctx, "SHOP", GitHubInput{Repository: "acme/web", Token: ptr("xyz")})
 	require.NoError(t, err)
-	assert.Equal(t, "…xyz", v.TokenHint)
+	assert.Equal(t, "…", v.TokenHint, "a short token shows none of its characters")
 
 	// A token sealed with another key shows no hint (connect again with a token).
 	c := f.repo.github[2]

@@ -138,7 +138,7 @@ describe('FE-INT-044 project integrations', () => {
     expect(await screen.findByText('GitHub request failed')).toBeInTheDocument()
     expect(await screen.findByText(/The last sync failed: GitHub answered 503/)).toBeInTheDocument()
 
-    await u.type(screen.getByLabelText('New token (optional)'), 'ghp_new9876')
+    await u.type(screen.getByLabelText('New token (optional)'), 'ghp_new_token_9876')
     await u.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(screen.getByTestId('github-connection')).toHaveTextContent('…9876'))
 

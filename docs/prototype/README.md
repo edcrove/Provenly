@@ -351,6 +351,31 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
 
+### 22. Full-product audit (screenshots of every flow, then code)
+
+Every screenshot of the flow was reviewed and the new modules re-read; each finding was fixed with a regression test
+that fails without the fix.
+
+- **F1** A running run showed its verdict as if final: the badge now reads "<verdict> so far" with a tooltip while
+  the run is running (run page, runs list, dashboard).
+- **F2/F10** A share of nothing read 0%: with no executed test case every "% of executed" (and the pass rate) is
+  "—", and with no expected test case every "% of expected" and the execution % is "—".
+- **F3** An unfiltered run without results said "No results match the filters"; it now says "No results yet.".
+- **F4** Issue and requirement pages ran the tracker link and "All issues/requirements" together; they are separated.
+- **F5** The project page (members, classification, API keys, webhooks, GitHub) was titled "<KEY> members"; it is
+  now "Project <KEY>" with a "Members" section.
+- **F6** A finished live panel still counted tests as "running"; it now reads "As streamed live: … still running ·
+  … never started".
+- **F7/F8** The runs-list breakdown and mobile dates broke mid-phrase; they wrap only between parts.
+- **F9** The GitHub token hint showed the last four characters of any token, the whole of a short one; tokens under
+  12 characters show only "…".
+- **F11** A manual test case with results from manual runs warned "Receives automated results but is marked
+  manual"; only results of batch or live runs warn now.
+- **Tests**: FE-INT-048 (new), FE-INT-014, FE-INT-009, FE-INT-044, FE-E2E-023 (provisional
+  badge and finished live panel), integrations unit tests (short-token hint).
+- **Kept as is** (judged correct): mobile tables scroll horizontally; requirements without linked test cases read
+  "0/0 passing"; coverage counts results of running runs (they are the latest known status).
+
 ### 21. Release, self-hosting, dogfooding, public readiness (Trello phase 4)
 
 - **Behavior**: tagging `vX.Y.Z` publishes images, the reporter and a release; teams self-host with released images

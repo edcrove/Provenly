@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { Play } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 
@@ -88,7 +89,10 @@ export function TestRunListPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
-                          <VerdictBadge verdict={run.outcome.verdict} />
+                          <VerdictBadge
+                            verdict={run.outcome.verdict}
+                            running={run.executionStatus === 'running'}
+                          />
                           <EditedBadge amendments={run.amendmentCount} />
                           <FlakyBadge count={run.outcome.flaky} />
                           <SuiteBadge suite={run.suite} />
@@ -98,8 +102,18 @@ export function TestRunListPage() {
                         {run.outcome.executed > 0 ? formatPercent(run.outcome.passRate) : '—'}
                       </TableCell>
                       <TableCell data-testid="outcome-breakdown">
-                        {outcomeBreakdown(run.outcome)}
-                        <span className="text-muted-foreground"> · {run.expectedCount} expected</span>
+                        {outcomeBreakdown(run.outcome)
+                          .split(' · ')
+                          .map((part, i) => (
+                            <Fragment key={part}>
+                              {i > 0 ? ' · ' : null}
+                              <span className="whitespace-nowrap">{part}</span>
+                            </Fragment>
+                          ))}
+                        <span className="text-muted-foreground">
+                          {' · '}
+                          <span className="whitespace-nowrap">{run.expectedCount} expected</span>
+                        </span>
                       </TableCell>
                       <TableCell>
                         {run.executionStatus === 'completed' ? (

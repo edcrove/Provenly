@@ -4530,7 +4530,7 @@ components:
           description: Comma-separated labels an issue must have to be mirrored; empty mirrors every issue.
         tokenHint:
           type: string
-          description: The token's last four characters; empty when it cannot be decrypted (connect again with a token).
+          description: An ellipsis followed by the token's last four characters (the ellipsis alone for tokens under 12 characters); empty when it cannot be decrypted (connect again with a token).
         lastSyncedAt:
           type: string
           format: date-time

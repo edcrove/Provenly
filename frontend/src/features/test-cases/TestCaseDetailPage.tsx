@@ -50,7 +50,11 @@ function Definition({ tc }: { tc: TestCase }) {
   const deprecate = useDeprecateTestCase(tc.id)
   const reactivate = useReactivateTestCase(tc.id)
   const history = useTestCaseHistory(tc.id, 1)
-  const manualWithResults = tc.status === 'active' && !tc.automated && (history.data?.totalItems ?? 0) > 0
+  // Results of manual runs are expected for a manual test case; only automated (CI or live) results are a mismatch.
+  const manualWithResults =
+    tc.status === 'active' &&
+    !tc.automated &&
+    (history.data?.items ?? []).some((h) => h.run.mode !== 'manual')
   const role = useProjectRole(tc.projectKey)
   const canEdit = can(role, 'member')
   const canManage = can(role, 'maintainer')

@@ -41,7 +41,7 @@ function Metadata({ run }: { run: TestRun }) {
       {rows.map(([k, v]) => (
         <div key={k}>
           <dt className="text-muted-foreground">{k}</dt>
-          <dd className="font-mono break-all">{v}</dd>
+          <dd className="font-mono wrap-anywhere">{v}</dd>
         </div>
       ))}
     </dl>
@@ -62,7 +62,7 @@ export function TestRunDetailPage() {
           <div className="flex flex-wrap items-center gap-3">
             <PageTitle title={`Test run #${r.id}`} />
             <h1 className="text-2xl font-semibold">Test run #{r.id}</h1>
-            <VerdictBadge verdict={r.outcome.verdict} />
+            <VerdictBadge verdict={r.outcome.verdict} running={r.executionStatus === 'running'} />
             <EditedBadge amendments={r.amendmentCount} />
             <FlakyBadge count={r.outcome.flaky} />
             <SuiteBadge suite={r.suite} />

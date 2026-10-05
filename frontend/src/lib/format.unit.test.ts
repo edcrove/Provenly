@@ -8,7 +8,6 @@ import {
   plural,
   shortCommit,
   sumPercents,
-  tcKey,
 } from './format'
 
 describe('format', () => {
@@ -22,10 +21,6 @@ describe('format', () => {
     expect(outcomeBreakdown({ passed: 0, failed: 0, error: 0, skipped: 0, untested: 0 })).toBe(
       'no test cases',
     )
-  })
-
-  it('formats TC keys', () => {
-    expect(tcKey(153)).toBe('TC-153')
   })
 
   it('formats durations', () => {

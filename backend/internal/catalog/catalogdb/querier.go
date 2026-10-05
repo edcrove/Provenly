@@ -6,30 +6,39 @@ package catalogdb
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
 	CloseTestStepGap(ctx context.Context, arg CloseTestStepGapParams) error
-	CountTestCases(ctx context.Context, status pgtype.Text) (int64, error)
+	CountProjects(ctx context.Context) (int64, error)
+	CountTestCases(ctx context.Context, arg CountTestCasesParams) (int64, error)
 	CountTestSteps(ctx context.Context, testCaseID int64) (int64, error)
+	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
+	// The number comes from the project's counter in the same statement: numbers
+	// are assigned per project, in order, and never reused. No row when the
+	// project does not exist.
 	CreateTestCase(ctx context.Context, arg CreateTestCaseParams) (TestCase, error)
 	CreateTestStep(ctx context.Context, arg CreateTestStepParams) (TestStep, error)
 	DeleteTestStep(ctx context.Context, arg DeleteTestStepParams) (int32, error)
 	DeprecateTestCase(ctx context.Context, id int64) (TestCase, error)
+	GetProject(ctx context.Context, id int64) (Project, error)
+	GetProjectByKey(ctx context.Context, key string) (Project, error)
 	GetTestCase(ctx context.Context, id int64) (TestCase, error)
 	ListAllTestSteps(ctx context.Context, testCaseID int64) ([]TestStep, error)
-	// One statement, so the expected universe (active AND automated) and the status
-	// of the referenced TC-IDs come from the same snapshot: a deprecation committed
-	// during an ingestion cannot put a TC in one and not the other.
-	ListIngestionView(ctx context.Context, ids []int64) ([]ListIngestionViewRow, error)
+	// One statement, so the expected universe of the project (active AND automated)
+	// and the status of the referenced numbers come from the same snapshot: a
+	// deprecation committed during an ingestion cannot put a TC in one and not the other.
+	ListIngestionView(ctx context.Context, arg ListIngestionViewParams) ([]ListIngestionViewRow, error)
+	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
+	// The identity (project and number) of the given test cases, for display.
+	ListTestCaseKeys(ctx context.Context, ids []int64) ([]ListTestCaseKeysRow, error)
 	ListTestCases(ctx context.Context, arg ListTestCasesParams) ([]TestCase, error)
 	ListTestSteps(ctx context.Context, arg ListTestStepsParams) ([]TestStep, error)
 	LockTestCase(ctx context.Context, id int64) (int64, error)
 	ReactivateTestCase(ctx context.Context, id int64) (TestCase, error)
 	SetTestStepPosition(ctx context.Context, arg SetTestStepPositionParams) error
 	ShiftTestStepsDown(ctx context.Context, arg ShiftTestStepsDownParams) error
+	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateTestCase(ctx context.Context, arg UpdateTestCaseParams) (TestCase, error)
 	UpdateTestStep(ctx context.Context, arg UpdateTestStepParams) (TestStep, error)
 }

@@ -3,6 +3,7 @@ package httpx
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -77,4 +78,17 @@ func EnumQuery(r *http.Request, name string, allowed ...string) (*string, error)
 		}
 	}
 	return nil, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: name, Message: "must be one of " + strings.Join(allowed, ", ")})
+}
+
+// PatternQuery reads an optional query parameter that must match re (present but empty is invalid).
+func PatternQuery(r *http.Request, name string, re *regexp.Regexp, message string) (*string, error) {
+	q := r.URL.Query()
+	if !q.Has(name) {
+		return nil, nil
+	}
+	raw := q.Get(name)
+	if !re.MatchString(raw) {
+		return nil, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: name, Message: message})
+	}
+	return &raw, nil
 }

@@ -1,14 +1,21 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 
-import { useCreateTestCase } from '@/api/queries'
+import { useCreateTestCase, useProjects } from '@/api/queries'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { NativeSelect } from '@/components/ui/select'
 import { PageTitle } from '@/components/PageTitle'
+import { useCurrentProject } from '@/features/projects/currentProject'
 
 import { TestCaseForm } from './TestCaseForm'
 
 export function NewTestCasePage() {
   const navigate = useNavigate()
   const create = useCreateTestCase()
+  const projects = useProjects()
+  const { project: current } = useCurrentProject()
+  const [project, setProject] = useState(current || 'TC')
   return (
     <Card className="max-w-2xl">
       <CardHeader>
@@ -16,15 +23,28 @@ export function NewTestCasePage() {
         <CardTitle as="h1" className="text-xl">
           New test case
         </CardTitle>
-        <CardDescription>The TC-ID is assigned by Provenly and never changes or gets reused.</CardDescription>
+        <CardDescription>
+          The TC-ID (project key and number, e.g. {project}-12) is assigned by Provenly and never changes or
+          gets reused.
+        </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="grid gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="tc-project">Project</Label>
+          <NativeSelect id="tc-project" value={project} onChange={(e) => setProject(e.target.value)}>
+            {(projects.data?.items ?? []).map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.key} · {p.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
         <TestCaseForm
           submitLabel="Create test case"
           pending={create.isPending}
           error={create.error}
           onSubmit={(values) =>
-            create.mutate(values, { onSuccess: (tc) => navigate(`/test-cases/${tc.id}`) })
+            create.mutate({ ...values, project }, { onSuccess: (tc) => navigate(`/test-cases/${tc.id}`) })
           }
           onCancel={() => navigate('/test-cases')}
         />

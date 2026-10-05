@@ -80,3 +80,15 @@ targets:
   - id: FE-INT-021
     description: a result's full error details (stack trace, every failure of the testcase) expand on demand with an accessible toggle
     surfaces: [src/features/test-runs/RunResults.tsx]
+  - id: FE-INT-022
+    description: the projects page lists projects, creates one (it becomes the current project), reports a key in use, renames with cancel and error, and paginates
+    surfaces: [src/features/projects/ProjectsPage.tsx]
+  - id: FE-INT-023
+    description: the header's current project narrows test case and run lists (remembered in the browser; an unknown remembered key means every project) and runs show their project key
+    surfaces: [src/features/projects/ProjectSwitcher.tsx, src/features/projects/ProjectProvider.tsx, src/app/Layout.tsx, src/features/test-runs/TestRunListPage.tsx, src/features/test-cases/TestCaseListPage.tsx]
+  - id: FE-INT-024
+    description: a new test case is created in the chosen project (default the current one) and numbered with its key; an unknown project is reported
+    surfaces: [src/features/test-cases/NewTestCasePage.tsx]
+  - id: FE-INT-025
+    description: run results show the test case key the API resolves (another project's key included), the id when there is none, and wrong_project diagnostics
+    surfaces: [src/features/test-runs/RunResults.tsx, src/features/test-runs/RunDiagnostics.tsx, src/features/test-runs/RunSummary.tsx]

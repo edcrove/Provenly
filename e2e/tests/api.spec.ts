@@ -1,5 +1,5 @@
 import { apiURL } from '../playwright.config'
-import { byName, byProperty, expect, junit, test, uniqueRunId } from '../support/fixtures'
+import { byName, byProperty, expect, junit, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
 test.describe('Backend API journeys', () => {
   test('[BE-E2E-001] health check responds through the public interface', async ({ request }) => {
@@ -10,7 +10,7 @@ test.describe('Backend API journeys', () => {
 
   test('[BE-E2E-002] test case lifecycle: server-assigned immutable TC-ID, edit and deprecate', async ({ request, provenly }) => {
     const tc = await provenly.createTestCase({ title: 'API lifecycle', automated: true })
-    expect(tc.key).toBe(`TC-${tc.id}`)
+    expect(tc.key).toBe(`TC-${tc.number}`)
     const rejected = await request.post(`${apiURL}/api/v1/test-cases`, { data: { id: 1, title: 'forced id' } })
     expect(rejected.status()).toBe(400)
     expect((await rejected.json()).code).toBe('validation_error')
@@ -53,15 +53,15 @@ test.describe('Backend API journeys', () => {
       uniqueRunId(),
       1,
       junit(
-        byProperty('login chrome', login.id),
-        byName(`login firefox TC-${login.id}`, '<failure message="timeout">stack</failure>'),
+        byProperty('login chrome', login.key),
+        byName(`login firefox ${login.key}`, '<failure message="timeout">stack</failure>'),
         byName('no tc id'),
         byName('broken TC-abc'),
         byName('ghost TC-987654321'),
-        byName(`old TC-${deprecated.id}`),
-        `<testcase name="login slow TC-${login.id}" time="soon"/>`,
+        byName(`old ${deprecated.key}`),
+        `<testcase name="login slow ${login.key}" time="soon"/>`,
         '<testcase name=""/>',
-        `<testcase name="login instant TC-${login.id}" time="0"/>`,
+        `<testcase name="login instant ${login.key}" time="0"/>`,
       ),
     )
     expect(res.status()).toBe(201)
@@ -96,8 +96,8 @@ test.describe('Backend API journeys', () => {
       diagnostics: { missing: 1, malformed: 1, unknown: 1, deprecated: 1, total: 4 },
     })
     expect(summary.testCases).toEqual([
-      { testCaseId: login.id, status: 'failed', resultCount: 4 },
-      { testCaseId: logout.id, status: 'untested', resultCount: 0 },
+      { testCaseId: login.id, testCaseKey: login.key, status: 'failed', resultCount: 4 },
+      { testCaseId: logout.id, testCaseKey: logout.key, status: 'untested', resultCount: 0 },
     ])
     const parseErrors = await (await request.get(`${apiURL}/api/v1/test-runs/${runId}/parse-errors`)).json()
     expect(parseErrors.items).toMatchObject([
@@ -118,12 +118,12 @@ test.describe('Backend API journeys', () => {
   test('[BE-E2E-005] resending an attempt is idempotent and a rerun creates a new run', async ({ request, provenly }) => {
     const tc = await provenly.createTestCase({ title: 'API idempotency', automated: true })
     const runId = uniqueRunId()
-    const report = junit(byProperty('idempotent', tc.id))
+    const report = junit(byProperty('idempotent', tc.key))
     const first = await (await provenly.ingest(runId, 1, report)).json()
     const replay = await provenly.ingest(runId, 1, report)
     expect(replay.status()).toBe(200)
     expect(await replay.json()).toMatchObject({ created: false, testRun: { id: first.testRun.id, resultCount: 1 }, warnings: [] })
-    const changed = await provenly.ingest(runId, 1, junit(byProperty('idempotent', tc.id, '<failure/>')))
+    const changed = await provenly.ingest(runId, 1, junit(byProperty('idempotent', tc.key, '<failure/>')))
     expect(changed.status()).toBe(200)
     const changedBody = await changed.json()
     expect(changedBody.warnings).toHaveLength(1)
@@ -142,8 +142,8 @@ test.describe('Backend API journeys', () => {
   test('[BE-E2E-006] history across runs and snapshot stability after catalog changes', async ({ request, provenly }) => {
     await provenly.isolateUniverse()
     const tc = await provenly.createTestCase({ title: 'API history', automated: true })
-    const run1 = await (await provenly.ingest(uniqueRunId(), 1, junit(byProperty('history', tc.id)))).json()
-    const run2 = await (await provenly.ingest(uniqueRunId(), 1, junit(byProperty('history renamed', tc.id, '<failure/>')))).json()
+    const run1 = await (await provenly.ingest(uniqueRunId(), 1, junit(byProperty('history', tc.key)))).json()
+    const run2 = await (await provenly.ingest(uniqueRunId(), 1, junit(byProperty('history renamed', tc.key, '<failure/>')))).json()
     const before = await (await request.get(`${apiURL}/api/v1/test-runs/${run1.testRun.id}/summary`)).json()
 
     await provenly.createTestCase({ title: 'API added later', automated: true })
@@ -157,5 +157,34 @@ test.describe('Backend API journeys', () => {
     expect(history.items[0]).toMatchObject({ result: { testName: 'history renamed' }, run: { id: run2.testRun.id, commit: 'c0ffee1234' } })
     const runs = await (await request.get(`${apiURL}/api/v1/test-runs?pageSize=5`)).json()
     expect(runs.items[0].id).toBe(run2.testRun.id)
+  })
+
+  test('[BE-E2E-007] projects: per-project numbering, ?project= ingestion, wrong_project and per-project run ids', async ({ request, provenly }) => {
+    const key = uniqueProjectKey()
+    const project = await provenly.createProject(key.toLowerCase(), 'E2E project')
+    expect(project.key).toBe(key)
+    expect((await request.post(`${apiURL}/api/v1/projects`, { data: { key, name: 'again' } })).status()).toBe(409)
+
+    const first = await provenly.createTestCase({ title: 'project first', automated: true, project: key })
+    const second = await provenly.createTestCase({ title: 'project second', automated: true, project: key })
+    expect([first.key, second.key]).toEqual([`${key}-1`, `${key}-2`])
+    const other = await provenly.createTestCase({ title: 'default project', automated: true })
+
+    const runId = uniqueRunId()
+    const report = junit(byName(`pays ${key}-1`), byProperty('cross', other.key), byName(`ignored ${other.key}`))
+    const res = await provenly.ingest(runId, 1, report, { project: key })
+    expect(res.status()).toBe(201)
+    const body = await res.json()
+    expect(body.testRun).toMatchObject({ projectId: project.id, expectedCount: 2 })
+    expect(body.diagnostics.map((d: { correlation: string }) => d.correlation).sort()).toEqual(['missing', 'wrong_project'])
+
+    // The same CI run id in the default project is another run.
+    expect((await provenly.ingest(runId, 1, junit(byProperty('x', other.key)))).status()).toBe(201)
+    const runs = await (await request.get(`${apiURL}/api/v1/test-runs?project=${key}`)).json()
+    expect(runs.items.map((r: { id: number }) => r.id)).toEqual([body.testRun.id])
+    const summary = await (await request.get(`${apiURL}/api/v1/test-runs/${body.testRun.id}/summary`)).json()
+    expect(summary.testCases.map((c: { testCaseKey: string }) => c.testCaseKey).sort()).toEqual([`${key}-1`, `${key}-2`])
+    expect(summary.diagnostics.wrongProject).toBe(1)
+    expect((await request.get(`${apiURL}/api/v1/test-cases?project=NOPE1`)).status()).toBe(404)
   })
 })

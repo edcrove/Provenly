@@ -1,5 +1,6 @@
 import { Navigate, type RouteObject } from 'react-router'
 
+import { ProjectsPage } from '@/features/projects/ProjectsPage'
 import { NewTestCasePage } from '@/features/test-cases/NewTestCasePage'
 import { TestCaseDetailPage } from '@/features/test-cases/TestCaseDetailPage'
 import { TestCaseListPage } from '@/features/test-cases/TestCaseListPage'
@@ -14,6 +15,7 @@ export const routes: RouteObject[] = [
     element: <Layout />,
     children: [
       { index: true, element: <Navigate to="/test-cases" replace /> },
+      { path: 'projects', element: <ProjectsPage /> },
       { path: 'test-cases', element: <TestCaseListPage /> },
       { path: 'test-cases/new', element: <NewTestCasePage /> },
       { path: 'test-cases/:testCaseId', element: <TestCaseDetailPage /> },

@@ -49,10 +49,12 @@ const (
 	CorrelationMalformed  Correlation = "malformed"
 	CorrelationUnknown    Correlation = "unknown"
 	CorrelationDeprecated Correlation = "deprecated"
+	// CorrelationWrongProject is a reference with another project's key (e.g. WEB-12 in a CHK run).
+	CorrelationWrongProject Correlation = "wrong_project"
 )
 
 // Correlations lists every correlation.
-var Correlations = []Correlation{CorrelationValid, CorrelationMissing, CorrelationMalformed, CorrelationUnknown, CorrelationDeprecated}
+var Correlations = []Correlation{CorrelationValid, CorrelationMissing, CorrelationMalformed, CorrelationUnknown, CorrelationDeprecated, CorrelationWrongProject}
 
 // ErrNotFound is returned by a Repository when a row does not exist.
 var ErrNotFound = errors.New("not found")
@@ -65,6 +67,7 @@ func ExternalRunID(provider, providerRunID string, attempt int32) string {
 // TestRun is a logical execution identified by its ExternalRunID.
 type TestRun struct {
 	ID            int64
+	ProjectID     int64
 	ExternalRunID string
 	Provider      string
 	ProviderRunID string
@@ -104,6 +107,7 @@ type TestResult struct {
 
 // NewRun is the metadata of a run to record.
 type NewRun struct {
+	ProjectID     int64
 	Provider      string
 	ProviderRunID string
 	RunAttempt    int32
@@ -189,15 +193,15 @@ type InsertRunParams struct {
 type Repository interface {
 	// InsertTestRun inserts a run unless its external id exists; ok is false on conflict.
 	InsertTestRun(ctx context.Context, p InsertRunParams) (id int64, ok bool, err error)
-	GetTestRunIDByExternalID(ctx context.Context, externalRunID string) (int64, error)
+	GetTestRunIDByExternalID(ctx context.Context, projectID int64, externalRunID string) (int64, error)
 	InsertExpectedCases(ctx context.Context, runID int64, testCaseIDs []int64) error
 	InsertTestResults(ctx context.Context, runID int64, results []NewResult) error
 	InsertParseErrors(ctx context.Context, runID int64, errs []ParseError) error
 	ListParseErrors(ctx context.Context, runID int64, limit, offset int32) ([]ParseError, error)
 	CountParseErrors(ctx context.Context, runID int64) (int64, error)
 	GetTestRun(ctx context.Context, id int64) (TestRun, error)
-	ListTestRuns(ctx context.Context, limit, offset int32) ([]TestRun, error)
-	CountTestRuns(ctx context.Context) (int64, error)
+	ListTestRuns(ctx context.Context, projectID *int64, limit, offset int32) ([]TestRun, error)
+	CountTestRuns(ctx context.Context, projectID *int64) (int64, error)
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, limit, offset int32) ([]TestResult, error)
 	CountRunResults(ctx context.Context, runID int64, f ResultFilter) (int64, error)
 	// ListSummaryInputs returns the snapshot TC-IDs and valid results of each given run.

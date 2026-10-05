@@ -1,6 +1,6 @@
 import { Link, useSearchParams } from 'react-router'
 
-import { useTestRuns } from '@/api/queries'
+import { useProjects, useTestRuns } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
 import { ExecutionBadge, VerdictBadge } from '@/components/StatusBadge'
@@ -8,12 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime, formatPercent, outcomeBreakdown, shortCommit } from '@/lib/format'
+import { useCurrentProject } from '@/features/projects/currentProject'
 import { positiveInt } from '@/lib/status'
 
 export function TestRunListPage() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
-  const query = useTestRuns(page)
+  const { project } = useCurrentProject()
+  const query = useTestRuns(page, project || undefined)
+  const projects = useProjects()
+  const projectKey = (id: number) => projects.data?.items.find((p) => p.id === id)?.key ?? '—'
   return (
     <Card>
       <CardHeader>
@@ -30,6 +34,7 @@ export function TestRunListPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Run</TableHead>
+                    <TableHead>Project</TableHead>
                     <TableHead>Verdict</TableHead>
                     <TableHead>Pass rate</TableHead>
                     <TableHead>Test cases</TableHead>
@@ -44,7 +49,7 @@ export function TestRunListPage() {
                 <TableBody>
                   {data.items.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-muted-foreground">
+                      <TableCell colSpan={11} className="text-muted-foreground">
                         No test runs yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.
                       </TableCell>
                     </TableRow>
@@ -55,6 +60,9 @@ export function TestRunListPage() {
                         <Link to={`/test-runs/${run.id}`} className="underline">
                           #{run.id}
                         </Link>
+                      </TableCell>
+                      <TableCell className="font-mono" data-testid="run-project">
+                        {projectKey(run.projectId)}
                       </TableCell>
                       <TableCell>
                         <VerdictBadge verdict={run.outcome.verdict} />

@@ -10,5 +10,6 @@ beforeEach(() => resetDb())
 afterEach(() => {
   cleanup()
   server.resetHandlers()
+  localStorage.clear()
 })
 afterAll(() => server.close())

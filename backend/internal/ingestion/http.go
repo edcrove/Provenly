@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/edcrove/provenly/backend/internal/catalog"
 	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/ingestion/junit"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
@@ -78,7 +79,7 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	meta := RunMeta{
-		Provider: q.Get("provider"), ProviderRunID: q.Get("runId"),
+		ProjectKey: q.Get("project"), Provider: q.Get("provider"), ProviderRunID: q.Get("runId"),
 		Pipeline: q.Get("pipeline"), Branch: q.Get("branch"), Commit: q.Get("commit"),
 		Status: execution.RunStatus(q.Get("status")), Charset: charset,
 	}
@@ -86,6 +87,9 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 	var fields []apperr.FieldError
 	if q.Has("status") && meta.Status == "" {
 		fields = append(fields, apperr.FieldError{Field: "status", Message: "must be one of completed, interrupted, cancelled"})
+	}
+	if q.Has("project") && meta.ProjectKey == "" {
+		fields = append(fields, apperr.FieldError{Field: "project", Message: catalog.ProjectKeyMessage})
 	}
 	attempt, err := strconv.ParseInt(q.Get("runAttempt"), 10, 32)
 	if err != nil {

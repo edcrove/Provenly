@@ -239,4 +239,29 @@ test('UI flows', async ({ page, request }) => {
   await page.getByRole('button', { name: /Show error details/ }).first().click()
   await expect(page.getByTestId('error-details')).toBeVisible()
   await shot(page, 'test-run-error-details')
+
+  // Projects (prototype feature 1): a second project with its own numbering, a run ingested into it
+  // (one reference with the default project's key is wrong_project) and the lists narrowed to it.
+  await page.goto('/projects')
+  await page.getByLabel('Key').fill('CHK')
+  await page.getByLabel('Name').fill('Checkout')
+  await page.getByLabel('Description').fill('Cart, payment and order confirmation')
+  await page.getByRole('button', { name: 'Create project' }).click()
+  await expect(page.getByTestId('project-CHK')).toBeVisible()
+  await shot(page, 'projects')
+  const pay = await createTC(request, 'Pay by card', true, { project: 'CHK' })
+  await createTC(request, 'Refund an order', true, { project: 'CHK' })
+  await createTC(request, 'Apply a discount code', false, { project: 'CHK' })
+  const params = new URLSearchParams({ project: 'CHK', provider: 'github', runId: '5150', runAttempt: '1', pipeline: 'checkout', branch: 'main', commit: '4b1d2c3e9a' })
+  const chkRun = await request.post(`${api}/ingestion/junit?${params}`, {
+    headers: { 'Content-Type': 'application/xml' },
+    data: junit(tc('pay visa', 'CHK-1'), tc('pay amex', 'CHK-1', fail('Card declined')), tc('login from checkout', `TC-${login}`)),
+  })
+  expect(chkRun.status()).toBe(201)
+  await page.goto('/test-cases')
+  await shot(page, 'test-cases-in-project')
+  await page.goto(`/test-runs/${((await chkRun.json()) as { testRun: { id: number } }).testRun.id}`)
+  await expect(page.getByRole('link', { name: 'CHK-1' }).first()).toBeVisible()
+  await shot(page, 'test-run-in-project')
+  expect(pay).toBeGreaterThan(0)
 })

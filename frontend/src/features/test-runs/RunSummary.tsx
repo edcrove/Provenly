@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import type { TestRunSummary } from '@/api/client'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatPercent, plural, sumPercents, tcKey } from '@/lib/format'
+import { formatPercent, plural, sumPercents } from '@/lib/format'
 import { resultStatuses, summaryStatuses } from '@/lib/status'
 
 /** Snapshot-based summary: counts, % of expected, % of executed and execution %. */
@@ -91,7 +91,7 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
             <span key={c.testCaseId}>
               {i > 0 && ', '}
               <Link to={`/test-cases/${c.testCaseId}`} className="font-mono underline">
-                {tcKey(c.testCaseId)}
+                {c.testCaseKey}
               </Link>
             </span>
           ))}

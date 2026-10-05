@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -31,6 +32,7 @@ func TestWriteErrorMapping(t *testing.T) {
 		fields []FieldError
 	}{
 		{apperr.NotFound("nope"), 404, CodeNotFound, nil},
+		{apperr.Conflict("taken"), 409, CodeConflict, nil},
 		{apperr.InvalidDocument("bad xml"), 400, CodeInvalidJUnit, nil},
 		{apperr.Validation("v", apperr.FieldError{Field: "title", Message: "req"}), 400, CodeValidation, []FieldError{{Field: "title", Message: "req"}}},
 		{&http.MaxBytesError{Limit: 1}, 413, CodePayloadTooLarge, nil},
@@ -123,6 +125,24 @@ func TestPathID(t *testing.T) {
 		e, ok := apperr.As(err)
 		require.True(t, ok, v)
 		assert.Equal(t, "id", e.Fields[0].Field)
+	}
+}
+
+func TestPatternQuery(t *testing.T) {
+	re := regexp.MustCompile(`^[A-Z]{2}$`)
+	v, err := PatternQuery(httptest.NewRequest(http.MethodGet, "/", nil), "project", re, "two letters")
+	require.NoError(t, err)
+	assert.Nil(t, v)
+
+	v, err = PatternQuery(httptest.NewRequest(http.MethodGet, "/?project=AB&project=x", nil), "project", re, "two letters")
+	require.NoError(t, err)
+	assert.Equal(t, "AB", *v, "the first repeated value wins")
+
+	for _, target := range []string{"/?project=", "/?project=abc"} {
+		_, err = PatternQuery(httptest.NewRequest(http.MethodGet, target, nil), "project", re, "two letters")
+		e, ok := apperr.As(err)
+		require.True(t, ok, target)
+		assert.Equal(t, []apperr.FieldError{{Field: "project", Message: "two letters"}}, e.Fields)
 	}
 }
 

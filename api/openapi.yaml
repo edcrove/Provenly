@@ -13,12 +13,18 @@ info:
     - Pagination: every listing endpoint accepts `page` (1-based) and `pageSize`
       (1..100, default 20) and returns `items` plus `page`, `pageSize`,
       `totalItems` and `totalPages`.
-    - Test Case identity: numeric `id`, displayed as `key` = `TC-<id>`. The id is
+    - Projects: every test case and run belongs to a project with a key of 2 to 10
+      upper-case letters or digits (e.g. `CHK`). The default project `TC` holds the
+      test cases created before projects existed. Projects are never deleted and
+      their key never changes.
+    - Test Case identity: numeric `id` (used in URLs) plus a per-project `number`,
+      displayed as `key` = `<projectKey>-<number>` (e.g. `CHK-12`). Both are
       assigned by the server, immutable and never reused.
 servers:
   - url: http://localhost:8080
 tags:
   - name: system
+  - name: projects
   - name: test-cases
   - name: test-steps
   - name: test-runs
@@ -51,6 +57,97 @@ paths:
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
 
+  /api/v1/projects:
+    get:
+      tags: [projects]
+      operationId: listProjects
+      summary: List projects (by key)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of projects
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [projects]
+      operationId: createProject
+      summary: Create a project. The key is trimmed and upper-cased; it can never change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    get:
+      tags: [projects]
+      operationId: getProject
+      summary: Get a project by its key
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [projects]
+      operationId: updateProject
+      summary: Edit a project's name or description (the key never changes)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectRequest"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/test-cases:
     get:
       tags: [test-cases]
@@ -64,6 +161,7 @@ paths:
           required: false
           schema:
             $ref: "#/components/schemas/TestCaseStatus"
+        - $ref: "#/components/parameters/ProjectFilter"
       responses:
         "200":
           description: Page of test cases
@@ -73,6 +171,8 @@ paths:
                 $ref: "#/components/schemas/TestCasePage"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
     post:
@@ -94,6 +194,8 @@ paths:
                 $ref: "#/components/schemas/TestCase"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
         "500":
@@ -340,6 +442,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
+        - $ref: "#/components/parameters/ProjectFilter"
       responses:
         "200":
           description: Page of test runs
@@ -349,6 +452,8 @@ paths:
                 $ref: "#/components/schemas/TestRunPage"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -458,7 +563,10 @@ paths:
       operationId: ingestJUnitReport
       summary: Ingest one complete JUnit XML report (batch) for a CI run attempt
       description: |
-        `externalRunId` = `{provider}:{runId}:{runAttempt}`. Re-sending the same
+        The run belongs to `project` (default `TC`): its expected universe is that
+        project's, the testcase-name fallback only reads `<project>-<n>`, and a
+        `tc-id` property with another project's key is a `wrong_project` diagnostic.
+        `externalRunId` = `{provider}:{runId}:{runAttempt}`, unique per project. Re-sending the same
         attempt is idempotent (200, no duplicate run, no reprocessing; if the report
         content differs from the original, a `warnings` entry says it was not
         applied); a new
@@ -467,6 +575,14 @@ paths:
         `parseErrors` (stored with the run; `persisted` tells whether the result
         was kept, e.g. with an unknown duration, or discarded, e.g. without name).
       parameters:
+        - name: project
+          in: query
+          required: false
+          description: Key of the project the run belongs to (default `TC`).
+          schema:
+            type: string
+            pattern: "^[A-Z][A-Z0-9]{1,9}$"
+          example: CHK
         - name: provider
           in: query
           required: true
@@ -548,6 +664,8 @@ paths:
                 $ref: "#/components/schemas/IngestionResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "413":
           $ref: "#/components/responses/PayloadTooLarge"
         "415":
@@ -557,6 +675,23 @@ paths:
 
 components:
   parameters:
+    ProjectKey:
+      name: projectKey
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[A-Z][A-Z0-9]{1,9}$"
+      example: CHK
+    ProjectFilter:
+      name: project
+      in: query
+      required: false
+      description: Only items of the project with this key (an unknown key is a 404).
+      schema:
+        type: string
+        pattern: "^[A-Z][A-Z0-9]{1,9}$"
+      example: CHK
     Page:
       name: page
       in: query
@@ -611,6 +746,12 @@ components:
             $ref: "#/components/schemas/Problem"
     NotFound:
       description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: The request conflicts with the current state (e.g. a project key already in use)
       content:
         application/problem+json:
           schema:
@@ -674,6 +815,7 @@ components:
             - validation_error
             - invalid_junit
             - not_found
+            - conflict
             - method_not_allowed
             - payload_too_large
             - unsupported_media_type
@@ -720,7 +862,7 @@ components:
     TestCase:
       type: object
       additionalProperties: false
-      required: [id, key, title, description, expectedResult, status, automated, createdAt, updatedAt]
+      required: [id, key, projectId, projectKey, number, title, description, expectedResult, status, automated, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -728,8 +870,19 @@ components:
           example: 153
         key:
           type: string
-          pattern: "^TC-[1-9][0-9]*$"
-          example: TC-153
+          pattern: "^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]*$"
+          example: CHK-12
+        projectId:
+          type: integer
+          format: int64
+        projectKey:
+          type: string
+          example: CHK
+        number:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 12
         title:
           type: string
         description:
@@ -751,6 +904,71 @@ components:
           format: date-time
           nullable: true
 
+    Project:
+      type: object
+      additionalProperties: false
+      required: [id, key, name, description, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        key:
+          type: string
+          pattern: "^[A-Z][A-Z0-9]{1,9}$"
+          example: CHK
+        name:
+          type: string
+          example: Checkout
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ProjectPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Project"
+
+    CreateProjectRequest:
+      type: object
+      additionalProperties: false
+      required: [key, name]
+      properties:
+        key:
+          type: string
+          description: 2 to 10 letters or digits, starting with a letter; stored upper-cased.
+          example: CHK
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 2000
+
+    UpdateProjectRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 2000
+
     TestCasePage:
       allOf:
         - $ref: "#/components/schemas/PageMeta"
@@ -767,6 +985,10 @@ components:
       additionalProperties: false
       required: [title]
       properties:
+        project:
+          type: string
+          pattern: "^[A-Z][A-Z0-9]{1,9}$"
+          description: Key of the project the test case belongs to (default `TC`); it never changes.
         title:
           type: string
           minLength: 1
@@ -946,6 +1168,7 @@ components:
       additionalProperties: false
       required:
         - id
+        - projectId
         - externalRunId
         - provider
         - providerRunId
@@ -960,6 +1183,9 @@ components:
         - createdAt
       properties:
         id:
+          type: integer
+          format: int64
+        projectId:
           type: integer
           format: int64
         externalRunId:
@@ -1019,7 +1245,7 @@ components:
     Correlation:
       type: string
       description: Outcome of TC-ID extraction/validation for a result
-      enum: [valid, missing, malformed, unknown, deprecated]
+      enum: [valid, missing, malformed, unknown, deprecated, wrong_project]
 
     TestResult:
       type: object
@@ -1028,6 +1254,7 @@ components:
         - id
         - testRunId
         - testCaseId
+        - testCaseKey
         - requestedTestCaseId
         - correlation
         - testName
@@ -1050,6 +1277,11 @@ components:
           format: int64
           nullable: true
           description: Set when correlation is `valid` or `deprecated` (a result received after the test case was deprecated still belongs to its history)
+        testCaseKey:
+          type: string
+          nullable: true
+          description: Display key (`<projectKey>-<number>`) of the linked test case; null when not linked
+          example: CHK-12
         requestedTestCaseId:
           type: string
           nullable: true
@@ -1170,8 +1402,12 @@ components:
     DiagnosticCounts:
       type: object
       additionalProperties: false
-      required: [missing, malformed, unknown, deprecated, total]
+      required: [missing, malformed, unknown, deprecated, wrongProject, total]
       properties:
+        wrongProject:
+          type: integer
+          format: int32
+          description: References with another project's key (not correlated)
         missing:
           type: integer
           format: int32
@@ -1191,11 +1427,14 @@ components:
     TestCaseOutcome:
       type: object
       additionalProperties: false
-      required: [testCaseId, status, resultCount]
+      required: [testCaseId, testCaseKey, status, resultCount]
       properties:
         testCaseId:
           type: integer
           format: int64
+        testCaseKey:
+          type: string
+          example: CHK-12
         status:
           $ref: "#/components/schemas/SummaryStatus"
         resultCount:
@@ -1269,7 +1508,7 @@ components:
           type: string
         correlation:
           type: string
-          enum: [missing, malformed, unknown, deprecated]
+          enum: [missing, malformed, unknown, deprecated, wrong_project]
         requestedTestCaseId:
           type: string
           nullable: true

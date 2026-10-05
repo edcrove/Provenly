@@ -40,3 +40,6 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 33 | Phone: new test case form | `33-mobile-test-case-new-form.png` |
 | 34 | Phone: test run detail | `34-mobile-test-run-detail.png` |
 | 35 | Result error details expanded (full stack trace, every failure) | `35-test-run-error-details.png` |
+| 36 | Projects page: TC (default) and CHK, new project form | `36-projects.png` |
+| 37 | Test case list narrowed to the current project (CHK-1…) | `37-test-cases-in-project.png` |
+| 38 | Run of the CHK project: CHK keys and a wrong_project diagnostic | `38-test-run-in-project.png` |

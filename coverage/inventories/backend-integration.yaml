@@ -62,3 +62,13 @@ targets:
     description: deep history and run-list pages cost no more than the first (20k results for one TC)
   - id: BE-INT-030
     description: the summary of a mixed run (precedence, untested, outside universe, diagnostics, three percentages) matches hand-computed numbers and survives later catalog changes; a run with nothing executed is 100% untested
+  - id: BE-INT-031
+    description: projects are created (key trimmed and upper-cased, duplicate key is a conflict), read by key or id, listed by key and updated; the database forbids deleting a project, changing its key, lowering its counter and invalid keys or names
+  - id: BE-INT-032
+    description: test case numbers are per project, contiguous and unique under concurrent creation; list, get and the ingestion view are scoped to the project
+  - id: BE-INT-033
+    description: ingestion into a project (?project=) snapshots that project's universe, correlates only its keys (another project's key is wrong_project), keeps externalRunId unique per project and filters run lists by project
+  - id: BE-INT-034
+    description: the projects migration keeps every existing test case as TC-<id>, continues the TC counter after the highest id and assigns existing runs to TC
+  - id: BE-INT-035
+    description: a project key lookup that fails after the test case query succeeded is reported as an error, never as a test case without key

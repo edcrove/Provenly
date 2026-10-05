@@ -46,7 +46,7 @@ type ExecutedPercentages struct {
 
 // DiagnosticCounts counts results excluded because their TC-ID is not valid.
 type DiagnosticCounts struct {
-	Missing, Malformed, Unknown, Deprecated, Total int32
+	Missing, Malformed, Unknown, Deprecated, WrongProject, Total int32
 }
 
 // TestCaseOutcome is the aggregated outcome of one snapshot TC-ID.
@@ -189,6 +189,8 @@ func ComputeSummary(runID int64, expected []int64, valid []ValidResult, diagnost
 			s.Diagnostics.Unknown++
 		case CorrelationDeprecated:
 			s.Diagnostics.Deprecated++
+		case CorrelationWrongProject:
+			s.Diagnostics.WrongProject++
 		}
 	}
 	s.Diagnostics.Total = int32(len(diagnostics))

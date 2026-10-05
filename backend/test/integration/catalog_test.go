@@ -33,13 +33,13 @@ func TestCatalogPersistence(t *testing.T) {
 		assert.Greater(t, c.ID, b.ID, "a deprecated id is never reused")
 
 		// A failed insert consumes an identity value but never produces a duplicate.
-		_, err = db.Pool.Exec(ctx, `INSERT INTO test_cases (title) VALUES ('')`)
+		_, err = db.Pool.Exec(ctx, `INSERT INTO test_cases (project_id, number, title) VALUES (1, 900, '')`)
 		require.Error(t, err)
 		d, err := s.Catalog.Create(ctx, catalog.CreateInput{Title: "d"})
 		require.NoError(t, err)
 		assert.Greater(t, d.ID, c.ID)
 
-		_, err = db.Pool.Exec(ctx, `INSERT INTO test_cases (id, title) VALUES (999, 'forced')`)
+		_, err = db.Pool.Exec(ctx, `INSERT INTO test_cases (id, project_id, number, title) VALUES (999, 1, 900, 'forced')`)
 		require.Error(t, err, "clients cannot choose a TC-ID")
 	})
 
@@ -50,7 +50,9 @@ func TestCatalogPersistence(t *testing.T) {
 		_, err = db.Pool.Exec(ctx, `DELETE FROM test_cases WHERE id = $1`, tc.ID)
 		assert.ErrorContains(t, err, "test cases cannot be deleted (TC-"+itoa(tc.ID)+"); deprecate instead")
 		_, err = db.Pool.Exec(ctx, `UPDATE test_cases SET id = DEFAULT WHERE id = $1`, tc.ID)
-		assert.ErrorContains(t, err, "test case id is immutable (TC-"+itoa(tc.ID)+")")
+		assert.ErrorContains(t, err, "test case identity is immutable (TC-"+itoa(tc.ID)+")")
+		_, err = db.Pool.Exec(ctx, `UPDATE test_cases SET number = number + 1 WHERE id = $1`, tc.ID)
+		assert.ErrorContains(t, err, "test case identity is immutable (TC-"+itoa(tc.ID)+")", "the number is part of the identity")
 	})
 
 	t.Run("BE-INT-026_database_enforces_test_case_integrity", func(t *testing.T) {
@@ -58,12 +60,12 @@ func TestCatalogPersistence(t *testing.T) {
 		tc, err := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Description: strings.Repeat("d", 10000), ExpectedResult: strings.Repeat("e", 10000)})
 		require.NoError(t, err, "10000 characters is the limit, not past it")
 		for _, c := range []struct{ stmt, constraint string }{
-			{`INSERT INTO test_cases (title) VALUES (' ' || chr(9) || ' ')`, "test_cases_title_not_blank"},
-			{`INSERT INTO test_cases (title, description) VALUES ('d', repeat('d', 10001))`, "test_cases_description_length"},
-			{`INSERT INTO test_cases (title, expected_result) VALUES ('e', repeat('é', 10001))`, "test_cases_expected_result_length"},
-			{`INSERT INTO test_cases (title, status) VALUES ('no date', 'deprecated')`, "test_cases_deprecated_at_matches_status"},
-			{`INSERT INTO test_cases (title, deprecated_at) VALUES ('active with date', now())`, "test_cases_deprecated_at_matches_status"},
-			{`INSERT INTO test_cases (title, created_at, updated_at) VALUES ('t', now(), now() - interval '1 second')`, "test_cases_updated_after_created"},
+			{`INSERT INTO test_cases (project_id, number, title) VALUES (1, 900, ' ' || chr(9) || ' ')`, "test_cases_title_not_blank"},
+			{`INSERT INTO test_cases (project_id, number, title, description) VALUES (1, 900, 'd', repeat('d', 10001))`, "test_cases_description_length"},
+			{`INSERT INTO test_cases (project_id, number, title, expected_result) VALUES (1, 900, 'e', repeat('é', 10001))`, "test_cases_expected_result_length"},
+			{`INSERT INTO test_cases (project_id, number, title, status) VALUES (1, 900, 'no date', 'deprecated')`, "test_cases_deprecated_at_matches_status"},
+			{`INSERT INTO test_cases (project_id, number, title, deprecated_at) VALUES (1, 900, 'active with date', now())`, "test_cases_deprecated_at_matches_status"},
+			{`INSERT INTO test_cases (project_id, number, title, created_at, updated_at) VALUES (1, 900, 't', now(), now() - interval '1 second')`, "test_cases_updated_after_created"},
 		} {
 			_, err := db.Pool.Exec(ctx, c.stmt)
 			assert.ErrorContains(t, err, c.constraint, c.stmt)
@@ -158,13 +160,13 @@ func TestCatalogPersistence(t *testing.T) {
 			_, err := s.Catalog.Create(ctx, catalog.CreateInput{Title: title})
 			require.NoError(t, err)
 		}
-		page, err := s.Catalog.List(ctx, nil, pagination.Page{Number: 1, Size: 2})
+		page, err := s.Catalog.List(ctx, catalog.ListFilter{}, pagination.Page{Number: 1, Size: 2})
 		require.NoError(t, err)
 		assert.Equal(t, int64(4), page.Total)
 		assert.Len(t, page.Items, 2)
 		assert.Greater(t, page.Items[0].ID, page.Items[1].ID, "newest first")
 		deprecated := catalog.StatusDeprecated
-		page, err = s.Catalog.List(ctx, &deprecated, pagination.Default())
+		page, err = s.Catalog.List(ctx, catalog.ListFilter{Status: &deprecated}, pagination.Default())
 		require.NoError(t, err)
 		assert.Equal(t, int64(1), page.Total)
 
@@ -189,14 +191,16 @@ func TestCatalogPersistence(t *testing.T) {
 		_, _ = s.Catalog.Create(ctx, catalog.CreateInput{Title: "manual"})
 		gone, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "gone", Automated: true})
 		_, _ = s.Catalog.Deprecate(ctx, gone.ID)
-		view, err := s.Catalog.IngestionView(ctx, []int64{auto.ID, gone.ID, 987654})
+		view, err := s.Catalog.IngestionView(ctx, catalog.DefaultProjectID, []int64{auto.Number, gone.Number, 987654})
 		require.NoError(t, err)
 		assert.Equal(t, []int64{auto.ID}, view.Expected)
-		assert.Equal(t, map[int64]catalog.Status{auto.ID: catalog.StatusActive, gone.ID: catalog.StatusDeprecated}, view.Statuses,
+		assert.Equal(t, map[int64]catalog.IngestionEntry{
+			auto.Number: {ID: auto.ID, Status: catalog.StatusActive}, gone.Number: {ID: gone.ID, Status: catalog.StatusDeprecated},
+		}, view.Entries,
 			"only referenced ids have a status; unknown ids are absent")
 
 		require.NoError(t, db.Reset(ctx))
-		view, err = s.Catalog.IngestionView(ctx, nil)
+		view, err = s.Catalog.IngestionView(ctx, catalog.DefaultProjectID, nil)
 		require.NoError(t, err)
 		assert.NotNil(t, view.Expected)
 		assert.Empty(t, view.Expected)
@@ -304,7 +308,7 @@ func TestCatalogPersistence(t *testing.T) {
 		store := catalogpg.NewStore(db.Pool)
 		var createdID int64
 		err := store.InTx(ctx, func(r catalog.Repository) error {
-			tc, err := r.CreateTestCase(ctx, catalog.CreateInput{Title: "rolled back"})
+			tc, err := r.CreateTestCase(ctx, catalog.CreateInput{ProjectID: catalog.DefaultProjectID, Title: "rolled back"})
 			createdID = tc.ID
 			if err != nil {
 				return err

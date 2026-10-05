@@ -49,7 +49,7 @@ func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, r
 			return err
 		}
 		if !ok {
-			if id, err = r.GetTestRunIDByExternalID(ctx, externalID); err != nil {
+			if id, err = r.GetTestRunIDByExternalID(ctx, run.ProjectID, externalID); err != nil {
 				return err
 			}
 		} else {
@@ -118,16 +118,16 @@ func (s *Service) getRun(ctx context.Context, id int64) (TestRun, error) {
 	return run, err
 }
 
-// ListRuns returns a page of runs with their outcomes, newest first.
-func (s *Service) ListRuns(ctx context.Context, page pagination.Page) (pagination.Result[TestRun], error) {
-	items, err := s.repo.ListTestRuns(ctx, page.Limit(), page.Offset())
+// ListRuns returns a page of runs with their outcomes, newest first, optionally of one project.
+func (s *Service) ListRuns(ctx context.Context, projectID *int64, page pagination.Page) (pagination.Result[TestRun], error) {
+	items, err := s.repo.ListTestRuns(ctx, projectID, page.Limit(), page.Offset())
 	if err != nil {
 		return pagination.Result[TestRun]{}, err
 	}
 	if err := attachOutcomes(ctx, s.repo, items, func(i int, o RunOutcome) { items[i].Outcome = o }); err != nil {
 		return pagination.Result[TestRun]{}, err
 	}
-	total, err := s.repo.CountTestRuns(ctx)
+	total, err := s.repo.CountTestRuns(ctx, projectID)
 	if err != nil {
 		return pagination.Result[TestRun]{}, err
 	}

@@ -21,15 +21,31 @@ import (
 var errBoom = errors.New("boom")
 
 type fakeCatalog struct {
-	universe []int64
-	statuses map[int64]catalog.Status
-	viewErr  error
-	askedIDs []int64
+	universe   []int64
+	statuses   map[int64]catalog.Status
+	viewErr    error
+	projectErr error
+	askedIDs   []int64
+	gotProject int64
 }
 
-func (f *fakeCatalog) IngestionView(_ context.Context, ids []int64) (catalog.IngestionView, error) {
-	f.askedIDs = ids
-	return catalog.IngestionView{Expected: f.universe, Statuses: f.statuses}, f.viewErr
+// ProjectByKey answers CHK as project 2 and every other key as project 1.
+func (f *fakeCatalog) ProjectByKey(_ context.Context, key string) (catalog.Project, error) {
+	id := int64(1)
+	if key == "CHK" {
+		id = 2
+	}
+	return catalog.Project{ID: id, Key: key}, f.projectErr
+}
+
+// IngestionView answers each known number with an id equal to the number (as in the default project).
+func (f *fakeCatalog) IngestionView(_ context.Context, projectID int64, numbers []int64) (catalog.IngestionView, error) {
+	f.askedIDs, f.gotProject = numbers, projectID
+	entries := map[int64]catalog.IngestionEntry{}
+	for n, st := range f.statuses {
+		entries[n] = catalog.IngestionEntry{ID: n, Status: st}
+	}
+	return catalog.IngestionView{Expected: f.universe, Entries: entries}, f.viewErr
 }
 
 type fakeRecorder struct {
@@ -266,3 +282,56 @@ type errReader struct{ err error }
 func (e errReader) Read([]byte) (int, error) { return 0, e.err }
 
 var _ io.Reader = errReader{}
+
+// A run belongs to the project named by ?project=; references with its key or
+// bare numbers correlate in it, another project's key is a wrong_project
+// diagnostic, and the name fallback only looks for the run's own key.
+func TestIngestIntoAProject(t *testing.T) {
+	cat := &fakeCatalog{universe: []int64{5}, statuses: map[int64]catalog.Status{5: catalog.StatusActive, 7: catalog.StatusActive}}
+	rec := &fakeRecorder{created: true}
+	svc := NewService(cat, rec)
+	m := meta
+	m.ProjectKey = "CHK"
+	xml := `<testsuite name="s">
+<testcase name="a"><properties><property name="tc-id" value="CHK-5"/></properties></testcase>
+<testcase name="b"><properties><property name="tc-id" value="chk-7"/></properties></testcase>
+<testcase name="c"><properties><property name="tc-id" value="5"/></properties></testcase>
+<testcase name="d"><properties><property name="tc-id" value="WEB-5"/></properties></testcase>
+<testcase name="CHK-7 by name"/>
+<testcase name="TC-7 is not this project's key"/>
+</testsuite>`
+	_, err := svc.IngestJUnit(context.Background(), m, strings.NewReader(xml))
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), cat.gotProject)
+	assert.Equal(t, int64(2), rec.gotRun.ProjectID)
+	assert.Equal(t, []int64{5, 7, 5, 7}, cat.askedIDs, "another project's numbers are not looked up")
+	var got []execution.Correlation
+	for _, r := range rec.gotResults {
+		got = append(got, r.Correlation)
+	}
+	assert.Equal(t, []execution.Correlation{
+		execution.CorrelationValid, execution.CorrelationValid, execution.CorrelationValid,
+		execution.CorrelationWrongProject, execution.CorrelationValid, execution.CorrelationMissing,
+	}, got)
+
+	// No project: the default project TC.
+	_, err = svc.IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite><testcase name="TC-5"/></testsuite>`))
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), cat.gotProject)
+
+	cat.projectErr = apperr.NotFound("project NOPE not found")
+	m.ProjectKey = "NOPE"
+	_, err = svc.IngestJUnit(context.Background(), m, strings.NewReader(`<testsuite/>`))
+	e, ok := apperr.As(err)
+	require.True(t, ok)
+	assert.Equal(t, apperr.KindNotFound, e.Kind)
+
+	m.ProjectKey = "chk"
+	assert.Error(t, ValidateMeta(m), "the key is validated before any lookup")
+}
+
+func TestWrongProjectDiagnosticMessage(t *testing.T) {
+	webRef := "WEB-5"
+	msg := diagnosticMessage(execution.Diagnostic{Correlation: execution.CorrelationWrongProject, RequestedTestCaseID: &webRef})
+	assert.Contains(t, msg, `"WEB-5" belongs to another project`)
+}

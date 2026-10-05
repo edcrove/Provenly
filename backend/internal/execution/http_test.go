@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,8 +16,9 @@ import (
 )
 
 type stubAPI struct {
-	err       error
-	gotFilter ResultFilter
+	err        error
+	gotFilter  ResultFilter
+	gotProject *int64
 }
 
 var sampleRun = TestRun{ID: 3, ExternalRunID: "github:1:1", Provider: "github", ProviderRunID: "1", RunAttempt: 1,
@@ -26,7 +28,8 @@ var sampleResult = TestResult{ID: 8, TestRunID: 3, TestCaseID: ptr(int64(153)), 
 	Correlation: CorrelationValid, TestName: "login", Status: Passed, DurationMs: ptr(int64(12))}
 
 func (s *stubAPI) GetRun(context.Context, int64) (TestRun, error) { return sampleRun, s.err }
-func (s *stubAPI) ListRuns(_ context.Context, p pagination.Page) (pagination.Result[TestRun], error) {
+func (s *stubAPI) ListRuns(_ context.Context, projectID *int64, p pagination.Page) (pagination.Result[TestRun], error) {
+	s.gotProject = projectID
 	return pagination.Result[TestRun]{Items: []TestRun{sampleRun}, Page: p, Total: 1}, s.err
 }
 func (s *stubAPI) ListRunResults(_ context.Context, _ int64, f ResultFilter, p pagination.Page) (pagination.Result[TestResult], error) {
@@ -43,9 +46,24 @@ func (s *stubAPI) History(_ context.Context, _ int64, p pagination.Page) (pagina
 	return pagination.Result[HistoryEntry]{Items: []HistoryEntry{{Result: sampleResult, Run: sampleRun}}, Page: p, Total: 1}, s.err
 }
 
-type stubCatalog struct{ err error }
+type stubCatalog struct{ err, projectErr, keysErr error }
+
+// Keys knows TC-153 and CHK-4 (id 154); other ids have no key.
+func (c stubCatalog) Keys(_ context.Context, ids []int64) (map[int64]string, error) {
+	known := map[int64]string{153: "TC-153", 154: "CHK-4"}
+	keys := map[int64]string{}
+	for _, id := range ids {
+		if k, ok := known[id]; ok {
+			keys[id] = k
+		}
+	}
+	return keys, c.keysErr
+}
 
 func (c stubCatalog) EnsureExists(context.Context, int64) error { return c.err }
+func (c stubCatalog) ProjectIDByKey(context.Context, string) (int64, error) {
+	return 7, c.projectErr
+}
 
 func serve(api API, cat TestCaseChecker, target string) *httptest.ResponseRecorder {
 	mux := http.NewServeMux()
@@ -59,9 +77,9 @@ func TestHandlerHappyPaths(t *testing.T) {
 	cases := map[string]string{
 		"/api/v1/test-runs":   `"externalRunId":"github:1:1"`,
 		"/api/v1/test-runs/3": `"providerRunId":"1"`,
-		"/api/v1/test-runs/3/results?status=failed&correlation=valid": `"testCaseId":153`,
+		"/api/v1/test-runs/3/results?status=failed&correlation=valid": `"testCaseId":153,"testCaseKey":"TC-153"`,
 		"/api/v1/test-runs/3/summary":                                 `"executionPercent":50`,
-		"/api/v1/test-cases/153/results":                              `"run":{"id":3`,
+		"/api/v1/test-cases/153/results":                              `"testCaseKey":"TC-153"`,
 		"/api/v1/test-runs/3/parse-errors":                            `"items":[{"index":2,"testName":"t","message":"m","persisted":true,"severity":"warning"}]`,
 	}
 	for target, want := range cases {
@@ -70,8 +88,23 @@ func TestHandlerHappyPaths(t *testing.T) {
 		assert.Contains(t, rec.Body.String(), want, target)
 	}
 	rec := serve(&stubAPI{}, stubCatalog{}, "/api/v1/test-runs/3/summary")
-	assert.Contains(t, rec.Body.String(), `"testCases":[{"testCaseId":153,"status":"passed","resultCount":1},{"testCaseId":154,"status":"untested","resultCount":0}]`)
-	assert.Contains(t, rec.Body.String(), `"diagnostics":{"missing":1,"malformed":0,"unknown":0,"deprecated":0,"total":1}`)
+	assert.Contains(t, rec.Body.String(), `"testCases":[{"testCaseId":153,"testCaseKey":"TC-153","status":"passed","resultCount":1},{"testCaseId":154,"testCaseKey":"CHK-4","status":"untested","resultCount":0}]`)
+	assert.Contains(t, rec.Body.String(), `"diagnostics":{"missing":1,"malformed":0,"unknown":0,"deprecated":0,"wrongProject":0,"total":1}`)
+}
+
+// ?project=<KEY> narrows the run list to one project; without it every run is listed.
+func TestHandlerProjectFilter(t *testing.T) {
+	api := &stubAPI{}
+	assert.Equal(t, http.StatusOK, serve(api, stubCatalog{}, "/api/v1/test-runs?project=CHK").Code)
+	require.NotNil(t, api.gotProject)
+	assert.Equal(t, int64(7), *api.gotProject)
+	serve(api, stubCatalog{}, "/api/v1/test-runs")
+	assert.Nil(t, api.gotProject)
+
+	assert.Equal(t, http.StatusNotFound, serve(api, stubCatalog{projectErr: apperr.NotFound("project CHK not found")}, "/api/v1/test-runs?project=CHK").Code)
+	for _, target := range []string{"/api/v1/test-runs?project=", "/api/v1/test-runs?project=chk"} {
+		assert.Equal(t, http.StatusBadRequest, serve(api, stubCatalog{}, target).Code, target)
+	}
 }
 
 func TestHandlerFilter(t *testing.T) {
@@ -95,6 +128,9 @@ func TestHandlerErrors(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, serve(failing, stubCatalog{}, target).Code, target)
 	}
 	assert.Equal(t, http.StatusNotFound, serve(&stubAPI{}, stubCatalog{err: apperr.NotFound("TC-1")}, "/api/v1/test-cases/1/results").Code)
+	for _, target := range []string{"/api/v1/test-runs/3/results", "/api/v1/test-runs/3/summary", "/api/v1/test-cases/153/results"} {
+		assert.Equal(t, http.StatusInternalServerError, serve(&stubAPI{}, stubCatalog{keysErr: errors.New("db down")}, target).Code, "key lookup failure: "+target)
+	}
 
 	for _, target := range []string{
 		"/api/v1/test-runs?page=x", "/api/v1/test-runs/x", "/api/v1/test-runs/x/results",

@@ -36,6 +36,7 @@ func TestComputeSummary(t *testing.T) {
 	diags := []Diagnostic{
 		{Correlation: CorrelationMissing}, {Correlation: CorrelationMalformed},
 		{Correlation: CorrelationUnknown}, {Correlation: CorrelationUnknown}, {Correlation: CorrelationDeprecated},
+		{Correlation: CorrelationWrongProject},
 	}
 	s := ComputeSummary(7, expected, valid, diags)
 	assert.Equal(t, int64(7), s.TestRunID)
@@ -45,7 +46,7 @@ func TestComputeSummary(t *testing.T) {
 	assert.Equal(t, StatusPercentages{Untested: 20, Passed: 20, Failed: 20, Error: 20, Skipped: 20}, s.PercentOfExpected)
 	assert.Equal(t, ExecutedPercentages{Passed: 25, Failed: 25, Error: 25, Skipped: 25}, s.PercentOfExecuted)
 	assert.Equal(t, 80.0, s.ExecutionPercent)
-	assert.Equal(t, DiagnosticCounts{Missing: 1, Malformed: 1, Unknown: 2, Deprecated: 1, Total: 5}, s.Diagnostics)
+	assert.Equal(t, DiagnosticCounts{Missing: 1, Malformed: 1, Unknown: 2, Deprecated: 1, WrongProject: 1, Total: 6}, s.Diagnostics)
 	assert.Equal(t, int32(3), s.OutsideUniverse)
 	assert.Equal(t, []int64{98, 99}, s.OutsideUniverseIDs)
 	assert.Equal(t, []TestCaseOutcome{

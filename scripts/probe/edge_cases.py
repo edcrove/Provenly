@@ -58,7 +58,7 @@ def main():
     st, tc = call(base, "POST", "/test-cases", {"title": "probe-a", "automated": True})
     if st != 201:
         sys.exit(f"cannot create a test case ({st}): is the API up at {base}?")
-    a = tc["id"]
+    a, a_key = tc["id"], tc["key"]
     b = call(base, "POST", "/test-cases", {"title": "probe-b"})[1]["id"]
     sa = call(base, "POST", f"/test-cases/{a}/steps", {"action": "s1"})[1]["id"]
     sb = call(base, "POST", f"/test-cases/{b}/steps", {"action": "b1"})[1]["id"]
@@ -66,7 +66,7 @@ def main():
     q = f"provider=github&runId=probe{int(time.time())}x{{}}&runAttempt=1"  # unique per sweep: re-runs are not replays
     run_id = call(base, "POST", "/ingestion/junit?" + q.format(1), raw=xml, ctype="application/xml")[1]["testRun"]["id"]
 
-    lists = ["/test-cases", "/test-runs", f"/test-cases/{a}/steps", f"/test-cases/{a}/results",
+    lists = ["/projects", "/test-cases", "/test-runs", f"/test-cases/{a}/steps", f"/test-cases/{a}/results",
              f"/test-runs/{run_id}/results", f"/test-runs/{run_id}/parse-errors"]
     for path in lists:
         for qs, exp in [("page=21474838&pageSize=100", 400), ("page=0", 400), ("page=", 400), ("pageSize=101", 400),
@@ -115,7 +115,7 @@ def main():
     st, body = call(base, "POST", "/ingestion/junit?" + q.format(5), raw=b'<testsuite name="s"><testcase name="t" time="1e300"/></testsuite>', ctype="application/xml")
     check("ingest absurd duration", st, 201)
     check("absurd duration is a parse error", len(body["parseErrors"]) if isinstance(body, dict) else -1, 1)
-    multi = f'<testsuite name="s"><testcase name="m TC-{a}"><failure message="first">d1</failure><failure message="second">d2</failure></testcase></testsuite>'
+    multi = f'<testsuite name="s"><testcase name="m {a_key}"><failure message="first">d1</failure><failure message="second">d2</failure></testcase></testsuite>'
     st, body = call(base, "POST", "/ingestion/junit?" + q.format(6), raw=multi.encode(), ctype="application/xml")
     details = call(base, "GET", f"/test-runs/{body['testRun']['id']}/results")[1]["items"][0]["errorDetails"] if st == 201 else ""
     check("every failure of a testcase is kept", int("first" in details and "second" in details), 1)
@@ -133,6 +133,32 @@ def main():
     st, body = oversized(base + "/ingestion/junit?" + q.format(10), 12 * 1024 * 1024)
     check("ingest 12 MB report", st, 413)
     check("oversized report answers problem+json", body.get("code") if isinstance(body, dict) else str(body)[:40], "payload_too_large")
+
+    # Projects (prototype feature 1): keys are validated before any lookup, unknown ones are 404s, a
+    # duplicate is a 409, and test case numbers stay contiguous per project under concurrent creation.
+    key = f"PR{int(time.time()) % 10**8}"  # projects are never deleted: one per sweep
+    check("POST /projects", call(base, "POST", "/projects", {"key": key.lower(), "name": "probe"})[0], 201)
+    check("POST /projects duplicate key", call(base, "POST", "/projects", {"key": key, "name": "again"})[0], 409)
+    for bad in ["", "A", "1AB", "ABCDEFGHIJK", "A-B", "A\u0000"]:
+        check(f"POST /projects key={bad!r}", call(base, "POST", "/projects", {"key": bad, "name": "x"})[0], 400)
+    check("POST /projects NUL name", call(base, "POST", "/projects", {"key": "PX" + key[2:8], "name": "a\u0000"})[0], 400)
+    check("POST /projects text/plain", call(base, "POST", "/projects", raw=b'{"key":"QQ","name":"x"}', ctype="text/plain")[0], 415)
+    check("PATCH /projects/{key} key change", call(base, "PATCH", f"/projects/{key}", {"key": "ZZ"})[0], 400)
+    check("PATCH /projects/{key} empty body", call(base, "PATCH", f"/projects/{key}", {})[0], 400)
+    for path in ["/test-cases", "/test-runs"]:
+        for qs, exp in [("project=", 400), (f"project={key.lower()}", 400), ("project=NOPE99", 404),
+                        (f"project={key}&project=x", 200)]:
+            check(f"GET {path}?{qs}", call(base, "GET", f"{path}?{qs}")[0], exp)
+    for pk, exp in [("nope", 400), ("NOPE99", 404), ("%00", 400)]:
+        check(f"GET /projects/{pk}", call(base, "GET", f"/projects/{pk}")[0], exp)
+    check("ingest project=", call(base, "POST", "/ingestion/junit?" + q.format(11) + "&project=", raw=xml, ctype="application/xml")[0], 400)
+    check("ingest unknown project", call(base, "POST", "/ingestion/junit?" + q.format(11) + "&project=NOPE99", raw=xml, ctype="application/xml")[0], 404)
+    check("create test case in unknown project", call(base, "POST", "/test-cases", {"title": "x", "project": "NOPE99"})[0], 404)
+    numbers = []
+    threads = [threading.Thread(target=lambda: numbers.append(call(base, "POST", "/test-cases", {"title": "probe-p", "project": key})[1].get("number"))) for _ in range(30)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    check("30 parallel creations in a project: contiguous numbers", int(sorted(numbers) == list(range(1, 31))), 1)
 
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]

@@ -18,27 +18,51 @@ import (
 
 // stubAPI answers every call with the configured error, or with canned data.
 type stubAPI struct {
-	err       error
-	gotStatus *Status
-	gotPage   pagination.Page
-	gotUpdate UpdateInput
-	gotStep   CreateStepInput
-	gotOrder  []int64
+	err        error
+	projectErr error
+	gotFilter  ListFilter
+	gotCreate  CreateInput
+	gotProject CreateProjectInput
+	gotStatus  *Status
+	gotPage    pagination.Page
+	gotUpdate  UpdateInput
+	gotStep    CreateStepInput
+	gotOrder   []int64
 }
 
-var sample = TestCase{ID: 153, Title: "Login", Status: StatusActive, Automated: true,
+var sample = TestCase{ID: 153, ProjectID: 1, ProjectKey: "TC", Number: 153, Title: "Login", Status: StatusActive, Automated: true,
 	CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 
 var sampleStep = TestStep{ID: 9, TestCaseID: 153, Position: 1, Action: "open"}
 
+var sampleProject = Project{ID: 1, Key: "TC", Name: "Default",
+	CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+
 func (s *stubAPI) Create(_ context.Context, in CreateInput) (TestCase, error) {
+	s.gotCreate = in
 	tc := sample
 	tc.Title = in.Title
 	return tc, s.err
 }
+func (s *stubAPI) CreateProject(_ context.Context, in CreateProjectInput) (Project, error) {
+	s.gotProject = in
+	return sampleProject, s.err
+}
+func (s *stubAPI) ProjectByKey(_ context.Context, key string) (Project, error) {
+	p := sampleProject
+	p.Key = key
+	return p, s.projectErr
+}
+func (s *stubAPI) ListProjects(_ context.Context, p pagination.Page) (pagination.Result[Project], error) {
+	return pagination.Result[Project]{Items: []Project{sampleProject}, Page: p, Total: 1}, s.err
+}
+func (s *stubAPI) UpdateProject(context.Context, string, UpdateProjectInput) (Project, error) {
+	return sampleProject, s.err
+}
 func (s *stubAPI) Get(context.Context, int64) (TestCase, error) { return sample, s.err }
-func (s *stubAPI) List(_ context.Context, st *Status, p pagination.Page) (pagination.Result[TestCase], error) {
-	s.gotStatus = st
+func (s *stubAPI) List(_ context.Context, f ListFilter, p pagination.Page) (pagination.Result[TestCase], error) {
+	s.gotFilter = f
+	s.gotStatus = f.Status
 	s.gotPage = p
 	return pagination.Result[TestCase]{Items: []TestCase{sample}, Page: p, Total: 1}, s.err
 }
@@ -94,6 +118,11 @@ func TestHandlerHappyPaths(t *testing.T) {
 		{"PUT", "/api/v1/test-cases/153/steps/order", `{"stepIds":[9]}`, 200, `"items":[{"id":9`},
 		{"PATCH", "/api/v1/test-cases/153/steps/9", `{"action":"b"}`, 200, `"position":1`},
 		{"DELETE", "/api/v1/test-cases/153/steps/9", "", 204, ""},
+		{"GET", "/api/v1/test-cases?project=CHK", "", 200, `"projectKey":"TC"`},
+		{"GET", "/api/v1/projects", "", 200, `"key":"TC"`},
+		{"POST", "/api/v1/projects", `{"key":"CHK","name":"Checkout"}`, 201, `"name":"Default"`},
+		{"GET", "/api/v1/projects/CHK", "", 200, `"key":"CHK"`},
+		{"PATCH", "/api/v1/projects/TC", `{"name":"x"}`, 200, `"description":""`},
 	}
 	for _, c := range cases {
 		api := &stubAPI{}
@@ -119,6 +148,17 @@ func TestHandlerPassesInputs(t *testing.T) {
 
 	serve(api, "PUT", "/api/v1/test-cases/1/steps/order", `{"stepIds":[3,1,2]}`)
 	assert.Equal(t, []int64{3, 1, 2}, api.gotOrder)
+
+	// The project filter and the project of a new test case are resolved by key; TC is the default.
+	serve(api, "GET", "/api/v1/test-cases?project=CHK", "")
+	require.NotNil(t, api.gotFilter.ProjectID)
+	assert.Equal(t, int64(1), *api.gotFilter.ProjectID)
+	serve(api, "GET", "/api/v1/test-cases", "")
+	assert.Nil(t, api.gotFilter.ProjectID)
+	serve(api, "POST", "/api/v1/test-cases", `{"title":"t","project":"CHK"}`)
+	assert.Equal(t, int64(1), api.gotCreate.ProjectID)
+	serve(api, "POST", "/api/v1/projects", `{"key":"web","name":"Web","description":"d"}`)
+	assert.Equal(t, CreateProjectInput{Key: "web", Name: "Web", Description: "d"}, api.gotProject)
 }
 
 // Unknown query parameters are ignored; every known parameter still applies and
@@ -150,6 +190,9 @@ func TestHandlerErrors(t *testing.T) {
 		{"PUT", "/api/v1/test-cases/1/steps/order", `{"stepIds":[]}`},
 		{"PATCH", "/api/v1/test-cases/1/steps/2", `{"action":"a"}`},
 		{"DELETE", "/api/v1/test-cases/1/steps/2", ""},
+		{"GET", "/api/v1/projects", ""},
+		{"POST", "/api/v1/projects", `{"key":"CHK","name":"n"}`},
+		{"PATCH", "/api/v1/projects/CHK", `{"name":"n"}`},
 	}
 	for _, r := range requests {
 		rec := serve(notFound, r.method, r.target, r.body)
@@ -178,9 +221,28 @@ func TestHandlerErrors(t *testing.T) {
 		{"PATCH", "/api/v1/test-cases/1/steps/x", `{"action":"a"}`},
 		{"PATCH", "/api/v1/test-cases/1/steps/1", `[]`},
 		{"DELETE", "/api/v1/test-cases/1/steps/0", ""},
+		{"GET", "/api/v1/test-cases?project=", ""},
+		{"GET", "/api/v1/test-cases?project=chk", ""},
+		{"POST", "/api/v1/test-cases", `{"title":"a","project":"x"}`},
+		{"GET", "/api/v1/projects?page=0", ""},
+		{"POST", "/api/v1/projects", `{"key":1}`},
+		{"GET", "/api/v1/projects/c", ""},
+		{"PATCH", "/api/v1/projects/c", `{"name":"n"}`},
+		{"PATCH", "/api/v1/projects/CHK", `nope`},
 	}
 	for _, r := range badRequests {
 		rec := serve(&stubAPI{}, r.method, r.target, r.body)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, "%s %s", r.method, r.target)
 	}
+
+	// An unknown project in a filter, in a new test case or addressed directly is a 404.
+	missing := &stubAPI{projectErr: apperr.NotFound("project CHK not found")}
+	for _, target := range []string{"/api/v1/test-cases?project=CHK", "/api/v1/projects/CHK"} {
+		assert.Equal(t, http.StatusNotFound, serve(missing, "GET", target, "").Code, target)
+	}
+	assert.Equal(t, http.StatusNotFound, serve(missing, "POST", "/api/v1/test-cases", `{"title":"a","project":"CHK"}`).Code)
+	// A duplicate project key is a 409.
+	rec := serve(&stubAPI{err: apperr.Conflict("project CHK already exists")}, "POST", "/api/v1/projects", `{"key":"CHK","name":"n"}`)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"code":"conflict"`)
 }

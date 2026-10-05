@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -13,10 +14,15 @@ import (
 
 // Field limits (mirrored in the OpenAPI contract).
 const (
-	maxTitle    = 200
-	maxLongText = 10000
-	maxStepText = 2000
+	maxTitle       = 200
+	maxLongText    = 10000
+	maxStepText    = 2000
+	maxProjectName = 100
+	maxProjectDesc = 2000
 )
+
+// ProjectKeyPattern is the format of a project key (mirrored in the OpenAPI contract and the database).
+var ProjectKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 
 // Service holds the catalog use cases. It is the only entry point of the
 // module for REST handlers, other modules and future interfaces (MCP).
@@ -27,7 +33,9 @@ type Service struct {
 // NewService builds a Service.
 func NewService(repo Repository) *Service { return &Service{repo: repo} }
 
-func notFound(id int64) error { return apperr.NotFound("test case %s not found", FormatKey(id)) }
+func notFound(id int64) error { return apperr.NotFound("test case %d not found", id) }
+
+func projectNotFound(key string) error { return apperr.NotFound("project %s not found", key) }
 
 func mapNotFound(err error, id int64) error {
 	if errors.Is(err, ErrNotFound) {
@@ -38,7 +46,7 @@ func mapNotFound(err error, id int64) error {
 
 func validLen(s string, limit int) bool { return utf8.RuneCountInString(s) <= limit }
 
-// Create validates and stores a new test case; storage assigns the TC-ID.
+// Create validates and stores a new test case; storage assigns its number in the project.
 func (s *Service) Create(ctx context.Context, in CreateInput) (TestCase, error) {
 	in.Title = strings.TrimSpace(in.Title)
 	var v apperr.Validator
@@ -52,7 +60,14 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (TestCase, error) 
 	if err := v.Err(); err != nil {
 		return TestCase{}, err
 	}
-	return s.repo.CreateTestCase(ctx, in)
+	if in.ProjectID == 0 {
+		in.ProjectID = DefaultProjectID
+	}
+	tc, err := s.repo.CreateTestCase(ctx, in)
+	if errors.Is(err, ErrNotFound) {
+		return TestCase{}, apperr.NotFound("project %d not found", in.ProjectID)
+	}
+	return tc, err
 }
 
 // Get returns a test case by TC-ID.
@@ -67,13 +82,13 @@ func (s *Service) EnsureExists(ctx context.Context, id int64) error {
 	return err
 }
 
-// List returns a page of test cases, newest TC-ID first.
-func (s *Service) List(ctx context.Context, status *Status, page pagination.Page) (pagination.Result[TestCase], error) {
-	items, err := s.repo.ListTestCases(ctx, status, page.Limit(), page.Offset())
+// List returns a page of test cases, newest first.
+func (s *Service) List(ctx context.Context, f ListFilter, page pagination.Page) (pagination.Result[TestCase], error) {
+	items, err := s.repo.ListTestCases(ctx, f, page.Limit(), page.Offset())
 	if err != nil {
 		return pagination.Result[TestCase]{}, err
 	}
-	total, err := s.repo.CountTestCases(ctx, status)
+	total, err := s.repo.CountTestCases(ctx, f)
 	if err != nil {
 		return pagination.Result[TestCase]{}, err
 	}
@@ -121,10 +136,103 @@ func (s *Service) Reactivate(ctx context.Context, id int64) (TestCase, error) {
 	return tc, mapNotFound(err, id)
 }
 
-// IngestionView returns, in one snapshot, the TC-IDs that are active and
-// automated right now and the status of each existing TC-ID among ids.
-func (s *Service) IngestionView(ctx context.Context, ids []int64) (IngestionView, error) {
-	return s.repo.ListIngestionView(ctx, ids)
+// IngestionView returns, in one snapshot, the project's test cases that are
+// active and automated right now and each existing test case among numbers.
+func (s *Service) IngestionView(ctx context.Context, projectID int64, numbers []int64) (IngestionView, error) {
+	return s.repo.ListIngestionView(ctx, projectID, numbers)
+}
+
+// Keys returns the display key of each known test case id (for other modules' read models).
+func (s *Service) Keys(ctx context.Context, ids []int64) (map[int64]string, error) {
+	if len(ids) == 0 {
+		return map[int64]string{}, nil
+	}
+	return s.repo.ListTestCaseKeys(ctx, ids)
+}
+
+func validateProjectText(v *apperr.Validator, name, description *string) {
+	if name != nil {
+		v.Check(*name != "", "name", "must not be empty")
+		v.Check(validLen(*name, maxProjectName), "name", fmt.Sprintf("must be at most %d characters", maxProjectName))
+		v.CheckText("name", *name)
+	}
+	if description != nil {
+		v.Check(validLen(*description, maxProjectDesc), "description", fmt.Sprintf("must be at most %d characters", maxProjectDesc))
+		v.CheckText("description", *description)
+	}
+}
+
+// CreateProject validates and stores a new project. The key is upper-cased and never changes.
+func (s *Service) CreateProject(ctx context.Context, in CreateProjectInput) (Project, error) {
+	in.Key = strings.ToUpper(strings.TrimSpace(in.Key))
+	in.Name = strings.TrimSpace(in.Name)
+	var v apperr.Validator
+	v.Check(ProjectKeyPattern.MatchString(in.Key), "key", "must be 2 to 10 letters or digits, starting with a letter (e.g. CHK)")
+	validateProjectText(&v, &in.Name, &in.Description)
+	if err := v.Err(); err != nil {
+		return Project{}, err
+	}
+	p, err := s.repo.CreateProject(ctx, in)
+	if errors.Is(err, ErrConflict) {
+		return Project{}, apperr.Conflict("project %s already exists", in.Key)
+	}
+	return p, err
+}
+
+// ProjectByKey returns a project by its key.
+func (s *Service) ProjectByKey(ctx context.Context, key string) (Project, error) {
+	p, err := s.repo.GetProjectByKey(ctx, key)
+	if errors.Is(err, ErrNotFound) {
+		return Project{}, projectNotFound(key)
+	}
+	return p, err
+}
+
+// ProjectIDByKey returns the id of a project by its key (other modules' project filter).
+func (s *Service) ProjectIDByKey(ctx context.Context, key string) (int64, error) {
+	p, err := s.ProjectByKey(ctx, key)
+	return p.ID, err
+}
+
+// ProjectByID returns a project by its id.
+func (s *Service) ProjectByID(ctx context.Context, id int64) (Project, error) {
+	p, err := s.repo.GetProject(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return Project{}, apperr.NotFound("project %d not found", id)
+	}
+	return p, err
+}
+
+// ListProjects returns a page of projects ordered by key.
+func (s *Service) ListProjects(ctx context.Context, page pagination.Page) (pagination.Result[Project], error) {
+	items, err := s.repo.ListProjects(ctx, page.Limit(), page.Offset())
+	if err != nil {
+		return pagination.Result[Project]{}, err
+	}
+	total, err := s.repo.CountProjects(ctx)
+	if err != nil {
+		return pagination.Result[Project]{}, err
+	}
+	return pagination.Result[Project]{Items: items, Page: page, Total: total}, nil
+}
+
+// UpdateProject edits a project's name or description; its key never changes.
+func (s *Service) UpdateProject(ctx context.Context, key string, in UpdateProjectInput) (Project, error) {
+	var v apperr.Validator
+	v.Check(in.Name != nil || in.Description != nil, "body", "at least one field is required")
+	if in.Name != nil {
+		n := strings.TrimSpace(*in.Name)
+		in.Name = &n
+	}
+	validateProjectText(&v, in.Name, in.Description)
+	if err := v.Err(); err != nil {
+		return Project{}, err
+	}
+	p, err := s.repo.UpdateProject(ctx, key, in)
+	if errors.Is(err, ErrNotFound) {
+		return Project{}, projectNotFound(key)
+	}
+	return p, err
 }
 
 // ListSteps returns a page of steps ordered by position.
@@ -191,7 +299,7 @@ func (s *Service) CreateStep(ctx context.Context, testCaseID int64, in CreateSte
 }
 
 func stepNotFound(testCaseID, stepID int64) error {
-	return apperr.NotFound("step %d of test case %s not found", stepID, FormatKey(testCaseID))
+	return apperr.NotFound("step %d of test case %d not found", stepID, testCaseID)
 }
 
 // UpdateStep edits a step's content. It never affects the TC-ID or historical results.

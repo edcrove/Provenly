@@ -214,8 +214,8 @@ describe('FE-INT-009 test run detail and summary', () => {
     db.summaries[7] = summary({
       counts: { untested: 0, passed: 2, failed: 0, error: 0, skipped: 0 },
       testCases: [
-        { testCaseId: 153, status: 'passed', resultCount: 1 },
-        { testCaseId: 154, status: 'passed', resultCount: 1 },
+        { testCaseId: 153, testCaseKey: 'TC-153', status: 'passed', resultCount: 1 },
+        { testCaseId: 154, testCaseKey: 'TC-154', status: 'passed', resultCount: 1 },
       ],
     })
     renderRoute('/test-runs/7')
@@ -250,13 +250,15 @@ describe('FE-INT-009 test run detail and summary', () => {
 describe('FE-INT-010 TC-ID diagnostics', () => {
   it('FE-INT-010 lists invalid TC-ID counts with explanations', async () => {
     db.summaries[7] = summary({
-      diagnostics: { missing: 1, malformed: 2, unknown: 0, deprecated: 3, total: 6 },
+      diagnostics: { missing: 1, malformed: 2, unknown: 0, deprecated: 3, wrongProject: 4, total: 10 },
       outsideUniverse: 2,
     })
     renderRoute('/test-runs/7')
     const list = await screen.findByRole('list', { name: 'Diagnostics' })
-    expect(within(list).getAllByRole('listitem')).toHaveLength(3)
+    expect(within(list).getAllByRole('listitem')).toHaveLength(4)
     expect(screen.getByTestId('diagnostic-malformed')).toHaveTextContent('2')
+    expect(screen.getByTestId('diagnostic-wrong_project')).toHaveTextContent('4')
+    expect(within(list).getByText(/another project's key/)).toBeInTheDocument()
     expect(screen.getByTestId('diagnostic-deprecated')).toHaveTextContent('3')
     expect(screen.queryByTestId('diagnostic-unknown')).not.toBeInTheDocument()
     expect(screen.getByTestId('outside-universe')).toHaveTextContent(
@@ -272,7 +274,10 @@ describe('FE-INT-010 TC-ID diagnostics', () => {
     db.summaries[7] = summary({ outsideUniverse: 2, outsideUniverseTestCaseIds: [154] })
     const { user } = renderRoute('/test-runs/7')
     const item = await screen.findByTestId('outside-154')
-    expect(within(item).getByRole('link', { name: 'TC-154' })).toHaveAttribute('href', '/test-cases/154')
+    expect(await within(item).findByRole('link', { name: 'TC-154' })).toHaveAttribute(
+      'href',
+      '/test-cases/154',
+    )
     expect(await within(item).findByText('Logout works')).toBeInTheDocument()
     await user.click(within(item).getByRole('button', { name: 'Mark as automated' }))
     expect(await within(item).findByText(/Now automated: future runs include it/)).toBeInTheDocument()
@@ -308,7 +313,7 @@ describe('FE-INT-010 TC-ID diagnostics', () => {
 
   it('FE-INT-010 states when every TC-ID is valid', async () => {
     db.summaries[7] = summary({
-      diagnostics: { missing: 0, malformed: 0, unknown: 0, deprecated: 0, total: 0 },
+      diagnostics: { missing: 0, malformed: 0, unknown: 0, deprecated: 0, wrongProject: 0, total: 0 },
     })
     renderRoute('/test-runs/7')
     expect(await screen.findByText('Every result declared a valid TC-ID.')).toBeInTheDocument()

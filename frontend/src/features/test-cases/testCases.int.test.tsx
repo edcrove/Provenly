@@ -59,8 +59,10 @@ describe('FE-INT-003 create test case', () => {
     await user.click(screen.getByLabelText(/Automated/))
     await user.click(screen.getByRole('button', { name: 'Create test case' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/test-cases/1001'))
-    expect(await screen.findByRole('heading', { name: /TC-1001 · Checkout/ })).toBeInTheDocument()
+    // The key is the project's key plus its next number (TC continues after TC-154), not the internal id.
+    expect(await screen.findByRole('heading', { name: /TC-155 · Checkout/ })).toBeInTheDocument()
     expect(db.testCases.at(-1)).toMatchObject({
+      projectKey: 'TC',
       title: 'Checkout',
       automated: true,
       expectedResult: 'Order confirmed',
@@ -320,7 +322,8 @@ describe('FE-INT-018 Test Case UI robustness', () => {
       renderRoute(`/test-cases/${id}`)
       expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
       await waitFor(() => expect(document.title).toBe('Page not found · Provenly'))
-      expect(requests).toEqual([])
+      // Only the header's project switcher talks to the API.
+      expect(requests.filter((u) => !u.includes('/api/v1/projects'))).toEqual([])
       server.events.removeAllListeners()
     },
   )

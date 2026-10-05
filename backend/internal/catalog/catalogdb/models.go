@@ -8,6 +8,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Project struct {
+	ID          int64
+	Key         string
+	Name        string
+	Description string
+	NextNumber  int64
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type TestCase struct {
 	ID             int64
 	Title          string
@@ -18,6 +28,8 @@ type TestCase struct {
 	CreatedAt      pgtype.Timestamptz
 	UpdatedAt      pgtype.Timestamptz
 	DeprecatedAt   pgtype.Timestamptz
+	ProjectID      int64
+	Number         int64
 }
 
 type TestStep struct {

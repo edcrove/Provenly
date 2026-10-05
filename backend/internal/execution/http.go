@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
@@ -12,22 +13,29 @@ import (
 // API is the set of execution use cases exposed over REST.
 type API interface {
 	GetRun(ctx context.Context, id int64) (TestRun, error)
-	ListRuns(ctx context.Context, page pagination.Page) (pagination.Result[TestRun], error)
+	ListRuns(ctx context.Context, projectID *int64, page pagination.Page) (pagination.Result[TestRun], error)
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, page pagination.Page) (pagination.Result[TestResult], error)
 	Summary(ctx context.Context, runID int64) (Summary, error)
 	ListParseErrors(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[ParseError], error)
 	History(ctx context.Context, testCaseID int64, page pagination.Page) (pagination.Result[HistoryEntry], error)
 }
 
-// TestCaseChecker lets the history endpoint answer 404 for unknown TC-IDs
-// through the catalog module's public interface.
+// TestCaseChecker is what the execution REST adapter needs from the catalog
+// module's public interface: 404s for unknown test cases, the ?project=<KEY> filter
+// and the display keys (<KEY>-<n>) of the test cases a response mentions.
 type TestCaseChecker interface {
 	EnsureExists(ctx context.Context, id int64) error
+	ProjectIDByKey(ctx context.Context, key string) (int64, error)
+	Keys(ctx context.Context, ids []int64) (map[int64]string, error)
 }
+
+// ProjectKeyPattern mirrors the catalog's project key format (validated before any lookup).
+var ProjectKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 
 // TestRunDTO is the wire form of TestRun.
 type TestRunDTO struct {
 	ID            int64      `json:"id"`
+	ProjectID     int64      `json:"projectId"`
 	ExternalRunID string     `json:"externalRunId"`
 	Provider      string     `json:"provider"`
 	ProviderRunID string     `json:"providerRunId"`
@@ -58,7 +66,7 @@ type outcomeDTO struct {
 // RunDTO converts a TestRun to its wire form.
 func RunDTO(r TestRun) TestRunDTO {
 	return TestRunDTO{
-		ID: r.ID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
+		ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.Commit, Status: r.Status,
 		Outcome:       outcomeDTO(r.Outcome),
 		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, CreatedAt: r.CreatedAt,
@@ -71,6 +79,7 @@ type TestResultDTO struct {
 	ID                  int64        `json:"id"`
 	TestRunID           int64        `json:"testRunId"`
 	TestCaseID          *int64       `json:"testCaseId"`
+	TestCaseKey         *string      `json:"testCaseKey"`
 	RequestedTestCaseID *string      `json:"requestedTestCaseId"`
 	Correlation         Correlation  `json:"correlation"`
 	TestName            string       `json:"testName"`
@@ -83,7 +92,30 @@ type TestResultDTO struct {
 	CreatedAt           time.Time    `json:"createdAt"`
 }
 
-func resultDTO(r TestResult) TestResultDTO { return TestResultDTO(r) }
+func resultDTO(r TestResult, keys map[int64]string) TestResultDTO {
+	var key *string
+	if r.TestCaseID != nil {
+		if k, ok := keys[*r.TestCaseID]; ok {
+			key = &k
+		}
+	}
+	return TestResultDTO{
+		ID: r.ID, TestRunID: r.TestRunID, TestCaseID: r.TestCaseID, TestCaseKey: key, RequestedTestCaseID: r.RequestedTestCaseID,
+		Correlation: r.Correlation, TestName: r.TestName, ClassName: r.ClassName, SuiteName: r.SuiteName, Status: r.Status,
+		DurationMs: r.DurationMs, ErrorMessage: r.ErrorMessage, ErrorDetails: r.ErrorDetails, CreatedAt: r.CreatedAt,
+	}
+}
+
+// resultKeys resolves the display keys of the test cases the results link to.
+func (h *Handler) resultKeys(ctx context.Context, results []TestResult) (map[int64]string, error) {
+	var ids []int64
+	for _, r := range results {
+		if r.TestCaseID != nil {
+			ids = append(ids, *r.TestCaseID)
+		}
+	}
+	return h.catalog.Keys(ctx, ids)
+}
 
 // ParseErrorDTO is the wire form of ParseError.
 type ParseErrorDTO struct {
@@ -102,8 +134,8 @@ type historyDTO struct {
 	Run    TestRunDTO    `json:"run"`
 }
 
-func historyEntryDTO(h HistoryEntry) historyDTO {
-	return historyDTO{Result: resultDTO(h.Result), Run: RunDTO(h.Run)}
+func historyEntryDTO(h HistoryEntry, keys map[int64]string) historyDTO {
+	return historyDTO{Result: resultDTO(h.Result, keys), Run: RunDTO(h.Run)}
 }
 
 type statusCountsDTO struct {
@@ -130,15 +162,17 @@ type executedPercentagesDTO struct {
 }
 
 type diagnosticCountsDTO struct {
-	Missing    int32 `json:"missing"`
-	Malformed  int32 `json:"malformed"`
-	Unknown    int32 `json:"unknown"`
-	Deprecated int32 `json:"deprecated"`
-	Total      int32 `json:"total"`
+	Missing      int32 `json:"missing"`
+	Malformed    int32 `json:"malformed"`
+	Unknown      int32 `json:"unknown"`
+	Deprecated   int32 `json:"deprecated"`
+	WrongProject int32 `json:"wrongProject"`
+	Total        int32 `json:"total"`
 }
 
 type testCaseOutcomeDTO struct {
 	TestCaseID  int64         `json:"testCaseId"`
+	TestCaseKey string        `json:"testCaseKey"`
 	Status      SummaryStatus `json:"status"`
 	ResultCount int32         `json:"resultCount"`
 }
@@ -157,10 +191,10 @@ type summaryDTO struct {
 	TestCases          []testCaseOutcomeDTO   `json:"testCases"`
 }
 
-func toSummaryDTO(s Summary) summaryDTO {
+func toSummaryDTO(s Summary, keys map[int64]string) summaryDTO {
 	cases := make([]testCaseOutcomeDTO, len(s.TestCases))
 	for i, c := range s.TestCases {
-		cases[i] = testCaseOutcomeDTO(c)
+		cases[i] = testCaseOutcomeDTO{TestCaseID: c.TestCaseID, TestCaseKey: keys[c.TestCaseID], Status: c.Status, ResultCount: c.ResultCount}
 	}
 	return summaryDTO{
 		TestRunID: s.TestRunID, ExpectedTotal: s.ExpectedTotal, ExecutedTotal: s.ExecutedTotal,
@@ -202,7 +236,18 @@ func (h *Handler) listRuns(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	res, err := h.api.ListRuns(r.Context(), page)
+	var projectID *int64
+	key, err := httpx.PatternQuery(r, "project", ProjectKeyPattern, "must be a project key: 2 to 10 upper-case letters or digits, starting with a letter")
+	if err == nil && key != nil {
+		var id int64
+		id, err = h.catalog.ProjectIDByKey(r.Context(), *key)
+		projectID = &id
+	}
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	res, err := h.api.ListRuns(r.Context(), projectID, page)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -274,7 +319,12 @@ func (h *Handler) listResults(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, resultDTO))
+	keys, err := h.resultKeys(r.Context(), res.Items)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, func(t TestResult) TestResultDTO { return resultDTO(t, keys) }))
 }
 
 func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +338,16 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, toSummaryDTO(s))
+	ids := make([]int64, len(s.TestCases))
+	for i, c := range s.TestCases {
+		ids[i] = c.TestCaseID
+	}
+	keys, err := h.catalog.Keys(r.Context(), ids)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toSummaryDTO(s, keys))
 }
 
 func (h *Handler) parseErrors(w http.ResponseWriter, r *http.Request) {
@@ -330,5 +389,10 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, historyEntryDTO))
+	keys, err := h.catalog.Keys(r.Context(), []int64{id})
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, func(e HistoryEntry) historyDTO { return historyEntryDTO(e, keys) }))
 }

@@ -38,6 +38,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List projects (by key) */
+        get: operations["listProjects"];
+        put?: never;
+        /** Create a project. The key is trimmed and upper-cased; it can never change. */
+        post: operations["createProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        /** Get a project by its key */
+        get: operations["getProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit a project's name or description (the key never changes) */
+        patch: operations["updateProject"];
+        trace?: never;
+    };
     "/api/v1/test-cases": {
         parameters: {
             query?: never;
@@ -304,7 +343,10 @@ export interface paths {
         put?: never;
         /**
          * Ingest one complete JUnit XML report (batch) for a CI run attempt
-         * @description `externalRunId` = `{provider}:{runId}:{runAttempt}`. Re-sending the same
+         * @description The run belongs to `project` (default `TC`): its expected universe is that
+         *     project's, the testcase-name fallback only reads `<project>-<n>`, and a
+         *     `tc-id` property with another project's key is a `wrong_project` diagnostic.
+         *     `externalRunId` = `{provider}:{runId}:{runAttempt}`, unique per project. Re-sending the same
          *     attempt is idempotent (200, no duplicate run, no reprocessing; if the report
          *     content differs from the original, a `warnings` entry says it was not
          *     applied); a new
@@ -341,7 +383,7 @@ export interface components {
              * @description Stable machine-readable error code. Requests that match no operation get `not_found` (404), or `method_not_allowed` (405, with an `Allow` header) when the path exists for other methods.
              * @enum {string}
              */
-            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "method_not_allowed" | "payload_too_large" | "unsupported_media_type" | "service_unavailable" | "internal_error";
+            code: "bad_request" | "validation_error" | "invalid_junit" | "not_found" | "conflict" | "method_not_allowed" | "payload_too_large" | "unsupported_media_type" | "service_unavailable" | "internal_error";
             detail?: string;
             errors?: components["schemas"]["FieldError"][];
         };
@@ -367,8 +409,17 @@ export interface components {
              * @example 153
              */
             id: number;
-            /** @example TC-153 */
+            /** @example CHK-12 */
             key: string;
+            /** Format: int64 */
+            projectId: number;
+            /** @example CHK */
+            projectKey: string;
+            /**
+             * Format: int64
+             * @example 12
+             */
+            number: number;
             title: string;
             description: string;
             expectedResult: string;
@@ -381,10 +432,41 @@ export interface components {
             /** Format: date-time */
             deprecatedAt?: string | null;
         };
+        Project: {
+            /** Format: int64 */
+            id: number;
+            /** @example CHK */
+            key: string;
+            /** @example Checkout */
+            name: string;
+            description: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ProjectPage: components["schemas"]["PageMeta"] & {
+            items: components["schemas"]["Project"][];
+        };
+        CreateProjectRequest: {
+            /**
+             * @description 2 to 10 letters or digits, starting with a letter; stored upper-cased.
+             * @example CHK
+             */
+            key: string;
+            name: string;
+            description?: string;
+        };
+        UpdateProjectRequest: {
+            name?: string;
+            description?: string;
+        };
         TestCasePage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["TestCase"][];
         };
         CreateTestCaseRequest: {
+            /** @description Key of the project the test case belongs to (default `TC`); it never changes. */
+            project?: string;
             title: string;
             description?: string;
             expectedResult?: string;
@@ -479,6 +561,8 @@ export interface components {
         TestRun: {
             /** Format: int64 */
             id: number;
+            /** Format: int64 */
+            projectId: number;
             /** @example github:9876543210:1 */
             externalRunId: string;
             provider: string;
@@ -513,7 +597,7 @@ export interface components {
          * @description Outcome of TC-ID extraction/validation for a result
          * @enum {string}
          */
-        Correlation: "valid" | "missing" | "malformed" | "unknown" | "deprecated";
+        Correlation: "valid" | "missing" | "malformed" | "unknown" | "deprecated" | "wrong_project";
         TestResult: {
             /** Format: int64 */
             id: number;
@@ -524,6 +608,11 @@ export interface components {
              * @description Set when correlation is `valid` or `deprecated` (a result received after the test case was deprecated still belongs to its history)
              */
             testCaseId: number | null;
+            /**
+             * @description Display key (`<projectKey>-<number>`) of the linked test case; null when not linked
+             * @example CHK-12
+             */
+            testCaseKey: string | null;
             /** @description Raw TC-ID reference as declared by the test (for diagnostics) */
             requestedTestCaseId: string | null;
             correlation: components["schemas"]["Correlation"];
@@ -581,6 +670,11 @@ export interface components {
             skipped: number;
         };
         DiagnosticCounts: {
+            /**
+             * Format: int32
+             * @description References with another project's key (not correlated)
+             */
+            wrongProject: number;
             /** Format: int32 */
             missing: number;
             /** Format: int32 */
@@ -595,6 +689,8 @@ export interface components {
         TestCaseOutcome: {
             /** Format: int64 */
             testCaseId: number;
+            /** @example CHK-12 */
+            testCaseKey: string;
             status: components["schemas"]["SummaryStatus"];
             /** Format: int32 */
             resultCount: number;
@@ -632,7 +728,7 @@ export interface components {
         IngestionDiagnostic: {
             testName: string;
             /** @enum {string} */
-            correlation: "missing" | "malformed" | "unknown" | "deprecated";
+            correlation: "missing" | "malformed" | "unknown" | "deprecated" | "wrong_project";
             requestedTestCaseId: string | null;
             message: string;
         };
@@ -702,6 +798,15 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description The request conflicts with the current state (e.g. a project key already in use) */
+        Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description Request body exceeds the allowed size */
         PayloadTooLarge: {
             headers: {
@@ -740,6 +845,13 @@ export interface components {
         };
     };
     parameters: {
+        /** @example CHK */
+        ProjectKey: string;
+        /**
+         * @description Only items of the project with this key (an unknown key is a 404).
+         * @example CHK
+         */
+        ProjectFilter: string;
         Page: number;
         PageSize: number;
         /** @description Numeric TC-ID (without the `TC-` prefix) */
@@ -794,12 +906,127 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    listProjects: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of projects */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     listTestCases: {
         parameters: {
             query?: {
                 page?: components["parameters"]["Page"];
                 pageSize?: components["parameters"]["PageSize"];
                 status?: components["schemas"]["TestCaseStatus"];
+                /**
+                 * @description Only items of the project with this key (an unknown key is a 404).
+                 * @example CHK
+                 */
+                project?: components["parameters"]["ProjectFilter"];
             };
             header?: never;
             path?: never;
@@ -817,6 +1044,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -843,6 +1071,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -1138,6 +1367,11 @@ export interface operations {
             query?: {
                 page?: components["parameters"]["Page"];
                 pageSize?: components["parameters"]["PageSize"];
+                /**
+                 * @description Only items of the project with this key (an unknown key is a 404).
+                 * @example CHK
+                 */
+                project?: components["parameters"]["ProjectFilter"];
             };
             header?: never;
             path?: never;
@@ -1155,6 +1389,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -1269,6 +1504,11 @@ export interface operations {
     ingestJUnitReport: {
         parameters: {
             query: {
+                /**
+                 * @description Key of the project the run belongs to (default `TC`).
+                 * @example CHK
+                 */
+                project?: string;
                 /** @example github */
                 provider: string;
                 /** @example 9876543210 */
@@ -1322,6 +1562,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];

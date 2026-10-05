@@ -4,6 +4,7 @@ import {
   correlationExplanation,
   correlations,
   correlationVariant,
+  diagnosticCount,
   invalidCorrelations,
   executionVariant,
   isInterruptedRun,
@@ -20,8 +21,14 @@ describe('status helpers', () => {
   it('lists the contract enums', () => {
     expect(resultStatuses).toEqual(['passed', 'failed', 'error', 'skipped'])
     expect(summaryStatuses).toEqual(['untested', 'passed', 'failed', 'error', 'skipped'])
-    expect(correlations).toEqual(['valid', 'missing', 'malformed', 'unknown', 'deprecated'])
+    expect(correlations).toEqual(['valid', 'missing', 'malformed', 'unknown', 'deprecated', 'wrong_project'])
     expect(invalidCorrelations).not.toContain('valid')
+  })
+
+  it('reads the diagnostic count of each invalid correlation', () => {
+    const d = { missing: 1, malformed: 2, unknown: 3, deprecated: 4, wrongProject: 5, total: 15 }
+    expect(invalidCorrelations.map((c) => diagnosticCount(d, c))).toEqual([1, 2, 3, 4, 5])
+    expect(correlationExplanation('wrong_project')).toMatch(/another project/)
   })
 
   it('maps statuses and correlations to badge variants', () => {

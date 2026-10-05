@@ -26,6 +26,11 @@ func TestConstructors(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, KindInvalidDocument, doc.Kind)
 
+	c, ok := As(Conflict("project %s exists", "CHK"))
+	require.True(t, ok)
+	assert.Equal(t, KindConflict, c.Kind)
+	assert.Equal(t, "project CHK exists", c.Message)
+
 	_, ok = As(errors.New("plain"))
 	assert.False(t, ok)
 }

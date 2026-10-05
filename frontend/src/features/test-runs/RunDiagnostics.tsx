@@ -5,8 +5,7 @@ import { useTestCase, useUpdateTestCase } from '@/api/queries'
 import { ErrorAlert } from '@/components/QueryState'
 import { CorrelationBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
-import { tcKey } from '@/lib/format'
-import { correlationExplanation, invalidCorrelations } from '@/lib/status'
+import { correlationExplanation, diagnosticCount, invalidCorrelations } from '@/lib/status'
 
 function outsideUniverseMessage(n: number): string {
   return n === 1
@@ -21,7 +20,7 @@ function OutsideUniverseCase({ id }: { id: number }) {
   return (
     <li className="flex flex-wrap items-center gap-2" data-testid={`outside-${id}`}>
       <Link to={`/test-cases/${id}`} className="font-mono underline">
-        {tcKey(id)}
+        {tc.data?.key ?? `#${id}`}
       </Link>
       <span>{tc.data?.title}</span>
       {tc.data?.automated ? (
@@ -53,11 +52,11 @@ export function RunDiagnostics({ summary }: { summary: TestRunSummary }) {
       ) : (
         <ul className="grid gap-2" aria-label="Diagnostics">
           {invalidCorrelations
-            .filter((c) => diagnostics[c] > 0)
+            .filter((c) => diagnosticCount(diagnostics, c) > 0)
             .map((c) => (
               <li key={c} className="flex items-center gap-2">
                 <CorrelationBadge correlation={c} />
-                <span data-testid={`diagnostic-${c}`}>{diagnostics[c]}</span>
+                <span data-testid={`diagnostic-${c}`}>{diagnosticCount(diagnostics, c)}</span>
                 <span className="text-muted-foreground">{correlationExplanation(c)}</span>
               </li>
             ))}

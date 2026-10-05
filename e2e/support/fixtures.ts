@@ -11,6 +11,8 @@ const coverageDir = path.join(import.meta.dirname, '../coverage/frontend')
 export interface TestCase {
   id: number
   key: string
+  number: number
+  projectKey: string
   title: string
   status: 'active' | 'deprecated'
   automated: boolean
@@ -20,10 +22,16 @@ export interface TestCase {
 export class ProvenlyApi {
   constructor(readonly request: APIRequestContext) {}
 
-  async createTestCase(body: { title: string; automated?: boolean; expectedResult?: string; description?: string }) {
+  async createTestCase(body: { title: string; automated?: boolean; expectedResult?: string; description?: string; project?: string }) {
     const res = await this.request.post(`${apiURL}/api/v1/test-cases`, { data: body })
     expect(res.status()).toBe(201)
     return (await res.json()) as TestCase
+  }
+
+  async createProject(key: string, name: string) {
+    const res = await this.request.post(`${apiURL}/api/v1/projects`, { data: { key, name } })
+    expect(res.status()).toBe(201)
+    return (await res.json()) as { id: number; key: string; name: string }
   }
 
   /** Deprecates every active automated test case so a journey controls the expected universe. */
@@ -49,6 +57,9 @@ export class ProvenlyApi {
   }
 }
 
+/** A project key no other execution uses (projects are never deleted). */
+export const uniqueProjectKey = () => `P${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`
+
 /** A unique CI run id per test execution. */
 export const uniqueRunId = () => `${Date.now()}${Math.floor(Math.random() * 1000)}`
 
@@ -57,8 +68,8 @@ export const junit = (...cases: string[]) =>
   `<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="e2e" timestamp="2026-09-28T10:00:00.000Z">${cases.join('')}</testsuite></testsuites>`
 
 /** A testcase declaring its TC-ID through the tc-id property (primary source). */
-export const byProperty = (name: string, id: number, outcome = '') =>
-  `<testcase name="${name}" classname="suite" time="0.42"><properties><property name="tc-id" value="${id}"/></properties>${outcome}</testcase>`
+export const byProperty = (name: string, ref: string, outcome = '') =>
+  `<testcase name="${name}" classname="suite" time="0.42"><properties><property name="tc-id" value="${ref}"/></properties>${outcome}</testcase>`
 
 /** A testcase declaring its TC-ID in its name (fallback). */
 export const byName = (name: string, outcome = '') => `<testcase name="${name}" classname="suite" time="1.5">${outcome}</testcase>`

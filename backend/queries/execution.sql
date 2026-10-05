@@ -1,7 +1,7 @@
 -- name: InsertTestRun :one
-INSERT INTO test_runs (external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256)
-VALUES (@external_run_id, @provider, @provider_run_id, @run_attempt, @pipeline, @branch, @commit_sha, @status, @started_at, @completed_at, @report_sha256)
-ON CONFLICT (external_run_id) DO NOTHING
+INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256)
+VALUES (@project_id, @external_run_id, @provider, @provider_run_id, @run_attempt, @pipeline, @branch, @commit_sha, @status, @started_at, @completed_at, @report_sha256)
+ON CONFLICT (project_id, external_run_id) DO NOTHING
 RETURNING id;
 
 -- name: InsertExpectedCases :exec
@@ -19,7 +19,7 @@ SELECT r.*,
 FROM test_runs r WHERE r.id = @id;
 
 -- name: GetTestRunIDByExternalID :one
-SELECT id FROM test_runs WHERE external_run_id = @external_run_id;
+SELECT id FROM test_runs WHERE project_id = @project_id AND external_run_id = @external_run_id;
 
 -- name: ListTestRuns :many
 -- The page is chosen first: the per-run counts are only computed for its rows,
@@ -28,11 +28,16 @@ SELECT r.*,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count
 FROM test_runs r
-WHERE r.id IN (SELECT p.id FROM test_runs p ORDER BY p.id DESC LIMIT @page_limit OFFSET @page_offset)
+WHERE r.id IN (
+    SELECT p.id FROM test_runs p
+    WHERE sqlc.narg('project_id')::bigint IS NULL OR p.project_id = sqlc.narg('project_id')::bigint
+    ORDER BY p.id DESC LIMIT @page_limit OFFSET @page_offset
+)
 ORDER BY r.id DESC;
 
 -- name: CountTestRuns :one
-SELECT count(*) FROM test_runs;
+SELECT count(*) FROM test_runs
+WHERE sqlc.narg('project_id')::bigint IS NULL OR project_id = sqlc.narg('project_id')::bigint;
 
 -- name: ListRunResults :many
 SELECT * FROM test_results
@@ -76,7 +81,7 @@ WITH page AS (
     WHERE r.id IN (SELECT q.test_run_id FROM test_results q WHERE q.id IN (SELECT id FROM page))
 )
 SELECT sqlc.embed(t),
-    r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
+    r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
     c.expected_count AS run_expected_count, c.result_count AS run_result_count
 FROM test_results t

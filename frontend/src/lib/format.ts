@@ -1,8 +1,3 @@
-/** Display form of a TC-ID. */
-export function tcKey(id: number): string {
-  return `TC-${id}`
-}
-
 /**
  * Formats a duration in milliseconds. null means unknown (not reported or
  * invalid); 0 means reported as 0 or rounded down from under 0.5 ms.

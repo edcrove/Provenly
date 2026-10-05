@@ -114,6 +114,9 @@ func TestPersistenceFailures(t *testing.T) {
 			"execution.CountRunResults":          func() error { _, err := exe.CountRunResults(ctx, 1, execution.ResultFilter{}); return err },
 			"execution.ListSummaryInputs":        func() error { _, err := exe.ListSummaryInputs(ctx, []int64{1}); return err },
 			"execution.ListDiagnostics":          func() error { _, err := exe.ListDiagnostics(ctx, 1); return err },
+			"execution.InsertAmendment":          func() error { _, err := exe.InsertAmendment(ctx, execution.NewAmendment{}); return err },
+			"execution.ListAmendments":           func() error { _, err := exe.ListAmendments(ctx, 1, 10, 0); return err },
+			"execution.CountAmendments":          func() error { _, err := exe.CountAmendments(ctx, 1); return err },
 			"execution.ListResultsForTestCase":   func() error { _, err := exe.ListResultsForTestCase(ctx, 1, 10, 0); return err },
 			"execution.CountResultsForTestCase":  func() error { _, err := exe.CountResultsForTestCase(ctx, 1); return err },
 		}

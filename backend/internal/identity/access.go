@@ -62,6 +62,12 @@ func (s *Service) Require(ctx context.Context, projectID int64, minRole authz.Ro
 	return nil
 }
 
+// Actor implements authz.Guard: the signed-in user (an API key is not a person and cannot make audited changes).
+func (s *Service) Actor(ctx context.Context) (authz.Actor, error) {
+	u, err := signedIn(ctx)
+	return authz.Actor{ID: u.ID, Username: u.Username}, err
+}
+
 // RequireAdmin implements authz.Guard.
 func (s *Service) RequireAdmin(ctx context.Context) error {
 	u, err := signedIn(ctx)

@@ -562,6 +562,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/test-runs/{testRunId}/amendments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        /** Amendments of the run's universe (DEC-42), oldest first */
+        get: operations["listTestRunAmendments"];
+        put?: never;
+        /**
+         * Include a reported TC-ID in the run's universe (maintainers; DEC-42)
+         * @description Only a TC-ID with valid results in the run that was outside its snapshot (e.g. marked manual when the run
+         *     was created) can be included. The snapshot is kept; the amendment is append-only, records who made it
+         *     and why, and marks the run as edited (`amendmentCount`). The summary and outcome count it from then on.
+         */
+        post: operations["amendTestRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ingestion/junit": {
         parameters: {
             query?: never;
@@ -935,6 +960,11 @@ export interface components {
             passRate: number;
         };
         TestRun: {
+            /**
+             * Format: int32
+             * @description Amendments of the universe after creation (DEC-42); more than 0 marks the run as edited.
+             */
+            amendmentCount: number;
             /** Format: int64 */
             id: number;
             /** Format: int64 */
@@ -1071,15 +1101,47 @@ export interface components {
             /** Format: int32 */
             resultCount: number;
         };
+        Amendment: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            testRunId: number;
+            /** Format: int64 */
+            testCaseId: number;
+            testCaseKey: string;
+            /** Format: int64 */
+            amendedBy: number;
+            amendedByUsername: string;
+            reason: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AmendmentPage: components["schemas"]["PageMeta"] & {
+            items: components["schemas"]["Amendment"][];
+        };
+        CreateAmendmentRequest: {
+            /** Format: int64 */
+            testCaseId: number;
+            /** @description Why the TC-ID belongs in this run's universe (1 to 500 characters). */
+            reason: string;
+        };
         /**
          * @description Computed against the run's immutable expected-universe snapshot.
          *     Percentages are 0..100 with 6 decimals (0 when the denominator is 0);
          *     clients round them for display and compute totals from these precise values.
          *     Results with an invalid TC-ID are excluded and reported in `diagnostics`.
          *     Valid results for test cases outside the snapshot (e.g. automated=false)
-         *     are excluded and counted in `outsideUniverse`.
+         *     are excluded and counted in `outsideUniverse`, unless a maintainer amended
+         *     them into the universe (`amendedTestCaseIds`, DEC-42).
          */
         TestRunSummary: {
+            /**
+             * Format: int32
+             * @description Size of the snapshot frozen at creation; `expectedTotal` adds the amendments.
+             */
+            snapshotTotal: number;
+            /** @description TC-IDs added to the universe after creation (DEC-42), ascending. */
+            amendedTestCaseIds: number[];
             /** Format: int64 */
             testRunId: number;
             /** Format: int32 */
@@ -2428,6 +2490,68 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listTestRunAmendments: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of amendments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AmendmentPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    amendTestRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAmendmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The amendment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Amendment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };

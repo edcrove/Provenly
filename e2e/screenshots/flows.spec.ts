@@ -258,7 +258,7 @@ test('UI flows', async ({ page }) => {
   await shot(page, 'projects')
   const pay = await createTC(request, 'Pay by card', true, { project: 'CHK' })
   await createTC(request, 'Refund an order', true, { project: 'CHK' })
-  await createTC(request, 'Apply a discount code', false, { project: 'CHK' })
+  const discount = await createTC(request, 'Apply a discount code', false, { project: 'CHK' })
   const params = new URLSearchParams({ project: 'CHK', provider: 'github', runId: '5150', runAttempt: '1', pipeline: 'checkout', branch: 'main', commit: '4b1d2c3e9a' })
   const chkRun = await request.post(`${api}/ingestion/junit?${params}`, {
     headers: { 'Content-Type': 'application/xml' },
@@ -325,6 +325,19 @@ test('UI flows', async ({ page }) => {
   await page.getByTestId('conflict').getByRole('button', { name: 'Reload' }).click()
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByRole('heading', { level: 1 })).toContainText('3-D Secure')
+  // Snapshot amendment (prototype feature 6): a manual test case reported by CI is included in its run.
+  const amendParams = new URLSearchParams({ project: 'CHK', provider: 'github', runId: '5151', runAttempt: '1', pipeline: 'checkout', branch: 'main', commit: '4b1d2c3e9b' })
+  const amendRun = await request.post(`${api}/ingestion/junit?${amendParams}`, {
+    headers: { 'Content-Type': 'application/xml' },
+    data: junit(tc('pay visa', 'CHK-1'), tc('discount code', 'CHK-3')),
+  })
+  expect(amendRun.status()).toBe(201)
+  await page.goto(`/test-runs/${((await amendRun.json()) as { testRun: { id: number } }).testRun.id}`)
+  const outsideItem = page.getByTestId(`outside-${discount}`)
+  await outsideItem.getByLabel('Why it belongs in this run').fill('Automated in sprint 12; the manual flag was stale')
+  await outsideItem.getByRole('button', { name: 'Include in this run' }).click()
+  await expect(page.getByTestId('amendments')).toBeVisible()
+  await shot(page, 'test-run-amended')
   await page.getByRole('button', { name: 'Sign out' }).click()
   await expect(page).toHaveURL(/\/login$/)
   await page.getByLabel('Username').fill('carla')

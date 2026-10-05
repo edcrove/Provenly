@@ -44,7 +44,7 @@ func TestAPIKeys(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, k.ID, got.ID)
 	assert.Equal(t, c.t, *repo.keys[k.ID].LastUsedAt)
-	for _, bad := range []string{"", "pvk_", token + "x", strings.Replace(token, "pvk_", "pvx_", 1), token[:len(token)-1] + "A"} {
+	for _, bad := range []string{"", "pvk_", token + "x", strings.Replace(token, "pvk_", "pvx_", 1), tampered(token)} {
 		_, err := s.AuthenticateKey(ctx, bad)
 		assert.Equal(t, errBadKey, err, bad)
 	}
@@ -178,4 +178,13 @@ func TestAPIKeyRoutes(t *testing.T) {
 	}
 	h.svc.repo.(*fakeRepo).errs["CountAPIKeys"] = errBoom
 	assert.Equal(t, http.StatusInternalServerError, h.do("GET", "/api/v1/projects/CHK/api-keys", "", auth).Code)
+}
+
+// tampered changes the last character of a key (never to itself, which would leave the key valid).
+func tampered(token string) string {
+	last := "A"
+	if token[len(token)-1] == 'A' {
+		last = "B"
+	}
+	return token[:len(token)-1] + last
 }

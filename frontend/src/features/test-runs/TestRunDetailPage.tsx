@@ -5,12 +5,13 @@ import { useTestRun, useTestRunSummary } from '@/api/queries'
 import { NotFoundPage } from '@/app/NotFoundPage'
 import { QueryState } from '@/components/QueryState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { ExecutionBadge, VerdictBadge } from '@/components/StatusBadge'
+import { EditedBadge, ExecutionBadge, VerdictBadge } from '@/components/StatusBadge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { formatDateTime, formatPercent } from '@/lib/format'
 import { isInterruptedRun, positiveInt } from '@/lib/status'
 
+import { RunAmendments } from './RunAmendments'
 import { RunDiagnostics } from './RunDiagnostics'
 import { RunParseErrors } from './RunParseErrors'
 import { RunResults } from './RunResults'
@@ -56,6 +57,7 @@ export function TestRunDetailPage() {
             <PageTitle title={`Test run #${r.id}`} />
             <h1 className="text-2xl font-semibold">Test run #{r.id}</h1>
             <VerdictBadge verdict={r.outcome.verdict} />
+            <EditedBadge amendments={r.amendmentCount} />
             {isInterruptedRun(r.executionStatus) ? <ExecutionBadge status={r.executionStatus} /> : null}
             <span className="text-muted-foreground text-sm" data-testid="run-pass-rate">
               {r.outcome.executed > 0
@@ -98,9 +100,12 @@ export function TestRunDetailPage() {
                     <CardDescription>Excluded from the universe and the percentages.</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <RunDiagnostics summary={s} />
+                    <RunDiagnostics summary={s} testRunId={r.id} />
                   </CardContent>
                 </Card>
+                {r.amendmentCount > 0 ? (
+                  <RunAmendments testRunId={r.id} snapshotTotal={s.snapshotTotal} />
+                ) : null}
               </>
             )}
           </QueryState>

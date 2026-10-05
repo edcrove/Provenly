@@ -1078,6 +1078,67 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/test-runs/{testRunId}/amendments:
+    parameters:
+      - $ref: "#/components/parameters/TestRunId"
+    get:
+      tags: [test-runs]
+      operationId: listTestRunAmendments
+      summary: Amendments of the run's universe (DEC-42), oldest first
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of amendments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmendmentPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [test-runs]
+      operationId: amendTestRun
+      summary: Include a reported TC-ID in the run's universe (maintainers; DEC-42)
+      description: |
+        Only a TC-ID with valid results in the run that was outside its snapshot (e.g. marked manual when the run
+        was created) can be included. The snapshot is kept; the amendment is append-only, records who made it
+        and why, and marks the run as edited (`amendmentCount`). The summary and outcome count it from then on.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAmendmentRequest"
+      responses:
+        "201":
+          description: The amendment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Amendment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/ingestion/junit:
     post:
       tags: [ingestion]
@@ -2076,8 +2137,14 @@ components:
         - outcome
         - expectedCount
         - resultCount
+        - amendmentCount
         - createdAt
       properties:
+        amendmentCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Amendments of the universe after creation (DEC-42); more than 0 marks the run as edited.
         id:
           type: integer
           format: int64
@@ -2337,6 +2404,59 @@ components:
           type: integer
           format: int32
 
+    Amendment:
+      type: object
+      additionalProperties: false
+      required: [id, testRunId, testCaseId, testCaseKey, amendedBy, amendedByUsername, reason, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        testRunId:
+          type: integer
+          format: int64
+        testCaseId:
+          type: integer
+          format: int64
+        testCaseKey:
+          type: string
+        amendedBy:
+          type: integer
+          format: int64
+        amendedByUsername:
+          type: string
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        createdAt:
+          type: string
+          format: date-time
+
+    AmendmentPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Amendment"
+
+    CreateAmendmentRequest:
+      type: object
+      additionalProperties: false
+      required: [testCaseId, reason]
+      properties:
+        testCaseId:
+          type: integer
+          format: int64
+          minimum: 1
+        reason:
+          type: string
+          description: Why the TC-ID belongs in this run's universe (1 to 500 characters).
+
     TestRunSummary:
       type: object
       additionalProperties: false
@@ -2346,7 +2466,8 @@ components:
         clients round them for display and compute totals from these precise values.
         Results with an invalid TC-ID are excluded and reported in `diagnostics`.
         Valid results for test cases outside the snapshot (e.g. automated=false)
-        are excluded and counted in `outsideUniverse`.
+        are excluded and counted in `outsideUniverse`, unless a maintainer amended
+        them into the universe (`amendedTestCaseIds`, DEC-42).
       required:
         - testRunId
         - expectedTotal
@@ -2359,7 +2480,20 @@ components:
         - outsideUniverse
         - outsideUniverseTestCaseIds
         - testCases
+        - snapshotTotal
+        - amendedTestCaseIds
       properties:
+        snapshotTotal:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Size of the snapshot frozen at creation; `expectedTotal` adds the amendments.
+        amendedTestCaseIds:
+          type: array
+          description: TC-IDs added to the universe after creation (DEC-42), ascending.
+          items:
+            type: integer
+            format: int64
         testRunId:
           type: integer
           format: int64

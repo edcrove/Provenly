@@ -41,6 +41,16 @@ type TestRun struct {
 	ProjectID     int64
 }
 
+type TestRunAmendment struct {
+	ID                int64
+	TestRunID         int64
+	TestCaseID        int64
+	AmendedBy         int64
+	AmendedByUsername string
+	Reason            string
+	CreatedAt         pgtype.Timestamptz
+}
+
 type TestRunExpectedCase struct {
 	TestRunID  int64
 	TestCaseID int64

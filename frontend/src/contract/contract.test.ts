@@ -101,6 +101,101 @@ const withKey = () => {
   })
 }
 const key9 = { projectKey: 'TC', apiKeyId: 9 }
+const outside154 = () => {
+  db.summaries[7] = {
+    ...db.summaries[7],
+    outsideUniverse: 1,
+    outsideUniverseTestCaseIds: [154],
+    testCases: db.summaries[7].testCases.filter((c) => c.testCaseId !== 154),
+  }
+}
+const amendBody = { testCaseId: 154, reason: 'marked manual by mistake' }
+const amendmentScenarios: Scenario[] = [
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/amendments',
+    status: 200,
+    call: (c) => c.GET('/api/v1/test-runs/{testRunId}/amendments', { params: { path: run } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/amendments',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/test-runs/{testRunId}/amendments', { params: { path: run, query: { page: 0 } } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/amendments',
+    status: 404,
+    call: (c) => c.GET('/api/v1/test-runs/{testRunId}/amendments', { params: { path: unknownRun } }),
+  },
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/amendments',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/test-runs/{testRunId}/amendments', { params: { path: run } }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/amendments',
+    status: 201,
+    setup: outside154,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/amendments', { params: { path: run }, body: amendBody }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/amendments',
+    status: 400,
+    setup: outside154,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/amendments', {
+        params: { path: run },
+        body: { ...amendBody, reason: ' ' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/amendments',
+    status: 403,
+    setup: () => {
+      outside154()
+      asViewer()
+    },
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/amendments', { params: { path: run }, body: amendBody }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/amendments',
+    status: 404,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/amendments', { params: { path: unknownRun }, body: amendBody }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/amendments',
+    status: 409,
+    setup: () => {
+      outside154()
+      db.summaries[7].amendedTestCaseIds = [154]
+    },
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/amendments', { params: { path: run }, body: amendBody }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/amendments',
+    status: 415,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/amendments', {
+        params: { path: run },
+        body: amendBody,
+        bodySerializer: JSON.stringify,
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/amendments',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/amendments', { params: { path: run }, body: amendBody }),
+  },
+]
+
 const staleTag = { 'If-Match': '"99"' }
 const step1 = { testCaseId: 153, stepId: 1 }
 const staleScenarios: Scenario[] = [
@@ -626,6 +721,7 @@ const scenarios: Scenario[] = [
   ...roleScenarios,
   ...apiKeyScenarios,
   ...staleScenarios,
+  ...amendmentScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
   // Projects

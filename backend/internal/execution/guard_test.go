@@ -44,3 +44,7 @@ var adminGuard = stubGuard{scope: authz.Scope{All: true}}
 func memberOf(roles map[int64]authz.Role) stubGuard {
 	return stubGuard{scope: authz.Scope{Roles: roles}}
 }
+
+func (g stubGuard) Actor(context.Context) (authz.Actor, error) {
+	return authz.Actor{ID: 1, Username: "admin"}, g.err
+}

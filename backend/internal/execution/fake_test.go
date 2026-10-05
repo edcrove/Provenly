@@ -13,6 +13,7 @@ type fakeRepo struct {
 	expected map[int64][]int64
 	results  map[int64][]TestResult
 	parseErr map[int64][]ParseError
+	amended  map[int64][]Amendment
 	nextRun  int64
 	nextRes  int64
 	errs     map[string]error
@@ -22,7 +23,7 @@ type fakeRepo struct {
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{runs: map[int64]TestRun{}, byExt: map[string]int64{}, expected: map[int64][]int64{},
-		results: map[int64][]TestResult{}, parseErr: map[int64][]ParseError{}, errs: map[string]error{}}
+		results: map[int64][]TestResult{}, parseErr: map[int64][]ParseError{}, amended: map[int64][]Amendment{}, errs: map[string]error{}}
 }
 
 func (f *fakeRepo) InsertTestRun(_ context.Context, p InsertRunParams) (int64, bool, error) {
@@ -106,8 +107,9 @@ func (f *fakeRepo) GetTestRun(_ context.Context, id int64) (TestRun, error) {
 	if !ok {
 		return TestRun{}, ErrNotFound
 	}
-	r.ExpectedCount = int32(len(f.expected[id]))
+	r.ExpectedCount = int32(len(f.expected[id]) + len(f.amended[id]))
 	r.ResultCount = int32(len(f.results[id]))
+	r.AmendmentCount = int32(len(f.amended[id]))
 	return r, nil
 }
 
@@ -184,6 +186,9 @@ func (f *fakeRepo) ListSummaryInputs(_ context.Context, runIDs []int64) (map[int
 	out := map[int64]SummaryInputs{}
 	for _, id := range runIDs {
 		in := SummaryInputs{Expected: f.expected[id]}
+		for _, a := range f.amended[id] {
+			in.Amended = append(in.Amended, a.TestCaseID)
+		}
 		for _, r := range f.results[id] {
 			if r.Correlation == CorrelationValid {
 				in.Valid = append(in.Valid, ValidResult{TestCaseID: *r.TestCaseID, Status: r.Status})
@@ -242,3 +247,34 @@ func (f *fakeRepo) InTx(_ context.Context, fn func(Repository) error) error {
 }
 
 var fixedNow = time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+func (f *fakeRepo) InsertAmendment(_ context.Context, a NewAmendment) (Amendment, error) {
+	if err := f.errs["InsertAmendment"]; err != nil {
+		return Amendment{}, err
+	}
+	for _, x := range f.amended[a.TestRunID] {
+		if x.TestCaseID == a.TestCaseID {
+			return Amendment{}, ErrConflict
+		}
+	}
+	out := Amendment{ID: int64(len(f.amended[a.TestRunID]) + 1), TestRunID: a.TestRunID, TestCaseID: a.TestCaseID, AmendedBy: a.AmendedBy,
+		AmendedByUsername: a.AmendedByUsername, Reason: a.Reason, CreatedAt: time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)}
+	f.amended[a.TestRunID] = append(f.amended[a.TestRunID], out)
+	return out, nil
+}
+
+func (f *fakeRepo) ListAmendments(_ context.Context, runID int64, limit, offset int32) ([]Amendment, error) {
+	if err := f.errs["ListAmendments"]; err != nil {
+		return nil, err
+	}
+	all := f.amended[runID]
+	start := min(int(offset), len(all))
+	return all[start:min(start+int(limit), len(all))], nil
+}
+
+func (f *fakeRepo) CountAmendments(_ context.Context, runID int64) (int64, error) {
+	if err := f.errs["CountAmendments"]; err != nil {
+		return 0, err
+	}
+	return int64(len(f.amended[runID])), nil
+}

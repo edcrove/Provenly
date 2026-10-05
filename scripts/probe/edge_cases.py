@@ -260,6 +260,26 @@ def main():
     [t.join() for t in threads]
     check("20 concurrent saves from one read: one wins", f"{codes.count(200)} won, {codes.count(412)} refused", "1 won, 19 refused")
 
+    # Snapshot amendment (prototype feature 6, DEC-42): only reported TC-IDs outside the snapshot, a reason, once.
+    manual = call(base, "POST", "/test-cases", {"title": "probe-manual"})[1]
+    rid = call(base, "POST", "/ingestion/junit?" + q.format(30), raw=f'<testsuite><testcase name="m {manual["key"]}"/></testsuite>'.encode(), ctype="application/xml")[1]["testRun"]["id"]
+    amend = f"/test-runs/{rid}/amendments"
+    for body, exp in [({"testCaseId": 0, "reason": "x"}, 400), ({"testCaseId": -1, "reason": "x"}, 400), ({"testCaseId": "1", "reason": "x"}, 400),
+                      ({"testCaseId": 9223372036854775807, "reason": "x"}, 400), ({"testCaseId": 1e30, "reason": "x"}, 400), ({"reason": "x"}, 400),
+                      ({"testCaseId": manual["id"]}, 400), ({"testCaseId": manual["id"], "reason": "a\u0000"}, 400),
+                      ({"testCaseId": manual["id"], "reason": "r" * 501}, 400), ({"testCaseId": a, "reason": "x"}, 409)]:
+        check(f"amend {str(body)[:40]}", call(base, "POST", amend, body)[0], exp)
+    check("amend text/plain", call(base, "POST", amend, raw=b'{}', ctype="text/plain")[0], 415)
+    for rq, exp in [("0", 400), ("abc", 400), ("9223372036854775807", 404)]:
+        check(f"amend run {rq}", call(base, "POST", f"/test-runs/{rq}/amendments", {"testCaseId": manual["id"], "reason": "x"})[0], exp)
+        check(f"amendments of run {rq}", call(base, "GET", f"/test-runs/{rq}/amendments")[0], exp)
+    codes = []
+    threads = [threading.Thread(target=lambda: codes.append(call(base, "POST", amend, {"testCaseId": manual["id"], "reason": "probe race"})[0])) for _ in range(20)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    check("20 concurrent amendments: one recorded", f"{codes.count(201)} recorded, {codes.count(409)} conflicts", "1 recorded, 19 conflicts")
+    check("amended run is marked", call(base, "GET", f"/test-runs/{rid}")[1].get("amendmentCount"), 1)
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

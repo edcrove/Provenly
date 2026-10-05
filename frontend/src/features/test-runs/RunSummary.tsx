@@ -17,6 +17,11 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
           <div className="text-2xl font-semibold" data-testid="expected-total">
             {summary.expectedTotal}
           </div>
+          {summary.amendedTestCaseIds.length > 0 ? (
+            <div className="text-muted-foreground text-xs" data-testid="expected-amended">
+              {summary.snapshotTotal} in the snapshot + {summary.amendedTestCaseIds.length} included later
+            </div>
+          ) : null}
         </div>
         <div className="rounded-md border p-3">
           <div className="text-muted-foreground">Executed</div>
@@ -82,7 +87,8 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
       <p className="text-muted-foreground text-xs">
         Each executed TC-ID counts once with its aggregated status (failed &gt; error &gt; skipped &gt;
         passed). The expected universe is the snapshot of active automated test cases taken when the run was
-        created.
+        created
+        {summary.amendedTestCaseIds.length > 0 ? ', plus the test cases a maintainer included later' : ''}.
       </p>
       {untested.length > 0 && (
         <div className="text-sm">

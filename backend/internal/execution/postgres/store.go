@@ -82,16 +82,17 @@ func filterText[T ~string](v *T) pgtype.Text {
 
 type runRow struct {
 	executiondb.TestRun
-	ExpectedCount int32
-	ResultCount   int32
+	ExpectedCount  int32
+	ResultCount    int32
+	AmendmentCount int32
 }
 
 func toRun(r runRow) execution.TestRun {
 	return execution.TestRun{
 		ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.CommitSha,
-		Status: execution.RunStatus(r.Status), ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount,
-		CreatedAt: r.CreatedAt.Time, StartedAt: timePtr(r.StartedAt), CompletedAt: timePtr(r.CompletedAt),
+		Status: execution.RunStatus(r.Status), ExpectedCount: r.ExpectedCount + r.AmendmentCount, ResultCount: r.ResultCount,
+		AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt.Time, StartedAt: timePtr(r.StartedAt), CompletedAt: timePtr(r.CompletedAt),
 		ReportSHA256: r.ReportSha256,
 	}
 }
@@ -196,7 +197,7 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 			RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
 			CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, ReportSha256: r.ReportSha256,
 		},
-		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount,
+		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount,
 	}), nil
 }
 
@@ -214,7 +215,7 @@ func (s *Store) ListTestRuns(ctx context.Context, projectIDs []int64, limit, off
 				RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
 				CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,
 			},
-			ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount,
+			ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount,
 		})
 	}
 	return out, nil
@@ -256,9 +257,12 @@ func (s *Store) ListSummaryInputs(ctx context.Context, runIDs []int64) (map[int6
 	out := make(map[int64]execution.SummaryInputs, len(runIDs))
 	for _, r := range rows {
 		in := out[r.TestRunID]
-		if r.Status.Valid {
+		switch r.Kind {
+		case "result":
 			in.Valid = append(in.Valid, execution.ValidResult{TestCaseID: r.TestCaseID, Status: execution.ResultStatus(r.Status.String)})
-		} else {
+		case "amended":
+			in.Amended = append(in.Amended, r.TestCaseID)
+		default:
 			in.Expected = append(in.Expected, r.TestCaseID)
 		}
 		out[r.TestRunID] = in
@@ -297,7 +301,7 @@ func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, li
 					RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.RunStatus,
 					CreatedAt: r.RunCreatedAt, StartedAt: r.RunStartedAt, CompletedAt: r.RunCompletedAt,
 				},
-				ExpectedCount: r.RunExpectedCount, ResultCount: r.RunResultCount,
+				ExpectedCount: r.RunExpectedCount, ResultCount: r.RunResultCount, AmendmentCount: r.RunAmendmentCount,
 			}),
 		}
 	}
@@ -307,4 +311,37 @@ func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, li
 // CountResultsForTestCase implements execution.Repository.
 func (s *Store) CountResultsForTestCase(ctx context.Context, testCaseID int64) (int64, error) {
 	return s.q.CountResultsForTestCase(ctx, pgtype.Int8{Int64: testCaseID, Valid: true})
+}
+
+func toAmendment(r executiondb.TestRunAmendment) execution.Amendment {
+	return execution.Amendment{
+		ID: r.ID, TestRunID: r.TestRunID, TestCaseID: r.TestCaseID, AmendedBy: r.AmendedBy, AmendedByUsername: r.AmendedByUsername,
+		Reason: r.Reason, CreatedAt: r.CreatedAt.Time,
+	}
+}
+
+// InsertAmendment implements execution.Repository.
+func (s *Store) InsertAmendment(ctx context.Context, a execution.NewAmendment) (execution.Amendment, error) {
+	r, err := s.q.InsertAmendment(ctx, executiondb.InsertAmendmentParams{
+		TestRunID: a.TestRunID, TestCaseID: a.TestCaseID, AmendedBy: a.AmendedBy, AmendedByUsername: a.AmendedByUsername, Reason: a.Reason,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return execution.Amendment{}, execution.ErrConflict
+	}
+	return toAmendment(r), err
+}
+
+// ListAmendments implements execution.Repository.
+func (s *Store) ListAmendments(ctx context.Context, runID int64, limit, offset int32) ([]execution.Amendment, error) {
+	rows, err := s.q.ListAmendments(ctx, executiondb.ListAmendmentsParams{TestRunID: runID, PageLimit: limit, PageOffset: offset})
+	out := make([]execution.Amendment, len(rows))
+	for i, r := range rows {
+		out[i] = toAmendment(r)
+	}
+	return out, err
+}
+
+// CountAmendments implements execution.Repository.
+func (s *Store) CountAmendments(ctx context.Context, runID int64) (int64, error) {
+	return s.q.CountAmendments(ctx, runID)
 }

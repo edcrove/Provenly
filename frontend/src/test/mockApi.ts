@@ -1,6 +1,7 @@
 import { http, HttpResponse, type JsonBodyType } from 'msw'
 
 import type {
+  Amendment,
   ApiKey,
   Invitation,
   ParseError,
@@ -32,6 +33,8 @@ export interface MockDb {
   members: { projectId: number; userId: number; role: MemberRole; since: string }[]
   /** CI API keys by project id. */
   apiKeys: (ApiKey & { projectId: number })[]
+  /** Snapshot amendments (DEC-42), all runs. */
+  amendments: Amendment[]
   /** The signed-in user's id (the session cookie), or null when signed out. */
   session: number | null
   projects: Project[]
@@ -58,6 +61,7 @@ export function seed(): MockDb {
     session: 1,
     members: [],
     apiKeys: [],
+    amendments: [],
     projects: [project()],
     testCases: [tc, testCase({ id: 154, title: 'Logout works' })],
     steps: [
@@ -814,6 +818,63 @@ export const handlers = [
       if (run instanceof Response) return run
       return respond(db.summaries[run.id] ?? summary({ testRunId: run.id }))
     }),
+  ),
+  http.get(
+    `${BASE}/test-runs/:testRunId/amendments`,
+    guard(({ params, request }) => {
+      const run = findRun(params.testRunId)
+      if (run instanceof Response) return run
+      return respond(
+        pageOf(
+          new URL(request.url),
+          db.amendments.filter((a) => a.testRunId === run.id),
+        ),
+      )
+    }),
+  ),
+  http.post(
+    `${BASE}/test-runs/:testRunId/amendments`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const run = findRun(params.testRunId)
+        if (run instanceof Response) return run
+        const denied = requireRole(run.projectId, 'maintainer', () => notFound(`test run ${run.id}`))
+        if (denied) return denied
+        const body = await readBody(request)
+        const testCaseId = Number(body?.testCaseId)
+        const reason = String(body?.reason ?? '').trim()
+        if (!reason || reason.length > 500) return validation('reason', 'must be 1 to 500 characters')
+        const s = (db.summaries[run.id] ??= summary({ testRunId: run.id }))
+        if (s.amendedTestCaseIds.includes(testCaseId) || s.testCases.some((c) => c.testCaseId === testCaseId))
+          return problem(409, 'conflict', `TC-ID ${testCaseId} is already in the universe of run ${run.id}`)
+        if (!s.outsideUniverseTestCaseIds.includes(testCaseId))
+          return validation('testCaseId', 'has no valid result in this run')
+        const tc = db.testCases.find((t) => t.id === testCaseId)
+        const amendment: Amendment = {
+          id: db.nextId++,
+          testRunId: run.id,
+          testCaseId,
+          testCaseKey: tc?.key ?? `TC-${testCaseId}`,
+          amendedBy: db.session!,
+          amendedByUsername: currentUser().username,
+          reason,
+          createdAt: now(),
+        }
+        db.amendments.push(amendment)
+        Object.assign(s, {
+          expectedTotal: s.expectedTotal + 1,
+          outsideUniverse: Math.max(0, s.outsideUniverse - 1),
+          outsideUniverseTestCaseIds: s.outsideUniverseTestCaseIds.filter((id) => id !== testCaseId),
+          amendedTestCaseIds: [...s.amendedTestCaseIds, testCaseId].sort((a, b) => a - b),
+          testCases: [
+            ...s.testCases,
+            { testCaseId, testCaseKey: amendment.testCaseKey, status: 'passed', resultCount: 1 },
+          ],
+        })
+        Object.assign(run, { amendmentCount: run.amendmentCount + 1, expectedCount: run.expectedCount + 1 })
+        return respond(amendment, 201)
+      }),
+    ),
   ),
   http.get(
     `${BASE}/test-runs/:testRunId/parse-errors`,

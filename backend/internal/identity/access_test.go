@@ -43,6 +43,12 @@ func TestGuard(t *testing.T) {
 	assert.Contains(t, err.Error(), "needs the maintainer role in the project (you are member)")
 	assert.Equal(t, gone, s.Require(asAna, 2, authz.RoleViewer, gone), "no role: the caller's not-found error")
 
+	actor, err := s.Actor(asAna)
+	require.NoError(t, err)
+	assert.Equal(t, authz.Actor{ID: ana.ID, Username: "ana"}, actor)
+	_, err = s.Actor(WithAPIKey(ctx, APIKey{ProjectID: 1}))
+	assert.Equal(t, apperr.KindUnauthorized, kindOf(t, err), "an API key is not a person")
+
 	assert.NoError(t, s.RequireAdmin(asAdmin))
 	assert.Equal(t, apperr.KindForbidden, kindOf(t, s.RequireAdmin(asAna)))
 

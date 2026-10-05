@@ -20,7 +20,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 3 | Roles and project membership (Admin, Maintainer, Member, Viewer) | MVP D12 | ✅ | proto/03-roles |
 | 4 | API keys for CI, `?project=` ingestion (secrets at rest moved to 18, see P4-6) | MVP D4, D11 | ✅ | proto/04-api-keys |
 | 5 | Optimistic locking (ETag / If-Match) | MVP D7 | ✅ | proto/05-optimistic-locking |
-| 6 | Snapshot amendment per run | DEC-42 | ⏳ | |
+| 6 | Snapshot amendment per run | DEC-42 | ✅ | proto/06-snapshot-amendment |
 | 7 | Retries, logical result and flaky | MVP D1 | ⏳ | |
 | 8 | Compressed (gzip) report ingestion | MVP D6 | ⏳ | |
 | 9 | Taxonomy: tags and custom dimensions | Planning #26 | ⏳ | |
@@ -80,6 +80,12 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P5-4 | UI | Every test case and step write sends `If-Match` with the version on screen; step writes carry the new ETag forward; a 412 shows "Someone else saved this test case" with Reload | D7: the UI always sends it; successive own edits never conflict with themselves |
 | P5-5 | Partial saves | The edit form sends only the fields the user changed since opening it | After a conflict and Reload, saving does not overwrite the other person's change in other fields; found while writing the E2E |
 | P5-6 | Projects | Not versioned in this feature | D7 covers test cases and steps; project renames are rare and maintainer-only |
+| P6-1 | Shape | Amendments are a separate append-only list per run (who, when, why); the snapshot table never changes; the summary computes over snapshot + amendments | DEC-42: "an amended summary is never mistaken for the original snapshot"; the original stays queryable (`snapshotTotal`) |
+| P6-2 | Eligibility | Only TC-IDs with a valid result in the run that were outside its snapshot (the summary's `outsideUniverseTestCaseIds`); enforced by the service and a database trigger | Includes what CI actually reported; never invents untested entries |
+| P6-3 | Who | Maintainers and administrators of the run's project; a reason (1–500 characters) is required | It changes the official numbers of a run |
+| P6-4 | Visibility | `amendmentCount` on every run (list, detail, history), an "edited" badge, an "Edited after creation" card with the history, and the summary splits "N in the snapshot + M included later" | DEC-42 asks for a visible mark in list, detail and API |
+| P6-5 | No undo | An amendment cannot be removed | Audit trail; a mistaken inclusion is visible with its reason. Revisit with the audit log (feature 20) if needed |
+| P6-6 | Actor | `authz.Guard.Actor` gives the signed-in user; API keys cannot amend | Amendments are human decisions |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
 ## What each feature does
@@ -169,4 +175,19 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: conflict notice with Reload (screenshot 45); copy on the definition card no longer says "never creates a version".
 - **Tests**: etag, apperr, httpx and catalog unit tests; BE-INT-042 (triggers, 20 concurrent writes: one wins);
   contract 412 scenarios for every write on both sides; FE-INT-034; BE-E2E-011; FE-E2E-014; probe If-Match sweep.
+
+### 6. Snapshot amendment per run (DEC-42)
+
+- **Behavior**: on a run, a test case reported by CI but outside the snapshot (it was manual when the run was created)
+  can be included by a maintainer with a reason. The run is marked "edited", the summary and verdict count it, and the
+  history shows who included what, when and why.
+- **API**: `GET/POST /test-runs/{id}/amendments`; `TestRun.amendmentCount`; summary `snapshotTotal` and
+  `amendedTestCaseIds`.
+- **Schema**: migration 00018 (`test_run_amendments`, protection trigger).
+- **UI**: "Include in this run" next to each outside-universe test case (maintainers), edited badge in run list and
+  detail, amendment history card, "N in the snapshot + M included later" (screenshot 46).
+- **Tests**: execution unit tests (service, summary, handlers), identity `Actor`; BE-INT-043 (trigger, 20 concurrent
+  amendments: one recorded); contract scenarios both sides; FE-INT-035; BE-E2E-012; FE-E2E-015; probe amendment sweep.
+  Also fixed a flaky API key test (feature 4): tampering a key could leave it unchanged when its last character was
+  already the replacement.
 

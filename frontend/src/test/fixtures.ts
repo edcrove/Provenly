@@ -114,6 +114,7 @@ export function testRun(overrides: Partial<TestRun> = {}): TestRun {
     },
     expectedCount: 2,
     resultCount: 3,
+    amendmentCount: 0,
     createdAt: at,
     startedAt: at,
     completedAt: at,
@@ -149,6 +150,8 @@ export function summary(overrides: Partial<TestRunSummary> = {}): TestRunSummary
   return {
     testRunId: 7,
     expectedTotal: 2,
+    snapshotTotal: 2,
+    amendedTestCaseIds: [],
     executedTotal: 1,
     counts: { untested: 1, passed: 0, failed: 1, error: 0, skipped: 0 },
     percentOfExpected: { untested: 50, passed: 0, failed: 50, error: 0, skipped: 0 },

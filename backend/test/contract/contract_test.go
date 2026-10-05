@@ -176,7 +176,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 62, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 65, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -542,6 +542,9 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.PUT("/api/v1/projects/TC/requirements/1/test-cases").WithJSON(map[string]any{"testCaseIds": []int{}}).Expect())
 	problem(e.GET("/api/v1/projects/TC/issues").Expect())
 	problem(e.GET("/api/v1/projects/TC/quality").Expect())
+	problem(e.POST("/api/v1/test-runs/live").WithJSON(map[string]any{"provider": "github", "runId": "1", "runAttempt": 1}).Expect())
+	problem(e.POST("/api/v1/test-runs/1/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "a", "sequence": 1, "type": "run.finished"}}}).Expect())
+	problem(e.GET("/api/v1/test-runs/1/live").Expect())
 	problem(e.POST("/api/v1/projects/TC/issues").WithJSON(map[string]any{"title": "x"}).Expect())
 	problem(e.POST("/api/v1/projects/TC/issues/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "X-1", "title": "x", "state": "open"}}}).Expect())
 	problem(e.GET("/api/v1/projects/TC/issues/1").Expect())
@@ -1154,4 +1157,73 @@ func TestQuality(t *testing.T) {
 	viewer.GET("/api/v1/projects/TC/quality").Expect().Status(http.StatusOK)
 	admin.POST("/api/v1/projects").WithJSON(map[string]any{"key": "CHK", "name": "Checkout"}).Expect().Status(http.StatusCreated)
 	viewer.GET("/api/v1/projects/CHK/quality").Expect().Status(http.StatusNotFound)
+}
+
+func TestLiveRuns(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	e := anon(t, s, 1<<20)
+	tcs := make([]string, 3)
+	for i := range tcs {
+		tcs[i] = admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "t" + strconv.Itoa(i), "automated": true}).
+			Expect().Status(http.StatusCreated).JSON().Object().Value("key").String().Raw()
+	}
+	admin.POST("/api/v1/projects").WithJSON(map[string]any{"key": "CHK", "name": "Checkout"}).Expect().Status(http.StatusCreated)
+	key := as(e, admin.POST("/api/v1/projects/CHK/api-keys").WithJSON(map[string]any{"name": "CI"}).Expect().Status(http.StatusCreated).
+		JSON().Object().Value("token").String().Raw())
+
+	start := map[string]any{"project": "TC", "provider": "github", "runId": "300", "runAttempt": 1, "pipeline": "ci"}
+	run := admin.POST("/api/v1/test-runs/live").WithJSON(start).Expect().Status(http.StatusCreated).JSON().Object()
+	run.HasValue("mode", "live").HasValue("executionStatus", "running").HasValue("expectedCount", 3)
+	id := strconv.FormatInt(int64(run.Value("id").Number().Raw()), 10)
+	admin.POST("/api/v1/test-runs/live").WithJSON(start).Expect().Status(http.StatusCreated).JSON().Object().Value("id").Number().IsEqual(run.Value("id").Number().Raw())
+	admin.POST("/api/v1/test-runs/live").WithJSON(map[string]any{"provider": "github", "runId": "300"}).Expect().Status(http.StatusBadRequest)
+	admin.POST("/api/v1/test-runs/live").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.POST("/api/v1/test-runs/live").WithJSON(map[string]any{"project": "NOPE", "provider": "github", "runId": "1", "runAttempt": 1}).Expect().Status(http.StatusNotFound)
+	key.POST("/api/v1/test-runs/live").WithJSON(start).Expect().Status(http.StatusNotFound)
+	ingest(admin, "301", 1, `<testsuite/>`).Expect().Status(http.StatusCreated)
+	admin.POST("/api/v1/test-runs/live").WithJSON(map[string]any{"provider": "github", "runId": "301", "runAttempt": 1}).Expect().Status(http.StatusConflict)
+
+	events := admin.POST("/api/v1/test-runs/" + id + "/events")
+	events.WithJSON(map[string]any{"events": []map[string]any{
+		{"eventId": "e1", "sequence": 1, "type": "test.started", "testName": "t0", "testCase": tcs[0]},
+		{"eventId": "e2", "sequence": 2, "type": "test.finished", "testName": "t0", "testCase": tcs[0], "status": "passed", "occurredAt": "2026-10-05T12:00:00Z"},
+		{"eventId": "e3", "sequence": 3, "type": "test.started", "testName": "t1", "testCase": tcs[1]},
+		{"eventId": "e4", "sequence": 4, "type": "test.started", "testName": "x", "testCase": "TC-999"},
+	}}).Expect().Status(http.StatusOK).JSON().Object().IsEqual(map[string]any{"accepted": 4, "duplicates": 0})
+	admin.POST("/api/v1/test-runs/" + id + "/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "e1", "sequence": 1, "type": "test.started"}}}).
+		Expect().Status(http.StatusOK).JSON().Object().IsEqual(map[string]any{"accepted": 0, "duplicates": 1})
+	admin.POST("/api/v1/test-runs/" + id + "/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "x", "sequence": 1, "type": "test.finished"}}}).
+		Expect().Status(http.StatusBadRequest)
+	admin.POST("/api/v1/test-runs/" + id + "/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "x", "sequence": 1, "type": "run.finished", "attempt": 101}}}).
+		Expect().Status(http.StatusBadRequest)
+	admin.POST("/api/v1/test-runs/" + id + "/events").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.POST("/api/v1/test-runs/987654/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "x", "sequence": 1, "type": "run.finished"}}}).Expect().Status(http.StatusNotFound)
+	key.POST("/api/v1/test-runs/" + id + "/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "x", "sequence": 1, "type": "run.finished"}}}).Expect().Status(http.StatusNotFound)
+
+	live := admin.GET("/api/v1/test-runs/" + id + "/live").Expect().Status(http.StatusOK).JSON().Object()
+	live.HasValue("reconciliation", "pending").HasValue("events", 4).HasValue("waiting", 1).HasValue("running", 1).HasValue("finished", 1)
+	admin.GET("/api/v1/test-runs/0/live").Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/test-runs/987654/live").Expect().Status(http.StatusNotFound)
+
+	// The final report completes the run; live events and results are reconciled.
+	ingest(admin, "300", 1, `<testsuite><testcase name="t0"><properties><property name="tc-id" value="`+tcs[0]+`"/></properties><failure/></testcase>`+
+		`<testcase name="t2"><properties><property name="tc-id" value="`+tcs[2]+`"/></properties></testcase></testsuite>`).
+		Expect().Status(http.StatusCreated).JSON().Object().HasValue("created", true).Value("testRun").Object().HasValue("executionStatus", "completed")
+	rec := admin.GET("/api/v1/test-runs/"+id+"/live").Expect().Status(http.StatusOK).JSON().Object().HasValue("reconciliation", "mismatch")
+	rec.Value("mismatches").Array().Length().IsEqual(4)
+	admin.POST("/api/v1/test-runs/" + id + "/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "late", "sequence": 9, "type": "run.finished"}}}).
+		Expect().Status(http.StatusConflict)
+	// Viewers read live runs but neither start them nor stream events.
+	inv := admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "TC", "role": "viewer"}).Expect().Status(http.StatusCreated).JSON().Object()
+	viewer := as(e, e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "vic",
+		"displayName": "Vic", "password": "vic's password"}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
+	viewer.GET("/api/v1/test-runs/" + id + "/live").Expect().Status(http.StatusOK)
+	viewer.POST("/api/v1/test-runs/live").WithJSON(map[string]any{"provider": "github", "runId": "303", "runAttempt": 1}).Expect().Status(http.StatusForbidden)
+	open := admin.POST("/api/v1/test-runs/live").WithJSON(map[string]any{"provider": "github", "runId": "304", "runAttempt": 1}).Expect().Status(http.StatusCreated).
+		JSON().Object().Value("id").Number().Raw()
+	viewer.POST("/api/v1/test-runs/" + strconv.FormatInt(int64(open), 10) + "/events").WithJSON(map[string]any{"events": []map[string]any{{"eventId": "v", "sequence": 1, "type": "run.finished"}}}).
+		Expect().Status(http.StatusForbidden)
+	batchID := strconv.FormatInt(int64(ingest(admin, "302", 1, `<testsuite/>`).Expect().Status(http.StatusCreated).JSON().Object().Value("testRun").Object().Value("id").Number().Raw()), 10)
+	admin.GET("/api/v1/test-runs/" + batchID + "/live").Expect().Status(http.StatusConflict)
 }

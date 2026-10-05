@@ -29,7 +29,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 | 12 | Requirements and requirement ↔ test traceability | Incubator (Requirements Federation) | ✅ | proto/12-requirements |
 | 13 | Issues, known issues and issue verification | Incubator, Planning #8 | ✅ | proto/13-issues |
 | 14 | Quality dashboard (trends, flaky, coverage) | Incubator (Quality Intelligence) | ✅ | proto/14-dashboard |
-| 15 | Live runs: execution sessions, live events, reconciliation | Trello Live Streaming, Planning #9 | ⏳ | |
+| 15 | Live runs: execution sessions, live events, reconciliation | Trello Live Streaming, Planning #9 | ✅ | proto/15-live-runs |
 | 16 | Playwright reporter (`@provenly/playwright-reporter`) | Trello, DEC-15 | ⏳ | |
 | 17 | OpenTelemetry basic instrumentation | Trello, DEC-11 | ⏳ | |
 | 18 | Export sink (webhooks) and GitHub connector, secrets at rest | Planning #3, #21, Incubator, MVP D4 | ⏳ | |
@@ -133,6 +133,12 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P14-3 | Stale | An active test case is stale when its latest valid result is older than `staleDays` (default 14, 1–365) or it has none; never-executed ones are listed first, then the oldest (20 listed, counts complete) | Highlights tests nobody runs; the threshold depends on the team's cadence, so it is a parameter |
 | P14-4 | Flaky | Counted per test case over the latest `window` runs (default 20, 1–200) with the D1 rule (passed on its last attempt after a failed or errored one); manual re-tests never count | Same definition as the run summaries; a window keeps old flakiness from dominating |
 | P14-5 | Architecture | A new read-only `insights` module computes what no module owns (cross catalog/execution); the trend, coverage and verification come from the existing endpoints | Keeps modules owning their data; one new endpoint instead of a monolithic dashboard API |
+| P15-1 | Lifecycle | CI starts a live run (`POST /test-runs/live`, API key or member session, same provider/runId/runAttempt identity as reports; a retried start returns the run); it is `running` until its JUnit report arrives through `/ingestion/junit`, which completes it with the report's results and status | The card's "TestRun created at the start"; the final report stays the source of truth and the existing ingestion keeps working unchanged for batch CI |
+| P15-2 | Events | `POST /test-runs/{id}/events` takes batches of up to 500 events (test.started/finished, step.started/completed, run.finished) with eventId, sequence, timestamp, test name and optional TC-ID; repeated event ids are counted as duplicates and skipped; at most 10,000 per run; refused once the run finished | Idempotent delivery lets runners retry freely; bounds keep a broken runner from filling the database |
+| P15-3 | Transport | HTTP batches in, polling (every 2 s) out; no WebSocket and no River queue in the prototype | The card names WebSocket and River as options; polling is enough to prove the model, keeps the stack unchanged and loses nothing if the channel drops (events are persisted) |
+| P15-4 | Live state | Derived on read: per expected test case waiting / running / its last finished status (by sequence); counts and the runner's run.finished flag; provisional only | "Live state is provisional; the final suite result is the source of truth" |
+| P15-5 | Reconciliation | Computed on read once the run is finished: CONSISTENT or MISMATCH with the card's kinds (status mismatch, live-only, final-only, started-without-finished, duplicate, invalid correlation). Events carry the test's attempt: each test (by name) counts with its last finished attempt and a test case's variants aggregate failed > error > skipped > passed, then compare with the run summary per TC-ID; a duplicate is one attempt of one test finished twice (a retry is not); events without a TC-ID are not reconciled | A mismatch never changes the final results; per-TC-ID comparison matches how summaries count |
+| P15-6 | Not now | No execution-session concept beyond the run, no step-level results, no automatic timeout of a run whose report never arrives (a member can still see it as running) | Kept for the reporter (feature 16) and a later decision on abandoned runs |
 | P12-6 | UI | A Requirements page (list with coverage, native creation and external registration), a requirement page (covering test cases, latest results, link/unlink, archive) and "Requirements" on the test case page | Traceability is visible from both sides |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
@@ -306,6 +312,20 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **UI**: new manual run page, manual execution panel on the run page, running/manual badges (screenshots 56–57).
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
+
+### 15. Live runs and reconciliation (Trello Live Streaming, Planning #9)
+
+- **Behavior**: CI starts a live run before executing, streams test events while it runs and finally sends its JUnit
+  report as usual. The run page shows live progress (finished / running / waiting and each test case's state,
+  refreshed every two seconds); when the report arrives the page reloads as a normal completed run and shows the
+  reconciliation of the live events with the final results.
+- **API**: `POST /test-runs/live`, `POST /test-runs/{id}/events` (API keys or sessions), `GET /test-runs/{id}/live`.
+- **Data**: migrations 00026–00027 (`test_run_events` with the attempt of each event; the identity trigger lets a running live run set its report digest
+  once).
+- **UI**: live panel on the run page (screenshots 65–66).
+- **Tests**: unit (live state, reconciliation, events, completion, handlers, ParseRef), BE-INT-053, backend and
+  frontend contract, FE-INT-043, BE-E2E-021, FE-E2E-023, probe live sweep (inputs, idempotency under concurrency,
+  completion).
 
 ### 14. Quality dashboard (Notion 21 Dashboards, Metrics & Quality Intelligence)
 

@@ -56,8 +56,8 @@ test.describe('Project roles', () => {
     })).status()).toBe(201)
     await anon.dispose()
 
-    await page.goto('/projects')
-    await page.getByTestId(`project-${key}`).getByRole('link', { name: 'Members' }).click()
+    // Straight to the project's page: the paginated project list may show it on another page.
+    await page.goto(`/projects/${key}`)
     await page.getByLabel('Username').fill(username)
     await page.getByRole('combobox', { name: 'Role', exact: true }).selectOption('member')
     await page.getByRole('button', { name: 'Add member' }).click()

@@ -737,6 +737,17 @@ export function useTestRunSummary(id: number) {
   })
 }
 
+/** The live state of a live run, polled every two seconds while it runs (provisional; the final report decides). */
+export function useLiveRun(id: number, running: boolean) {
+  return useQuery({
+    queryKey: [...keys.testRun(id), 'live'],
+    enabled: id > 0,
+    refetchInterval: running ? 2000 : false,
+    queryFn: async () =>
+      unwrap(await api.GET('/api/v1/test-runs/{testRunId}/live', { params: { path: { testRunId: id } } })),
+  })
+}
+
 export function useRunAmendments(id: number, enabled = true) {
   return useQuery({
     queryKey: [...keys.testRun(id), 'amendments'],

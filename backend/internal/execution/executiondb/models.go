@@ -58,6 +58,21 @@ type TestRunAmendment struct {
 	CreatedAt         pgtype.Timestamptz
 }
 
+type TestRunEvent struct {
+	ID                  int64
+	TestRunID           int64
+	EventID             string
+	Sequence            int64
+	EventType           string
+	TestName            string
+	RequestedTestCaseID pgtype.Text
+	TestCaseID          pgtype.Int8
+	Status              pgtype.Text
+	OccurredAt          pgtype.Timestamptz
+	ReceivedAt          pgtype.Timestamptz
+	Attempt             int32
+}
+
 type TestRunExpectedCase struct {
 	TestRunID  int64
 	TestCaseID int64

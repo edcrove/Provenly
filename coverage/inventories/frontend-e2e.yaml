@@ -44,3 +44,5 @@ targets:
     description: a run shows a failure as new; a member reports a native issue and links the failing test case (known issue, evidence run shown); the run now lists it as a known issue; closing the issue makes it a reopen candidate, a passing run makes it validated fixed, and the test case page lists the issue
   - id: FE-E2E-022
     description: the dashboard of a project shows its latest run, a trend bar per run (linking to it), the automation rate, never-executed and flaky test cases and the requirement coverage breakdown
+  - id: FE-E2E-023
+    description: the run page follows a live run - provisional progress and per-test states update as CI streams events; when the final report arrives the page shows the completed run, its verdict and the reconciliation mismatch

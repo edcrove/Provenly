@@ -309,6 +309,14 @@ type Repository interface {
 	ListLatestResults(ctx context.Context, testCaseIDs []int64) ([]ValidResult, error)
 	// ListLatestConclusive returns, per test case, its latest run with a conclusive logical status and that status.
 	ListLatestConclusive(ctx context.Context, testCaseIDs []int64) ([]Conclusive, error)
+	// CountRunEvents counts a run's live events.
+	CountRunEvents(ctx context.Context, runID int64) (int, error)
+	// InsertRunEvent appends a live event; inserted is false when its event id was already received.
+	InsertRunEvent(ctx context.Context, runID int64, e NewEvent) (inserted bool, err error)
+	// ListRunEvents returns a run's live events ordered by sequence.
+	ListRunEvents(ctx context.Context, runID int64) ([]Event, error)
+	// CompleteLiveRun ends a running live run with its final report's execution status and digest.
+	CompleteLiveRun(ctx context.Context, runID int64, status RunStatus, reportSHA256 string) error
 	// ListLastExecuted returns when each test case last had a valid result (absent: never).
 	ListLastExecuted(ctx context.Context, testCaseIDs []int64) (map[int64]time.Time, error)
 	// ListFlakyCounts returns the test cases flaky in a project's latest window runs, most flaky first, at most limit.

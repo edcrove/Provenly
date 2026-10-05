@@ -141,6 +141,18 @@ when each last executed (execution query `ListLastExecuted`) and how many of the
 (`ListFlakyCounts`: last attempt passed after a failed or errored one, manual re-tests excluded). The dashboard page
 combines it with the run list (trend), requirement coverage and issue verification, which stay in their modules.
 
+## Live runs (prototype feature 15)
+
+A live run is a test run with `mode = live`, started by `ingestion.Live` (same identity, project access and API keys as
+reports; snapshot taken at start) and `running` until its final JUnit report arrives through the normal ingestion:
+`execution.Service.RecordRun` finds the running live run by its external id and, under its row lock, appends the
+report's results and parse errors and completes it (`CompleteLiveRun`: execution status, completion time and the
+report digest, which the identity trigger lets a running live run set exactly once). Events live in
+`test_run_events` (append-only, unique per run and event id, accepted only while the live run runs, at most 10,000
+per run); `execution.Service.Live` derives the provisional state of each expected test case and, once the run is
+finished, reconciles the events with the run summary (status mismatch, live-only, final-only,
+started-without-finished, duplicate, invalid correlation). The UI polls every two seconds while the run is running.
+
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its

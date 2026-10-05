@@ -49,8 +49,8 @@ test.describe('CI API keys', () => {
     await provenly.createProject(key, 'UI keys')
     const tc = await provenly.createTestCase({ title: 'checked by CI', automated: true, project: key })
 
-    await page.goto('/projects')
-    await page.getByTestId(`project-${key}`).getByRole('link', { name: 'Members' }).click()
+    // Straight to the project's page: the paginated project list may show it on another page.
+    await page.goto(`/projects/${key}`)
     await page.getByLabel('Key name').fill('Nightly pipeline')
     await page.getByRole('button', { name: 'Create API key' }).click()
     const token = (await page.getByTestId('api-key-token').textContent())!

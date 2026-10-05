@@ -69,3 +69,5 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 62 | A Jira issue reproduced by a failing test case: known issue, with the run that is its evidence | `62-issue-detail.png` |
 | 63 | A run whose failure is a known issue (linked to an open Jira issue) | `63-test-run-known-issues.png` |
 | 64 | The quality dashboard of a project: latest run, pass-rate trend, automation, stale and flaky test cases, requirement coverage and issue verification | `64-dashboard.png` |
+| 65 | A live run in progress: provisional states from the events CI streams, awaiting the final report | `65-live-run-in-progress.png` |
+| 66 | The same live run completed by its JUnit report, with the reconciliation of its live events | `66-live-run-reconciled.png` |

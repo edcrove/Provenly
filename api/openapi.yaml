@@ -1713,6 +1713,111 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/test-runs/live:
+    post:
+      tags: [ingestion]
+      operationId: startLiveRun
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+        - cookieAuth: []
+      summary: Start a live run before executing (CI with a project API key, or members); starting it again returns it
+      description: |
+        The run expects the project's active automated test cases (the suite's when named) and stays `running` while
+        the runner streams events. The final JUnit report, sent to `/api/v1/ingestion/junit` with the same
+        provider, runId and runAttempt, completes it and stays the source of truth.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartLiveRunRequest"
+      responses:
+        "201":
+          description: The running live run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestRun"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-runs/{testRunId}/events:
+    parameters:
+      - $ref: "#/components/parameters/TestRunId"
+    post:
+      tags: [ingestion]
+      operationId: recordLiveEvents
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+        - cookieAuth: []
+      summary: Stream live events of a running live run (idempotent by eventId)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LiveEventsRequest"
+      responses:
+        "200":
+          description: How many events were accepted and how many were repeated deliveries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveEventsResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/test-runs/{testRunId}/live:
+    parameters:
+      - $ref: "#/components/parameters/TestRunId"
+    get:
+      tags: [test-runs]
+      operationId: getLiveRun
+      summary: The provisional live state of a live run and, once its final report arrived, the reconciliation of its events with the final results
+      responses:
+        "200":
+          description: The live state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveRun"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/test-runs/manual:
     post:
       tags: [test-runs]
@@ -3926,6 +4031,157 @@ components:
                   runs:
                     type: integer
                     format: int32
+
+    StartLiveRunRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, runId, runAttempt]
+      properties:
+        project:
+          type: string
+          description: The project key (default the API key's project, else TC).
+        suite:
+          type: string
+        provider:
+          type: string
+        runId:
+          type: string
+        runAttempt:
+          type: integer
+          format: int32
+          minimum: 1
+        pipeline:
+          type: string
+        branch:
+          type: string
+        commit:
+          type: string
+
+    LiveEventsRequest:
+      type: object
+      additionalProperties: false
+      required: [events]
+      properties:
+        events:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            additionalProperties: false
+            required: [eventId, sequence, type]
+            properties:
+              eventId:
+                type: string
+                pattern: "^[A-Za-z0-9._:-]{1,100}$"
+                description: Identifies the event; a repeated delivery is skipped.
+              sequence:
+                type: integer
+                format: int64
+                minimum: 0
+              type:
+                type: string
+                enum: [test.started, test.finished, step.started, step.completed, run.finished]
+              testName:
+                type: string
+                maxLength: 1000
+              testCase:
+                type: string
+                maxLength: 100
+                description: The TC-ID the test declares (CHK-12, TC-12 or 12).
+              status:
+                type: string
+                enum: [passed, failed, error, skipped]
+                description: Required for test.finished, absent otherwise.
+              occurredAt:
+                type: string
+                format: date-time
+              attempt:
+                type: integer
+                format: int32
+                minimum: 1
+                maximum: 100
+                description: The test's attempt (default 1); a retry is the next attempt, not a duplicate.
+
+    LiveEventsResult:
+      type: object
+      additionalProperties: false
+      required: [accepted, duplicates]
+      properties:
+        accepted:
+          type: integer
+        duplicates:
+          type: integer
+
+    LiveRun:
+      type: object
+      additionalProperties: false
+      required: [reconciliation, events, lastSequence, runFinished, waiting, running, finished, testCases, mismatches]
+      properties:
+        reconciliation:
+          type: string
+          enum: [pending, consistent, mismatch]
+          description: Pending while the run runs; then whether the live events agree with the final report.
+        events:
+          type: integer
+          format: int32
+        lastSequence:
+          type: integer
+          format: int64
+          nullable: true
+        runFinished:
+          type: boolean
+          description: The runner sent run.finished.
+        waiting:
+          type: integer
+          format: int32
+        running:
+          type: integer
+          format: int32
+        finished:
+          type: integer
+          format: int32
+        testCases:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [testCaseId, testCaseKey, state]
+            properties:
+              testCaseId:
+                type: integer
+                format: int64
+              testCaseKey:
+                type: string
+              state:
+                type: string
+                enum: [waiting, running, passed, failed, error, skipped]
+        mismatches:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, testCaseId, testCaseKey, requestedTestCaseId, liveStatus, finalStatus]
+            properties:
+              kind:
+                type: string
+                enum: [status_mismatch, live_only, final_only, started_without_finished, duplicate, invalid_correlation]
+              testCaseId:
+                type: integer
+                format: int64
+                nullable: true
+              testCaseKey:
+                type: string
+                nullable: true
+              requestedTestCaseId:
+                type: string
+                nullable: true
+              liveStatus:
+                type: string
+                nullable: true
+              finalStatus:
+                type: string
+                nullable: true
 
     TestRunPage:
       allOf:

@@ -23,6 +23,7 @@ type API interface {
 	History(ctx context.Context, testCaseID int64, page pagination.Page) (pagination.Result[HistoryEntry], error)
 	Amend(ctx context.Context, runID, testCaseID int64, reason string, by authz.Actor) (Amendment, error)
 	ListAmendments(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[Amendment], error)
+	Live(ctx context.Context, runID int64) (Live, error)
 }
 
 // TestCaseChecker is what the execution REST adapter needs from the catalog
@@ -322,6 +323,7 @@ func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/results", h.onRun(authz.RoleViewer, h.listResults))
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/summary", h.onRun(authz.RoleViewer, h.summary))
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/parse-errors", h.onRun(authz.RoleViewer, h.parseErrors))
+	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/live", h.onRun(authz.RoleViewer, h.live))
 	mux.HandleFunc("GET /api/v1/test-runs/{testRunId}/amendments", h.onRun(authz.RoleViewer, h.listAmendments))
 	mux.HandleFunc("POST /api/v1/test-runs/{testRunId}/amendments", h.onRun(authz.RoleMaintainer, h.amend))
 	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}/results", h.history)

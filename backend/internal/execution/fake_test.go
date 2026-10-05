@@ -20,6 +20,7 @@ type fakeRepo struct {
 	// summaryReads records the run ids of every ListSummaryInputs call.
 	summaryReads [][]int64
 	flaky        []FlakyCount
+	events       map[int64][]Event
 }
 
 func newFakeRepo() *fakeRepo {
@@ -417,4 +418,47 @@ func (f *fakeRepo) ListFlakyCounts(_ context.Context, _ int64, _, limit int32) (
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+func (f *fakeRepo) CountRunEvents(_ context.Context, runID int64) (int, error) {
+	if err := f.errs["CountRunEvents"]; err != nil {
+		return 0, err
+	}
+	return len(f.events[runID]), nil
+}
+
+func (f *fakeRepo) InsertRunEvent(_ context.Context, runID int64, e NewEvent) (bool, error) {
+	if err := f.errs["InsertRunEvent"]; err != nil {
+		return false, err
+	}
+	if f.events == nil {
+		f.events = map[int64][]Event{}
+	}
+	for _, x := range f.events[runID] {
+		if x.EventID == e.EventID {
+			return false, nil
+		}
+	}
+	f.events[runID] = append(f.events[runID], Event{NewEvent: e, ID: int64(len(f.events[runID]) + 1)})
+	return true, nil
+}
+
+func (f *fakeRepo) ListRunEvents(_ context.Context, runID int64) ([]Event, error) {
+	if err := f.errs["ListRunEvents"]; err != nil {
+		return nil, err
+	}
+	out := slices.Clone(f.events[runID])
+	slices.SortStableFunc(out, func(a, b Event) int { return int(a.Sequence - b.Sequence) })
+	return out, nil
+}
+
+func (f *fakeRepo) CompleteLiveRun(_ context.Context, runID int64, status RunStatus, sha string) error {
+	if err := f.errs["CompleteLiveRun"]; err != nil {
+		return err
+	}
+	r := f.runs[runID]
+	now := time.Now()
+	r.Status, r.CompletedAt, r.ReportSHA256 = status, &now, sha
+	f.runs[runID] = r
+	return nil
 }

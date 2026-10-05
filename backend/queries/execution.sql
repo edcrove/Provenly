@@ -212,3 +212,20 @@ FROM tests x WHERE x.last_status = 'passed' AND x.any_failure
 GROUP BY x.test_case_id
 ORDER BY flaky_runs DESC, x.test_case_id
 LIMIT @max_items;
+
+-- name: CountRunEvents :one
+SELECT count(*)::int FROM test_run_events WHERE test_run_id = @test_run_id;
+
+-- name: InsertRunEvent :execrows
+-- Appends one live event; an event id already received for the run is a duplicate delivery and is skipped (0 rows).
+INSERT INTO test_run_events (test_run_id, event_id, sequence, event_type, test_name, requested_test_case_id, test_case_id, status, occurred_at, attempt)
+VALUES (@test_run_id, @event_id, @sequence, @event_type, @test_name, sqlc.narg('requested_test_case_id'), sqlc.narg('test_case_id'), sqlc.narg('status'), @occurred_at, @attempt)
+ON CONFLICT (test_run_id, event_id) DO NOTHING;
+
+-- name: ListRunEvents :many
+SELECT * FROM test_run_events WHERE test_run_id = @test_run_id ORDER BY sequence, id;
+
+-- name: CompleteLiveRun :exec
+-- The final report completes a running live run: its execution status, completion time and report digest.
+UPDATE test_runs SET status = @status, completed_at = now(), report_sha256 = @report_sha256
+WHERE id = @id AND mode = 'live' AND status = 'running';

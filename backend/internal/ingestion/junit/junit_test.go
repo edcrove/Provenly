@@ -527,3 +527,9 @@ func TestParseWithProjectKey(t *testing.T) {
 		assert.Equal(t, int64(3), rep.Results[1].Ref.ID, key)
 	}
 }
+
+func TestParseRef(t *testing.T) {
+	assert.Equal(t, TCRef{Kind: RefMissing, Source: SourceNone}, ParseRef("  "))
+	assert.Equal(t, TCRef{Kind: RefFound, Source: SourceProperty, Raw: "CHK-12", Prefix: "CHK", ID: 12}, ParseRef(" CHK-12 "))
+	assert.Equal(t, RefMalformed, ParseRef("nope").Kind)
+}

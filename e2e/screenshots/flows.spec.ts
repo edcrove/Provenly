@@ -484,5 +484,24 @@ test('UI flows', async ({ page }) => {
   await expect(page.getByTestId('automation-rate')).toBeVisible()
   await expect(page.getByTestId('coverage-breakdown')).toBeVisible()
   await shot(page, 'dashboard')
+  // Live runs (prototype feature 15): CI starts a run, streams events, then sends its report.
+  const liveRun = (await (await request.post(`${api}/test-runs/live`, { data: { project: 'CHK', provider: 'github', runId: '5160', runAttempt: 1, pipeline: 'e2e', branch: 'main' } })).json()) as { id: number }
+  expect((await request.post(`${api}/test-runs/${liveRun.id}/events`, {
+    data: { events: [
+      { eventId: 'l1', sequence: 1, type: 'test.started', testName: 'pay visa', testCase: 'CHK-1' },
+      { eventId: 'l2', sequence: 2, type: 'test.finished', testName: 'pay visa', testCase: 'CHK-1', status: 'passed' },
+      { eventId: 'l3', sequence: 3, type: 'test.started', testName: 'refund', testCase: 'CHK-2' },
+    ] },
+  })).status()).toBe(200)
+  await page.goto(`/test-runs/${liveRun.id}`)
+  await expect(page.getByTestId('live-CHK-2')).toContainText('running')
+  await shot(page, 'live-run-in-progress')
+  const liveParams = new URLSearchParams({ project: 'CHK', provider: 'github', runId: '5160', runAttempt: '1' })
+  expect((await request.post(`${api}/ingestion/junit?${liveParams}`, {
+    headers: { 'Content-Type': 'application/xml' },
+    data: junit(tc('pay visa', 'CHK-1'), tc('refund', 'CHK-2', '<failure message="refund not issued"/>')),
+  })).status()).toBe(201)
+  await expect(page.getByTestId('reconciliation')).toHaveText('mismatch')
+  await shot(page, 'live-run-reconciled')
   await page.getByLabel('Current project').selectOption('')
 })

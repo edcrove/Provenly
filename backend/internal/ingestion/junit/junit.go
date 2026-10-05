@@ -697,3 +697,13 @@ func uniq(values []string) []string {
 	}
 	return out
 }
+
+// ParseRef reads a TC-ID reference given on its own (e.g. a live event's testCase): CHK-12, TC-12 or 12. An empty
+// value is a missing reference.
+func ParseRef(value string) TCRef {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return TCRef{Kind: RefMissing, Source: SourceNone}
+	}
+	return fromProperty([]string{value})
+}

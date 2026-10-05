@@ -630,10 +630,10 @@ def main():
     for args in [{"projectKey": "../x"}, {"projectKey": ".."}]:
         st, body = mcp({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "list_issues", "arguments": args}})
         check(f"mcp list_issues {args}", f"{st} {body.get('error', {}).get('code') if isinstance(body, dict) else body}", "200 -32602")
-    for args in [{}, {"testCaseId": 0}, {"testCaseId": "1"}, {"testCaseId": 1.5}, {"testCaseId": 2 ** 70}, {"testCaseId": 1, "x": 1}]:
+    for args in [{}, {"testCaseId": 0}, {"testCaseId": "1"}, {"testCaseId": 1.5}, {"testCaseId": 2 ** 70}, {"testCaseId": 9223372036854775807}, {"testCaseId": 1, "x": 1}]:
         st, body = mcp({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_test_case", "arguments": args}})
         check(f"mcp get_test_case {args}", f"{st} {body.get('error', {}).get('code') if isinstance(body, dict) else body}", "200 -32602")
-    for name, args in [("get_test_case", {"testCaseId": 9223372036854775807}), ("get_project_quality", {"projectKey": "NOPE1"}),
+    for name, args in [("get_test_case", {"testCaseId": 999999999}), ("get_project_quality", {"projectKey": "NOPE1"}),
                        ("search_test_cases", {"project": "nope"}), ("list_test_run_results", {"testRunId": 1, "status": "\u0000"})]:
         st, body = mcp({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}})
         res = body.get("result", {}) if isinstance(body, dict) else {}

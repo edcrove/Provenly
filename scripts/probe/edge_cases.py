@@ -396,6 +396,47 @@ def main():
     check("archive a suite", call(base, "PATCH", f"{suites}/probe-query", {"archived": True})[0], 200)
     check("ingest for an archived suite", call(base, "POST", "/ingestion/junit?project=" + key + "&suite=probe-query&" + q.format(61), raw=xml, ctype="application/xml")[0], 409)
 
+    # Manual execution (prototype feature 11, MVP D3): inputs are validated before any lookup; only running manual
+    # runs take results, only for expected test cases; finishing closes the run; twenty concurrent records of one test
+    # case are twenty gapless attempts.
+    hand = call(base, "POST", "/test-cases", {"title": "probe-manual-run", "project": key})[1]["id"]
+    for body, exp in [({"project": key}, 400), ({"project": key, "name": " "}, 400), ({"project": key, "name": "n" * 201}, 400),
+                      ({"project": key, "name": "x", "scope": "some"}, 400), ({"project": key, "name": "x", "suite": "Bad"}, 400),
+                      ({"project": "bad", "name": "x"}, 400), ({"project": "NOPE99", "name": "x"}, 404), ({"project": key, "name": "a\u0000"}, 400),
+                      ({"project": key, "name": "x", "suite": "nope"}, 404), ({"project": key, "name": "x", "suite": "probe-query"}, 409),
+                      ({"project": key, "name": "x", "branch": "b" * 256}, 400), ({"project": key, "name": "x", "unknown": 1}, 400)]:
+        check(f"start manual {str(body)[:50]}", call(base, "POST", "/test-runs/manual", body)[0], exp)
+    check("start manual text/plain", call(base, "POST", "/test-runs/manual", raw=b"{}", ctype="text/plain")[0], 415)
+    check("viewer starts a manual run", call(base, "POST", "/test-runs/manual", {"project": key, "name": "x"}, headers=as_viewer)[0], 404)
+    st, mrun = call(base, "POST", "/test-runs/manual", {"project": key, "name": "probe sign-off"})
+    check("start a manual run", st, 201)
+    mid = mrun.get("id", 0) if isinstance(mrun, dict) else 0
+    rec = f"/test-runs/{mid}/manual-results"
+    for body, exp in [({"testCaseId": hand, "status": "blocked"}, 400), ({"testCaseId": 0, "status": "passed"}, 400),
+                      ({"testCaseId": -1, "status": "passed"}, 400), ({"testCaseId": "1", "status": "passed"}, 400),
+                      ({"testCaseId": hand, "status": "passed", "note": "n" * 10001}, 400), ({"testCaseId": hand, "status": "passed", "note": "a\u0000"}, 400),
+                      ({"testCaseId": hand, "status": "passed", "failedStep": 1}, 400), ({"testCaseId": hand, "status": "failed", "failedStep": 0}, 400),
+                      ({"testCaseId": hand, "status": "failed", "failedStep": 2147483648}, 400), ({"testCaseId": hand, "status": "passed", "durationMs": -1}, 400),
+                      ({"testCaseId": 9223372036854775807, "status": "passed"}, 409), ({"testCaseId": a, "status": "passed"}, 409),
+                      ({"testCaseId": hand, "status": "failed", "note": "ñ" * 10000, "failedStep": 3}, 201)]:
+        check(f"record {str(body)[:50]}", call(base, "POST", rec, body)[0], exp)
+    for rid, exp in [("0", 400), ("abc", 400), ("9223372036854775807", 404), (str(run_id), 409)]:
+        check(f"record into run {rid}", call(base, "POST", f"/test-runs/{rid}/manual-results", {"testCaseId": hand, "status": "passed"})[0], exp)
+        check(f"finish run {rid}", call(base, "POST", f"/test-runs/{rid}/finish", {"status": "completed"})[0], exp)
+    codes = []
+    threads = [threading.Thread(target=lambda: codes.append(call(base, "POST", rec, {"testCaseId": hand, "status": "passed"})[0])) for _ in range(20)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    check("20 concurrent records: all kept", codes.count(201), 20)
+    st, page = call(base, "GET", f"/test-runs/{mid}/results?pageSize=100")
+    attempts = sorted(r["attempt"] for r in page.get("items", [])) if isinstance(page, dict) else []
+    check("manual attempts are gapless", attempts == list(range(1, 22)), True)
+    for body, exp in [({"status": "interrupted"}, 400), ({"status": "running"}, 400), ({}, 400)]:
+        check(f"finish {body}", call(base, "POST", f"/test-runs/{mid}/finish", body)[0], exp)
+    check("finish a manual run", call(base, "POST", f"/test-runs/{mid}/finish", {"status": "completed"})[0], 200)
+    check("finish it again", call(base, "POST", f"/test-runs/{mid}/finish", {"status": "cancelled"})[0], 409)
+    check("record after finishing", call(base, "POST", rec, {"testCaseId": hand, "status": "passed"})[0], 409)
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

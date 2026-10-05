@@ -1132,6 +1132,214 @@ const suiteScenarios: Scenario[] = [
   },
 ]
 
+const manualTcs = () => {
+  db.testCases[1] = { ...db.testCases[1], automated: false }
+}
+const startManual = { project: 'TC', name: 'Release sign-off' }
+/** A running manual run (id 900) expecting TC-153. */
+const runningManual = () => {
+  db.runs.push({ ...db.runs[0], id: 900, mode: 'manual', executionStatus: 'running', startedBy: 'admin' })
+  db.summaries[900] = { ...db.summaries[7], testRunId: 900 }
+}
+const manualRun = { testRunId: 900 }
+
+const manualScenarios: Scenario[] = [
+  {
+    op: 'POST /api/v1/test-runs/manual',
+    status: 201,
+    setup: manualTcs,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/manual', { body: { ...startManual, scope: 'manual', branch: 'main' } }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/manual',
+    status: 400,
+    call: (c) => c.POST('/api/v1/test-runs/manual', { body: { project: 'TC', name: ' ' } }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/manual',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.POST('/api/v1/test-runs/manual', { body: startManual }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/manual',
+    status: 404,
+    call: (c) => c.POST('/api/v1/test-runs/manual', { body: { ...startManual, project: 'NOPE' } }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/manual',
+    status: 409,
+    setup: () => {
+      withSuites()
+      db.suites[1].archivedAt = '2026-10-05T10:00:00Z'
+    },
+    call: (c) => c.POST('/api/v1/test-runs/manual', { body: { ...startManual, suite: 'smoke' } }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/manual',
+    status: 415,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/manual', {
+        body: startManual,
+        bodySerializer: JSON.stringify,
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/manual',
+    status: 500,
+    setup: fail,
+    call: (c) => c.POST('/api/v1/test-runs/manual', { body: startManual }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/manual-results',
+    status: 201,
+    setup: runningManual,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/manual-results', {
+        params: { path: manualRun },
+        body: { testCaseId: 153, status: 'failed', note: 'Button missing', failedStep: 2 },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/manual-results',
+    status: 400,
+    setup: runningManual,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/manual-results', {
+        params: { path: manualRun },
+        body: { testCaseId: 153, status: 'blocked' as 'error' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/manual-results',
+    status: 403,
+    setup: () => {
+      runningManual()
+      asViewer()
+    },
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/manual-results', {
+        params: { path: manualRun },
+        body: { testCaseId: 153, status: 'passed' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/manual-results',
+    status: 404,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/manual-results', {
+        params: { path: unknownRun },
+        body: { testCaseId: 153, status: 'passed' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/manual-results',
+    status: 409,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/manual-results', {
+        params: { path: run },
+        body: { testCaseId: 153, status: 'passed' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/manual-results',
+    status: 415,
+    setup: runningManual,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/manual-results', {
+        params: { path: manualRun },
+        body: { testCaseId: 153, status: 'passed' },
+        bodySerializer: JSON.stringify,
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/manual-results',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/manual-results', {
+        params: { path: manualRun },
+        body: { testCaseId: 153, status: 'passed' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/finish',
+    status: 200,
+    setup: runningManual,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/finish', {
+        params: { path: manualRun },
+        body: { status: 'completed' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/finish',
+    status: 400,
+    setup: runningManual,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/finish', {
+        params: { path: manualRun },
+        body: { status: 'interrupted' as 'completed' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/finish',
+    status: 403,
+    setup: () => {
+      runningManual()
+      asViewer()
+    },
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/finish', {
+        params: { path: manualRun },
+        body: { status: 'completed' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/finish',
+    status: 404,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/finish', {
+        params: { path: unknownRun },
+        body: { status: 'completed' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/finish',
+    status: 409,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/finish', {
+        params: { path: run },
+        body: { status: 'cancelled' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/finish',
+    status: 415,
+    setup: runningManual,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/finish', {
+        params: { path: manualRun },
+        body: { status: 'completed' },
+        bodySerializer: JSON.stringify,
+        headers: textPlain,
+      }),
+  },
+  {
+    op: 'POST /api/v1/test-runs/{testRunId}/finish',
+    status: 500,
+    setup: fail,
+    call: (c) =>
+      c.POST('/api/v1/test-runs/{testRunId}/finish', {
+        params: { path: manualRun },
+        body: { status: 'completed' },
+      }),
+  },
+]
+
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 type AnyCall = (path: string, init: object) => Promise<Result>
 const anyPath = {
@@ -1175,6 +1383,7 @@ const scenarios: Scenario[] = [
   ...amendmentScenarios,
   ...taxonomyScenarios,
   ...suiteScenarios,
+  ...manualScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
   // Projects

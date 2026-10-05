@@ -23,6 +23,8 @@ type TestResult struct {
 	ErrorDetails        string
 	CreatedAt           pgtype.Timestamptz
 	Attempt             int32
+	RecordedBy          pgtype.Text
+	FailedStep          pgtype.Int4
 }
 
 type TestRun struct {
@@ -42,6 +44,8 @@ type TestRun struct {
 	ProjectID     int64
 	SuiteKey      pgtype.Text
 	SuiteName     pgtype.Text
+	Mode          string
+	StartedBy     pgtype.Text
 }
 
 type TestRunAmendment struct {

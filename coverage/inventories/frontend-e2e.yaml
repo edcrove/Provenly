@@ -36,3 +36,5 @@ targets:
     description: a maintainer adds a feature value on the project page, creates a test case with tags, feature and risk, changes its risk, and filters the project's list by tag and by classification
   - id: FE-E2E-018
     description: a maintainer creates a static suite and adds a test case in the UI; CI reports a run for the suite; the suite's runs link shows it and the run page shows the suite badge and its verdict
+  - id: FE-E2E-019
+    description: a tester starts a manual run from the run list, records a failure with a note and the failed step, re-tests it as passed and completes the run; the run shows the passed verdict and the recorded note

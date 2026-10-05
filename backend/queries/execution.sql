@@ -1,6 +1,6 @@
 -- name: InsertTestRun :one
-INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256, suite_key, suite_name)
-VALUES (@project_id, @external_run_id, @provider, @provider_run_id, @run_attempt, @pipeline, @branch, @commit_sha, @status, @started_at, @completed_at, @report_sha256, sqlc.narg('suite_key'), sqlc.narg('suite_name'))
+INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256, suite_key, suite_name, mode, started_by)
+VALUES (@project_id, @external_run_id, @provider, @provider_run_id, @run_attempt, @pipeline, @branch, @commit_sha, @status, @started_at, @completed_at, @report_sha256, sqlc.narg('suite_key'), sqlc.narg('suite_name'), @mode, sqlc.narg('started_by'))
 ON CONFLICT (project_id, external_run_id) DO NOTHING
 RETURNING id;
 
@@ -137,3 +137,23 @@ LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountAmendments :one
 SELECT count(*) FROM test_run_amendments WHERE test_run_id = @test_run_id;
+
+-- name: LockTestRun :one
+-- Locks a run until the transaction ends (manual recording and completion).
+SELECT status, mode FROM test_runs WHERE id = @id FOR UPDATE;
+
+-- name: IsInUniverse :one
+-- Whether a test case is in a run's universe: its snapshot or its amendments.
+SELECT EXISTS (SELECT 1 FROM test_run_expected_cases e WHERE e.test_run_id = sqlc.arg('run_id')::bigint AND e.test_case_id = sqlc.arg('case_id')::bigint)
+    OR EXISTS (SELECT 1 FROM test_run_amendments a WHERE a.test_run_id = sqlc.arg('run_id')::bigint AND a.test_case_id = sqlc.arg('case_id')::bigint);
+
+-- name: InsertManualResult :one
+-- One recorded result of a running run; a re-test of the same test is its next attempt.
+INSERT INTO test_results (test_run_id, test_case_id, requested_test_case_id, correlation, test_name, class_name, suite_name, status, duration_ms, error_message, error_details, attempt, recorded_by, failed_step)
+SELECT @test_run_id, @test_case_id, @requested_test_case_id, 'valid', @test_name, @class_name, '', @status, sqlc.narg('duration_ms'), @error_message, '',
+    coalesce(max(x.attempt), 0) + 1, sqlc.narg('recorded_by'), sqlc.narg('failed_step')
+FROM test_results x WHERE x.test_run_id = @test_run_id AND x.class_name = @class_name AND x.test_name = @test_name
+RETURNING *;
+
+-- name: FinishTestRun :exec
+UPDATE test_runs SET status = @status, completed_at = now() WHERE id = @id AND status = 'running';

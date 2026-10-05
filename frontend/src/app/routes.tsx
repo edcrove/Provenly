@@ -8,6 +8,7 @@ import { ProjectMembersPage } from '@/features/projects/ProjectMembersPage'
 import { ProjectsPage } from '@/features/projects/ProjectsPage'
 import { SuiteDetailPage } from '@/features/suites/SuiteDetailPage'
 import { SuitesPage } from '@/features/suites/SuitesPage'
+import { NewManualRunPage } from '@/features/manual/NewManualRunPage'
 import { NewTestCasePage } from '@/features/test-cases/NewTestCasePage'
 import { TestCaseDetailPage } from '@/features/test-cases/TestCaseDetailPage'
 import { TestCaseListPage } from '@/features/test-cases/TestCaseListPage'
@@ -34,6 +35,7 @@ export const routes: RouteObject[] = [
       { path: 'suites', element: <SuitesPage /> },
       { path: 'suites/:projectKey/:suiteKey', element: <SuiteDetailPage /> },
       { path: 'test-runs', element: <TestRunListPage /> },
+      { path: 'test-runs/manual', element: <NewManualRunPage /> },
       { path: 'test-runs/:testRunId', element: <TestRunDetailPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

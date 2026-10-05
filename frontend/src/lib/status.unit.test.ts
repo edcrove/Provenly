@@ -50,6 +50,8 @@ describe('status helpers', () => {
     expect(isInterruptedRun('interrupted')).toBe(true)
     expect(isInterruptedRun('cancelled')).toBe(true)
     expect(isInterruptedRun('completed')).toBe(false)
+    expect(isInterruptedRun('running')).toBe(false)
+    expect(executionVariant('running')).toBe('outline')
   })
 
   it('maps verdicts to badges and labels', () => {

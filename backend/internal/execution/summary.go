@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // SummaryStatus is the aggregated status of a TC-ID within a run.
@@ -256,7 +257,7 @@ func logical(results []ValidResult) ([]ResultStatus, bool) {
 	for i, key := range order {
 		t := tests[key]
 		statuses[i] = t.last.Status
-		flaky = flaky || (t.last.Status == Passed && t.failed)
+		flaky = flaky || (t.last.Status == Passed && t.failed && !strings.Contains(key, "\x1f"+ManualClass+"\x1f"))
 	}
 	return statuses, flaky
 }

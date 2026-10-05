@@ -16,13 +16,18 @@ type Querier interface {
 	CountResultsForTestCase(ctx context.Context, testCaseID pgtype.Int8) (int64, error)
 	CountRunResults(ctx context.Context, arg CountRunResultsParams) (int64, error)
 	CountTestRuns(ctx context.Context, arg CountTestRunsParams) (int64, error)
+	FinishTestRun(ctx context.Context, arg FinishTestRunParams) error
 	GetTestRun(ctx context.Context, id int64) (GetTestRunRow, error)
 	GetTestRunIDByExternalID(ctx context.Context, arg GetTestRunIDByExternalIDParams) (int64, error)
 	InsertAmendment(ctx context.Context, arg InsertAmendmentParams) (TestRunAmendment, error)
 	InsertExpectedCases(ctx context.Context, arg InsertExpectedCasesParams) error
+	// One recorded result of a running run; a re-test of the same test is its next attempt.
+	InsertManualResult(ctx context.Context, arg InsertManualResultParams) (TestResult, error)
 	InsertParseErrors(ctx context.Context, arg []InsertParseErrorsParams) (int64, error)
 	InsertTestResults(ctx context.Context, arg []InsertTestResultsParams) (int64, error)
 	InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error)
+	// Whether a test case is in a run's universe: its snapshot or its amendments.
+	IsInUniverse(ctx context.Context, arg IsInUniverseParams) (pgtype.Bool, error)
 	ListAmendments(ctx context.Context, arg ListAmendmentsParams) ([]TestRunAmendment, error)
 	ListDiagnosticResults(ctx context.Context, testRunID int64) ([]ListDiagnosticResultsRow, error)
 	ListParseErrors(ctx context.Context, arg ListParseErrorsParams) ([]ListParseErrorsRow, error)
@@ -37,6 +42,8 @@ type Querier interface {
 	// The page is chosen first: the per-run counts are only computed for its rows,
 	// not for every row skipped by OFFSET.
 	ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]ListTestRunsRow, error)
+	// Locks a run until the transaction ends (manual recording and completion).
+	LockTestRun(ctx context.Context, id int64) (LockTestRunRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

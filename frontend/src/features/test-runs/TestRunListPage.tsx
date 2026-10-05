@@ -1,14 +1,17 @@
+import { Play } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 
 import { useProjects, useTestRuns } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
 import { EditedBadge, ExecutionBadge, FlakyBadge, SuiteBadge, VerdictBadge } from '@/components/StatusBadge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime, formatPercent, outcomeBreakdown, shortCommit } from '@/lib/format'
 import { useCurrentProject } from '@/features/projects/currentProject'
+import { can } from '@/lib/roles'
 import { positiveInt } from '@/lib/status'
 
 export function TestRunListPage() {
@@ -24,9 +27,18 @@ export function TestRunListPage() {
     <Card>
       <CardHeader>
         <PageTitle title="Test Runs" />
-        <CardTitle as="h1" className="text-xl">
-          Test Runs
-        </CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle as="h1" className="text-xl">
+            Test Runs
+          </CardTitle>
+          {(projects.data?.items ?? []).some((p) => can(p.myRole, 'member')) ? (
+            <Button asChild variant="outline">
+              <Link to="/test-runs/manual">
+                <Play /> Start manual run
+              </Link>
+            </Button>
+          ) : null}
+        </div>
         {suite ? (
           <p className="text-muted-foreground text-sm" data-testid="suite-filter">
             Runs of suite <span className="font-mono">{suite}</span> ·{' '}

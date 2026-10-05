@@ -3,7 +3,7 @@ import type { components } from '@/api/schema'
 export type ResultStatus = components['schemas']['ResultStatus']
 export type SummaryStatus = components['schemas']['SummaryStatus']
 export type Correlation = components['schemas']['Correlation']
-export type ExecutionStatus = components['schemas']['ExecutionStatus']
+export type ExecutionStatus = components['schemas']['RunExecutionStatus']
 export type Verdict = components['schemas']['RunVerdict']
 export type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'outline'
 
@@ -71,6 +71,7 @@ const executionVariants: Record<ExecutionStatus, BadgeVariant> = {
   completed: 'secondary',
   interrupted: 'destructive',
   cancelled: 'warning',
+  running: 'outline',
 }
 
 /** Badge of how the CI execution ended (not the test outcome). */
@@ -80,7 +81,7 @@ export function executionVariant(status: ExecutionStatus): BadgeVariant {
 
 /** True when CI reported that the execution broke or was stopped (the report may be incomplete). */
 export function isInterruptedRun(status: ExecutionStatus): boolean {
-  return status !== 'completed'
+  return status === 'interrupted' || status === 'cancelled'
 }
 
 const verdictVariants: Record<Verdict, BadgeVariant> = {

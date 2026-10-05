@@ -405,10 +405,189 @@ function suiteMembers(projectId: number, raw: unknown): number[] | Response {
     : ids
 }
 
+type Outcome = TestRunSummary['testCases'][number]
+
+/** The summary of a manual run, recomputed from its test cases' latest results. */
+function manualSummary(runId: number, cases: Outcome[]): TestRunSummary {
+  const count = (st: string) => cases.filter((c) => c.status === st).length
+  const executed = cases.length - count('untested')
+  const pct = (n: number, of: number) => (of ? (n * 100) / of : 0)
+  return summary({
+    testRunId: runId,
+    expectedTotal: cases.length,
+    snapshotTotal: cases.length,
+    executedTotal: executed,
+    counts: {
+      untested: count('untested'),
+      passed: count('passed'),
+      failed: count('failed'),
+      error: count('error'),
+      skipped: count('skipped'),
+    },
+    percentOfExpected: {
+      untested: pct(count('untested'), cases.length),
+      passed: pct(count('passed'), cases.length),
+      failed: pct(count('failed'), cases.length),
+      error: pct(count('error'), cases.length),
+      skipped: pct(count('skipped'), cases.length),
+    },
+    percentOfExecuted: {
+      passed: pct(count('passed'), executed),
+      failed: pct(count('failed'), executed),
+      error: pct(count('error'), executed),
+      skipped: pct(count('skipped'), executed),
+    },
+    executionPercent: pct(executed, cases.length),
+    diagnostics: { missing: 0, malformed: 0, unknown: 0, deprecated: 0, wrongProject: 0, total: 0 },
+    testCases: cases,
+  })
+}
+
+const RESULT_STATUSES = ['passed', 'failed', 'error', 'skipped']
+
 const stepsOf = (tcId: number) =>
   db.steps.filter((s) => s.testCaseId === tcId).sort((a, b) => a.position - b.position)
 
 export const handlers = [
+  http.post(
+    `${BASE}/test-runs/manual`,
+    guard(
+      jsonGuard(async ({ request }) => {
+        const body = await readBody(request)
+        const key = String(body?.project ?? '')
+        if (!KEY.test(key)) return validation('project', 'must be a project key')
+        const name = typeof body?.name === 'string' ? body.name.trim() : ''
+        if (!name) return validation('name', 'is required')
+        const scope = body?.scope ?? 'manual'
+        if (scope !== 'manual' && scope !== 'all') return validation('scope', 'must be one of manual, all')
+        const p = db.projects.find((x) => x.key === key)
+        if (!p) return notFound(`project ${key}`)
+        const denied = requireRole(p.id, 'member', () => notFound(`project ${key}`))
+        if (denied) return denied
+        let suite: MockDb['suites'][number] | undefined
+        if (body?.suite !== undefined) {
+          suite = db.suites.find((x) => x.projectId === p.id && x.key === body.suite)
+          if (!suite) return notFound(`suite ${String(body.suite)}`)
+          if (suite.archivedAt) return problem(409, 'conflict', `suite ${suite.key} is archived`)
+        }
+        const expected = db.testCases.filter(
+          (t) =>
+            t.projectId === p.id &&
+            t.status === 'active' &&
+            (scope === 'all' || !t.automated) &&
+            (!suite || suite.kind !== 'static' || suite.members.includes(t.id)) &&
+            (!suite || suite.kind !== 'query' || !suite.query?.tag || t.tags.includes(suite.query.tag)),
+        )
+        const id = ++db.nextId
+        const run = testRun({
+          id,
+          projectId: p.id,
+          externalRunId: `manual:${id}:1`,
+          provider: 'manual',
+          providerRunId: String(id),
+          pipeline: name,
+          branch: String(body?.branch ?? ''),
+          commit: '',
+          executionStatus: 'running',
+          mode: 'manual',
+          startedBy: currentUser().username,
+          suite: suite ? { key: suite.key, name: suite.name } : null,
+          expectedCount: expected.length,
+          resultCount: 0,
+          completedAt: null,
+          createdAt: now(),
+          outcome: {
+            verdict: expected.length ? 'incomplete' : 'no_tests',
+            executed: 0,
+            passed: 0,
+            failed: 0,
+            error: 0,
+            skipped: 0,
+            untested: expected.length,
+            passRate: 0,
+            flaky: 0,
+          },
+        })
+        db.runs.push(run)
+        db.summaries[id] = manualSummary(
+          id,
+          expected.map((t) => ({
+            testCaseId: t.id,
+            testCaseKey: t.key,
+            status: 'untested',
+            resultCount: 0,
+            flaky: false,
+          })),
+        )
+        return respond(run, 201)
+      }),
+    ),
+  ),
+  http.post(
+    `${BASE}/test-runs/:testRunId/manual-results`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const run = findRun(params.testRunId)
+        if (run instanceof Response) return run
+        const body = await readBody(request)
+        if (!RESULT_STATUSES.includes(String(body?.status)))
+          return validation('status', 'must be one of passed, failed, error, skipped')
+        const denied = requireRole(run.projectId, 'member', () => notFound(`test run ${run.id}`))
+        if (denied) return denied
+        if (run.mode !== 'manual' || run.executionStatus !== 'running')
+          return problem(409, 'conflict', `run ${run.id} takes no more results`)
+        const sum = db.summaries[run.id]
+        const outcome = sum.testCases.find((c) => c.testCaseId === body?.testCaseId)
+        if (!outcome)
+          return problem(
+            409,
+            'conflict',
+            `test case ${String(body?.testCaseId)} is not expected in run ${run.id}`,
+          )
+        outcome.status = body!.status as Outcome['status']
+        outcome.resultCount++
+        db.summaries[run.id] = manualSummary(run.id, sum.testCases)
+        const result = testResult({
+          id: ++db.nextId,
+          testRunId: run.id,
+          testCaseId: outcome.testCaseId,
+          testCaseKey: outcome.testCaseKey,
+          requestedTestCaseId: outcome.testCaseKey,
+          testName: outcome.testCaseKey ?? '',
+          className: 'provenly-manual',
+          suiteName: '',
+          status: body!.status as TestResult['status'],
+          errorMessage: String(body?.note ?? ''),
+          attempt: outcome.resultCount,
+          recordedBy: currentUser().username,
+          failedStep: typeof body?.failedStep === 'number' ? body.failedStep : null,
+          durationMs: null,
+        })
+        db.results.push(result)
+        run.resultCount++
+        return respond(result, 201)
+      }),
+    ),
+  ),
+  http.post(
+    `${BASE}/test-runs/:testRunId/finish`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        const run = findRun(params.testRunId)
+        if (run instanceof Response) return run
+        const status = (await readBody(request))?.status
+        if (status !== 'completed' && status !== 'cancelled')
+          return validation('status', 'must be one of completed, cancelled')
+        const denied = requireRole(run.projectId, 'member', () => notFound(`test run ${run.id}`))
+        if (denied) return denied
+        if (run.mode !== 'manual' || run.executionStatus !== 'running')
+          return problem(409, 'conflict', `run ${run.id} is ${run.executionStatus}`)
+        run.executionStatus = status
+        run.completedAt = now()
+        return respond(run)
+      }),
+    ),
+  ),
   http.get(
     `${BASE}/projects/:projectKey/suites`,
     guard(({ params }) => {

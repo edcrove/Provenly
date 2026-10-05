@@ -3,6 +3,7 @@
 package postgres
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"time"
@@ -94,6 +95,7 @@ func toRun(r runRow) execution.TestRun {
 		Status: execution.RunStatus(r.Status), ExpectedCount: r.ExpectedCount + r.AmendmentCount, ResultCount: r.ResultCount,
 		AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt.Time, StartedAt: timePtr(r.StartedAt), CompletedAt: timePtr(r.CompletedAt),
 		ReportSHA256: r.ReportSha256, SuiteKey: r.SuiteKey.String, SuiteName: r.SuiteName.String,
+		Mode: execution.RunMode(r.Mode), StartedBy: r.StartedBy.String,
 	}
 }
 
@@ -103,7 +105,23 @@ func toResult(r executiondb.TestResult) execution.TestResult {
 		Correlation: execution.Correlation(r.Correlation), TestName: r.TestName, ClassName: r.ClassName, SuiteName: r.SuiteName,
 		Status: execution.ResultStatus(r.Status), DurationMs: int8Ptr(r.DurationMs), ErrorMessage: r.ErrorMessage,
 		ErrorDetails: r.ErrorDetails, CreatedAt: r.CreatedAt.Time, Attempt: r.Attempt,
+		RecordedBy: r.RecordedBy.String, FailedStep: int4Ptr(r.FailedStep),
 	}
+}
+
+func int4Ptr(v pgtype.Int4) *int32 {
+	if !v.Valid {
+		return nil
+	}
+	n := v.Int32
+	return &n
+}
+
+func int4Arg(v *int32) pgtype.Int4 {
+	if v == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: *v, Valid: true}
 }
 
 // InsertTestRun implements execution.Repository.
@@ -111,8 +129,9 @@ func (s *Store) InsertTestRun(ctx context.Context, p execution.InsertRunParams) 
 	id, err := s.q.InsertTestRun(ctx, executiondb.InsertTestRunParams{
 		ProjectID: p.ProjectID, ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID, RunAttempt: p.RunAttempt,
 		Pipeline: p.Pipeline, Branch: p.Branch, CommitSha: p.Commit, Status: string(p.Status),
-		StartedAt: timestamptz(p.StartedAt), CompletedAt: timestamptz(&p.CompletedAt), ReportSha256: p.ReportSHA256,
+		StartedAt: timestamptz(p.StartedAt), CompletedAt: timestamptz(p.CompletedAt), ReportSha256: p.ReportSHA256,
 		SuiteKey: optionalText(p.SuiteKey), SuiteName: optionalText(p.SuiteName),
+		Mode: string(cmp.Or(p.Mode, execution.ModeBatch)), StartedBy: optionalText(p.StartedBy),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
@@ -196,7 +215,7 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 		TestRun: executiondb.TestRun{
 			ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 			RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
-			CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, ReportSha256: r.ReportSha256, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName,
+			CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, ReportSha256: r.ReportSha256, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName, Mode: r.Mode, StartedBy: r.StartedBy,
 		},
 		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount,
 	}), nil
@@ -214,7 +233,7 @@ func (s *Store) ListTestRuns(ctx context.Context, f execution.RunFilter, limit, 
 			TestRun: executiondb.TestRun{
 				ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 				RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
-				CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName,
+				CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName, Mode: r.Mode, StartedBy: r.StartedBy,
 			},
 			ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount,
 		})
@@ -353,4 +372,38 @@ func (s *Store) ListAmendments(ctx context.Context, runID int64, limit, offset i
 // CountAmendments implements execution.Repository.
 func (s *Store) CountAmendments(ctx context.Context, runID int64) (int64, error) {
 	return s.q.CountAmendments(ctx, runID)
+}
+
+// LockTestRun implements execution.Repository.
+func (s *Store) LockTestRun(ctx context.Context, id int64) (execution.RunStatus, execution.RunMode, error) {
+	r, err := s.q.LockTestRun(ctx, id)
+	return execution.RunStatus(r.Status), execution.RunMode(r.Mode), notFound(err)
+}
+
+// IsInUniverse implements execution.Repository.
+func (s *Store) IsInUniverse(ctx context.Context, runID, testCaseID int64) (bool, error) {
+	ok, err := s.q.IsInUniverse(ctx, executiondb.IsInUniverseParams{RunID: runID, CaseID: testCaseID})
+	return ok.Bool, err
+}
+
+// InsertManualResult implements execution.Repository.
+func (s *Store) InsertManualResult(ctx context.Context, runID int64, r execution.NewResult) (execution.TestResult, error) {
+	row, err := s.q.InsertManualResult(ctx, executiondb.InsertManualResultParams{
+		TestRunID: runID, TestCaseID: pgtype.Int8{Int64: *r.TestCaseID, Valid: true}, RequestedTestCaseID: pgtype.Text{String: *r.RequestedTestCaseID, Valid: true},
+		TestName: r.TestName, ClassName: execution.ManualClass, Status: string(r.Status), DurationMs: int8Arg(r.DurationMs),
+		ErrorMessage: r.ErrorMessage, RecordedBy: optionalText(r.RecordedBy), FailedStep: int4Arg(r.FailedStep),
+	})
+	return toResult(row), err
+}
+
+// FinishTestRun implements execution.Repository.
+func (s *Store) FinishTestRun(ctx context.Context, id int64, status execution.RunStatus) error {
+	return s.q.FinishTestRun(ctx, executiondb.FinishTestRunParams{ID: id, Status: string(status)})
+}
+
+func int8Arg(v *int64) pgtype.Int8 {
+	if v == nil {
+		return pgtype.Int8{}
+	}
+	return pgtype.Int8{Int64: *v, Valid: true}
 }

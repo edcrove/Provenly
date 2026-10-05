@@ -641,6 +641,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/test-runs/manual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a manual run (members) expecting the active manual test cases of the project or suite (all of them with scope=all) */
+        post: operations["startManualRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/test-runs/{testRunId}/manual-results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record the result of an expected test case in a running manual run (members); recording it again is a re-test */
+        post: operations["recordManualResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/test-runs/{testRunId}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish a running manual run as completed or cancelled (members) */
+        post: operations["finishManualRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-runs/{testRunId}": {
         parameters: {
             query?: never;
@@ -1158,6 +1213,12 @@ export interface components {
          */
         ExecutionStatus: "completed" | "interrupted" | "cancelled";
         /**
+         * @description How the run's execution ended (`completed`, `interrupted`, `cancelled`), or `running` while a manual run
+         *     still receives results.
+         * @enum {string}
+         */
+        RunExecutionStatus: "running" | "completed" | "interrupted" | "cancelled";
+        /**
          * @description Derived from the run's summary (snapshot TC-IDs with their aggregated status):
          *     `no_tests` when the expected universe is empty; otherwise `failed` when any TC-ID
          *     failed or errored; otherwise `incomplete` when any is untested or skipped;
@@ -1195,6 +1256,13 @@ export interface components {
             passRate: number;
         };
         TestRun: {
+            /**
+             * @description How the results arrive - one CI report (batch), recorded by people (manual) or streamed (live).
+             * @enum {string}
+             */
+            mode: "batch" | "manual" | "live";
+            /** @description Who started a manual run. */
+            startedBy: string | null;
             /** @description The suite the run was reported for, as named then (null - the project's automated catalog). */
             suite: {
                 key: string;
@@ -1218,7 +1286,7 @@ export interface components {
             pipeline: string;
             branch: string;
             commit: string;
-            executionStatus: components["schemas"]["ExecutionStatus"];
+            executionStatus: components["schemas"]["RunExecutionStatus"];
             outcome: components["schemas"]["RunOutcome"];
             /**
              * Format: int32
@@ -1297,6 +1365,37 @@ export interface components {
             /** @description Every test case the static suite lists (replaces them). */
             testCaseIds: number[];
         };
+        StartManualRunRequest: {
+            project: string;
+            suite?: string;
+            /** @description What is being tested (shown as the run's pipeline). */
+            name: string;
+            /**
+             * @description manual expects the active manual test cases; all every active test case.
+             * @default manual
+             * @enum {string}
+             */
+            scope?: "manual" | "all";
+            branch?: string;
+            commit?: string;
+        };
+        ManualResultRequest: {
+            /** Format: int64 */
+            testCaseId: number;
+            status: components["schemas"]["ResultStatus"];
+            note?: string;
+            /**
+             * Format: int32
+             * @description Only for a failed or error result.
+             */
+            failedStep?: number;
+            /** Format: int64 */
+            durationMs?: number;
+        };
+        FinishRunRequest: {
+            /** @enum {string} */
+            status: "completed" | "cancelled";
+        };
         TestRunPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["TestRun"][];
         };
@@ -1308,6 +1407,13 @@ export interface components {
          */
         Correlation: "valid" | "missing" | "malformed" | "unknown" | "deprecated" | "wrong_project";
         TestResult: {
+            /** @description Who recorded a manual result (null for results reported by CI). */
+            recordedBy: string | null;
+            /**
+             * Format: int32
+             * @description The step where a manual test failed, when the tester said so.
+             */
+            failedStep: number | null;
             /**
              * Format: int32
              * @description Which attempt of its test this result was (1 = first). Read from Surefire flaky/rerun elements or an `attempt`/`retry` testcase property.
@@ -3041,6 +3147,103 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    startManualRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartManualRunRequest"];
+            };
+        };
+        responses: {
+            /** @description The running manual run */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    recordManualResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualResultRequest"];
+            };
+        };
+        responses: {
+            /** @description The recorded result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    finishManualRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                testRunId: components["parameters"]["TestRunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinishRunRequest"];
+            };
+        };
+        responses: {
+            /** @description The finished run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };

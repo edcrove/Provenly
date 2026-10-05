@@ -22,7 +22,30 @@ const (
 	RunCompleted   RunStatus = "completed"
 	RunInterrupted RunStatus = "interrupted"
 	RunCancelled   RunStatus = "cancelled"
+	// RunRunning is a manual (or live) run still receiving results.
+	RunRunning RunStatus = "running"
 )
+
+// RunMode tells how a run's results arrive.
+type RunMode string
+
+// Run modes.
+const (
+	// ModeBatch runs are created with every result of one CI report.
+	ModeBatch RunMode = "batch"
+	// ModeManual runs are started by a person, who records results one by one and finishes the run.
+	ModeManual RunMode = "manual"
+	// ModeLive runs receive results while CI executes them (reserved for streamed runs).
+	ModeLive RunMode = "live"
+)
+
+// MaxAttempts bounds the attempts of one test in a run (the JUnit parser's bound; a manual test re-tested more is
+// refused).
+const MaxAttempts = 100
+
+// ManualClass is the class name of manually recorded results: a manual re-test is the next attempt of the same
+// test, and passing after a failed attempt is a fix, not flakiness.
+const ManualClass = "provenly-manual"
 
 // ResultStatus is the observed outcome of one result. "untested" is never a
 // persisted result: it is derived in the summary.
@@ -93,6 +116,9 @@ type TestRun struct {
 	// SuiteKey and SuiteName name the suite the run was reported for, as they were then (empty: none).
 	SuiteKey  string
 	SuiteName string
+	Mode      RunMode
+	// StartedBy is who started a manual run (empty otherwise).
+	StartedBy string
 }
 
 // TestResult is one persisted result. TestCaseID is set when the correlation
@@ -116,6 +142,9 @@ type TestResult struct {
 	Attempt int32
 	// Retried tells that a later attempt of the same test exists: this result is not the test's logical result.
 	Retried bool
+	// RecordedBy is who recorded a manual result; FailedStep the step where it failed, if any.
+	RecordedBy string
+	FailedStep *int32
 }
 
 // NewRun is the metadata of a run to record.
@@ -135,6 +164,9 @@ type NewRun struct {
 	// SuiteKey and SuiteName name the suite the run was reported for (empty: the project's automated catalog).
 	SuiteKey  string
 	SuiteName string
+	// Mode is how the results arrive (empty: batch); StartedBy is who started a manual run.
+	Mode      RunMode
+	StartedBy string
 }
 
 // RunFilter narrows a run list; nil fields do not filter.
@@ -161,6 +193,9 @@ type NewResult struct {
 	ErrorDetails        string
 	// Attempt numbers the executions of the same test in the run (1 = first, D1).
 	Attempt int32
+	// RecordedBy is who recorded a manual result; FailedStep the step where it failed, if any.
+	RecordedBy string
+	FailedStep *int32
 }
 
 // ParseError is a testcase of the ingested report that could not be fully
@@ -243,13 +278,22 @@ type InsertRunParams struct {
 	NewRun
 	ExternalRunID string
 	Status        RunStatus
-	CompletedAt   time.Time
+	// CompletedAt is nil while the run is running.
+	CompletedAt *time.Time
 }
 
 // Repository is the persistence port of the execution module.
 type Repository interface {
 	// InsertTestRun inserts a run unless its external id exists; ok is false on conflict.
 	InsertTestRun(ctx context.Context, p InsertRunParams) (id int64, ok bool, err error)
+	// LockTestRun locks a run until the transaction ends and returns its status and mode.
+	LockTestRun(ctx context.Context, id int64) (RunStatus, RunMode, error)
+	// IsInUniverse tells whether a test case is in a run's snapshot or amendments.
+	IsInUniverse(ctx context.Context, runID, testCaseID int64) (bool, error)
+	// InsertManualResult appends one recorded result (the next attempt of its test) to a running run.
+	InsertManualResult(ctx context.Context, runID int64, r NewResult) (TestResult, error)
+	// FinishTestRun ends a running run with a final status.
+	FinishTestRun(ctx context.Context, id int64, status RunStatus) error
 	GetTestRunIDByExternalID(ctx context.Context, projectID int64, externalRunID string) (int64, error)
 	InsertExpectedCases(ctx context.Context, runID int64, testCaseIDs []int64) error
 	InsertTestResults(ctx context.Context, runID int64, results []NewResult) error

@@ -82,8 +82,22 @@ func (q *Queries) CountTestRuns(ctx context.Context, arg CountTestRunsParams) (i
 	return count, err
 }
 
+const finishTestRun = `-- name: FinishTestRun :exec
+UPDATE test_runs SET status = $1, completed_at = now() WHERE id = $2 AND status = 'running'
+`
+
+type FinishTestRunParams struct {
+	Status string
+	ID     int64
+}
+
+func (q *Queries) FinishTestRun(ctx context.Context, arg FinishTestRunParams) error {
+	_, err := q.db.Exec(ctx, finishTestRun, arg.Status, arg.ID)
+	return err
+}
+
 const getTestRun = `-- name: GetTestRun :one
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
@@ -107,6 +121,8 @@ type GetTestRunRow struct {
 	ProjectID      int64
 	SuiteKey       pgtype.Text
 	SuiteName      pgtype.Text
+	Mode           string
+	StartedBy      pgtype.Text
 	ExpectedCount  int32
 	ResultCount    int32
 	AmendmentCount int32
@@ -132,6 +148,8 @@ func (q *Queries) GetTestRun(ctx context.Context, id int64) (GetTestRunRow, erro
 		&i.ProjectID,
 		&i.SuiteKey,
 		&i.SuiteName,
+		&i.Mode,
+		&i.StartedBy,
 		&i.ExpectedCount,
 		&i.ResultCount,
 		&i.AmendmentCount,
@@ -206,6 +224,63 @@ func (q *Queries) InsertExpectedCases(ctx context.Context, arg InsertExpectedCas
 	return err
 }
 
+const insertManualResult = `-- name: InsertManualResult :one
+INSERT INTO test_results (test_run_id, test_case_id, requested_test_case_id, correlation, test_name, class_name, suite_name, status, duration_ms, error_message, error_details, attempt, recorded_by, failed_step)
+SELECT $1, $2, $3, 'valid', $4, $5, '', $6, $7, $8, '',
+    coalesce(max(x.attempt), 0) + 1, $9, $10
+FROM test_results x WHERE x.test_run_id = $1 AND x.class_name = $5 AND x.test_name = $4
+RETURNING id, test_run_id, test_case_id, requested_test_case_id, correlation, test_name, class_name, suite_name, status, duration_ms, error_message, error_details, created_at, attempt, recorded_by, failed_step
+`
+
+type InsertManualResultParams struct {
+	TestRunID           int64
+	TestCaseID          pgtype.Int8
+	RequestedTestCaseID pgtype.Text
+	TestName            string
+	ClassName           string
+	Status              string
+	DurationMs          pgtype.Int8
+	ErrorMessage        string
+	RecordedBy          pgtype.Text
+	FailedStep          pgtype.Int4
+}
+
+// One recorded result of a running run; a re-test of the same test is its next attempt.
+func (q *Queries) InsertManualResult(ctx context.Context, arg InsertManualResultParams) (TestResult, error) {
+	row := q.db.QueryRow(ctx, insertManualResult,
+		arg.TestRunID,
+		arg.TestCaseID,
+		arg.RequestedTestCaseID,
+		arg.TestName,
+		arg.ClassName,
+		arg.Status,
+		arg.DurationMs,
+		arg.ErrorMessage,
+		arg.RecordedBy,
+		arg.FailedStep,
+	)
+	var i TestResult
+	err := row.Scan(
+		&i.ID,
+		&i.TestRunID,
+		&i.TestCaseID,
+		&i.RequestedTestCaseID,
+		&i.Correlation,
+		&i.TestName,
+		&i.ClassName,
+		&i.SuiteName,
+		&i.Status,
+		&i.DurationMs,
+		&i.ErrorMessage,
+		&i.ErrorDetails,
+		&i.CreatedAt,
+		&i.Attempt,
+		&i.RecordedBy,
+		&i.FailedStep,
+	)
+	return i, err
+}
+
 type InsertParseErrorsParams struct {
 	TestRunID int64
 	CaseIndex int32
@@ -231,8 +306,8 @@ type InsertTestResultsParams struct {
 }
 
 const insertTestRun = `-- name: InsertTestRun :one
-INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256, suite_key, suite_name)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256, suite_key, suite_name, mode, started_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 ON CONFLICT (project_id, external_run_id) DO NOTHING
 RETURNING id
 `
@@ -252,6 +327,8 @@ type InsertTestRunParams struct {
 	ReportSha256  string
 	SuiteKey      pgtype.Text
 	SuiteName     pgtype.Text
+	Mode          string
+	StartedBy     pgtype.Text
 }
 
 func (q *Queries) InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error) {
@@ -270,10 +347,30 @@ func (q *Queries) InsertTestRun(ctx context.Context, arg InsertTestRunParams) (i
 		arg.ReportSha256,
 		arg.SuiteKey,
 		arg.SuiteName,
+		arg.Mode,
+		arg.StartedBy,
 	)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const isInUniverse = `-- name: IsInUniverse :one
+SELECT EXISTS (SELECT 1 FROM test_run_expected_cases e WHERE e.test_run_id = $1::bigint AND e.test_case_id = $2::bigint)
+    OR EXISTS (SELECT 1 FROM test_run_amendments a WHERE a.test_run_id = $1::bigint AND a.test_case_id = $2::bigint)
+`
+
+type IsInUniverseParams struct {
+	RunID  int64
+	CaseID int64
+}
+
+// Whether a test case is in a run's universe: its snapshot or its amendments.
+func (q *Queries) IsInUniverse(ctx context.Context, arg IsInUniverseParams) (pgtype.Bool, error) {
+	row := q.db.QueryRow(ctx, isInUniverse, arg.RunID, arg.CaseID)
+	var column_1 pgtype.Bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const listAmendments = `-- name: ListAmendments :many
@@ -406,7 +503,7 @@ WITH page AS (
     FROM test_runs r
     WHERE r.id IN (SELECT q.test_run_id FROM test_results q WHERE q.id IN (SELECT id FROM page))
 )
-SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at, t.attempt, EXISTS (
+SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at, t.attempt, t.recorded_by, t.failed_step, EXISTS (
         SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
           AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
     ) AS retried,
@@ -472,6 +569,8 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 			&i.TestResult.ErrorDetails,
 			&i.TestResult.CreatedAt,
 			&i.TestResult.Attempt,
+			&i.TestResult.RecordedBy,
+			&i.TestResult.FailedStep,
 			&i.Retried,
 			&i.RunProjectID,
 			&i.ExternalRunID,
@@ -500,7 +599,7 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 }
 
 const listRunResults = `-- name: ListRunResults :many
-SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at, t.attempt, EXISTS (
+SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at, t.attempt, t.recorded_by, t.failed_step, EXISTS (
     SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
       AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
 ) AS retried
@@ -556,6 +655,8 @@ func (q *Queries) ListRunResults(ctx context.Context, arg ListRunResultsParams) 
 			&i.TestResult.ErrorDetails,
 			&i.TestResult.CreatedAt,
 			&i.TestResult.Attempt,
+			&i.TestResult.RecordedBy,
+			&i.TestResult.FailedStep,
 			&i.Retried,
 		); err != nil {
 			return nil, err
@@ -621,7 +722,7 @@ func (q *Queries) ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]
 }
 
 const listTestRuns = `-- name: ListTestRuns :many
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
@@ -659,6 +760,8 @@ type ListTestRunsRow struct {
 	ProjectID      int64
 	SuiteKey       pgtype.Text
 	SuiteName      pgtype.Text
+	Mode           string
+	StartedBy      pgtype.Text
 	ExpectedCount  int32
 	ResultCount    int32
 	AmendmentCount int32
@@ -697,6 +800,8 @@ func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]L
 			&i.ProjectID,
 			&i.SuiteKey,
 			&i.SuiteName,
+			&i.Mode,
+			&i.StartedBy,
 			&i.ExpectedCount,
 			&i.ResultCount,
 			&i.AmendmentCount,
@@ -709,4 +814,21 @@ func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]L
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockTestRun = `-- name: LockTestRun :one
+SELECT status, mode FROM test_runs WHERE id = $1 FOR UPDATE
+`
+
+type LockTestRunRow struct {
+	Status string
+	Mode   string
+}
+
+// Locks a run until the transaction ends (manual recording and completion).
+func (q *Queries) LockTestRun(ctx context.Context, id int64) (LockTestRunRow, error) {
+	row := q.db.QueryRow(ctx, lockTestRun, id)
+	var i LockTestRunRow
+	err := row.Scan(&i.Status, &i.Mode)
+	return i, err
 }

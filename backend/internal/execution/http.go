@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"cmp"
 	"context"
 	"net/http"
 	"regexp"
@@ -61,6 +62,9 @@ type TestRunDTO struct {
 	CompletedAt    *time.Time `json:"completedAt"`
 	// Suite is the suite the run was reported for (null: the project's automated catalog).
 	Suite *SuiteRefDTO `json:"suite"`
+	// Mode is how the results arrive (batch, manual, live); StartedBy who started a manual run.
+	Mode      RunMode `json:"mode"`
+	StartedBy *string `json:"startedBy"`
 }
 
 // SuiteRefDTO names a suite as it was when the run was created.
@@ -93,6 +97,10 @@ func RunDTO(r TestRun) TestRunDTO {
 	if r.SuiteKey != "" {
 		dto.Suite = &SuiteRefDTO{Key: r.SuiteKey, Name: r.SuiteName}
 	}
+	dto.Mode = cmp.Or(r.Mode, ModeBatch)
+	if r.StartedBy != "" {
+		dto.StartedBy = &r.StartedBy
+	}
 	return dto
 }
 
@@ -114,7 +122,13 @@ type TestResultDTO struct {
 	CreatedAt           time.Time    `json:"createdAt"`
 	Attempt             int32        `json:"attempt"`
 	Retried             bool         `json:"retried"`
+	// RecordedBy is who recorded a manual result (null for CI results); FailedStep the step where it failed.
+	RecordedBy *string `json:"recordedBy"`
+	FailedStep *int32  `json:"failedStep"`
 }
+
+// ResultDTO converts a TestResult to its wire form, with the display key of its test case when known.
+func ResultDTO(r TestResult, keys map[int64]string) TestResultDTO { return resultDTO(r, keys) }
 
 func resultDTO(r TestResult, keys map[int64]string) TestResultDTO {
 	var key *string
@@ -123,12 +137,16 @@ func resultDTO(r TestResult, keys map[int64]string) TestResultDTO {
 			key = &k
 		}
 	}
-	return TestResultDTO{
+	dto := TestResultDTO{
 		ID: r.ID, TestRunID: r.TestRunID, TestCaseID: r.TestCaseID, TestCaseKey: key, RequestedTestCaseID: r.RequestedTestCaseID,
 		Correlation: r.Correlation, TestName: r.TestName, ClassName: r.ClassName, SuiteName: r.SuiteName, Status: r.Status,
 		DurationMs: r.DurationMs, ErrorMessage: r.ErrorMessage, ErrorDetails: r.ErrorDetails, CreatedAt: r.CreatedAt,
-		Attempt: r.Attempt, Retried: r.Retried,
+		Attempt: r.Attempt, Retried: r.Retried, FailedStep: r.FailedStep,
 	}
+	if r.RecordedBy != "" {
+		dto.RecordedBy = &r.RecordedBy
+	}
+	return dto
 }
 
 // resultKeys resolves the display keys of the test cases the results link to.

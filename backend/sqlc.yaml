@@ -29,6 +29,7 @@ sql:
       - migrations/00018_run_amendments.sql
       - migrations/00019_result_attempts.sql
       - migrations/00022_run_suites.sql
+      - migrations/00023_manual_runs.sql
     queries: queries/execution.sql
     gen:
       go:

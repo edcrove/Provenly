@@ -33,3 +33,5 @@ targets:
     description: taxonomy through the public API - a new project gets the built-in dimensions; values and dimensions are added (duplicates 409); test cases are created with normalized tags and a classification and filtered by tag and by dimension:value pairs; archived values cannot be assigned (400 on the dimension field); clearing tags and a dimension advances the ETag
   - id: BE-E2E-016
     description: suites through the public API - a query and a static suite are created; a run reported with ?suite= expects only the suite (no untested, other results outside the universe) and names its suite; runs and test cases filter by suite; archived suites take no runs (409) and unknown ones are 404
+  - id: BE-E2E-017
+    description: manual execution through the public API - a manual run expects the manual test cases, takes a failure (note, failed step) and a passing re-test (attempt 2, not flaky), completes as passed and then refuses results; the test case history shows both results

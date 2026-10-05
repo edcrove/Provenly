@@ -87,8 +87,9 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
       </Table>
       <p className="text-muted-foreground text-xs">
         Each executed TC-ID counts once with its aggregated status (failed &gt; error &gt; skipped &gt;
-        passed); a retried test counts with its last attempt. The expected universe is the snapshot of active
-        automated test cases taken when the run was created
+        passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when
+        the run was created (the active automated test cases, of its suite if it names one; a manual run's own
+        selection)
         {summary.amendedTestCaseIds.length > 0 ? ', plus the test cases a maintainer included later' : ''}.
       </p>
       {flaky.length > 0 && (

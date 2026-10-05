@@ -210,17 +210,30 @@ func SuiteFilter(f ListFilter, su Suite) ListFilter {
 	return f
 }
 
-// SuiteSelection resolves a suite for a run: the active automated test cases it selects now, ascending. An archived
-// suite receives no runs (409).
+// SuiteSelection resolves a suite for a CI run: the active automated test cases it selects now, ascending. An
+// archived suite receives no runs (409).
 func (s *Service) SuiteSelection(ctx context.Context, projectID int64, key string) (Suite, []int64, error) {
-	su, err := s.Suite(ctx, projectID, key)
-	if err != nil {
-		return Suite{}, nil, err
+	automated := true
+	return s.Selection(ctx, projectID, key, &automated)
+}
+
+// Selection resolves the expected universe of a run: the project's active test cases (only automated or only
+// manual ones when automated is set), narrowed to a suite when key is not empty, ascending. An archived suite
+// receives no runs (409).
+func (s *Service) Selection(ctx context.Context, projectID int64, key string, automated *bool) (Suite, []int64, error) {
+	var su Suite
+	active := StatusActive
+	f := ListFilter{Status: &active, Automated: automated, ProjectIDs: []int64{projectID}}
+	if key != "" {
+		var err error
+		if su, err = s.Suite(ctx, projectID, key); err != nil {
+			return Suite{}, nil, err
+		}
+		if su.ArchivedAt != nil {
+			return Suite{}, nil, apperr.Conflict("suite %s is archived: restore it to report runs for it", key)
+		}
+		f = SuiteFilter(f, su)
 	}
-	if su.ArchivedAt != nil {
-		return Suite{}, nil, apperr.Conflict("suite %s is archived: restore it to report runs for it", key)
-	}
-	active, automated := StatusActive, true
-	ids, err := s.repo.ListTestCaseIDs(ctx, SuiteFilter(ListFilter{Status: &active, Automated: &automated, ProjectIDs: []int64{projectID}}, su))
+	ids, err := s.repo.ListTestCaseIDs(ctx, f)
 	return su, ids, err
 }

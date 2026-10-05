@@ -35,6 +35,8 @@ export function invitation(overrides: Partial<Invitation> = {}): Invitation {
     acceptedAt: null,
     acceptedUserId: null,
     revokedAt: null,
+    projectId: null,
+    projectRole: null,
     ...overrides,
   }
 }
@@ -47,6 +49,7 @@ export function project(overrides: Partial<Project> = {}): Project {
     description: 'Test cases created before projects existed.',
     createdAt: at,
     updatedAt: at,
+    myRole: 'admin',
     ...overrides,
   }
 }

@@ -104,3 +104,12 @@ targets:
   - id: FE-INT-029
     description: the account page shows who is signed in and changes the password (mismatch and wrong current password reported)
     surfaces: [src/features/auth/AccountPage.tsx]
+  - id: FE-INT-030
+    description: each role sees only its actions - viewers read (no edit, deprecate, steps editing, new test case, rename, mark automated), members edit and create in their projects, maintainers deprecate and rename; projects without a role do not show
+    surfaces: [src/features/test-cases/TestCaseDetailPage.tsx, src/features/test-cases/StepsEditor.tsx, src/features/projects/ProjectsPage.tsx, src/features/test-runs/RunDiagnostics.tsx]
+  - id: FE-INT-031
+    description: project members - administrators and maintainers add (unknown users reported), change and remove members; viewers see the list without controls; pagination and unknown projects
+    surfaces: [src/features/projects/ProjectMembersPage.tsx]
+  - id: FE-INT-032
+    description: an invitation can grant a project role, shown in the invitation list
+    surfaces: [src/features/auth/UsersPage.tsx]

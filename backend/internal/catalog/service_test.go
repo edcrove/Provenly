@@ -404,7 +404,7 @@ func TestProjectsLifecycle(t *testing.T) {
 	_, err = svc.ProjectByID(ctx, 99)
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 
-	res, err := svc.ListProjects(ctx, pagination.Default())
+	res, err := svc.ListProjects(ctx, nil, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), res.Total)
 	assert.Equal(t, []string{"CHK", "TC"}, []string{res.Items[0].Key, res.Items[1].Key})
@@ -428,10 +428,10 @@ func TestProjectsLifecycle(t *testing.T) {
 	_, err = svc.UpdateProject(ctx, "CHK", UpdateProjectInput{Name: ptr("x")})
 	assert.ErrorIs(t, err, errBoom)
 	repo.errs["CountProjects"] = errBoom
-	_, err = svc.ListProjects(ctx, pagination.Default())
+	_, err = svc.ListProjects(ctx, nil, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 	repo.errs["ListProjects"] = errBoom
-	_, err = svc.ListProjects(ctx, pagination.Default())
+	_, err = svc.ListProjects(ctx, nil, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 }
 
@@ -466,7 +466,7 @@ func TestTestCaseNumbersPerProject(t *testing.T) {
 	c, _ := svc.Create(ctx, CreateInput{ProjectID: chk.ID, Title: "c"})
 	assert.Equal(t, []string{"TC-1", "CHK-1", "CHK-2"}, []string{a.Key(), b.Key(), c.Key()}, "no project means the default one")
 
-	res, err := svc.List(ctx, ListFilter{ProjectID: &chk.ID}, pagination.Default())
+	res, err := svc.List(ctx, ListFilter{ProjectIDs: []int64{chk.ID}}, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), res.Total)
 
@@ -476,6 +476,12 @@ func TestTestCaseNumbersPerProject(t *testing.T) {
 	assert.Equal(t, IngestionEntry{ID: c.ID, Status: StatusActive}, view.Entries[2])
 
 	_, err = svc.Create(ctx, CreateInput{ProjectID: 99, Title: "x"})
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
+
+	pid, err := svc.ProjectOf(ctx, c.ID)
+	require.NoError(t, err)
+	assert.Equal(t, chk.ID, pid)
+	_, err = svc.ProjectOf(ctx, 999)
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 
 	keys, err := svc.Keys(ctx, []int64{a.ID, c.ID, 999})

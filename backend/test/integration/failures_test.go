@@ -15,6 +15,7 @@ import (
 	executionpg "github.com/edcrove/provenly/backend/internal/execution/postgres"
 	"github.com/edcrove/provenly/backend/internal/identity"
 	identitypg "github.com/edcrove/provenly/backend/internal/identity/postgres"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/postgres"
 )
 
@@ -63,8 +64,8 @@ func TestPersistenceFailures(t *testing.T) {
 			},
 			"catalog.GetProject":      func() error { _, err := cat.GetProject(ctx, 1); return err },
 			"catalog.GetProjectByKey": func() error { _, err := cat.GetProjectByKey(ctx, "XX"); return err },
-			"catalog.ListProjects":    func() error { _, err := cat.ListProjects(ctx, 10, 0); return err },
-			"catalog.CountProjects":   func() error { _, err := cat.CountProjects(ctx); return err },
+			"catalog.ListProjects":    func() error { _, err := cat.ListProjects(ctx, nil, 10, 0); return err },
+			"catalog.CountProjects":   func() error { _, err := cat.CountProjects(ctx, nil); return err },
 			"catalog.UpdateProject": func() error {
 				_, err := cat.UpdateProject(ctx, "XX", catalog.UpdateProjectInput{Name: str("x")})
 				return err
@@ -84,6 +85,12 @@ func TestPersistenceFailures(t *testing.T) {
 			"identity.LockInvitationByToken":  func() error { _, err := idn.LockInvitationByToken(ctx, []byte("x")); return err },
 			"identity.MarkInvitationAccepted": func() error { return idn.MarkInvitationAccepted(ctx, 1, 1) },
 			"identity.RevokeInvitation":       func() error { _, err := idn.RevokeInvitation(ctx, 1); return err },
+			"identity.MemberRole":             func() error { _, err := idn.MemberRole(ctx, 1, 1); return err },
+			"identity.ListUserMemberships":    func() error { _, err := idn.ListUserMemberships(ctx, 1); return err },
+			"identity.ListProjectMembers":     func() error { _, err := idn.ListProjectMembers(ctx, 1, 10, 0); return err },
+			"identity.CountProjectMembers":    func() error { _, err := idn.CountProjectMembers(ctx, 1); return err },
+			"identity.UpsertMember":           func() error { return idn.UpsertMember(ctx, 1, 1, authz.RoleViewer) },
+			"identity.DeleteMember":           func() error { _, err := idn.DeleteMember(ctx, 1, 1); return err },
 
 			"execution.InTx":                     func() error { return exe.InTx(ctx, func(execution.Repository) error { return nil }) },
 			"execution.InsertTestRun":            func() error { _, _, err := exe.InsertTestRun(ctx, execution.InsertRunParams{}); return err },

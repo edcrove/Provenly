@@ -21,8 +21,8 @@ SELECT * FROM users ORDER BY username LIMIT @page_limit OFFSET @page_offset;
 UPDATE users SET password_hash = @password_hash, updated_at = now() WHERE id = @id RETURNING *;
 
 -- name: CreateInvitation :one
-INSERT INTO invitations (token_sha256, email, note, created_by, expires_at)
-VALUES (@token_sha256, sqlc.narg('email'), @note, @created_by, @expires_at)
+INSERT INTO invitations (token_sha256, email, note, created_by, expires_at, project_id, project_role)
+VALUES (@token_sha256, sqlc.narg('email'), @note, @created_by, @expires_at, sqlc.narg('project_id'), sqlc.narg('project_role'))
 RETURNING *;
 
 -- name: ListInvitations :many
@@ -46,3 +46,27 @@ RETURNING *;
 
 -- name: GetInvitation :one
 SELECT * FROM invitations WHERE id = @id;
+
+-- name: GetMemberRole :one
+SELECT role FROM project_members WHERE project_id = @project_id AND user_id = @user_id;
+
+-- name: ListUserMemberships :many
+SELECT project_id, role FROM project_members WHERE user_id = @user_id;
+
+-- name: ListProjectMembers :many
+SELECT sqlc.embed(users), m.role AS member_role, m.created_at AS member_since
+FROM project_members m JOIN users ON users.id = m.user_id
+WHERE m.project_id = @project_id
+ORDER BY users.username
+LIMIT @page_limit OFFSET @page_offset;
+
+-- name: CountProjectMembers :one
+SELECT count(*) FROM project_members WHERE project_id = @project_id;
+
+-- name: UpsertMember :one
+INSERT INTO project_members (project_id, user_id, role) VALUES (@project_id, @user_id, @role)
+ON CONFLICT (project_id, user_id) DO UPDATE SET role = EXCLUDED.role, updated_at = now()
+RETURNING *;
+
+-- name: DeleteMember :execrows
+DELETE FROM project_members WHERE project_id = @project_id AND user_id = @user_id;

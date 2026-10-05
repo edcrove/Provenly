@@ -20,14 +20,14 @@ SELECT id FROM test_cases WHERE id = @id FOR UPDATE;
 -- name: ListTestCases :many
 SELECT * FROM test_cases
 WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
-  AND (sqlc.narg('project_id')::bigint IS NULL OR project_id = sqlc.narg('project_id')::bigint)
+  AND (sqlc.narg('project_ids')::bigint[] IS NULL OR project_id = ANY(sqlc.narg('project_ids')::bigint[]))
 ORDER BY id DESC
 LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountTestCases :one
 SELECT count(*) FROM test_cases
 WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
-  AND (sqlc.narg('project_id')::bigint IS NULL OR project_id = sqlc.narg('project_id')::bigint);
+  AND (sqlc.narg('project_ids')::bigint[] IS NULL OR project_id = ANY(sqlc.narg('project_ids')::bigint[]));
 
 -- name: UpdateTestCase :one
 UPDATE test_cases SET
@@ -122,10 +122,14 @@ SELECT * FROM projects WHERE id = @id;
 SELECT * FROM projects WHERE key = @key;
 
 -- name: ListProjects :many
-SELECT * FROM projects ORDER BY key LIMIT @page_limit OFFSET @page_offset;
+-- project_ids NULL means every project (administrators); otherwise only those.
+SELECT * FROM projects
+WHERE sqlc.narg('project_ids')::bigint[] IS NULL OR id = ANY(sqlc.narg('project_ids')::bigint[])
+ORDER BY key LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountProjects :one
-SELECT count(*) FROM projects;
+SELECT count(*) FROM projects
+WHERE sqlc.narg('project_ids')::bigint[] IS NULL OR id = ANY(sqlc.narg('project_ids')::bigint[]);
 
 -- name: UpdateProject :one
 UPDATE projects SET

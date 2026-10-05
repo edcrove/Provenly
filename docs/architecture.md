@@ -50,6 +50,16 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
   sign-in, sign-out, accepting an invitation and (until CI API keys, prototype feature 4) ingestion. Without a session
   the answer is `401 unauthorized`; administrator-only operations answer `403 forbidden`.
 
+## Roles (package `platform/authz`)
+
+- Administrators (`users.is_admin`) can do everything. Other users hold one role per project in `project_members`:
+  maintainer > member > viewer. `authz.Guard` (implemented by `identity`) answers `Scope` (visible projects and roles)
+  and `Require(project, min role)`; catalog and execution depend only on the port.
+- A project without a role is invisible: its resources answer the module's own `404`; a role below the minimum answers
+  `403 forbidden`. Lists filter in SQL by the visible project ids (`NULL` means every project).
+- Minimum roles: viewer reads; member writes test cases and steps; maintainer deprecates, reactivates, renames the
+  project and manages members; administrators create projects and manage users and invitations.
+
 ## REST conventions (see `api/openapi.yaml`)
 
 - Errors: `application/problem+json` with a stable `code` (`validation_error`, `not_found`, `invalid_junit`, …) and

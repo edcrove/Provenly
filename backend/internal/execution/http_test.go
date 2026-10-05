@@ -12,13 +12,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
 type stubAPI struct {
-	err        error
-	gotFilter  ResultFilter
-	gotProject *int64
+	err         error
+	getErr      error
+	gotFilter   ResultFilter
+	gotProjects []int64
 }
 
 var sampleRun = TestRun{ID: 3, ExternalRunID: "github:1:1", Provider: "github", ProviderRunID: "1", RunAttempt: 1,
@@ -27,9 +29,9 @@ var sampleRun = TestRun{ID: 3, ExternalRunID: "github:1:1", Provider: "github", 
 var sampleResult = TestResult{ID: 8, TestRunID: 3, TestCaseID: ptr(int64(153)), RequestedTestCaseID: ptr("153"),
 	Correlation: CorrelationValid, TestName: "login", Status: Passed, DurationMs: ptr(int64(12))}
 
-func (s *stubAPI) GetRun(context.Context, int64) (TestRun, error) { return sampleRun, s.err }
-func (s *stubAPI) ListRuns(_ context.Context, projectID *int64, p pagination.Page) (pagination.Result[TestRun], error) {
-	s.gotProject = projectID
+func (s *stubAPI) GetRun(context.Context, int64) (TestRun, error) { return sampleRun, s.getErr }
+func (s *stubAPI) ListRuns(_ context.Context, projectIDs []int64, p pagination.Page) (pagination.Result[TestRun], error) {
+	s.gotProjects = projectIDs
 	return pagination.Result[TestRun]{Items: []TestRun{sampleRun}, Page: p, Total: 1}, s.err
 }
 func (s *stubAPI) ListRunResults(_ context.Context, _ int64, f ResultFilter, p pagination.Page) (pagination.Result[TestResult], error) {
@@ -60,14 +62,19 @@ func (c stubCatalog) Keys(_ context.Context, ids []int64) (map[int64]string, err
 	return keys, c.keysErr
 }
 
-func (c stubCatalog) EnsureExists(context.Context, int64) error { return c.err }
+// ProjectOf puts every test case in project 7.
+func (c stubCatalog) ProjectOf(context.Context, int64) (int64, error) { return 7, c.err }
 func (c stubCatalog) ProjectIDByKey(context.Context, string) (int64, error) {
 	return 7, c.projectErr
 }
 
 func serve(api API, cat TestCaseChecker, target string) *httptest.ResponseRecorder {
+	return serveAs(adminGuard, api, cat, target)
+}
+
+func serveAs(guard authz.Guard, api API, cat TestCaseChecker, target string) *httptest.ResponseRecorder {
 	mux := http.NewServeMux()
-	NewHandler(api, cat).Register(mux)
+	NewHandler(api, cat, guard).Register(mux)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	return rec
@@ -96,10 +103,9 @@ func TestHandlerHappyPaths(t *testing.T) {
 func TestHandlerProjectFilter(t *testing.T) {
 	api := &stubAPI{}
 	assert.Equal(t, http.StatusOK, serve(api, stubCatalog{}, "/api/v1/test-runs?project=CHK").Code)
-	require.NotNil(t, api.gotProject)
-	assert.Equal(t, int64(7), *api.gotProject)
+	assert.Equal(t, []int64{7}, api.gotProjects)
 	serve(api, stubCatalog{}, "/api/v1/test-runs")
-	assert.Nil(t, api.gotProject)
+	assert.Nil(t, api.gotProjects, "administrators: every project")
 
 	assert.Equal(t, http.StatusNotFound, serve(api, stubCatalog{projectErr: apperr.NotFound("project CHK not found")}, "/api/v1/test-runs?project=CHK").Code)
 	for _, target := range []string{"/api/v1/test-runs?project=", "/api/v1/test-runs?project=chk"} {
@@ -121,8 +127,9 @@ func TestHandlerFilter(t *testing.T) {
 
 func TestHandlerErrors(t *testing.T) {
 	failing := &stubAPI{err: apperr.NotFound("missing")}
+	assert.Equal(t, http.StatusNotFound, serve(&stubAPI{getErr: apperr.NotFound("missing")}, stubCatalog{}, "/api/v1/test-runs/3").Code)
 	for _, target := range []string{
-		"/api/v1/test-runs", "/api/v1/test-runs/3", "/api/v1/test-runs/3/results",
+		"/api/v1/test-runs", "/api/v1/test-runs/3/results",
 		"/api/v1/test-runs/3/summary", "/api/v1/test-cases/1/results", "/api/v1/test-runs/3/parse-errors",
 	} {
 		assert.Equal(t, http.StatusNotFound, serve(failing, stubCatalog{}, target).Code, target)
@@ -141,4 +148,23 @@ func TestHandlerErrors(t *testing.T) {
 	} {
 		assert.Equal(t, http.StatusBadRequest, serve(&stubAPI{}, stubCatalog{}, target).Code, target)
 	}
+}
+
+// Runs, their results and the history of a test case are visible to anyone with a role in the project; other
+// users get 404 (never 403). Lists are narrowed to the user's projects.
+func TestHandlerAuthorization(t *testing.T) {
+	api := &stubAPI{}
+	viewer := memberOf(map[int64]authz.Role{sampleRun.ProjectID: authz.RoleViewer, 7: authz.RoleViewer})
+	for _, target := range []string{"/api/v1/test-runs/3", "/api/v1/test-runs/3/results", "/api/v1/test-runs/3/summary",
+		"/api/v1/test-runs/3/parse-errors", "/api/v1/test-cases/153/results"} {
+		assert.Equal(t, http.StatusOK, serveAs(viewer, api, stubCatalog{}, target).Code, target)
+		rec := serveAs(memberOf(nil), api, stubCatalog{}, target)
+		assert.Equal(t, http.StatusNotFound, rec.Code, target)
+		assert.Contains(t, rec.Body.String(), "not found", target)
+	}
+	serveAs(memberOf(map[int64]authz.Role{7: authz.RoleViewer}), api, stubCatalog{}, "/api/v1/test-runs")
+	assert.Equal(t, []int64{7}, api.gotProjects)
+	assert.Equal(t, http.StatusNotFound, serveAs(memberOf(nil), api, stubCatalog{}, "/api/v1/test-runs?project=CHK").Code)
+	broken := stubGuard{err: errors.New("db down")}
+	assert.Equal(t, http.StatusInternalServerError, serveAs(broken, api, stubCatalog{}, "/api/v1/test-runs").Code)
 }

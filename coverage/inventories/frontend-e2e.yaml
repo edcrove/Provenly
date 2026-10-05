@@ -22,3 +22,5 @@ targets:
     description: create a project, work inside it (lists narrowed, new test case numbered with its key), read its run with its own keys, and go back to every project
   - id: FE-E2E-011
     description: sign in from a fresh browser (back to the page asked for), invite someone, they join from the link in another browser and sign out
+  - id: FE-E2E-012
+    description: an administrator adds a project member in the UI; the member signs in and sees only the actions of their role, which narrow after a demotion

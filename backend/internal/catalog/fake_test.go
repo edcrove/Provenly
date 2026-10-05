@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"time"
 )
@@ -71,7 +72,7 @@ func (f *fakeRepo) LockTestCase(_ context.Context, id int64) error {
 func (f *fakeRepo) filtered(lf ListFilter) []TestCase {
 	var out []TestCase
 	for _, tc := range f.cases {
-		if (lf.Status == nil || tc.Status == *lf.Status) && (lf.ProjectID == nil || tc.ProjectID == *lf.ProjectID) {
+		if (lf.Status == nil || tc.Status == *lf.Status) && (lf.ProjectIDs == nil || slices.Contains(lf.ProjectIDs, tc.ProjectID)) {
 			out = append(out, tc)
 		}
 	}
@@ -153,7 +154,7 @@ func (f *fakeRepo) ListIngestionView(_ context.Context, projectID int64, numbers
 		return IngestionView{}, err
 	}
 	view := IngestionView{Entries: map[int64]IngestionEntry{}}
-	for _, tc := range f.filtered(ListFilter{ProjectID: &projectID}) {
+	for _, tc := range f.filtered(ListFilter{ProjectIDs: []int64{projectID}}) {
 		if tc.Status == StatusActive && tc.Automated {
 			view.Expected = append(view.Expected, tc.ID)
 		}
@@ -217,13 +218,15 @@ func (f *fakeRepo) GetProjectByKey(_ context.Context, key string) (Project, erro
 	return Project{}, ErrNotFound
 }
 
-func (f *fakeRepo) ListProjects(_ context.Context, limit, offset int32) ([]Project, error) {
+func (f *fakeRepo) ListProjects(_ context.Context, ids []int64, limit, offset int32) ([]Project, error) {
 	if err := f.fail("ListProjects"); err != nil {
 		return nil, err
 	}
 	var all []Project
 	for _, p := range f.projects {
-		all = append(all, p)
+		if ids == nil || slices.Contains(ids, p.ID) {
+			all = append(all, p)
+		}
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].Key < all[j].Key })
 	if int(offset) >= len(all) {
@@ -232,11 +235,12 @@ func (f *fakeRepo) ListProjects(_ context.Context, limit, offset int32) ([]Proje
 	return all[offset:min(int(offset+limit), len(all))], nil
 }
 
-func (f *fakeRepo) CountProjects(_ context.Context) (int64, error) {
+func (f *fakeRepo) CountProjects(ctx context.Context, ids []int64) (int64, error) {
 	if err := f.fail("CountProjects"); err != nil {
 		return 0, err
 	}
-	return int64(len(f.projects)), nil
+	all, _ := f.ListProjects(ctx, ids, 1<<30, 0)
+	return int64(len(all)), nil
 }
 
 func (f *fakeRepo) UpdateProject(_ context.Context, key string, in UpdateProjectInput) (Project, error) {

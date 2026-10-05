@@ -5,10 +5,13 @@ import (
 	"context"
 	"sort"
 	"time"
+
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 )
 
 // fakeRepo is an in-memory Repository; errs makes a method fail.
 type fakeRepo struct {
+	members     map[[2]int64]Member
 	users       map[int64]User
 	invitations map[int64]Invitation
 	nextUser    int64
@@ -20,7 +23,7 @@ type fakeRepo struct {
 }
 
 func newFakeRepo(now func() time.Time) *fakeRepo {
-	return &fakeRepo{users: map[int64]User{}, invitations: map[int64]Invitation{}, errs: map[string]error{}, now: now}
+	return &fakeRepo{members: map[[2]int64]Member{}, users: map[int64]User{}, invitations: map[int64]Invitation{}, errs: map[string]error{}, now: now}
 }
 
 func (f *fakeRepo) fail(method string) error { return f.errs[method] }
@@ -29,7 +32,10 @@ func (f *fakeRepo) InTx(_ context.Context, fn func(Repository) error) error {
 	if err := f.fail("InTx"); err != nil {
 		return err
 	}
-	users, invs := map[int64]User{}, map[int64]Invitation{}
+	users, invs, members := map[int64]User{}, map[int64]Invitation{}, map[[2]int64]Member{}
+	for k, v := range f.members {
+		members[k] = v
+	}
 	for k, v := range f.users {
 		users[k] = v
 	}
@@ -37,7 +43,7 @@ func (f *fakeRepo) InTx(_ context.Context, fn func(Repository) error) error {
 		invs[k] = v
 	}
 	if err := fn(f); err != nil {
-		f.users, f.invitations = users, invs
+		f.users, f.invitations, f.members = users, invs, members
 		return err
 	}
 	return nil
@@ -125,7 +131,7 @@ func (f *fakeRepo) CreateInvitation(_ context.Context, in NewInvitation) (Invita
 	}
 	f.nextInv++
 	inv := Invitation{ID: f.nextInv, TokenSHA256: in.TokenSHA256, Email: in.Email, Note: in.Note, CreatedBy: in.CreatedBy,
-		CreatedAt: f.now(), ExpiresAt: in.ExpiresAt}
+		CreatedAt: f.now(), ExpiresAt: in.ExpiresAt, ProjectID: in.ProjectID, ProjectRole: in.ProjectRole}
 	f.invitations[inv.ID] = inv
 	return inv, nil
 }
@@ -198,4 +204,64 @@ func (f *fakeRepo) RevokeInvitation(_ context.Context, id int64) (Invitation, er
 	i.RevokedAt = &at
 	f.invitations[id] = i
 	return i, nil
+}
+
+func (f *fakeRepo) MemberRole(_ context.Context, projectID, userID int64) (authz.Role, error) {
+	if err := f.fail("MemberRole"); err != nil {
+		return authz.RoleNone, err
+	}
+	return f.members[[2]int64{projectID, userID}].Role, nil
+}
+
+func (f *fakeRepo) ListUserMemberships(_ context.Context, userID int64) (map[int64]authz.Role, error) {
+	if err := f.fail("ListUserMemberships"); err != nil {
+		return nil, err
+	}
+	out := map[int64]authz.Role{}
+	for k, m := range f.members {
+		if k[1] == userID {
+			out[k[0]] = m.Role
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) ListProjectMembers(_ context.Context, projectID int64, limit, offset int32) ([]Member, error) {
+	if err := f.fail("ListProjectMembers"); err != nil {
+		return nil, err
+	}
+	var out []Member
+	for k, m := range f.members {
+		if k[0] == projectID {
+			m.User = f.users[k[1]]
+			out = append(out, m)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].User.Username < out[j].User.Username })
+	return window(out, limit, offset), nil
+}
+
+func (f *fakeRepo) CountProjectMembers(ctx context.Context, projectID int64) (int64, error) {
+	if err := f.fail("CountProjectMembers"); err != nil {
+		return 0, err
+	}
+	all, _ := f.ListProjectMembers(ctx, projectID, 1<<30, 0)
+	return int64(len(all)), nil
+}
+
+func (f *fakeRepo) UpsertMember(_ context.Context, projectID, userID int64, role authz.Role) error {
+	if err := f.fail("UpsertMember"); err != nil {
+		return err
+	}
+	f.members[[2]int64{projectID, userID}] = Member{Role: role, Since: f.now()}
+	return nil
+}
+
+func (f *fakeRepo) DeleteMember(_ context.Context, projectID, userID int64) (bool, error) {
+	if err := f.fail("DeleteMember"); err != nil {
+		return false, err
+	}
+	_, ok := f.members[[2]int64{projectID, userID}]
+	delete(f.members, [2]int64{projectID, userID})
+	return ok, nil
 }

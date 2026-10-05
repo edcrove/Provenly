@@ -78,3 +78,7 @@ targets:
     description: invitations store only the token digest, list newest first, are accepted once, revoke only while pending, and the database forbids deleting them or changing a settled one
   - id: BE-INT-038
     description: concurrent acceptances of one link create exactly one account, and one username is taken once across links
+  - id: BE-INT-039
+    description: project roles persist (granted by an invitation on accept, changed in place, removed), drive the guard (scope, required role, invisible projects) and the database rejects unknown roles, unknown projects and incomplete invitation grants
+  - id: BE-INT-040
+    description: test case, run and project lists are narrowed to the visible projects (every project, some, or none for a user without memberships)

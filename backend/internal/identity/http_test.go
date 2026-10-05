@@ -1,6 +1,8 @@
 package identity
 
 import (
+	"context"
+
 	"crypto/tls"
 	"encoding/json"
 	"net/http"
@@ -8,9 +10,21 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// stubProjects knows TC (1) and CHK (2).
+type stubProjects struct{}
+
+func (stubProjects) ProjectIDByKey(_ context.Context, key string) (int64, error) {
+	if id, ok := map[string]int64{"TC": 1, "CHK": 2}[key]; ok {
+		return id, nil
+	}
+	return 0, apperr.NotFound("project %s not found", key)
+}
 
 type harness struct {
 	t   *testing.T
@@ -23,7 +37,7 @@ func newHarness(t *testing.T) *harness {
 	s, _, c, ctx := setup(t)
 	admin(ctx, t, s)
 	mux := http.NewServeMux()
-	h := NewHandler(s, c.now)
+	h := NewHandler(s, stubProjects{}, c.now)
 	h.RegisterPublic(mux)
 	h.RegisterProtected(Protect(mux, s))
 	return &harness{t: t, mux: mux, svc: s}

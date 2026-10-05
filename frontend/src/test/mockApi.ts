@@ -12,6 +12,7 @@ import type {
   TestRunSummary,
   TestStep,
 } from '@/api/client'
+import type { MemberRole } from '@/lib/roles'
 
 import { invitation, project, summary, testCase, testResult, testRun, testStep, user } from './fixtures'
 
@@ -26,6 +27,8 @@ export interface MockDb {
   invitations: Invitation[]
   /** Tokens of the invitations created in this mock, by invitation id. */
   invitationTokens: Record<string, number>
+  /** Project roles of non-admin users. */
+  members: { projectId: number; userId: number; role: MemberRole; since: string }[]
   /** The signed-in user's id (the session cookie), or null when signed out. */
   session: number | null
   projects: Project[]
@@ -50,6 +53,7 @@ export function seed(): MockDb {
     invitations: [],
     invitationTokens: {},
     session: 1,
+    members: [],
     projects: [project()],
     testCases: [tc, testCase({ id: 154, title: 'Logout works' })],
     steps: [
@@ -160,6 +164,13 @@ const guard =
 
 const currentUser = () => db.users.find((u) => u.id === db.session)!
 const session = (u: User) => ({ token: `token-${u.id}`, expiresAt: '2026-10-05T22:00:00Z', user: u })
+/** The signed-in user's role in a project, like the server: admin everywhere, else the membership. */
+const roleIn = (projectId: number): Project['myRole'] | undefined =>
+  currentUser().isAdmin
+    ? 'admin'
+    : db.members.find((m) => m.projectId === projectId && m.userId === db.session)?.role
+const memberRoleOk = (role: unknown): role is MemberRole =>
+  role === 'maintainer' || role === 'member' || role === 'viewer'
 const forbidden = () => problem(403, 'forbidden', 'only administrators can manage users and invitations')
 const USERNAME = /^[a-z0-9][a-z0-9._-]{2,31}$/
 
@@ -171,10 +182,24 @@ const jsonGuard =
       ? fn(info)
       : problem(415, 'unsupported_media_type', 'Content-Type must be application/json')
 
-function findCase(raw: string | readonly string[] | undefined): TestCase | Response {
+const rank = { viewer: 1, member: 2, maintainer: 3, admin: 4 }
+/** Like the server: invisible projects are 404, a role below min is 403. */
+function requireRole(projectId: number, min: MemberRole, missing: () => Response): Response | undefined {
+  const role = roleIn(projectId)
+  if (!role) return missing()
+  if (rank[role] < rank[min]) return problem(403, 'forbidden', `this needs the ${min} role in the project`)
+  return undefined
+}
+
+function findCase(
+  raw: string | readonly string[] | undefined,
+  min: MemberRole = 'viewer',
+): TestCase | Response {
   const id = pathId(raw)
   if (id === undefined) return validation('testCaseId', 'must be a positive integer')
-  return db.testCases.find((t) => t.id === id) ?? notFound(`test case TC-${id}`)
+  const tc = db.testCases.find((t) => t.id === id)
+  if (!tc) return notFound(`test case TC-${id}`)
+  return requireRole(tc.projectId, min, () => notFound(`test case TC-${id}`)) ?? tc
 }
 
 function findRun(raw: string | readonly string[] | undefined): TestRun | Response {
@@ -206,6 +231,53 @@ const stepsOf = (tcId: number) =>
   db.steps.filter((s) => s.testCaseId === tcId).sort((a, b) => a.position - b.position)
 
 export const handlers = [
+  http.get(
+    `${BASE}/projects/:projectKey/members`,
+    guard(({ params, request }) => {
+      if (!KEY.test(String(params.projectKey))) return validation('projectKey', 'must be a project key')
+      const p = db.projects.find((x) => x.key === params.projectKey)
+      if (!p || !roleIn(p.id)) return notFound(`project ${String(params.projectKey)}`)
+      const items = db.members
+        .filter((m) => m.projectId === p.id)
+        .map((m) => ({ user: db.users.find((u) => u.id === m.userId)!, role: m.role, since: m.since }))
+        .sort((a, b) => a.user.username.localeCompare(b.user.username))
+      return respond(pageOf(new URL(request.url), items))
+    }),
+  ),
+  http.put(
+    `${BASE}/projects/:projectKey/members/:username`,
+    guard(
+      jsonGuard(async ({ params, request }) => {
+        if (!KEY.test(String(params.projectKey))) return validation('projectKey', 'must be a project key')
+        const p = db.projects.find((x) => x.key === params.projectKey)
+        if (!p || !roleIn(p.id)) return notFound(`project ${String(params.projectKey)}`)
+        if (roleIn(p.id) !== 'admin' && roleIn(p.id) !== 'maintainer')
+          return problem(403, 'forbidden', 'this needs the maintainer role in the project')
+        const role = (await readBody(request))?.role
+        if (!memberRoleOk(role)) return validation('role', 'must be one of maintainer, member, viewer')
+        const u = db.users.find((x) => x.username === params.username)
+        if (!u) return notFound(`user ${String(params.username)}`)
+        db.members = db.members.filter((m) => !(m.projectId === p.id && m.userId === u.id))
+        db.members.push({ projectId: p.id, userId: u.id, role, since: now() })
+        return respond({ user: u, role, since: now() })
+      }),
+    ),
+  ),
+  http.delete(
+    `${BASE}/projects/:projectKey/members/:username`,
+    guard(({ params }) => {
+      if (!KEY.test(String(params.projectKey))) return validation('projectKey', 'must be a project key')
+      const p = db.projects.find((x) => x.key === params.projectKey)
+      if (!p || !roleIn(p.id)) return notFound(`project ${String(params.projectKey)}`)
+      if (roleIn(p.id) !== 'admin' && roleIn(p.id) !== 'maintainer')
+        return problem(403, 'forbidden', 'this needs the maintainer role in the project')
+      const u = db.users.find((x) => x.username === params.username)
+      const before = db.members.length
+      db.members = db.members.filter((m) => !(m.projectId === p.id && m.userId === u?.id))
+      if (db.members.length === before) return notFound(`member ${String(params.username)}`)
+      return new HttpResponse(null, { status: 204 })
+    }),
+  ),
   http.post(
     `${BASE}/auth/login`,
     publicGuard(
@@ -278,8 +350,15 @@ export const handlers = [
         const email = typeof body?.email === 'string' && body.email.trim() ? body.email.trim() : null
         if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
           return validation('email', 'must be an email address')
+        const grant = typeof body?.project === 'string' && body.project ? body.project : null
+        const grantProject = grant ? db.projects.find((p) => p.key === grant) : undefined
+        if (grant && !grantProject) return notFound(`project ${grant}`)
+        if (grant && !memberRoleOk(body?.role))
+          return validation('role', 'must be one of maintainer, member, viewer')
         const inv = invitation({
           id: ++db.nextId,
+          projectId: grantProject?.id ?? null,
+          projectRole: grantProject ? (body?.role as MemberRole) : null,
           email,
           note: String(body?.note ?? '').trim(),
           createdBy: currentUser().id,
@@ -319,6 +398,8 @@ export const handlers = [
         db.users.push(u)
         db.passwords[username] = password
         Object.assign(inv, { status: 'accepted', acceptedAt: now(), acceptedUserId: u.id })
+        if (inv.projectId && inv.projectRole)
+          db.members.push({ projectId: inv.projectId, userId: u.id, role: inv.projectRole, since: now() })
         db.session = u.id
         return respond(session(u), 201)
       }),
@@ -344,7 +425,10 @@ export const handlers = [
       respond(
         pageOf(
           new URL(request.url),
-          [...db.projects].sort((a, b) => a.key.localeCompare(b.key)),
+          db.projects
+            .filter((p) => roleIn(p.id))
+            .map((p) => ({ ...p, myRole: roleIn(p.id)! }))
+            .sort((a, b) => a.key.localeCompare(b.key)),
         ),
       ),
     ),
@@ -353,6 +437,7 @@ export const handlers = [
     `${BASE}/projects`,
     guard(
       jsonGuard(async ({ request }) => {
+        if (!currentUser().isAdmin) return problem(403, 'forbidden', 'administrators only')
         const body = await readBody(request)
         const key = String(body?.key ?? '')
           .trim()
@@ -381,6 +466,8 @@ export const handlers = [
       jsonGuard(async ({ params, request }) => {
         const p = db.projects.find((x) => x.key === params.projectKey)
         if (!p) return notFound(`project ${String(params.projectKey)}`)
+        const denied = requireRole(p.id, 'maintainer', () => notFound(`project ${String(params.projectKey)}`))
+        if (denied) return denied
         const body = await readBody(request)
         if (!body || Object.keys(body).length === 0)
           return validation('body', 'at least one field is required')
@@ -417,6 +504,8 @@ export const handlers = [
         if (!KEY.test(key)) return validation('project', 'must be a project key')
         const p = db.projects.find((x) => x.key === key)
         if (!p) return notFound(`project ${key}`)
+        const denied = requireRole(p.id, 'member', () => notFound(`project ${key}`))
+        if (denied) return denied
         const id = ++db.nextId
         const tc = testCase({
           id,
@@ -443,7 +532,7 @@ export const handlers = [
     `${BASE}/test-cases/:testCaseId`,
     guard(
       jsonGuard(async ({ params, request }) => {
-        const tc = findCase(params.testCaseId)
+        const tc = findCase(params.testCaseId, 'member')
         if (tc instanceof Response) return tc
         const body = await readBody(request)
         if (!body || Object.keys(body).length === 0)
@@ -458,7 +547,7 @@ export const handlers = [
   http.post(
     `${BASE}/test-cases/:testCaseId/deprecate`,
     guard(({ params }) => {
-      const tc = findCase(params.testCaseId)
+      const tc = findCase(params.testCaseId, 'maintainer')
       if (tc instanceof Response) return tc
       tc.status = 'deprecated'
       tc.deprecatedAt ??= now()
@@ -468,7 +557,7 @@ export const handlers = [
   http.post(
     `${BASE}/test-cases/:testCaseId/reactivate`,
     guard(({ params }) => {
-      const tc = findCase(params.testCaseId)
+      const tc = findCase(params.testCaseId, 'maintainer')
       if (tc instanceof Response) return tc
       tc.status = 'active'
       tc.deprecatedAt = null
@@ -487,7 +576,7 @@ export const handlers = [
     `${BASE}/test-cases/:testCaseId/steps`,
     guard(
       jsonGuard(async ({ params, request }) => {
-        const tc = findCase(params.testCaseId)
+        const tc = findCase(params.testCaseId, 'member')
         if (tc instanceof Response) return tc
         const body = await readBody(request)
         const action = typeof body?.action === 'string' ? body.action.trim() : ''
@@ -508,7 +597,7 @@ export const handlers = [
     `${BASE}/test-cases/:testCaseId/steps/order`,
     guard(
       jsonGuard(async ({ params, request }) => {
-        const tc = findCase(params.testCaseId)
+        const tc = findCase(params.testCaseId, 'member')
         if (tc instanceof Response) return tc
         const body = await readBody(request)
         const ids = Array.isArray(body?.stepIds) ? (body.stepIds as number[]) : []
@@ -527,7 +616,7 @@ export const handlers = [
     `${BASE}/test-cases/:testCaseId/steps/:stepId`,
     guard(
       jsonGuard(async ({ params, request }) => {
-        const tc = findCase(params.testCaseId)
+        const tc = findCase(params.testCaseId, 'member')
         if (tc instanceof Response) return tc
         const stepId = pathId(params.stepId)
         if (stepId === undefined) return validation('stepId', 'must be a positive integer')
@@ -546,7 +635,7 @@ export const handlers = [
   http.delete(
     `${BASE}/test-cases/:testCaseId/steps/:stepId`,
     guard(({ params }) => {
-      const tc = findCase(params.testCaseId)
+      const tc = findCase(params.testCaseId, 'member')
       if (tc instanceof Response) return tc
       const stepId = pathId(params.stepId)
       if (stepId === undefined) return validation('stepId', 'must be a positive integer')

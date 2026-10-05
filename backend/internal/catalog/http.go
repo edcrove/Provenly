@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
@@ -26,7 +27,7 @@ type API interface {
 	ReorderSteps(ctx context.Context, testCaseID int64, stepIDs []int64) ([]TestStep, error)
 	CreateProject(ctx context.Context, in CreateProjectInput) (Project, error)
 	ProjectByKey(ctx context.Context, key string) (Project, error)
-	ListProjects(ctx context.Context, page pagination.Page) (pagination.Result[Project], error)
+	ListProjects(ctx context.Context, projectIDs []int64, page pagination.Page) (pagination.Result[Project], error)
 	UpdateProject(ctx context.Context, key string, in UpdateProjectInput) (Project, error)
 }
 
@@ -41,10 +42,17 @@ type ProjectDTO struct {
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+	// MyRole is what the signed-in user may do in the project (admin, maintainer, member or viewer).
+	MyRole string `json:"myRole"`
 }
 
-// ProjectToDTO converts a Project to its wire form.
-func ProjectToDTO(p Project) ProjectDTO { return ProjectDTO(p) }
+// ProjectToDTO converts a Project to its wire form, with the caller's role in it.
+func ProjectToDTO(p Project, role authz.Role) ProjectDTO {
+	return ProjectDTO{
+		ID: p.ID, Key: p.Key, Name: p.Name, Description: p.Description, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		MyRole: role.String(),
+	}
+}
 
 type createProjectRequest struct {
 	Key         string `json:"key"`
@@ -145,11 +153,71 @@ type stepList struct {
 
 // Handler is the REST adapter of the catalog module.
 type Handler struct {
-	api API
+	api   API
+	guard authz.Guard
 }
 
 // NewHandler builds a Handler.
-func NewHandler(api API) *Handler { return &Handler{api: api} }
+func NewHandler(api API, guard authz.Guard) *Handler { return &Handler{api: api, guard: guard} }
+
+// onTestCase authorizes routes on /test-cases/{testCaseId}: the test case's project must give the user at
+// least minRole; a test case of a project the user cannot see is "not found". A malformed id is left to next.
+func (h *Handler) onTestCase(minRole authz.Role, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if id, err := httpx.PathID(r, "testCaseId"); err == nil {
+			tc, err := h.api.Get(r.Context(), id)
+			if err == nil {
+				err = h.guard.Require(r.Context(), tc.ProjectID, minRole, notFound(id))
+			}
+			if err != nil {
+				httpx.WriteError(w, r, err)
+				return
+			}
+			r = r.WithContext(context.WithValue(r.Context(), testCaseKey{}, tc))
+		}
+		next(w, r)
+	}
+}
+
+type testCaseKey struct{}
+
+// VisibleProjects narrows a list to ?project=<KEY> (which the user must see) or to every project the user can see
+// (nil: every project, for administrators).
+func VisibleProjects(r *http.Request, byKey func(context.Context, string) (Project, error), guard authz.Guard) ([]int64, error) {
+	id, err := ProjectQuery(r, byKey)
+	if err != nil {
+		return nil, err
+	}
+	if id != nil {
+		if err := guard.Require(r.Context(), *id, authz.RoleViewer, projectNotFound(r.URL.Query().Get("project"))); err != nil {
+			return nil, err
+		}
+		return []int64{*id}, nil
+	}
+	scope, err := guard.Scope(r.Context())
+	return scope.ProjectIDs(), err
+}
+
+// project resolves {projectKey} and checks the user's role in it; the role is returned for the DTO.
+func (h *Handler) project(w http.ResponseWriter, r *http.Request, minRole authz.Role) (Project, authz.Role, bool) {
+	key, ok := h.projectKey(w, r)
+	if !ok {
+		return Project{}, authz.RoleNone, false
+	}
+	p, err := h.api.ProjectByKey(r.Context(), key)
+	if err == nil {
+		err = h.guard.Require(r.Context(), p.ID, minRole, projectNotFound(key))
+	}
+	var scope authz.Scope
+	if err == nil {
+		scope, err = h.guard.Scope(r.Context())
+	}
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return Project{}, authz.RoleNone, false
+	}
+	return p, scope.RoleIn(p.ID), true
+}
 
 // Register mounts the catalog routes.
 func (h *Handler) Register(mux httpx.Router) {
@@ -159,15 +227,15 @@ func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}", h.updateProject)
 	mux.HandleFunc("GET /api/v1/test-cases", h.list)
 	mux.HandleFunc("POST /api/v1/test-cases", h.create)
-	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}", h.get)
-	mux.HandleFunc("PATCH /api/v1/test-cases/{testCaseId}", h.update)
-	mux.HandleFunc("POST /api/v1/test-cases/{testCaseId}/deprecate", h.deprecate)
-	mux.HandleFunc("POST /api/v1/test-cases/{testCaseId}/reactivate", h.reactivate)
-	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}/steps", h.listSteps)
-	mux.HandleFunc("POST /api/v1/test-cases/{testCaseId}/steps", h.createStep)
-	mux.HandleFunc("PUT /api/v1/test-cases/{testCaseId}/steps/order", h.reorderSteps)
-	mux.HandleFunc("PATCH /api/v1/test-cases/{testCaseId}/steps/{stepId}", h.updateStep)
-	mux.HandleFunc("DELETE /api/v1/test-cases/{testCaseId}/steps/{stepId}", h.deleteStep)
+	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}", h.onTestCase(authz.RoleViewer, h.get))
+	mux.HandleFunc("PATCH /api/v1/test-cases/{testCaseId}", h.onTestCase(authz.RoleMember, h.update))
+	mux.HandleFunc("POST /api/v1/test-cases/{testCaseId}/deprecate", h.onTestCase(authz.RoleMaintainer, h.deprecate))
+	mux.HandleFunc("POST /api/v1/test-cases/{testCaseId}/reactivate", h.onTestCase(authz.RoleMaintainer, h.reactivate))
+	mux.HandleFunc("GET /api/v1/test-cases/{testCaseId}/steps", h.onTestCase(authz.RoleViewer, h.listSteps))
+	mux.HandleFunc("POST /api/v1/test-cases/{testCaseId}/steps", h.onTestCase(authz.RoleMember, h.createStep))
+	mux.HandleFunc("PUT /api/v1/test-cases/{testCaseId}/steps/order", h.onTestCase(authz.RoleMember, h.reorderSteps))
+	mux.HandleFunc("PATCH /api/v1/test-cases/{testCaseId}/steps/{stepId}", h.onTestCase(authz.RoleMember, h.updateStep))
+	mux.HandleFunc("DELETE /api/v1/test-cases/{testCaseId}/steps/{stepId}", h.onTestCase(authz.RoleMember, h.deleteStep))
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +254,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		s := Status(*raw)
 		f.Status = &s
 	}
-	if f.ProjectID, err = ProjectQuery(r, h.api.ProjectByKey); err != nil {
+	if f.ProjectIDs, err = VisibleProjects(r, h.api.ProjectByKey, h.guard); err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
@@ -210,6 +278,9 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := h.api.ProjectByKey(r.Context(), key)
+	if err == nil {
+		err = h.guard.Require(r.Context(), p.ID, authz.RoleMember, projectNotFound(key))
+	}
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -225,17 +296,12 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
-	id, err := httpx.PathID(r, "testCaseId")
-	if err != nil {
+	if _, err := httpx.PathID(r, "testCaseId"); err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	tc, err := h.api.Get(r.Context(), id)
-	if err != nil {
-		httpx.WriteError(w, r, err)
-		return
-	}
-	httpx.WriteJSON(w, http.StatusOK, ToDTO(tc))
+	// Loaded and authorized by onTestCase.
+	httpx.WriteJSON(w, http.StatusOK, ToDTO(r.Context().Value(testCaseKey{}).(TestCase)))
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
@@ -404,15 +470,24 @@ func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	res, err := h.api.ListProjects(r.Context(), page)
+	scope, err := h.guard.Scope(r.Context())
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, ProjectToDTO))
+	res, err := h.api.ListProjects(r.Context(), scope.ProjectIDs(), page)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, func(p Project) ProjectDTO { return ProjectToDTO(p, scope.RoleIn(p.ID)) }))
 }
 
 func (h *Handler) createProject(w http.ResponseWriter, r *http.Request) {
+	if err := h.guard.RequireAdmin(r.Context()); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
 	var req createProjectRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		httpx.WriteError(w, r, err)
@@ -423,36 +498,31 @@ func (h *Handler) createProject(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, ProjectToDTO(p))
+	httpx.WriteJSON(w, http.StatusCreated, ProjectToDTO(p, authz.RoleAdmin))
 }
 
 func (h *Handler) getProject(w http.ResponseWriter, r *http.Request) {
-	key, ok := h.projectKey(w, r)
+	p, role, ok := h.project(w, r, authz.RoleViewer)
 	if !ok {
 		return
 	}
-	p, err := h.api.ProjectByKey(r.Context(), key)
-	if err != nil {
-		httpx.WriteError(w, r, err)
-		return
-	}
-	httpx.WriteJSON(w, http.StatusOK, ProjectToDTO(p))
+	httpx.WriteJSON(w, http.StatusOK, ProjectToDTO(p, role))
 }
 
 func (h *Handler) updateProject(w http.ResponseWriter, r *http.Request) {
-	key, ok := h.projectKey(w, r)
-	if !ok {
-		return
-	}
 	var req updateProjectRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	p, err := h.api.UpdateProject(r.Context(), key, UpdateProjectInput(req))
+	p, role, ok := h.project(w, r, authz.RoleMaintainer)
+	if !ok {
+		return
+	}
+	p, err := h.api.UpdateProject(r.Context(), p.Key, UpdateProjectInput(req))
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, ProjectToDTO(p))
+	httpx.WriteJSON(w, http.StatusOK, ProjectToDTO(p, role))
 }

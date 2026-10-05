@@ -14,7 +14,7 @@ type Querier interface {
 	CountParseErrors(ctx context.Context, testRunID int64) (int64, error)
 	CountResultsForTestCase(ctx context.Context, testCaseID pgtype.Int8) (int64, error)
 	CountRunResults(ctx context.Context, arg CountRunResultsParams) (int64, error)
-	CountTestRuns(ctx context.Context, projectID pgtype.Int8) (int64, error)
+	CountTestRuns(ctx context.Context, projectIds []int64) (int64, error)
 	GetTestRun(ctx context.Context, id int64) (GetTestRunRow, error)
 	GetTestRunIDByExternalID(ctx context.Context, arg GetTestRunIDByExternalIDParams) (int64, error)
 	InsertExpectedCases(ctx context.Context, arg InsertExpectedCasesParams) error

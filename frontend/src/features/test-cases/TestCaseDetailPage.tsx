@@ -19,6 +19,9 @@ import { NotFoundPage } from '@/app/NotFoundPage'
 import { formatDateTime } from '@/lib/format'
 import { positiveInt } from '@/lib/status'
 
+import { useProjectRole } from '@/features/projects/useProjectRole'
+import { can } from '@/lib/roles'
+
 import { StepsEditor } from './StepsEditor'
 import { TestCaseForm } from './TestCaseForm'
 import { TestCaseHistory } from './TestCaseHistory'
@@ -31,6 +34,9 @@ function Definition({ tc }: { tc: TestCase }) {
   const reactivate = useReactivateTestCase(tc.id)
   const history = useTestCaseHistory(tc.id, 1)
   const manualWithResults = tc.status === 'active' && !tc.automated && (history.data?.totalItems ?? 0) > 0
+  const role = useProjectRole(tc.projectKey)
+  const canEdit = can(role, 'member')
+  const canManage = can(role, 'maintainer')
 
   return (
     <div className="grid gap-4">
@@ -46,12 +52,13 @@ function Definition({ tc }: { tc: TestCase }) {
           </div>
         </div>
         <div className="flex gap-2">
-          {!editing && (
+          {!editing && canEdit && (
             <Button variant="outline" onClick={() => setEditing(true)}>
               Edit
             </Button>
           )}
           {tc.status === 'active' &&
+            canManage &&
             (confirming ? (
               <>
                 <Button
@@ -70,7 +77,7 @@ function Definition({ tc }: { tc: TestCase }) {
                 Deprecate
               </Button>
             ))}
-          {tc.status === 'deprecated' && (
+          {tc.status === 'deprecated' && canManage && (
             <Button variant="outline" disabled={reactivate.isPending} onClick={() => reactivate.mutate()}>
               Reactivate
             </Button>
@@ -84,14 +91,16 @@ function Definition({ tc }: { tc: TestCase }) {
           <AlertTitle>Receives automated results but is marked manual</AlertTitle>
           <AlertDescription className="flex flex-wrap items-center gap-2">
             Runs do not count it in their expected universe. Mark it as automated so future runs include it.
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={update.isPending}
-              onClick={() => update.mutate({ automated: true })}
-            >
-              Mark as automated
-            </Button>
+            {canEdit ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={update.isPending}
+                onClick={() => update.mutate({ automated: true })}
+              >
+                Mark as automated
+              </Button>
+            ) : null}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -137,7 +146,7 @@ function Definition({ tc }: { tc: TestCase }) {
           )}
           <div className="grid gap-2">
             <h3 className="font-medium">Steps</h3>
-            <StepsEditor testCaseId={tc.id} />
+            <StepsEditor testCaseId={tc.id} readOnly={!canEdit} />
           </div>
         </CardContent>
       </Card>

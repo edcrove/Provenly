@@ -5,6 +5,8 @@ import { useTestCase, useUpdateTestCase } from '@/api/queries'
 import { ErrorAlert } from '@/components/QueryState'
 import { CorrelationBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
+import { useProjectRole } from '@/features/projects/useProjectRole'
+import { can } from '@/lib/roles'
 import { correlationExplanation, diagnosticCount, invalidCorrelations } from '@/lib/status'
 
 function outsideUniverseMessage(n: number): string {
@@ -17,6 +19,7 @@ function outsideUniverseMessage(n: number): string {
 function OutsideUniverseCase({ id }: { id: number }) {
   const tc = useTestCase(id)
   const update = useUpdateTestCase(id)
+  const canEdit = can(useProjectRole(tc.data?.projectKey), 'member')
   return (
     <li className="flex flex-wrap items-center gap-2" data-testid={`outside-${id}`}>
       <Link to={`/test-cases/${id}`} className="font-mono underline">
@@ -27,7 +30,7 @@ function OutsideUniverseCase({ id }: { id: number }) {
         <span className="text-muted-foreground">
           Now automated: future runs include it; this run&apos;s snapshot is unchanged.
         </span>
-      ) : (
+      ) : canEdit ? (
         <Button
           size="sm"
           variant="outline"
@@ -36,7 +39,7 @@ function OutsideUniverseCase({ id }: { id: number }) {
         >
           Mark as automated
         </Button>
-      )}
+      ) : null}
       {update.error ? <ErrorAlert error={update.error} title="Could not update the test case" /> : null}
     </li>
   )

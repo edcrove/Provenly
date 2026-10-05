@@ -28,10 +28,11 @@ func (q *Queries) CloseTestStepGap(ctx context.Context, arg CloseTestStepGapPara
 
 const countProjects = `-- name: CountProjects :one
 SELECT count(*) FROM projects
+WHERE $1::bigint[] IS NULL OR id = ANY($1::bigint[])
 `
 
-func (q *Queries) CountProjects(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countProjects)
+func (q *Queries) CountProjects(ctx context.Context, projectIds []int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countProjects, projectIds)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -40,16 +41,16 @@ func (q *Queries) CountProjects(ctx context.Context) (int64, error) {
 const countTestCases = `-- name: CountTestCases :one
 SELECT count(*) FROM test_cases
 WHERE ($1::text IS NULL OR status = $1::text)
-  AND ($2::bigint IS NULL OR project_id = $2::bigint)
+  AND ($2::bigint[] IS NULL OR project_id = ANY($2::bigint[]))
 `
 
 type CountTestCasesParams struct {
-	Status    pgtype.Text
-	ProjectID pgtype.Int8
+	Status     pgtype.Text
+	ProjectIds []int64
 }
 
 func (q *Queries) CountTestCases(ctx context.Context, arg CountTestCasesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countTestCases, arg.Status, arg.ProjectID)
+	row := q.db.QueryRow(ctx, countTestCases, arg.Status, arg.ProjectIds)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -362,16 +363,20 @@ func (q *Queries) ListIngestionView(ctx context.Context, arg ListIngestionViewPa
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, key, name, description, next_number, created_at, updated_at FROM projects ORDER BY key LIMIT $2 OFFSET $1
+SELECT id, key, name, description, next_number, created_at, updated_at FROM projects
+WHERE $1::bigint[] IS NULL OR id = ANY($1::bigint[])
+ORDER BY key LIMIT $3 OFFSET $2
 `
 
 type ListProjectsParams struct {
+	ProjectIds []int64
 	PageOffset int32
 	PageLimit  int32
 }
 
+// project_ids NULL means every project (administrators); otherwise only those.
 func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error) {
-	rows, err := q.db.Query(ctx, listProjects, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listProjects, arg.ProjectIds, arg.PageOffset, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -432,14 +437,14 @@ func (q *Queries) ListTestCaseKeys(ctx context.Context, ids []int64) ([]ListTest
 const listTestCases = `-- name: ListTestCases :many
 SELECT id, title, description, expected_result, status, automated, created_at, updated_at, deprecated_at, project_id, number FROM test_cases
 WHERE ($1::text IS NULL OR status = $1::text)
-  AND ($2::bigint IS NULL OR project_id = $2::bigint)
+  AND ($2::bigint[] IS NULL OR project_id = ANY($2::bigint[]))
 ORDER BY id DESC
 LIMIT $4 OFFSET $3
 `
 
 type ListTestCasesParams struct {
 	Status     pgtype.Text
-	ProjectID  pgtype.Int8
+	ProjectIds []int64
 	PageOffset int32
 	PageLimit  int32
 }
@@ -447,7 +452,7 @@ type ListTestCasesParams struct {
 func (q *Queries) ListTestCases(ctx context.Context, arg ListTestCasesParams) ([]TestCase, error) {
 	rows, err := q.db.Query(ctx, listTestCases,
 		arg.Status,
-		arg.ProjectID,
+		arg.ProjectIds,
 		arg.PageOffset,
 		arg.PageLimit,
 	)

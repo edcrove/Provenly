@@ -17,7 +17,7 @@ Status legend: ✅ merged into the prototype branch · 🚧 in progress · ⏳ p
 |---|---|---|---|---|
 | 1 | Projects and per-project TC keys (`CHK-12`) | MVP D9, D10 | ✅ | proto/01-projects |
 | 2 | Users, login (JWT) and invitations | MVP D13, DEC-30 | ✅ | proto/02-auth |
-| 3 | Roles and project membership (Admin, Maintainer, Member, Viewer) | MVP D12 | ⏳ | |
+| 3 | Roles and project membership (Admin, Maintainer, Member, Viewer) | MVP D12 | ✅ | proto/03-roles |
 | 4 | API keys for CI, `?project=` ingestion, secrets at rest | MVP D4, D11 | ⏳ | |
 | 5 | Optimistic locking (ETag / If-Match) | MVP D7 | ⏳ | |
 | 6 | Snapshot amendment per run | DEC-42 | ⏳ | |
@@ -60,6 +60,13 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P2-7 | Ingestion | Stays public until CI API keys exist (feature 4) | CI cannot sign in with a person's account; keys are the MVP answer (D4, D11) |
 | P2-8 | Usernames | 3–32 lower-case letters, digits, `.`, `-`, `_`; immutable; users are never deleted | Usernames appear in audit and history; a rename would rewrite who did what |
 | P2-9 | Known limits | No rate limiting or lockout on sign-in, no password reset by email, no SSO | Recorded for the readiness feature (21); reset is an admin action today (invite again) |
+| P3-1 | Role model | Global administrator flag plus one role per project: maintainer > member > viewer | MVP D12; administrators stay global so a fresh install has someone who can do everything |
+| P3-2 | What each role may do | viewer reads; member creates and edits test cases and steps (and marks them automated); maintainer also deprecates, reactivates, renames the project and manages its members; creating projects and inviting people is admin-only | Deprecation and membership change what others see, so they sit one level up; project creation is an installation concern |
+| P3-3 | Invisible vs forbidden | A project without a role is invisible: its test cases, runs, members and history answer 404 and lists skip it; a role that is too low answers 403 | Never confirms that another project's resources exist; 403 only where the caller can already see the resource |
+| P3-4 | Lists | Test case, run and project lists are filtered in SQL by the visible project ids (`NULL` = every project for administrators) | Correct pagination and counts; no post-filtering |
+| P3-5 | Joining a project | An invitation may carry a project and role, applied in the same transaction that creates the account; afterwards administrators or the project's maintainers add members by username | One link onboards someone into the right project |
+| P3-6 | Ingestion | Still public; runs are attributed by `?project=` (feature 4 binds CI keys to a project) | Same reason as P2-7 |
+| P3-7 | UI | Each project carries `myRole`; the UI hides actions the role cannot do (Edit, Deprecate, New test case, Rename, member controls) and the API still enforces them | Hidden-but-enforced: the UI is a convenience, the API is the rule |
 | P1-9 | UI | Header "current project" selector (remembered per browser) narrows test case and run lists; Projects page creates and renames projects; new test cases pick a project | Single place to switch context; no URL change needed for the prototype |
 
 ## What each feature does
@@ -105,4 +112,20 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
   config, CLI, query client, links), probe sweep with auth cases. The probe found a 500 on sign-in with a NUL in the
   username; fixed (impossible usernames are never looked up) with unit and contract regressions.
 - **Known limits**: see P2-9. All scripts (README flow, smoke, probe, env checks, demo seed) sign in first.
+
+### 3. Roles and project membership
+
+- **Behavior**: administrators see and do everything. Everyone else sees only the projects they belong to, with the
+  role they hold there (P3-2). Other projects are invisible (404); a role too low for an action answers 403.
+- **API**: `GET /projects/{key}/members`, `PUT/DELETE /projects/{key}/members/{username}`; `Project.myRole`;
+  invitations accept `project` + `role` and report `projectId` / `projectRole`; 403 declared on every role-gated
+  operation.
+- **Schema**: migration 00015 (`project_members`, invitation project and role with a both-or-neither check).
+- **Code**: `internal/platform/authz` (roles, scope, `Guard` port) implemented by `identity`; catalog and execution
+  handlers ask the guard before acting and pass the visible project ids to their list queries.
+- **UI**: members page per project (screenshot 43), role column on Projects, role-gated actions on test cases, steps,
+  runs and project pages (screenshot 44 shows a viewer), invitations with an optional project and role.
+- **Tests**: authz and identity unit tests, handler authorization tests in catalog and execution, BE-INT-039..040
+  (membership invariants and filtered lists), contract role scenarios for every role-gated operation on both sides,
+  FE-INT-030..032, BE-E2E-009, FE-E2E-012.
 

@@ -18,6 +18,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
@@ -79,6 +80,9 @@ type Session struct {
 type CreateInvitationInput struct {
 	Email *string
 	Note  string
+	// ProjectID and Role: a project role granted on accept (both or neither).
+	ProjectID *int64
+	Role      string
 }
 
 // AcceptInput is what the invited person provides.
@@ -262,6 +266,13 @@ func (s *Service) CreateInvitation(ctx context.Context, actor User, in CreateInv
 	email := validateEmail(&v, in.Email)
 	v.Check(utf8.RuneCountInString(in.Note) <= maxNote, "note", fmt.Sprintf("must be at most %d characters", maxNote))
 	v.CheckText("note", in.Note)
+	grant, roleErr := authz.ParseMemberRole(in.Role)
+	switch {
+	case in.ProjectID != nil:
+		v.Check(roleErr == nil, "role", "must be one of maintainer, member, viewer")
+	default:
+		v.Check(in.Role == "", "role", "needs a project")
+	}
 	if err := v.Err(); err != nil {
 		return Invitation{}, "", err
 	}
@@ -270,7 +281,7 @@ func (s *Service) CreateInvitation(ctx context.Context, actor User, in CreateInv
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	inv, err := s.repo.CreateInvitation(ctx, NewInvitation{
 		TokenSHA256: TokenDigest(token), Email: email, Note: in.Note, CreatedBy: actor.ID,
-		ExpiresAt: s.now().Add(s.cfg.InvitationTTL),
+		ExpiresAt: s.now().Add(s.cfg.InvitationTTL), ProjectID: in.ProjectID, ProjectRole: grant,
 	})
 	if err != nil {
 		return Invitation{}, "", err
@@ -349,6 +360,11 @@ func (s *Service) AcceptInvitation(ctx context.Context, in AcceptInput) (Session
 		}
 		if err != nil {
 			return err
+		}
+		if inv.ProjectID != nil {
+			if err := r.UpsertMember(ctx, *inv.ProjectID, user.ID, inv.ProjectRole); err != nil {
+				return err
+			}
 		}
 		return r.MarkInvitationAccepted(ctx, inv.ID, user.ID)
 	})

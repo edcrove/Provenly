@@ -57,6 +57,8 @@ const pending = () => {
     acceptedAt: null,
     acceptedUserId: null,
     revokedAt: null,
+    projectId: null,
+    projectRole: null,
   })
   db.invitationTokens['invite-5'] = 5
 }
@@ -73,6 +75,164 @@ const acceptBody = (username = 'ana', token = 'invite-5') => ({
 })
 const login = { username: 'admin', password: 'correct horse' }
 const passwords = { currentPassword: 'correct horse', newPassword: 'a brand new password' }
+
+/** Ana: a viewer in TC (project 1). */
+const asViewer = () => {
+  asMember()
+  db.members.push({ projectId: 1, userId: 2, role: 'viewer', since: '2026-10-05T10:00:00Z' })
+}
+const addAna = () => {
+  db.users.push({ ...db.users[0], id: 2, username: 'ana', isAdmin: false })
+}
+const tcKey = { projectKey: 'TC' }
+const ana = { projectKey: 'TC', username: 'ana' }
+
+const roleScenarios: Scenario[] = [
+  {
+    op: 'POST /api/v1/projects',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.POST('/api/v1/projects', { body: { key: 'WEB', name: 'w' } }),
+  },
+  {
+    op: 'PATCH /api/v1/projects/{projectKey}',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.PATCH('/api/v1/projects/{projectKey}', { params: { path: tcKey }, body: { name: 'x' } }),
+  },
+  {
+    op: 'POST /api/v1/test-cases',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.POST('/api/v1/test-cases', { body: { title: 'x' } }),
+  },
+  {
+    op: 'PATCH /api/v1/test-cases/{testCaseId}',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.PATCH('/api/v1/test-cases/{testCaseId}', { params: { path: tc }, body: { title: 'x' } }),
+  },
+  {
+    op: 'POST /api/v1/test-cases/{testCaseId}/deprecate',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.POST('/api/v1/test-cases/{testCaseId}/deprecate', { params: { path: tc } }),
+  },
+  {
+    op: 'POST /api/v1/test-cases/{testCaseId}/reactivate',
+    status: 403,
+    setup: asViewer,
+    call: (c) => c.POST('/api/v1/test-cases/{testCaseId}/reactivate', { params: { path: tc } }),
+  },
+  {
+    op: 'POST /api/v1/test-cases/{testCaseId}/steps',
+    status: 403,
+    setup: asViewer,
+    call: (c) =>
+      c.POST('/api/v1/test-cases/{testCaseId}/steps', { params: { path: tc }, body: { action: 'a' } }),
+  },
+  {
+    op: 'PUT /api/v1/test-cases/{testCaseId}/steps/order',
+    status: 403,
+    setup: asViewer,
+    call: (c) =>
+      c.PUT('/api/v1/test-cases/{testCaseId}/steps/order', {
+        params: { path: tc },
+        body: { stepIds: [1, 2] },
+      }),
+  },
+  {
+    op: 'PATCH /api/v1/test-cases/{testCaseId}/steps/{stepId}',
+    status: 403,
+    setup: asViewer,
+    call: (c) =>
+      c.PATCH('/api/v1/test-cases/{testCaseId}/steps/{stepId}', {
+        params: { path: { ...tc, stepId: 1 } },
+        body: { action: 'a' },
+      }),
+  },
+  {
+    op: 'DELETE /api/v1/test-cases/{testCaseId}/steps/{stepId}',
+    status: 403,
+    setup: asViewer,
+    call: (c) =>
+      c.DELETE('/api/v1/test-cases/{testCaseId}/steps/{stepId}', { params: { path: { ...tc, stepId: 1 } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/members',
+    status: 200,
+    setup: asViewer,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/members', { params: { path: tcKey, query: { page: 1 } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/members',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/members', { params: { path: tcKey, query: { pageSize: 0 } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/members',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/members', { params: { path: chk } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/members',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/members', { params: { path: tcKey } }),
+  },
+  ...(
+    [
+      [200, addAna, ana, { role: 'member' }],
+      [400, addAna, ana, { role: 'owner' }],
+      [403, asViewer, ana, { role: 'maintainer' }],
+      [404, undefined, ana, { role: 'member' }],
+      [500, fail, ana, { role: 'member' }],
+    ] as const
+  ).map(([status, setup, path, body]): Scenario => ({
+    op: 'PUT /api/v1/projects/{projectKey}/members/{username}',
+    status,
+    setup,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/members/{username}', {
+        params: { path },
+        body: body as { role: 'member' },
+      }),
+  })),
+  {
+    op: 'PUT /api/v1/projects/{projectKey}/members/{username}',
+    status: 415,
+    call: (c) =>
+      c.PUT('/api/v1/projects/{projectKey}/members/{username}', {
+        params: { path: ana },
+        body: { role: 'member' },
+        headers: textPlain,
+      }),
+  },
+  ...(
+    [
+      [204, asViewer, { projectKey: 'TC', username: 'ana' }, true],
+      [400, undefined, { projectKey: 'tc', username: 'ana' }, false],
+      [403, asViewer, ana, false],
+      [404, undefined, ana, false],
+      [500, fail, ana, false],
+    ] as const
+  ).map(([status, setup, path, asAdmin]): Scenario => ({
+    op: 'DELETE /api/v1/projects/{projectKey}/members/{username}',
+    status,
+    setup: () => {
+      setup?.()
+      if (asAdmin) db.session = 1
+    },
+    call: (c) => c.DELETE('/api/v1/projects/{projectKey}/members/{username}', { params: { path } }),
+  })),
+  {
+    op: 'POST /api/v1/invitations',
+    status: 404,
+    call: (c) => c.POST('/api/v1/invitations', { body: { project: 'NOPE', role: 'viewer' } }),
+  },
+]
 
 const authScenarios: Scenario[] = [
   { op: 'POST /api/v1/auth/login', status: 200, call: (c) => c.POST('/api/v1/auth/login', { body: login }) },
@@ -257,6 +417,7 @@ const signedOutScenarios = (): Scenario[] =>
     })
 
 const scenarios: Scenario[] = [
+  ...roleScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
   // Projects

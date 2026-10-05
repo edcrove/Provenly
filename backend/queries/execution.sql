@@ -30,14 +30,14 @@ SELECT r.*,
 FROM test_runs r
 WHERE r.id IN (
     SELECT p.id FROM test_runs p
-    WHERE sqlc.narg('project_id')::bigint IS NULL OR p.project_id = sqlc.narg('project_id')::bigint
+    WHERE sqlc.narg('project_ids')::bigint[] IS NULL OR p.project_id = ANY(sqlc.narg('project_ids')::bigint[])
     ORDER BY p.id DESC LIMIT @page_limit OFFSET @page_offset
 )
 ORDER BY r.id DESC;
 
 -- name: CountTestRuns :one
 SELECT count(*) FROM test_runs
-WHERE sqlc.narg('project_id')::bigint IS NULL OR project_id = sqlc.narg('project_id')::bigint;
+WHERE sqlc.narg('project_ids')::bigint[] IS NULL OR project_id = ANY(sqlc.narg('project_ids')::bigint[]);
 
 -- name: ListRunResults :many
 SELECT * FROM test_results

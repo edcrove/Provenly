@@ -47,3 +47,5 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 40 | Account: identity and password change | `40-account.png` |
 | 41 | Joining Provenly from an invitation link | `41-accept-invitation.png` |
 | 42 | Sign-in with a wrong password | `42-sign-in-error.png` |
+| 43 | Project members: roles managed by an administrator or maintainer | `43-project-members.png` |
+| 44 | A viewer reads a test case without editing actions | `44-viewer-test-case.png` |

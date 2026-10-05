@@ -161,7 +161,7 @@ func TestProjects(t *testing.T) {
 func TestAuthentication(t *testing.T) {
 	s := fresh(t)
 	e := anon(t, s, 1<<20)
-	params := strings.NewReplacer("{testCaseId}", "1", "{testRunId}", "1", "{stepId}", "1", "{projectKey}", "TC", "{invitationId}", "1")
+	params := strings.NewReplacer("{testCaseId}", "1", "{testRunId}", "1", "{stepId}", "1", "{projectKey}", "TC", "{invitationId}", "1", "{username}", "admin")
 	protected := 0
 	for path, item := range doc.Paths.Map() {
 		for method, op := range item.Operations() {
@@ -173,7 +173,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 27, protected, "every operation except health, readiness, sign-in, sign-out, accept and ingestion")
+	assert.Equal(t, 30, protected, "every operation except health, readiness, sign-in, sign-out, accept and ingestion")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -231,6 +231,119 @@ func TestAuthentication(t *testing.T) {
 	anaAPI.POST("/api/v1/auth/password").WithJSON(map[string]any{"currentPassword": "ana's password", "newPassword": "a brand new password"}).
 		Expect().Status(http.StatusOK).JSON().Object().Value("user").Object().HasValue("username", "ana")
 	anaAPI.GET("/api/v1/auth/me").Expect().Status(http.StatusUnauthorized)
+}
+
+// TestRoles: a member sees only their projects (others are 404) and each role unlocks its operations (else 403).
+func TestRoles(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	e := anon(t, s, 1<<20)
+	admin.POST("/api/v1/projects").WithJSON(map[string]any{"key": "CHK", "name": "Checkout"}).Expect().Status(http.StatusCreated).
+		JSON().Object().HasValue("myRole", "admin")
+	tcID := int64(admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "pay", "project": "CHK"}).Expect().
+		Status(http.StatusCreated).JSON().Object().Value("id").Number().Raw())
+	hidden := int64(admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "default"}).Expect().
+		Status(http.StatusCreated).JSON().Object().Value("id").Number().Raw())
+	stepID := int64(admin.POST("/api/v1/test-cases/" + strconv.FormatInt(tcID, 10) + "/steps").WithJSON(map[string]any{"action": "a"}).Expect().
+		Status(http.StatusCreated).JSON().Object().Value("id").Number().Raw())
+	runID := int64(ingest(admin, "88", 1, `<testsuite><testcase name="pay CHK-1"/></testsuite>`).WithQuery("project", "CHK").
+		Expect().Status(http.StatusCreated).JSON().Object().Value("testRun").Object().Value("id").Number().Raw())
+
+	// Ana joins CHK as viewer through her invitation.
+	inv := admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "CHK", "role": "viewer"}).Expect().Status(http.StatusCreated).JSON().Object()
+	inv.Value("invitation").Object().HasValue("projectRole", "viewer")
+	admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "NOPE", "role": "viewer"}).Expect().Status(http.StatusNotFound)
+	admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "CHK", "role": "owner"}).Expect().Status(http.StatusBadRequest)
+	ana := e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "ana",
+		"displayName": "Ana", "password": "ana's password"}).Expect().Status(http.StatusCreated).JSON().Object()
+	as := as(e, ana.Value("token").String().Raw())
+
+	tc := "/api/v1/test-cases/" + strconv.FormatInt(tcID, 10)
+	step := tc + "/steps/" + strconv.FormatInt(stepID, 10)
+	run := "/api/v1/test-runs/" + strconv.FormatInt(runID, 10)
+	// Visible: CHK only.
+	as.GET("/api/v1/projects").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1).
+		Value("items").Array().Value(0).Object().HasValue("key", "CHK").HasValue("myRole", "viewer")
+	as.GET("/api/v1/test-cases").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	as.GET("/api/v1/test-runs").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	for _, path := range []string{tc, tc + "/steps", tc + "/results", run, run + "/results", run + "/summary", run + "/parse-errors",
+		"/api/v1/projects/CHK", "/api/v1/projects/CHK/members"} {
+		as.GET(path).Expect().Status(http.StatusOK)
+	}
+	for _, path := range []string{"/api/v1/test-cases/" + strconv.FormatInt(hidden, 10), "/api/v1/projects/TC", "/api/v1/projects/TC/members"} {
+		as.GET(path).Expect().Status(http.StatusNotFound)
+	}
+	for _, path := range []string{"/api/v1/test-cases", "/api/v1/test-runs"} {
+		as.GET(path).WithQuery("project", "TC").Expect().Status(http.StatusNotFound)
+	}
+
+	// Each operation needs its role: 403 below it.
+	writes := []struct {
+		method, path string
+		body         map[string]any
+		min          string
+	}{
+		{"POST", "/api/v1/test-cases", map[string]any{"title": "new", "project": "CHK"}, "member"},
+		{"PATCH", tc, map[string]any{"title": "pay v2"}, "member"},
+		{"PUT", tc + "/steps/order", map[string]any{"stepIds": []int64{stepID}}, "member"},
+		{"POST", tc + "/steps", map[string]any{"action": "b"}, "member"},
+		{"PATCH", step, map[string]any{"action": "a2"}, "member"},
+		{"POST", tc + "/deprecate", nil, "maintainer"},
+		{"POST", tc + "/reactivate", nil, "maintainer"},
+		{"PATCH", "/api/v1/projects/CHK", map[string]any{"name": "Checkout v2"}, "maintainer"},
+		{"PUT", "/api/v1/projects/CHK/members/admin", map[string]any{"role": "viewer"}, "maintainer"},
+		{"DELETE", "/api/v1/projects/CHK/members/admin", nil, "maintainer"},
+		{"DELETE", step, nil, "member"},
+	}
+	send := func(w struct {
+		method, path string
+		body         map[string]any
+		min          string
+	}) *httpexpect.Response {
+		req := as.Request(w.method, w.path)
+		if w.body != nil {
+			req = req.WithJSON(w.body)
+		}
+		return req.Expect()
+	}
+	for _, role := range []string{"viewer", "member", "maintainer"} {
+		admin.PUT("/api/v1/projects/CHK/members/ana").WithJSON(map[string]any{"role": role}).Expect().Status(http.StatusOK).
+			JSON().Object().HasValue("role", role)
+		for _, w := range writes {
+			allowed := role == "maintainer" || (role == "member" && w.min == "member")
+			if allowed {
+				continue
+			}
+			send(w).Status(http.StatusForbidden).JSON(problemOpts).Object().HasValue("code", "forbidden")
+		}
+	}
+	for _, w := range writes { // as maintainer everything goes through
+		send(w).Status(success(w.method, w.path))
+	}
+	as.POST("/api/v1/projects").WithJSON(map[string]any{"key": "WEB", "name": "w"}).Expect().Status(http.StatusForbidden)
+
+	// Member management: validation and unknown users.
+	admin.PUT("/api/v1/projects/CHK/members/nobody").WithJSON(map[string]any{"role": "viewer"}).Expect().Status(http.StatusNotFound)
+	admin.PUT("/api/v1/projects/CHK/members/ana").WithJSON(map[string]any{"role": "owner"}).Expect().Status(http.StatusBadRequest)
+	admin.PUT("/api/v1/projects/CHK/members/ana").WithText(`{"role":"viewer"}`).Expect().Status(http.StatusUnsupportedMediaType)
+	admin.PUT("/api/v1/projects/chk/members/ana").WithJSON(map[string]any{"role": "viewer"}).Expect().Status(http.StatusBadRequest)
+	admin.DELETE("/api/v1/projects/CHK/members/nobody").Expect().Status(http.StatusNotFound)
+	admin.DELETE("/api/v1/projects/chk/members/ana").Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/projects/CHK/members").WithQuery("page", 0).Expect().Status(http.StatusBadRequest)
+	admin.GET("/api/v1/projects/NOPE/members").Expect().Status(http.StatusNotFound)
+	admin.DELETE("/api/v1/projects/CHK/members/ana").Expect().Status(http.StatusNoContent)
+	as.GET("/api/v1/projects").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
+}
+
+// success is the status of a successful write: 204 for deletes, 201 for creations, otherwise 200.
+func success(method, path string) int {
+	switch {
+	case method == "DELETE":
+		return http.StatusNoContent
+	case method == "POST" && (path == "/api/v1/test-cases" || strings.HasSuffix(path, "/steps")):
+		return http.StatusCreated
+	}
+	return http.StatusOK
 }
 
 func TestTestSteps(t *testing.T) {
@@ -337,6 +450,9 @@ func TestInternalErrors(t *testing.T) {
 	}
 	problem(e.GET("/api/v1/projects").Expect())
 	problem(e.GET("/api/v1/auth/me").Expect())
+	problem(e.GET("/api/v1/projects/TC/members").Expect())
+	problem(e.PUT("/api/v1/projects/TC/members/admin").WithJSON(map[string]any{"role": "viewer"}).Expect())
+	problem(e.DELETE("/api/v1/projects/TC/members/admin").Expect())
 	problem(e.POST("/api/v1/auth/password").WithJSON(map[string]any{"currentPassword": "x", "newPassword": "a long password"}).Expect())
 	problem(e.GET("/api/v1/users").Expect())
 	problem(e.GET("/api/v1/invitations").Expect())

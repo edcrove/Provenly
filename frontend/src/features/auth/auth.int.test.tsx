@@ -215,6 +215,46 @@ describe('FE-INT-028 accepting an invitation', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('already used')
   })
 
+  it('FE-INT-028 every field the server refuses is marked and explained next to it', async () => {
+    server.use(
+      http.post('*/api/v1/invitations/accept', () =>
+        HttpResponse.json(
+          {
+            type: 'about:blank',
+            title: 'Bad Request',
+            status: 400,
+            code: 'validation_error',
+            detail: 'request validation failed',
+            errors: [
+              { field: 'username', message: 'is taken' },
+              { field: 'displayName', message: 'must be at most 100 characters' },
+              { field: 'email', message: 'must be an email address' },
+              { field: 'password', message: 'must be at most 72 bytes' },
+            ],
+          },
+          { status: 400, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+    const { user: u } = open()
+    await u.type(screen.getByLabelText('Username'), 'carla')
+    await u.type(screen.getByLabelText('Display name'), 'Carla')
+    await u.type(screen.getByLabelText('Password'), 'carla password')
+    await u.type(screen.getByLabelText('Repeat password'), 'carla password')
+    await u.click(screen.getByRole('button', { name: 'Create account' }))
+    await waitFor(() =>
+      expect(screen.getByLabelText('Username')).toHaveAccessibleDescription('Username is taken'),
+    )
+    for (const [label, description] of [
+      ['Display name', 'Display name must be at most 100 characters'],
+      ['Email (optional)', 'Email must be an email address'],
+      ['Password', 'Password must be at most 72 bytes'],
+    ]) {
+      expect(screen.getByLabelText(label)).toHaveAttribute('aria-invalid', 'true')
+      expect(screen.getByLabelText(label)).toHaveAccessibleDescription(description)
+    }
+  })
+
   it('FE-INT-028 a link without a token says it is invalid', async () => {
     db.session = null
     renderRoute('/accept-invite')

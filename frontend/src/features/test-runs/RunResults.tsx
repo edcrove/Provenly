@@ -13,6 +13,11 @@ import { formatDuration } from '@/lib/format'
 import { correlationExplanation, correlations, pickEnum, positiveInt, resultStatuses } from '@/lib/status'
 
 /** Individual results of a run as ingested, filterable by status and TC-ID correlation. */
+/** The message is clamped to two lines: a long one without details still opens in full. */
+const CLAMPED_MESSAGE = 120
+const expandable = (r: { errorMessage: string; errorDetails: string }) =>
+  r.errorDetails !== '' || r.errorMessage.length > CLAMPED_MESSAGE || r.errorMessage.includes('\n')
+
 export function RunResults({ testRunId }: { testRunId: number }) {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
@@ -119,7 +124,7 @@ export function RunResults({ testRunId }: { testRunId: number }) {
                       <TableCell>{formatDuration(r.durationMs)}</TableCell>
                       <TableCell className="max-w-xs">
                         <span className="flex items-start gap-1">
-                          {r.errorDetails ? (
+                          {expandable(r) ? (
                             <Button
                               size="icon"
                               variant="ghost"
@@ -142,7 +147,7 @@ export function RunResults({ testRunId }: { testRunId: number }) {
                             data-testid="error-details"
                             className="max-h-96 overflow-auto font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]"
                           >
-                            {r.errorDetails}
+                            {r.errorDetails || r.errorMessage}
                           </pre>
                         </TableCell>
                       </TableRow>

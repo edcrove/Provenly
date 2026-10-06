@@ -52,7 +52,8 @@ export function TestRunDetailPage() {
   const { testRunId } = useParams()
   const id = positiveInt(testRunId, 0)
   const run = useTestRun(id)
-  const summary = useTestRunSummary(id)
+  const running = run.data?.executionStatus === 'running'
+  const summary = useTestRunSummary(id, running)
   const projects = useProjects().data?.items ?? []
   if (!id) return <NotFoundPage />
   return (
@@ -72,7 +73,7 @@ export function TestRunDetailPage() {
             {r.mode !== 'batch' ? <Badge variant="outline">{r.mode}</Badge> : null}
             <span className="text-muted-foreground text-sm" data-testid="run-pass-rate">
               {r.outcome.executed > 0
-                ? `${formatPercent(r.outcome.passRate)} of executed passed`
+                ? `${formatPercent(r.outcome.passRate)} of executed passed${running ? ' so far' : ''}`
                 : 'No test case executed'}
             </span>
           </div>
@@ -102,7 +103,7 @@ export function TestRunDetailPage() {
                     <CardTitle as="h2">Summary</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <RunSummary summary={s} />
+                    <RunSummary summary={s} running={running} />
                     <RunKnownIssues
                       projectKey={projects.find((p) => p.id === r.projectId)?.key ?? ''}
                       summary={s}

@@ -397,6 +397,24 @@ questions went to Ed.
 - The Playwright reporter clips live event names to 1000 characters and drops an over-long TC-ID: one long title
   used to make the API reject the whole event batch.
 
+**Frontend**
+- A malformed requirement or issue id is "Page not found" at once (it loaded forever).
+- New test case and new manual run send the project the select shows: with no current project, or one the user
+  cannot write to, they used to send a hidden `TC`.
+- "Runs of this suite" carries the project (suite keys are per project) and the runs list honours it.
+- A failed "Mark as automated" is shown; the dashboard keeps its figures and focus while a filter changes; the run
+  trend is a list of links that say their verdict (provisional while running); the latest-run card tells loading, a
+  failed read and no runs apart.
+- A running run's pass rate says "so far" in the header, summary and list, and its summary polls while it runs.
+- Empty lists name the filter that emptied them (runs, issues, audit).
+- Project page sections no longer set the tab title (a failed key list turned it into "Error").
+- Table cells are never flex or grid containers (guarded by a unit test); notices use `role=status`, errors
+  `role=alert`.
+- Manual execution: a typed failed step disables Pass and Skip instead of being dropped; the TC-ID link says it opens
+  a new tab.
+- A long or multi-line failure message without details opens in full; the invitation form marks and explains each
+  refused field.
+
 **Docs and release**
 - `release.yml` grants no permission by default (each job asks for its own) and `latest` follows the highest version
   only; no workflow leaves the checkout token on disk (`persist-credentials: false`).

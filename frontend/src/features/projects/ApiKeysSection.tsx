@@ -110,7 +110,7 @@ export function ApiKeysSection({ projectKey }: { projectKey: string }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-6">
-        <QueryState query={keys} page>
+        <QueryState query={keys}>
           {(data) => (
             <>
               <Table>

@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
-import { testCase } from '@/test/fixtures'
+import { project, testCase } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { renderRoute } from '@/test/render'
 import { server } from '@/test/server'
@@ -24,6 +24,11 @@ describe('FE-INT-039 manual execution', () => {
     expect(panel).toHaveTextContent('1 still untested')
     expect(screen.getByTestId('execution-badge')).toHaveTextContent('running')
     const row = within(panel).getByTestId('manual-TC-160')
+    // The TC-ID link opens a new tab and says so.
+    expect(within(row).getByRole('link', { name: /^TC-160 *\(opens in a new tab\)$/ })).toHaveAttribute(
+      'target',
+      '_blank',
+    )
 
     await u.type(within(row).getByLabelText('Note for TC-160'), 'Pay button missing')
     await u.type(within(row).getByLabelText('Failed step of TC-160'), '2')
@@ -38,8 +43,15 @@ describe('FE-INT-039 manual execution', () => {
     })
     expect(within(row).getByLabelText('Note for TC-160')).toHaveValue('')
 
-    // A re-test after the fix: the last result counts; the failed step is not sent for a pass.
+    // A failed step is never dropped silently: Pass and Skip wait until it is cleared.
     await u.type(within(row).getByLabelText('Failed step of TC-160'), '3')
+    expect(within(row).getByRole('button', { name: 'Pass' })).toBeDisabled()
+    expect(within(row).getByRole('button', { name: 'Skip' })).toBeDisabled()
+    expect(within(row).getByRole('button', { name: 'Fail' })).toBeEnabled()
+    expect(within(row).getByTestId('step-hint-TC-160')).toHaveTextContent('clear it to pass or skip')
+    // A re-test after the fix: the last result counts.
+    await u.clear(within(row).getByLabelText('Failed step of TC-160'))
+    expect(within(row).queryByTestId('step-hint-TC-160')).not.toBeInTheDocument()
     await u.click(within(row).getByRole('button', { name: 'Pass' }))
     await waitFor(() => expect(within(row).getByTestId('status-badge')).toHaveTextContent('passed'))
     expect(db.results.at(-1)).toMatchObject({ status: 'passed', failedStep: null, attempt: 2 })
@@ -92,6 +104,22 @@ describe('FE-INT-039 manual execution', () => {
     await u.click(within(panel).getByRole('button', { name: 'Cancel run' }))
     await waitFor(() => expect(screen.queryByTestId('manual-execution')).not.toBeInTheDocument())
     expect(screen.getByTestId('execution-badge')).toHaveTextContent('cancelled')
+  })
+
+  it('FE-INT-039 starts in the project the select shows when the user cannot write to the default one', async () => {
+    db.projects.push(project({ id: 2, key: 'CHK', name: 'Checkout', description: '' }))
+    db.users.push({ ...db.users[0], id: 2, username: 'ana', isAdmin: false })
+    db.members.push({ projectId: 1, userId: 2, role: 'viewer', since: at })
+    db.members.push({ projectId: 2, userId: 2, role: 'member', since: at })
+    db.session = 2
+    const { user: u, router } = renderRoute('/test-runs/manual')
+    await u.type(await screen.findByLabelText('What is being tested'), 'Checkout pass')
+    const select = screen.getByLabelText('Project')
+    await within(select).findByRole('option', { name: /^CHK/ })
+    expect(select).toHaveValue('CHK')
+    await u.click(screen.getByRole('button', { name: 'Start manual run' }))
+    await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/test-runs\/\d+$/))
+    expect(db.runs.at(-1)).toMatchObject({ projectId: 2 })
   })
 
   it('FE-INT-039 a suite and every test case can be chosen; failures to start are shown; viewers only read', async () => {

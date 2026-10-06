@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
-import { testCase } from '@/test/fixtures'
+import { project, testCase } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { renderRoute } from '@/test/render'
 import { server } from '@/test/server'
@@ -67,6 +68,23 @@ describe('FE-INT-003 create test case', () => {
       automated: true,
       expectedResult: 'Order confirmed',
     })
+  })
+
+  it('FE-INT-003 creates in the project the select shows when the user cannot write to the default one', async () => {
+    db.projects.push(project({ id: 2, key: 'CHK', name: 'Checkout', description: '' }))
+    db.users.push({ ...db.users[0], id: 2, username: 'ana', isAdmin: false })
+    db.members.push({ projectId: 1, userId: 2, role: 'viewer', since: '2026-10-05T10:00:00Z' })
+    db.members.push({ projectId: 2, userId: 2, role: 'member', since: '2026-10-05T10:00:00Z' })
+    db.session = 2
+    const { user, router } = renderRoute('/test-cases/new')
+    const select = await screen.findByLabelText('Project')
+    await within(select).findByRole('option', { name: /^CHK/ })
+    expect(select).toHaveValue('CHK')
+    expect(within(select).queryByRole('option', { name: /^TC/ })).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('Title'), 'Refund')
+    await user.click(screen.getByRole('button', { name: 'Create test case' }))
+    await waitFor(() => expect(router.state.location.pathname).not.toBe('/test-cases/new'))
+    expect(db.testCases.at(-1)).toMatchObject({ projectKey: 'CHK', title: 'Refund' })
   })
 
   it('FE-INT-003 shows validation errors from the API and supports cancel', async () => {
@@ -143,9 +161,35 @@ describe('FE-INT-014 manual test case receiving automated results', () => {
     const { user } = renderRoute('/test-cases/153')
     const alert = await screen.findByTestId('manual-with-results')
     expect(alert).toHaveTextContent('Receives automated results but is marked manual')
+    // A notice is announced politely; only errors are alerts.
+    expect(alert).toHaveAttribute('role', 'status')
     await user.click(within(alert).getByRole('button', { name: 'Mark as automated' }))
     await waitFor(() => expect(screen.queryByTestId('manual-with-results')).not.toBeInTheDocument())
     expect(db.testCases[0].automated).toBe(true)
+  })
+
+  it('FE-INT-014 a failed "Mark as automated" is shown, not swallowed', async () => {
+    db.testCases[0] = testCase({ automated: false })
+    server.use(
+      http.patch('*/api/v1/test-cases/:id', () =>
+        HttpResponse.json(
+          {
+            type: 'about:blank',
+            title: 'Internal Server Error',
+            status: 500,
+            code: 'internal_error',
+            detail: 'the database is down',
+          },
+          { status: 500, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+    const { user } = renderRoute('/test-cases/153')
+    const alert = await screen.findByTestId('manual-with-results')
+    await user.click(within(alert).getByRole('button', { name: 'Mark as automated' }))
+    expect(await screen.findByText('Could not update the test case')).toBeInTheDocument()
+    expect(screen.getByText(/the database is down/)).toBeInTheDocument()
+    expect(db.testCases[0].automated).toBe(false)
   })
 
   it('FE-INT-014 results from manual runs alone do not warn', async () => {

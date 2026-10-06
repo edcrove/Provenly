@@ -15,9 +15,12 @@ import { TestCaseForm } from './TestCaseForm'
 export function NewTestCasePage() {
   const navigate = useNavigate()
   const create = useCreateTestCase()
-  const projects = useProjects()
+  const projects = (useProjects().data?.items ?? []).filter((p) => can(p.myRole, 'member'))
   const { project: current } = useCurrentProject()
-  const [project, setProject] = useState(current || 'TC')
+  const [chosen, setProject] = useState(current)
+  // The select shows only projects the user can write to: send the one it shows (the current project, else the
+  // default TC, else the first one), never a hidden default the user cannot write to.
+  const project = [chosen, 'TC'].find((k) => projects.some((p) => p.key === k)) ?? projects[0]?.key ?? ''
   const dimensions = useDimensions(project).data?.items ?? []
   return (
     <Card className="max-w-2xl">
@@ -35,13 +38,11 @@ export function NewTestCasePage() {
         <div className="grid gap-2">
           <Label htmlFor="tc-project">Project</Label>
           <NativeSelect id="tc-project" value={project} onChange={(e) => setProject(e.target.value)}>
-            {(projects.data?.items ?? [])
-              .filter((p) => can(p.myRole, 'member'))
-              .map((p) => (
-                <option key={p.key} value={p.key}>
-                  {p.key} · {p.name}
-                </option>
-              ))}
+            {projects.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.key} · {p.name}
+              </option>
+            ))}
           </NativeSelect>
         </div>
         <TestCaseForm

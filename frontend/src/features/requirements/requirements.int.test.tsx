@@ -154,8 +154,15 @@ describe('FE-INT-040 requirements and traceability', () => {
     expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Open in the source' })).not.toBeInTheDocument()
     detail.unmount()
-    renderRoute('/requirements/TC/987654')
+    const unknown = renderRoute('/requirements/TC/987654')
     expect(await screen.findByText('Not found')).toBeInTheDocument()
+    unknown.unmount()
+    // A malformed id is not found at once (it used to load forever).
+    for (const bad of ['abc', '-1']) {
+      const page = renderRoute(`/requirements/TC/${bad}`)
+      expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+      page.unmount()
+    }
   })
 
   it('FE-INT-040 an empty project says so; a covering test case outside the first page shows its id', async () => {

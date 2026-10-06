@@ -35,26 +35,28 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
       <TableCell>
         <StatusBadge status={outcome.status} />
       </TableCell>
-      <TableCell className="grid gap-1">
-        <div className="flex flex-wrap gap-1">
-          <Input
-            aria-label={`Note for ${key}`}
-            placeholder="Note (optional)"
-            className="h-8 w-48"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-          <Input
-            aria-label={`Failed step of ${key}`}
-            placeholder="Step"
-            type="number"
-            min={1}
-            className="h-8 w-20"
-            value={step}
-            onChange={(e) => setStep(e.target.value)}
-          />
+      <TableCell>
+        <div className="grid gap-1">
+          <div className="flex flex-wrap gap-1">
+            <Input
+              aria-label={`Note for ${key}`}
+              placeholder="Note (optional)"
+              className="h-8 w-48"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+            <Input
+              aria-label={`Failed step of ${key}`}
+              placeholder="Step"
+              type="number"
+              min={1}
+              className="h-8 w-20"
+              value={step}
+              onChange={(e) => setStep(e.target.value)}
+            />
+          </div>
+          {record.error ? <ErrorAlert error={record.error} title={`Could not record ${key}`} /> : null}
         </div>
-        {record.error ? <ErrorAlert error={record.error} title={`Could not record ${key}`} /> : null}
       </TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-1">

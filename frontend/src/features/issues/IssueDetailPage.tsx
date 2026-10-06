@@ -51,20 +51,22 @@ function LinkedTests({ issue, projectKey, edit }: { issue: Issue; projectKey: st
                   {keyOf(c.testCaseId)}
                 </Link>
               </TableCell>
-              <TableCell className="flex flex-wrap items-center gap-2">
-                {c.evidence ? (
-                  <>
-                    <StatusBadge status={c.evidence} />
-                    <Link to={`/test-runs/${c.evidenceRunId}`} className="text-sm underline">
-                      run #{c.evidenceRunId}
-                    </Link>
-                  </>
-                ) : (
-                  <span className="text-muted-foreground">no conclusive result</span>
-                )}
-                {c.latestInconclusive ? (
-                  <span className="text-muted-foreground text-xs">latest run skipped it</span>
-                ) : null}
+              <TableCell>
+                <div className="flex flex-wrap items-center gap-2">
+                  {c.evidence ? (
+                    <>
+                      <StatusBadge status={c.evidence} />
+                      <Link to={`/test-runs/${c.evidenceRunId}`} className="text-sm underline">
+                        run #{c.evidenceRunId}
+                      </Link>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">no conclusive result</span>
+                  )}
+                  {c.latestInconclusive ? (
+                    <span className="text-muted-foreground text-xs">latest run skipped it</span>
+                  ) : null}
+                </div>
               </TableCell>
               <TableCell>
                 <Badge variant={verificationVariant(c.status)}>{verificationLabel(c.status)}</Badge>

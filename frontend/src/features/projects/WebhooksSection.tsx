@@ -85,27 +85,29 @@ function WebhookRow({ webhook, projectKey }: { webhook: Webhook; projectKey: str
             'None yet'
           )}
         </TableCell>
-        <TableCell className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={m.ping.isPending}
-            onClick={() => m.ping.mutate(webhook.id)}
-          >
-            Send ping
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={m.update.isPending}
-            onClick={() => m.update.mutate({ webhookId: webhook.id, body: { active: !webhook.active } })}
-          >
-            {webhook.active ? 'Pause' : 'Resume'}
-          </Button>
-          <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
-            Deliveries
-          </Button>
-          {error ? <ErrorAlert error={error} title="Could not update the webhook" /> : null}
+        <TableCell>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={m.ping.isPending}
+              onClick={() => m.ping.mutate(webhook.id)}
+            >
+              Send ping
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={m.update.isPending}
+              onClick={() => m.update.mutate({ webhookId: webhook.id, body: { active: !webhook.active } })}
+            >
+              {webhook.active ? 'Pause' : 'Resume'}
+            </Button>
+            <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
+              Deliveries
+            </Button>
+            {error ? <ErrorAlert error={error} title="Could not update the webhook" /> : null}
+          </div>
         </TableCell>
       </TableRow>
       {open ? (

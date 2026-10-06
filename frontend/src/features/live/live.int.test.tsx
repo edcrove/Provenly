@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { LiveRun } from '@/api/client'
 import { summary } from '@/test/fixtures'
@@ -22,7 +22,19 @@ const live = (over: Partial<LiveRun> = {}): LiveRun => ({
   ...over,
 })
 
+// Running runs poll every 2 s: fake timers advance the polls instead of waiting for them (card #54). Time still
+// flows (shouldAdvanceTime) so msw and Testing Library's own waits work.
+const POLL = 2000
+const nextPoll = () => vi.advanceTimersByTimeAsync(POLL)
+
 describe('FE-INT-043 live runs', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('FE-INT-043 a running live run shows provisional progress and reloads itself when the final report arrives', async () => {
     db.runs[0] = { ...db.runs[0], mode: 'live', executionStatus: 'running' }
     db.live[7] = live()
@@ -68,9 +80,8 @@ describe('FE-INT-043 live runs', () => {
         },
       ],
     })
-    await waitFor(() => expect(screen.getByTestId('reconciliation')).toHaveTextContent('mismatch'), {
-      timeout: 4000,
-    })
+    await nextPoll()
+    await waitFor(() => expect(screen.getByTestId('reconciliation')).toHaveTextContent('mismatch'))
     await waitFor(() =>
       expect(
         screen.getByText('The final report completed this run; its live events were reconciled with it.'),
@@ -82,7 +93,7 @@ describe('FE-INT-043 live runs', () => {
     expect(within(rows[2]).getByRole('link', { name: '#155' })).toHaveAttribute('href', '/test-cases/155')
     expect(screen.getByText(/runner finished/)).toBeInTheDocument()
     expect(screen.queryByTestId('live-TC-154')).not.toBeInTheDocument()
-  }, 10000)
+  })
 
   it("FE-INT-043 a running run's pass rate reads as provisional everywhere and keeps itself current", async () => {
     db.runs[0] = { ...db.runs[0], mode: 'live', executionStatus: 'running' }
@@ -92,9 +103,8 @@ describe('FE-INT-043 live runs', () => {
     expect(await screen.findByText('Pass rate so far')).toBeInTheDocument()
     // The summary polls while the run runs: new counts show without a reload.
     db.summaries[7] = summary({ testRunId: 7, executedTotal: 9 })
-    await waitFor(() => expect(screen.getByTestId('executed-total')).toHaveTextContent('9'), {
-      timeout: 4000,
-    })
+    await nextPoll()
+    await waitFor(() => expect(screen.getByTestId('executed-total')).toHaveTextContent('9'))
     detail.unmount()
     renderRoute('/test-runs')
     expect(await screen.findByTestId('pass-rate')).toHaveTextContent(/so far$/)

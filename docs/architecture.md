@@ -45,7 +45,8 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 
 ## Identity and sessions (module `identity`)
 
-- Local accounts (MVP D13): username (lower-case, immutable) + bcrypt password (cost 12, 10 characters to 72 bytes).
+- Local accounts (MVP D13): username (lower-case, immutable) + bcrypt password (cost 12, at least 10 characters counted as characters, at most 72 bytes: bcrypt's
+  limit, never truncated; the forms say so).
   Users are never deleted (trigger). The first administrator is created on start when there are no users, from
   `PROVENLY_ADMIN_USERNAME` / `PROVENLY_ADMIN_PASSWORD`; prod refuses the public demo password.
 - New people join through single-use invitation links (7 days; email optional). Only the SHA-256 of the token is

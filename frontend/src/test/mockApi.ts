@@ -1530,7 +1530,11 @@ export const handlers = [
         const body = await readBody(request)
         const u = currentUser()
         const next = String(body?.newPassword ?? '')
-        if (next.length < 10) return validation('newPassword', 'must be at least 10 characters')
+        const tooShort = (p: string) => [...p].length < 10
+        const tooLong = (p: string) => new TextEncoder().encode(p).length > 72
+        if (tooShort(next)) return validation('newPassword', 'must be at least 10 characters')
+        if (tooLong(next))
+          return validation('newPassword', 'must be at most 72 bytes (letters outside ASCII count as 2 to 4)')
         if (db.passwords[u.username] !== body?.currentPassword)
           return validation('currentPassword', 'is not your current password')
         db.passwords[u.username] = next
@@ -1597,7 +1601,9 @@ export const handlers = [
           .toLowerCase()
         const password = String(body?.password ?? '')
         if (!USERNAME.test(username)) return validation('username', 'must be 3 to 32 lower-case letters')
-        if (password.length < 10) return validation('password', 'must be at least 10 characters')
+        if ([...password].length < 10) return validation('password', 'must be at least 10 characters')
+        if (new TextEncoder().encode(password).length > 72)
+          return validation('password', 'must be at most 72 bytes (letters outside ASCII count as 2 to 4)')
         const inv = db.invitations.find((i) => i.id === db.invitationTokens[String(body?.token ?? '')])
         if (!inv || inv.status !== 'pending')
           return problem(404, 'not_found', 'invitation not found, expired, revoked or already used')

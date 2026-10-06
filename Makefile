@@ -123,6 +123,7 @@ lint: ## Lint, vet, format-check and typecheck both services
 	cd frontend && npm run lint && npm run format:check && npm run typecheck
 	cd e2e && npm run typecheck
 	cd reporters/playwright && npm run typecheck
+	scripts/docs-check.sh
 
 test-backend-unit: $(OUT) ## Backend Unit (testing+testify), raw coverage in GOCOVERDIR
 	rm -rf $(GOCOV)/unit && mkdir -p $(GOCOV)/unit

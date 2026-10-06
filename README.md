@@ -1,9 +1,11 @@
 # Provenly
 
-Open-source QA / test-management platform (formerly *OpenTestHub*). This repository holds the **POC**: a
-vertical slice where a Test Case gets a permanent numeric id (`TC-<id>`), an automated test declares that id, CI
-sends a JUnit XML report, Provenly ingests it into an idempotent TestRun and a UI/API shows results, a
-snapshot-based summary and per-test-case history. Everything runs locally; sign in with the demo administrator (`admin` / `provenly-demo`, see `envs/demo.env`).
+Open-source QA / test-management platform (formerly *OpenTestHub*). This repository holds the **full-product
+prototype** (projects, users and roles, API keys, suites, manual and live runs, retries and flaky detection,
+requirements and issues traceability, a quality dashboard, webhooks, a GitHub Issues connector, an MCP endpoint and a
+Playwright reporter; see [`docs/prototype`](docs/prototype/README.md)) built on the original POC slice: a Test Case
+gets a permanent id (`TC-<id>`), an automated test declares that id, CI sends a JUnit XML report, Provenly ingests it
+into an idempotent TestRun and a UI/API shows results, a snapshot-based summary and per-test-case history. Everything runs locally; sign in with the demo administrator (`admin` / `provenly-demo`, see `envs/demo.env`).
 
 ```
 TC-153 created ──► automated test declares TC-153 ──► CI posts JUnit XML ──► Provenly
@@ -78,7 +80,7 @@ make dev-frontend             # UI  on http://localhost:5173  (terminal 2)
 
 Screenshots of every UI flow: [`docs/screenshots`](docs/screenshots/README.md) (regenerate with `make screenshots`).
 
-### Try the POC flow with curl
+### Try the core flow with curl
 
 ```bash
 # 0. Sign in (the demo administrator of envs/demo.env); the session cookie goes to cookies.txt

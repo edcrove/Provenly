@@ -397,6 +397,17 @@ questions went to Ed.
 - The Playwright reporter clips live event names to 1000 characters and drops an over-long TC-ID: one long title
   used to make the API reject the whole event batch.
 
+**Test fidelity**
+- The frontend mock behaves like the server where tests relied on it: a manual run's and an amended run's outcome
+  are recomputed from their results, a skipped latest result keeps the previous conclusive evidence of an issue, the
+  quality endpoint lists stale test cases with their last execution, and ids are never handed out twice.
+- BE-INT-001 compares the whole schema (columns, constraints, indexes, functions, triggers, sequences, types)
+  before a reset and after migrating up again, and asserts the reset leaves nothing behind.
+- New contract checks: a deprecated test case stays editable (implementation decision #10), gzip reports replay like
+  plain ones, CI API keys get 401 on manual-run routes, scoped lists return the visible items and page over them.
+- No wall-clock tolerances: the deep-page check uses medians and a relative bound; backoff and stale dates are exact.
+- covgate fails a gate when a test carries an id its inventory does not declare (BE-INT-020 was missing).
+
 ### 23. Review agents (technical experts and user personas)
 
 - **What**: fourteen read-only subagents in `.claude/agents/` — technical experts (`reviewer-api-contract`,

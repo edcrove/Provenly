@@ -316,8 +316,17 @@ func TestRoles(t *testing.T) {
 	// Visible: CHK only.
 	as.GET("/api/v1/projects").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1).
 		Value("items").Array().Value(0).Object().HasValue("key", "CHK").HasValue("myRole", "viewer")
-	as.GET("/api/v1/test-cases").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
-	as.GET("/api/v1/test-runs").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	// The items themselves are the visible ones (not only the counts), and paging counts only them.
+	cases := as.GET("/api/v1/test-cases").WithQuery("pageSize", 1).Expect().Status(http.StatusOK).JSON().Object()
+	cases.HasValue("totalItems", 1).HasValue("totalPages", 1)
+	cases.Value("items").Array().Length().IsEqual(1)
+	cases.Value("items").Array().Value(0).Object().HasValue("id", tcID).HasValue("projectKey", "CHK")
+	as.GET("/api/v1/test-cases").WithQuery("pageSize", 1).WithQuery("page", 2).Expect().Status(http.StatusOK).
+		JSON().Object().HasValue("totalItems", 1).Value("items").Array().IsEmpty()
+	runs := as.GET("/api/v1/test-runs").Expect().Status(http.StatusOK).JSON().Object()
+	runs.HasValue("totalItems", 1).Value("items").Array().Length().IsEqual(1)
+	runs.Value("items").Array().Value(0).Object().HasValue("id", runID)
+	admin.GET("/api/v1/test-cases").Expect().Status(http.StatusOK).JSON().Object().Value("totalItems").Number().Ge(2)
 	for _, path := range []string{tc, tc + "/steps", tc + "/results", run, run + "/results", run + "/summary", run + "/parse-errors",
 		"/api/v1/projects/CHK", "/api/v1/projects/CHK/members"} {
 		as.GET(path).Expect().Status(http.StatusOK)

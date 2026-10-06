@@ -48,6 +48,14 @@ describe('FE-INT-039 manual execution', () => {
     await u.click(within(panel).getByRole('button', { name: 'Complete run' }))
     await waitFor(() => expect(screen.queryByTestId('manual-execution')).not.toBeInTheDocument())
     expect(db.runs.at(-1)!.executionStatus).toBe('completed')
+    // The verdict follows the recorded results (the last re-test passed), as the server derives it.
+    expect(screen.getByTestId('verdict-badge')).toHaveTextContent('passed')
+    expect(db.runs.at(-1)!.outcome).toMatchObject({
+      verdict: 'passed',
+      executed: 1,
+      passed: 1,
+      passRate: 100,
+    })
   })
 
   it('FE-INT-039 records blocked and skipped, cancels, and reports refusals', async () => {

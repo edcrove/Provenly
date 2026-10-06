@@ -46,6 +46,37 @@ func TestLoadOverrides(t *testing.T) {
 	}, cfg)
 }
 
+// Prod refuses private, loopback and link-local webhook and connector targets unless explicitly allowed: the
+// SSRF guard is on by default only there.
+func TestLoadProdDefaults(t *testing.T) {
+	prod := map[string]string{
+		"PROVENLY_DATABASE_URL": "postgres://db", "PROVENLY_ENV": "prod", "PROVENLY_JWT_SECRET": strings.Repeat("k", 32),
+		"PROVENLY_SECRETS_KEY": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
+	}
+	cfg, err := Load(env(prod))
+	require.NoError(t, err)
+	assert.Equal(t, "prod", cfg.Env)
+	assert.False(t, cfg.WebhooksAllowPrivate, "prod blocks private targets by default")
+	for _, e := range []string{"development", "ci", "demo", "qa"} {
+		cfg, err := Load(env(map[string]string{"PROVENLY_DATABASE_URL": "x", "PROVENLY_ENV": e}))
+		require.NoError(t, err, e)
+		assert.True(t, cfg.WebhooksAllowPrivate, e)
+	}
+}
+
+// An unknown environment name would silently get development defaults (random keys, SSRF guard off): refused.
+func TestLoadRefusesUnknownEnvironments(t *testing.T) {
+	for name, want := range map[string]string{
+		"production": `PROVENLY_ENV must be one of development, ci, demo, qa, prod, got "production"`,
+		"Prod":       `got "Prod"`,
+		"staging":    `got "staging"`,
+	} {
+		_, err := Load(env(map[string]string{"PROVENLY_DATABASE_URL": "x", "PROVENLY_ENV": name}))
+		require.Error(t, err, name)
+		assert.Contains(t, err.Error(), want)
+	}
+}
+
 func TestLoadErrors(t *testing.T) {
 	cases := map[string]map[string]string{
 		"PROVENLY_DATABASE_URL is required":             {},

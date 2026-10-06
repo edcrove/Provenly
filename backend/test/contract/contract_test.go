@@ -321,6 +321,14 @@ func TestRoles(t *testing.T) {
 	for _, path := range []string{"/api/v1/test-cases/" + strconv.FormatInt(hidden, 10), "/api/v1/projects/TC", "/api/v1/projects/TC/members"} {
 		as.GET(path).Expect().Status(http.StatusNotFound)
 	}
+	// An invisible project reads exactly like an unknown one on members and API keys: same 404 detail, naming the
+	// requested key, never the internal id.
+	for _, sub := range []string{"members", "api-keys"} {
+		as.GET("/api/v1/projects/TC/"+sub).Expect().Status(http.StatusNotFound).JSON(problemOpts).Object().HasValue("detail", "project TC not found")
+		as.GET("/api/v1/projects/ZZZ/"+sub).Expect().Status(http.StatusNotFound).JSON(problemOpts).Object().HasValue("detail", "project ZZZ not found")
+	}
+	as.PUT("/api/v1/projects/TC/members/ana").WithJSON(map[string]any{"role": "viewer"}).Expect().Status(http.StatusNotFound).
+		JSON(problemOpts).Object().HasValue("detail", "project TC not found")
 	for _, path := range []string{"/api/v1/test-cases", "/api/v1/test-runs"} {
 		as.GET(path).WithQuery("project", "TC").Expect().Status(http.StatusNotFound)
 	}

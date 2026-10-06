@@ -14,6 +14,8 @@ function ConnectForm({ projectKey, current }: { projectKey: string; current: Git
   const [repository, setRepository] = useState(current?.repository ?? '')
   const [labels, setLabels] = useState(current?.labels ?? '')
   const [token, setToken] = useState('')
+  // The stored token stays with its repository: another repository needs the token again (the server says so).
+  const tokenRequired = !current || repository.trim().toLowerCase() !== current.repository.toLowerCase()
   const submit = (e: FormEvent) => {
     e.preventDefault()
     connect.mutate(
@@ -46,7 +48,7 @@ function ConnectForm({ projectKey, current }: { projectKey: string; current: Git
           />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="github-token">{current ? 'New token (optional)' : 'Token'}</Label>
+          <Label htmlFor="github-token">{tokenRequired ? 'Token' : 'New token (optional)'}</Label>
           <Input
             id="github-token"
             type="password"
@@ -54,7 +56,7 @@ function ConnectForm({ projectKey, current }: { projectKey: string; current: Git
             value={token}
             maxLength={500}
             onChange={(e) => setToken(e.target.value)}
-            required={!current}
+            required={tokenRequired}
           />
         </div>
         <Button type="submit" disabled={connect.isPending}>

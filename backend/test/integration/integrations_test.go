@@ -194,6 +194,8 @@ func TestIntegrations(t *testing.T) {
 			"pending":   fmt.Sprintf(`UPDATE webhook_deliveries SET status = 'pending' WHERE webhook_id = %d AND status = 'succeeded'`, hook.ID),
 			"token":     `INSERT INTO github_connections (project_id, repository, token) VALUES (1, 'acme/shop', 'ghp_clear')`,
 			"repo":      `INSERT INTO github_connections (project_id, repository, token) VALUES (1, 'acme', 'v1:x')`,
+			"dot dot":   `INSERT INTO github_connections (project_id, repository, token) VALUES (1, '../..', 'v1:x')`,
+			"climbs":    `INSERT INTO github_connections (project_id, repository, token) VALUES (1, 'acme/..', 'v1:x')`,
 		} {
 			_, err := db.Pool.Exec(ctx, q)
 			assert.Error(t, err, name)

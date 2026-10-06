@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 
 import { useAcceptInvitation } from '@/api/queries'
 import { PageTitle } from '@/components/PageTitle'
@@ -10,12 +10,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ApiError } from '@/lib/problem'
 
+import { invitationToken } from './links'
+
 const empty = { username: '', displayName: '', email: '', password: '', confirm: '' }
 
-/** Creates an account from an invitation link (/accept-invite?token=…) and signs in. */
+/** Creates an account from an invitation link (/accept-invite#token=…) and signs in. */
 export function AcceptInvitePage() {
-  const [params] = useSearchParams()
-  const token = params.get('token') ?? ''
+  const location = useLocation()
+  const token = invitationToken(location.hash, location.search)
   const navigate = useNavigate()
   const accept = useAcceptInvitation()
   const [values, setValues] = useState(empty)

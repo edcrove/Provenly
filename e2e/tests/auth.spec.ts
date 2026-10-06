@@ -59,7 +59,7 @@ test.describe('Accounts', () => {
     await admin.getByLabel('Note (optional)').fill('FE-E2E-011')
     await admin.getByRole('button', { name: 'Create invitation link' }).click()
     const link = (await admin.getByTestId('invitation-link').textContent())!
-    expect(link).toContain('/accept-invite?token=')
+    expect(link).toContain('/accept-invite#token=')
 
     const guestCtx = await browser.newContext({ storageState: { cookies: [], origins: [] } })
     const guest = await guestCtx.newPage()

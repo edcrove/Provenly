@@ -273,6 +273,9 @@ func TestAcceptInvitationValidationAndConflicts(t *testing.T) {
 	broken := NewService(repo, time.Now, Config{BcryptCost: 99})
 	_, err = broken.AcceptInvitation(ctx, AcceptInput{Token: token, Username: "eve", DisplayName: "Eve", Password: "a long password"})
 	assert.Error(t, err)
+	// A made-up token is refused before any password hashing (the broken hasher is never reached).
+	_, err = broken.AcceptInvitation(ctx, AcceptInput{Token: "pvi_made_up", Username: "eve", DisplayName: "Eve", Password: "a long password"})
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 }
 
 func TestInvitationValidationAndRepositoryFailures(t *testing.T) {

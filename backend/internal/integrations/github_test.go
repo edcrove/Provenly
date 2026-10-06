@@ -82,6 +82,10 @@ func TestConnectGitHub(t *testing.T) {
 		"long token":    {Repository: "acme/shop", Token: ptr(strings.Repeat("t", 501))},
 		"token text":    {Repository: "acme/shop", Token: ptr("t\x00")},
 		"needs a token": {Repository: "acme/shop"},
+		"dot dot":       {Repository: "../..", Token: ptr("t")},
+		"climbs":        {Repository: "acme/..", Token: ptr("t")},
+		"dot owner":     {Repository: "./shop", Token: ptr("t")},
+		"dots only":     {Repository: "acme/...", Token: ptr("t")},
 	} {
 		_, err := f.svc.ConnectGitHub(ctx, "SHOP", in)
 		assert.Equal(t, apperr.KindValidation, kindOf(err), name)
@@ -94,12 +98,18 @@ func TestConnectGitHub(t *testing.T) {
 	assert.Equal(t, GitHubView{Repository: "acme/shop", Labels: "qa,bug", TokenHint: "…1234", UpdatedAt: now}, v)
 	assert.NotContains(t, f.repo.github[2].Token, "ghp_secret1234", "the token is stored sealed")
 
-	// Without a token the stored one is kept (change repository or labels only); a new one rotates it.
-	v, err = f.svc.ConnectGitHub(ctx, "SHOP", GitHubInput{Repository: "acme/web"})
+	// Without a token the stored one is kept for the same repository (labels only, any letter case); another
+	// repository needs the token again; a new one rotates it. Names with dots inside a segment are valid.
+	v, err = f.svc.ConnectGitHub(ctx, "SHOP", GitHubInput{Repository: "Acme/Shop", Labels: "qa"})
 	require.NoError(t, err)
-	assert.Equal(t, "acme/web", v.Repository)
+	assert.Equal(t, "Acme/Shop", v.Repository)
 	assert.Equal(t, "…1234", v.TokenHint)
-	v, err = f.svc.ConnectGitHub(ctx, "SHOP", GitHubInput{Repository: "acme/web", Token: ptr("xyz")})
+	_, err = f.svc.ConnectGitHub(ctx, "SHOP", GitHubInput{Repository: "otherorg/secret"})
+	e, _ = apperr.As(err)
+	require.NotNil(t, e)
+	assert.Equal(t, []apperr.FieldError{{Field: "token", Message: "is required to change the repository"}}, e.Fields)
+	assert.Equal(t, "Acme/Shop", f.repo.github[2].Repository, "nothing changed")
+	v, err = f.svc.ConnectGitHub(ctx, "SHOP", GitHubInput{Repository: "acme/web.site", Token: ptr("xyz")})
 	require.NoError(t, err)
 	assert.Equal(t, "…", v.TokenHint, "a short token shows none of its characters")
 

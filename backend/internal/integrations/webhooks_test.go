@@ -24,10 +24,15 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 func TestBlockedAddresses(t *testing.T) {
-	for _, ip := range []string{"127.0.0.1", "::1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "169.254.169.254", "fe80::1", "0.0.0.0", "224.0.0.1", "ff01::1", "fc00::1"} {
+	for _, ip := range []string{"127.0.0.1", "::1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "169.254.169.254", "fe80::1", "0.0.0.0", "224.0.0.1", "ff01::1", "fc00::1",
+		// Ranges the net.IP predicates miss: "this network", CGNAT / Alibaba metadata, benchmarking, documentation,
+		// reserved and broadcast, Azure WireServer; IPv4-mapped, NAT64 and 6to4 forms of blocked IPv4 addresses.
+		"0.1.2.3", "100.64.0.1", "100.100.100.200", "198.18.0.1", "192.0.2.1", "240.0.0.1", "255.255.255.255",
+		"168.63.129.16", "::ffff:127.0.0.1", "::ffff:169.254.169.254", "64:ff9b::a9fe:a9fe", "64:ff9b:1::a00:1",
+		"2002:a00:1::", "2002:7f00:1::", "2001::1", "2001:db8::1", "fec0::1"} {
 		assert.True(t, blocked(net.ParseIP(ip)), ip)
 	}
-	for _, ip := range []string{"8.8.8.8", "140.82.112.3", "2606:4700::1111"} {
+	for _, ip := range []string{"8.8.8.8", "140.82.112.3", "2606:4700::1111", "64:ff9b::808:808", "2002:808:808::", "100.128.0.1"} {
 		assert.False(t, blocked(net.ParseIP(ip)), ip)
 	}
 	assert.Error(t, checkDial("tcp", "no-port", nil))

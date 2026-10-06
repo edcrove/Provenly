@@ -28,6 +28,20 @@ const (
 
 var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$`)
 
+// validRepository accepts owner/name with no "." or ".." segment (the path GitHub is called with must not climb out
+// of /repos/{owner}/{name}).
+func validRepository(r string) bool {
+	if !repositoryPattern.MatchString(r) {
+		return false
+	}
+	for _, part := range strings.Split(r, "/") {
+		if strings.Trim(part, ".") == "" {
+			return false
+		}
+	}
+	return true
+}
+
 // GitHubView is a project's GitHub connection as shown: never the token, only its last four characters.
 type GitHubView struct {
 	Repository   string
@@ -82,7 +96,7 @@ func (s *Service) GitHub(ctx context.Context, projectKey string) (GitHubView, er
 func (s *Service) ConnectGitHub(ctx context.Context, projectKey string, in GitHubInput) (GitHubView, error) {
 	in.Repository, in.Labels = strings.TrimSpace(in.Repository), strings.TrimSpace(in.Labels)
 	var v apperr.Validator
-	v.Check(repositoryPattern.MatchString(in.Repository), "repository", "must be owner/name")
+	v.Check(validRepository(in.Repository), "repository", "must be owner/name")
 	v.Check(validLen(in.Labels, maxLabels), "labels", fmt.Sprintf("must be at most %d characters", maxLabels))
 	v.CheckText("labels", in.Labels)
 	if in.Token != nil {
@@ -106,6 +120,11 @@ func (s *Service) ConnectGitHub(ctx context.Context, projectKey string, in GitHu
 		}
 		if err != nil {
 			return GitHubView{}, err
+		}
+		// The stored token was given for its repository: pointing it at another one needs the token again, so a
+		// maintainer cannot aim a colleague's token at a repository it was never meant to read.
+		if !strings.EqualFold(current.Repository, in.Repository) {
+			return GitHubView{}, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "token", Message: "is required to change the repository"})
 		}
 		c.Token = current.Token
 	}

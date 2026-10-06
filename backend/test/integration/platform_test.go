@@ -75,7 +75,7 @@ func TestPlatform(t *testing.T) {
 		// Up again: the exact tables, and the same schema object for object.
 		require.NoError(t, postgres.Migrate(ctx, db.Pool, "up"))
 		assert.Equal(t, []string{"api_keys", "audit_events", "classification_dimensions", "classification_values",
-			"github_connections", "invitations", "issue_test_cases", "issues", "project_members", "projects",
+			"github_connections", "invitations", "issue_test_cases", "issues", "password_resets", "project_members", "projects",
 			"requirement_test_cases", "requirements", "test_case_classifications", "test_case_tags", "test_cases",
 			"test_results", "test_run_amendments", "test_run_events", "test_run_expected_cases", "test_run_parse_errors", "test_run_shards",
 			"test_runs", "test_steps", "test_suite_cases", "test_suites", "users", "webhook_deliveries", "webhooks"}, tables())

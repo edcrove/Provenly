@@ -19,6 +19,7 @@ export function user(overrides: Partial<User> = {}): User {
     email: null,
     isAdmin: true,
     createdAt: at,
+    deactivatedAt: null,
     ...overrides,
   }
 }

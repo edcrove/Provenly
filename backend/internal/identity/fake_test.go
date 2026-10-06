@@ -22,6 +22,8 @@ type fakeRepo struct {
 	now         func() time.Time
 	// afterLock runs inside AcceptInvitation's transaction (to simulate a concurrent change).
 	afterLock func()
+	resets    map[int64]PasswordReset
+	nextReset int64
 }
 
 func newFakeRepo(now func() time.Time) *fakeRepo {
@@ -34,7 +36,10 @@ func (f *fakeRepo) InTx(_ context.Context, fn func(Repository) error) error {
 	if err := f.fail("InTx"); err != nil {
 		return err
 	}
-	users, invs, members := map[int64]User{}, map[int64]Invitation{}, map[[2]int64]Member{}
+	users, invs, members, resets := map[int64]User{}, map[int64]Invitation{}, map[[2]int64]Member{}, map[int64]PasswordReset{}
+	for k, v := range f.resets {
+		resets[k] = v
+	}
 	for k, v := range f.members {
 		members[k] = v
 	}
@@ -45,7 +50,7 @@ func (f *fakeRepo) InTx(_ context.Context, fn func(Repository) error) error {
 		invs[k] = v
 	}
 	if err := fn(f); err != nil {
-		f.users, f.invitations, f.members = users, invs, members
+		f.users, f.invitations, f.members, f.resets = users, invs, members, resets
 		return err
 	}
 	return nil
@@ -345,5 +350,81 @@ func (f *fakeRepo) TouchAPIKey(_ context.Context, id int64) error {
 	now := f.now()
 	k.LastUsedAt = &now
 	f.keys[id] = k
+	return nil
+}
+
+func (f *fakeRepo) SetUserDeactivated(_ context.Context, id int64, at *time.Time) (User, error) {
+	if err := f.fail("SetUserDeactivated"); err != nil {
+		return User{}, err
+	}
+	u, ok := f.users[id]
+	if !ok {
+		return User{}, ErrNotFound
+	}
+	u.DeactivatedAt = at
+	f.users[id] = u
+	return u, nil
+}
+
+func (f *fakeRepo) CountActiveAdmins(context.Context) (int64, error) {
+	if err := f.fail("CountActiveAdmins"); err != nil {
+		return 0, err
+	}
+	n := int64(0)
+	for _, u := range f.users {
+		if u.IsAdmin && u.DeactivatedAt == nil {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (f *fakeRepo) VoidPasswordResets(_ context.Context, userID int64) error {
+	if err := f.fail("VoidPasswordResets"); err != nil {
+		return err
+	}
+	now := f.now()
+	for id, r := range f.resets {
+		if r.UserID == userID && r.UsedAt == nil {
+			r.UsedAt = &now
+			f.resets[id] = r
+		}
+	}
+	return nil
+}
+
+func (f *fakeRepo) CreatePasswordReset(_ context.Context, r PasswordReset) (PasswordReset, error) {
+	if err := f.fail("CreatePasswordReset"); err != nil {
+		return PasswordReset{}, err
+	}
+	if f.resets == nil {
+		f.resets = map[int64]PasswordReset{}
+	}
+	f.nextReset++
+	r.ID, r.CreatedAt = f.nextReset, f.now()
+	f.resets[r.ID] = r
+	return r, nil
+}
+
+func (f *fakeRepo) LockPasswordResetByToken(_ context.Context, digest []byte) (PasswordReset, error) {
+	if err := f.fail("LockPasswordResetByToken"); err != nil {
+		return PasswordReset{}, err
+	}
+	for _, r := range f.resets {
+		if bytes.Equal(r.TokenSHA256, digest) {
+			return r, nil
+		}
+	}
+	return PasswordReset{}, ErrNotFound
+}
+
+func (f *fakeRepo) MarkPasswordResetUsed(_ context.Context, id int64) error {
+	if err := f.fail("MarkPasswordResetUsed"); err != nil {
+		return err
+	}
+	r := f.resets[id]
+	now := f.now()
+	r.UsedAt = &now
+	f.resets[id] = r
 	return nil
 }

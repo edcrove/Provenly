@@ -356,6 +356,10 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 The audit's open decisions and cards were refined by the product owner and the six personas and recorded in the
 Notion Decision Register; each one ships in its own PR.
 
+- **Offboarding (card #61):** administrators deactivate (sessions end at once, sign-in refused like a wrong password,
+  project API keys keep working) and reactivate users, and give single-use password reset links (24 h); the
+  `provenly reset-password <username>` command is the break-glass way back in. Nobody deactivates themselves and the
+  last active administrator stays.
 - **npm name (card #64):** the Playwright reporter is published unscoped as `provenly-playwright-reporter` (the
   `@provenly` scope is not this project's), with provenance; earlier mentions of `@provenly/playwright-reporter` refer
   to it.

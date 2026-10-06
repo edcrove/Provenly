@@ -165,3 +165,6 @@ targets:
   - id: FE-INT-050
     description: find a test case by its TC-ID - typing a key in any case narrows the list to it (?key=) and clearing brings everything back; an unknown key says so; text that is not a key is explained and not sent; a malformed ?key= in the address is ignored
     surfaces: [src/features/test-cases/TestCaseListPage.tsx, src/api/queries.ts]
+  - id: FE-INT-051
+    description: account offboarding - an administrator deactivates another user after an inline confirmation (Cancel focused) and reactivates them; a password reset link is shown once and lets the person choose a new password (mismatch and too-short explained) and sign in; a used or missing link says so; a deactivated user gets the usual sign-in refusal
+    surfaces: [src/features/auth/UsersPage.tsx, src/features/auth/ResetPasswordPage.tsx, src/features/auth/links.ts, src/api/queries.ts]

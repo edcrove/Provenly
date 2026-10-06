@@ -53,6 +53,8 @@ type Config struct {
 	SessionTTL time.Duration
 	// InvitationTTL is how long an invitation link can be used.
 	InvitationTTL time.Duration
+	// PasswordResetTTL is how long a password reset link can be used.
+	PasswordResetTTL time.Duration
 	// BcryptCost is the password hashing cost.
 	BcryptCost int
 	// LoginMaxFailures failed sign-ins of one username within LoginWindow lock it until the window passes
@@ -63,7 +65,7 @@ type Config struct {
 
 // DefaultConfig returns production lifetimes with the given secret.
 func DefaultConfig(secret []byte) Config {
-	return Config{Secret: secret, SessionTTL: 12 * time.Hour, InvitationTTL: 7 * 24 * time.Hour, BcryptCost: 12,
+	return Config{Secret: secret, SessionTTL: 12 * time.Hour, InvitationTTL: 7 * 24 * time.Hour, PasswordResetTTL: 24 * time.Hour, BcryptCost: 12,
 		LoginMaxFailures: 5, LoginWindow: 15 * time.Minute}
 }
 
@@ -166,7 +168,8 @@ func (s *Service) login(ctx context.Context, username, password string) (Session
 	if err != nil {
 		return Session{}, err
 	}
-	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
+	// A deactivated user gets the same answer as a wrong password, after the same bcrypt work.
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil || u.DeactivatedAt != nil {
 		return Session{}, errBadCredentials
 	}
 	return s.issue(u)
@@ -216,7 +219,7 @@ func (s *Service) Authenticate(ctx context.Context, token string) (User, error) 
 	if err != nil {
 		return User{}, err
 	}
-	if c.PasswordVersion != passwordVersion(u.PasswordHash) {
+	if c.PasswordVersion != passwordVersion(u.PasswordHash) || u.DeactivatedAt != nil {
 		return User{}, errSignIn
 	}
 	return u, nil

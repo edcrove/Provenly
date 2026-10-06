@@ -22,6 +22,17 @@ func (q *Queries) CountAPIKeys(ctx context.Context, projectID int64) (int64, err
 	return count, err
 }
 
+const countActiveAdmins = `-- name: CountActiveAdmins :one
+SELECT count(*) FROM users WHERE is_admin AND deactivated_at IS NULL
+`
+
+func (q *Queries) CountActiveAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countInvitations = `-- name: CountInvitations :one
 SELECT count(*) FROM invitations
 `
@@ -136,11 +147,44 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 	return i, err
 }
 
+const createPasswordReset = `-- name: CreatePasswordReset :one
+INSERT INTO password_resets (user_id, token_sha256, created_by, expires_at)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, token_sha256, created_by, created_at, expires_at, used_at
+`
+
+type CreatePasswordResetParams struct {
+	UserID      int64
+	TokenSha256 []byte
+	CreatedBy   pgtype.Int8
+	ExpiresAt   pgtype.Timestamptz
+}
+
+func (q *Queries) CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) (PasswordReset, error) {
+	row := q.db.QueryRow(ctx, createPasswordReset,
+		arg.UserID,
+		arg.TokenSha256,
+		arg.CreatedBy,
+		arg.ExpiresAt,
+	)
+	var i PasswordReset
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenSha256,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.UsedAt,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, display_name, email, password_hash, is_admin)
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (username) DO NOTHING
-RETURNING id, username, display_name, email, password_hash, is_admin, created_at, updated_at
+RETURNING id, username, display_name, email, password_hash, is_admin, created_at, updated_at, deactivated_at
 `
 
 type CreateUserParams struct {
@@ -170,6 +214,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.IsAdmin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeactivatedAt,
 	)
 	return i, err
 }
@@ -279,7 +324,7 @@ func (q *Queries) GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (s
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, username, display_name, email, password_hash, is_admin, created_at, updated_at FROM users WHERE id = $1
+SELECT id, username, display_name, email, password_hash, is_admin, created_at, updated_at, deactivated_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
@@ -294,12 +339,13 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.IsAdmin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeactivatedAt,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, display_name, email, password_hash, is_admin, created_at, updated_at FROM users WHERE username = $1
+SELECT id, username, display_name, email, password_hash, is_admin, created_at, updated_at, deactivated_at FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -314,6 +360,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.IsAdmin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeactivatedAt,
 	)
 	return i, err
 }
@@ -401,7 +448,7 @@ func (q *Queries) ListInvitations(ctx context.Context, arg ListInvitationsParams
 }
 
 const listProjectMembers = `-- name: ListProjectMembers :many
-SELECT users.id, users.username, users.display_name, users.email, users.password_hash, users.is_admin, users.created_at, users.updated_at, m.role AS member_role, m.created_at AS member_since
+SELECT users.id, users.username, users.display_name, users.email, users.password_hash, users.is_admin, users.created_at, users.updated_at, users.deactivated_at, m.role AS member_role, m.created_at AS member_since
 FROM project_members m JOIN users ON users.id = m.user_id
 WHERE m.project_id = $1
 ORDER BY users.username
@@ -438,6 +485,7 @@ func (q *Queries) ListProjectMembers(ctx context.Context, arg ListProjectMembers
 			&i.User.IsAdmin,
 			&i.User.CreatedAt,
 			&i.User.UpdatedAt,
+			&i.User.DeactivatedAt,
 			&i.MemberRole,
 			&i.MemberSince,
 		); err != nil {
@@ -481,7 +529,7 @@ func (q *Queries) ListUserMemberships(ctx context.Context, userID int64) ([]List
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, display_name, email, password_hash, is_admin, created_at, updated_at FROM users ORDER BY username LIMIT $2 OFFSET $1
+SELECT id, username, display_name, email, password_hash, is_admin, created_at, updated_at, deactivated_at FROM users ORDER BY username LIMIT $2 OFFSET $1
 `
 
 type ListUsersParams struct {
@@ -507,6 +555,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.IsAdmin,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeactivatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -543,6 +592,26 @@ func (q *Queries) LockInvitationByToken(ctx context.Context, tokenSha256 []byte)
 	return i, err
 }
 
+const lockPasswordResetByToken = `-- name: LockPasswordResetByToken :one
+SELECT id, user_id, token_sha256, created_by, created_at, expires_at, used_at FROM password_resets WHERE token_sha256 = $1 FOR UPDATE
+`
+
+// Locks the link so two uses of it cannot both set a password.
+func (q *Queries) LockPasswordResetByToken(ctx context.Context, tokenSha256 []byte) (PasswordReset, error) {
+	row := q.db.QueryRow(ctx, lockPasswordResetByToken, tokenSha256)
+	var i PasswordReset
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenSha256,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.UsedAt,
+	)
+	return i, err
+}
+
 const markInvitationAccepted = `-- name: MarkInvitationAccepted :exec
 UPDATE invitations SET accepted_at = now(), accepted_user_id = $1 WHERE id = $2
 `
@@ -554,6 +623,15 @@ type MarkInvitationAcceptedParams struct {
 
 func (q *Queries) MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) error {
 	_, err := q.db.Exec(ctx, markInvitationAccepted, arg.UserID, arg.ID)
+	return err
+}
+
+const markPasswordResetUsed = `-- name: MarkPasswordResetUsed :exec
+UPDATE password_resets SET used_at = now() WHERE id = $1 AND used_at IS NULL
+`
+
+func (q *Queries) MarkPasswordResetUsed(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markPasswordResetUsed, id)
 	return err
 }
 
@@ -614,7 +692,7 @@ func (q *Queries) RevokeInvitation(ctx context.Context, id int64) (Invitation, e
 }
 
 const setPasswordHash = `-- name: SetPasswordHash :one
-UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2 RETURNING id, username, display_name, email, password_hash, is_admin, created_at, updated_at
+UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2 RETURNING id, username, display_name, email, password_hash, is_admin, created_at, updated_at, deactivated_at
 `
 
 type SetPasswordHashParams struct {
@@ -634,6 +712,34 @@ func (q *Queries) SetPasswordHash(ctx context.Context, arg SetPasswordHashParams
 		&i.IsAdmin,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeactivatedAt,
+	)
+	return i, err
+}
+
+const setUserDeactivated = `-- name: SetUserDeactivated :one
+UPDATE users SET deactivated_at = $1, updated_at = now() WHERE id = $2 RETURNING id, username, display_name, email, password_hash, is_admin, created_at, updated_at, deactivated_at
+`
+
+type SetUserDeactivatedParams struct {
+	DeactivatedAt pgtype.Timestamptz
+	ID            int64
+}
+
+// deactivated_at NULL reactivates the user.
+func (q *Queries) SetUserDeactivated(ctx context.Context, arg SetUserDeactivatedParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserDeactivated, arg.DeactivatedAt, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.DisplayName,
+		&i.Email,
+		&i.PasswordHash,
+		&i.IsAdmin,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeactivatedAt,
 	)
 	return i, err
 }
@@ -672,4 +778,14 @@ func (q *Queries) UpsertMember(ctx context.Context, arg UpsertMemberParams) (Pro
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const voidPasswordResets = `-- name: VoidPasswordResets :exec
+UPDATE password_resets SET used_at = now() WHERE user_id = $1 AND used_at IS NULL
+`
+
+// A new link, or a used one, voids the user's other pending links.
+func (q *Queries) VoidPasswordResets(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, voidPasswordResets, userID)
+	return err
 }

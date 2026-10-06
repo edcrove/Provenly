@@ -84,7 +84,7 @@ describe('FE-INT-038 suites and partial runs', () => {
     expect(screen.getByTestId('suite-badge')).toHaveTextContent('suite: Release')
   })
 
-  it('FE-INT-038 the runs of a suite follow the link\'s project, not the one chosen in the header', async () => {
+  it("FE-INT-038 the runs of a suite follow the link's project, not the one chosen in the header", async () => {
     db.projects.push(project({ id: 2, key: 'CHK', name: 'Checkout', description: '' }))
     db.runs.push(testRun({ id: 8, suite: { key: 'release', name: 'Release' } }))
     db.runs.push(testRun({ id: 9, projectId: 2, suite: { key: 'release', name: 'Checkout release' } }))

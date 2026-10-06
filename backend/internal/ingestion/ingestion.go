@@ -26,6 +26,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/ingestion/junit"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 	"github.com/edcrove/provenly/backend/internal/platform/telemetry"
 )
 
@@ -147,11 +148,7 @@ func (s *Service) project(ctx context.Context, key string) (catalog.Project, err
 		return s.catalog.ProjectByID(ctx, id)
 	}
 	key = cmp.Or(key, catalog.DefaultProjectKey)
-	p, err := s.catalog.ProjectByKey(ctx, key)
-	if err != nil {
-		return p, err
-	}
-	return p, s.access.Require(ctx, p.ID, authz.RoleMember, apperr.NotFound("project %s not found", key))
+	return projectkey.Resolve(ctx, "project", key, s.catalog.ProjectByKey, catalog.ProjectID, s.access, authz.RoleMember)
 }
 
 // ValidateMeta checks the run metadata that forms the externalRunId.
@@ -167,7 +164,7 @@ func ValidateMeta(m RunMeta) error {
 	v.CheckText("branch", m.Branch)
 	v.CheckText("commit", m.Commit)
 	v.Check(m.Status == "" || slices.Contains(execution.ExecutionStatuses, m.Status), "status", "must be one of completed, interrupted, cancelled")
-	v.Check(m.ProjectKey == "" || catalog.ProjectKeyPattern.MatchString(m.ProjectKey), "project", catalog.ProjectKeyMessage)
+	v.Check(m.ProjectKey == "" || projectkey.Valid(m.ProjectKey), "project", projectkey.Message)
 	v.Check(m.SuiteKey == "" || catalog.SuiteKeyPattern.MatchString(m.SuiteKey), "suite", catalog.SuiteKeyMessage)
 	return v.Err()
 }

@@ -6,9 +6,9 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/edcrove/provenly/backend/internal/catalog"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 )
 
 var nonEmpty = regexp.MustCompile(`^(?s).+$`)
@@ -56,7 +56,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var f Filter
-	project, err := httpx.PatternQuery(r, "project", catalog.ProjectKeyPattern, catalog.ProjectKeyMessage)
+	project, err := projectkey.Query(r)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

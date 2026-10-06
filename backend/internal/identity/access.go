@@ -7,6 +7,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 )
 
 // The identity Service is the authz.Guard of the other modules.
@@ -83,8 +84,8 @@ var errProjectHidden = apperr.NotFound("project not found")
 
 func projectNotFound(int64) error { return errProjectHidden }
 
-// ProjectNotFound is the answer for an unknown or invisible project key (the same text as the catalog's).
-func ProjectNotFound(key string) error { return apperr.NotFound("project %s not found", key) }
+// ProjectNotFound is the answer for an unknown or invisible project key.
+func ProjectNotFound(key string) error { return projectkey.NotFound(key) }
 
 // ListMembers returns a page of a project's members by username (anyone who can see the project).
 func (s *Service) ListMembers(ctx context.Context, projectID int64, page pagination.Page) (pagination.Result[Member], error) {

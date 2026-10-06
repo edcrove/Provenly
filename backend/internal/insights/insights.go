@@ -14,6 +14,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 )
 
 // Bounds of the quality query.
@@ -104,16 +105,13 @@ func percent(part, total int32) float64 {
 func (s *Service) Quality(ctx context.Context, q Query) (Quality, error) {
 	q.StaleDays, q.Window = cmp.Or(q.StaleDays, DefaultStaleDays), cmp.Or(q.Window, DefaultWindow)
 	var v apperr.Validator
-	v.Check(catalog.ProjectKeyPattern.MatchString(q.ProjectKey), "projectKey", catalog.ProjectKeyMessage)
+	projectkey.Check(&v, "projectKey", q.ProjectKey)
 	v.Check(q.StaleDays >= 1 && q.StaleDays <= MaxStaleDays, "staleDays", "must be 1 to 365")
 	v.Check(q.Window >= 1 && q.Window <= MaxWindow, "window", "must be 1 to 200")
 	if err := v.Err(); err != nil {
 		return Quality{}, err
 	}
-	p, err := s.catalog.ProjectByKey(ctx, q.ProjectKey)
-	if err == nil {
-		err = s.access.Require(ctx, p.ID, authz.RoleViewer, apperr.NotFound("project %s not found", q.ProjectKey))
-	}
+	p, err := projectkey.Resolve(ctx, "projectKey", q.ProjectKey, s.catalog.ProjectByKey, catalog.ProjectID, s.access, authz.RoleViewer)
 	if err != nil {
 		return Quality{}, err
 	}

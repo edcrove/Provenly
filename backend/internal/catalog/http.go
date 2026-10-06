@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/etag"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 )
 
 // API is the set of catalog use cases exposed over REST.
@@ -55,7 +55,7 @@ type API interface {
 }
 
 // ProjectKeyMessage is the validation message of a malformed project key.
-const ProjectKeyMessage = "must be a project key: 2 to 10 upper-case letters or digits, starting with a letter"
+const ProjectKeyMessage = projectkey.Message
 
 // ProjectDTO is the wire form of Project.
 type ProjectDTO struct {
@@ -88,9 +88,12 @@ type updateProjectRequest struct {
 	Description *string `json:"description"`
 }
 
+// ProjectID is the id of a project (for projectkey.Resolve).
+func ProjectID(p Project) int64 { return p.ID }
+
 // ProjectQuery resolves the optional ?project=<KEY> filter to a project id.
 func ProjectQuery(r *http.Request, byKey func(context.Context, string) (Project, error)) (*int64, error) {
-	key, err := httpx.PatternQuery(r, "project", ProjectKeyPattern, ProjectKeyMessage)
+	key, err := projectkey.Query(r)
 	if err != nil || key == nil {
 		return nil, err
 	}
@@ -258,10 +261,7 @@ func (h *Handler) project(w http.ResponseWriter, r *http.Request, minRole authz.
 	if !ok {
 		return Project{}, authz.RoleNone, false
 	}
-	p, err := h.api.ProjectByKey(r.Context(), key)
-	if err == nil {
-		err = h.guard.Require(r.Context(), p.ID, minRole, projectNotFound(key))
-	}
+	p, err := projectkey.Resolve(r.Context(), "projectKey", key, h.api.ProjectByKey, ProjectID, h.guard, minRole)
 	var scope authz.Scope
 	if err == nil {
 		scope, err = h.guard.Scope(r.Context())
@@ -360,15 +360,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	key := cmp.Or(req.Project, DefaultProjectKey)
-	if !ProjectKeyPattern.MatchString(key) {
-		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "project", Message: ProjectKeyMessage}))
-		return
-	}
-	p, err := h.api.ProjectByKey(r.Context(), key)
-	if err == nil {
-		err = h.guard.Require(r.Context(), p.ID, authz.RoleMember, projectNotFound(key))
-	}
+	p, err := projectkey.Resolve(r.Context(), "project", cmp.Or(req.Project, DefaultProjectKey), h.api.ProjectByKey, ProjectID, h.guard, authz.RoleMember)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -578,9 +570,9 @@ func (h *Handler) deleteStep(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) projectKey(w http.ResponseWriter, r *http.Request) (string, bool) {
-	key := r.PathValue("projectKey")
-	if !ProjectKeyPattern.MatchString(key) {
-		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "projectKey", Message: ProjectKeyMessage}))
+	key, err := projectkey.Path(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
 		return "", false
 	}
 	return key, true

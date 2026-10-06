@@ -24,6 +24,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 )
 
 // Delivery limits and retry schedule.
@@ -51,11 +52,7 @@ func webhookNotFound(id int64) error { return apperr.NotFound("webhook %d not fo
 
 // project resolves a project the caller maintains (else 404 as if it did not exist, 403 for lower roles).
 func (s *Service) project(ctx context.Context, key string) (catalog.Project, error) {
-	p, err := s.catalog.ProjectByKey(ctx, key)
-	if err == nil {
-		err = s.access.Require(ctx, p.ID, authz.RoleMaintainer, apperr.NotFound("project %s not found", key))
-	}
-	return p, err
+	return projectkey.Resolve(ctx, "projectKey", key, s.catalog.ProjectByKey, catalog.ProjectID, s.access, authz.RoleMaintainer)
 }
 
 // checkURL validates a webhook endpoint: http(s) without credentials; plain http and literal private addresses only

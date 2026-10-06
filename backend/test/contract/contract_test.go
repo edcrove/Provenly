@@ -19,6 +19,7 @@ import (
 
 	"github.com/edcrove/provenly/backend/internal/app"
 	"github.com/edcrove/provenly/backend/internal/platform/postgres"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 	"github.com/edcrove/provenly/backend/internal/platform/telemetry"
 )
 
@@ -51,6 +52,48 @@ func TestRoutesMatchContract(t *testing.T) {
 	}
 	require.ElementsMatch(t, spec, app.RoutePatterns(),
 		"router and api/openapi.yaml disagree: add the missing operations to the contract or remove the extra routes")
+}
+
+// TestProjectKeys: every way of naming a project (path, ?project=, a body field, the ingestion) answers a malformed key
+// with the same 400 and message, and an unknown one with the same 404 (card #45).
+func TestProjectKeys(t *testing.T) {
+	e := api(t, fresh(t), 1<<20)
+	malformed := func(r *httpexpect.Request, field string) {
+		t.Helper()
+		errs := r.Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "validation_error").Value("errors").Array()
+		errs.ContainsAny(map[string]any{"field": field, "message": projectkey.Message})
+	}
+	unknown := func(r *httpexpect.Request) {
+		t.Helper()
+		r.Expect().Status(http.StatusNotFound).JSON(problemOpts).Object().HasValue("code", "not_found").HasValue("detail", "project NOPE not found")
+	}
+	paths := 0
+	for _, route := range app.RoutePatterns() {
+		method, path, _ := strings.Cut(route, " ")
+		if method != http.MethodGet || !strings.Contains(path, "{projectKey}") || strings.Count(path, "{") > 1 {
+			continue
+		}
+		paths++
+		malformed(e.GET(strings.Replace(path, "{projectKey}", "chk", 1)), "projectKey")
+		unknown(e.GET(strings.Replace(path, "{projectKey}", "NOPE", 1)))
+	}
+	assert.GreaterOrEqual(t, paths, 10, "every project-scoped read is swept")
+	for _, path := range []string{"/api/v1/test-cases", "/api/v1/test-runs", "/api/v1/audit"} {
+		malformed(e.GET(path).WithQuery("project", "chk"), "project")
+		malformed(e.GET(path).WithQuery("project", ""), "project")
+	}
+	unknown(e.GET("/api/v1/test-cases").WithQuery("project", "NOPE"))
+	unknown(e.GET("/api/v1/test-runs").WithQuery("project", "NOPE"))
+	malformed(e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "x", "project": "chk"}), "project")
+	unknown(e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "x", "project": "NOPE"}))
+	malformed(e.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "chk", "name": "x", "scope": "manual"}), "project")
+	unknown(e.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "NOPE", "name": "x", "scope": "manual"}))
+	malformed(e.POST("/api/v1/test-runs/live").WithJSON(map[string]any{"project": "chk", "provider": "github", "runId": "1", "runAttempt": 1}), "project")
+	unknown(e.POST("/api/v1/test-runs/live").WithJSON(map[string]any{"project": "NOPE", "provider": "github", "runId": "1", "runAttempt": 1}))
+	malformed(ingest(e, "1", 1, "<testsuite/>").WithQuery("project", "chk"), "project")
+	unknown(ingest(e, "1", 1, "<testsuite/>").WithQuery("project", "NOPE"))
+	malformed(e.POST("/api/v1/invitations").WithJSON(map[string]any{"email": "a@b.c", "project": "chk", "role": "viewer"}), "project")
+	malformed(e.POST("/api/v1/projects").WithJSON(map[string]any{"key": "C-K", "name": "x"}), "key")
 }
 
 func TestSystem(t *testing.T) {

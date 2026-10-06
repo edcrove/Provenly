@@ -1,0 +1,19 @@
+# Keeps pinned dependencies current (SHAs of GitHub Actions included); each update arrives as a PR that CI checks.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups: { actions: { patterns: ["*"] } }
+  - package-ecosystem: gomod
+    directories: [/backend, /tools/covgate]
+    schedule: { interval: weekly }
+  - package-ecosystem: npm
+    directories: [/frontend, /e2e, /reporters/playwright]
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directories: [/backend, /frontend]
+    schedule: { interval: weekly }
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule: { interval: weekly }

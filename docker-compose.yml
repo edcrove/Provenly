@@ -31,8 +31,13 @@ x-app-env: &app-env
   PROVENLY_SECRETS_KEY: ${PROVENLY_SECRETS_KEY:-}
   PROVENLY_WEBHOOKS_ALLOW_PRIVATE: ${PROVENLY_WEBHOOKS_ALLOW_PRIVATE:-}
   PROVENLY_GITHUB_API_URL: ${PROVENLY_GITHUB_API_URL:-}
-  # OpenTelemetry: set an OTLP/HTTP endpoint (e.g. http://collector:4318) to export traces.
+  # OpenTelemetry: set an OTLP/HTTP endpoint (e.g. http://collector:4318) to export traces. The SDK's standard
+  # variables pass through (a hosted collector needs its headers; empty ones mean the SDK defaults).
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}
+  OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+  OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-}
+  OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-}
   # The demo administrator when the env file does not say (an empty value, as in prod.env.example, means none).
   PROVENLY_ADMIN_USERNAME: ${PROVENLY_ADMIN_USERNAME-admin}
   PROVENLY_ADMIN_PASSWORD: ${PROVENLY_ADMIN_PASSWORD-provenly-demo}

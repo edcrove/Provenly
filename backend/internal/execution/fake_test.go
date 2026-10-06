@@ -21,6 +21,22 @@ type fakeRepo struct {
 	summaryReads [][]int64
 	flaky        []FlakyCount
 	events       map[int64][]Event
+	shards       map[int64][]RunShard
+	// failOn fails the nth call (counted in calls) of a method with errBoom.
+	failOn map[string]int
+	calls  map[string]int
+}
+
+// fail returns the error a method must answer with on this call.
+func (f *fakeRepo) fail(name string) error {
+	if f.calls == nil {
+		f.calls = map[string]int{}
+	}
+	f.calls[name]++
+	if n, ok := f.failOn[name]; ok && f.calls[name] == n {
+		return errBoom
+	}
+	return f.errs[name]
 }
 
 func newFakeRepo() *fakeRepo {
@@ -44,7 +60,7 @@ func (f *fakeRepo) InsertTestRun(_ context.Context, p InsertRunParams) (int64, b
 	f.runs[f.nextRun] = TestRun{ID: f.nextRun, ProjectID: p.ProjectID, ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID,
 		RunAttempt: p.RunAttempt, Pipeline: p.Pipeline, Branch: p.Branch, Commit: p.Commit, Status: p.Status,
 		StartedAt: p.StartedAt, CompletedAt: p.CompletedAt, CreatedAt: created, SuiteKey: p.SuiteKey, SuiteName: p.SuiteName,
-		Mode: p.Mode, StartedBy: p.StartedBy}
+		Mode: p.Mode, StartedBy: p.StartedBy, ShardTotal: p.ShardTotal}
 	f.byExt[ext] = f.nextRun
 	return f.nextRun, true, nil
 }
@@ -74,7 +90,14 @@ func (f *fakeRepo) InsertTestResults(_ context.Context, runID int64, rs []NewRes
 	for _, r := range rs {
 		f.nextRes++
 		f.results[runID] = append(f.results[runID], TestResult{ID: f.nextRes, TestRunID: runID, TestCaseID: r.TestCaseID,
-			RequestedTestCaseID: r.RequestedTestCaseID, Correlation: r.Correlation, TestName: r.TestName, Status: r.Status})
+			RequestedTestCaseID: r.RequestedTestCaseID, Correlation: r.Correlation, TestName: r.TestName, Status: r.Status,
+			Shard: func() *int32 {
+				if r.Shard == 0 {
+					return nil
+				}
+				n := r.Shard
+				return &n
+			}()})
 	}
 	return nil
 }
@@ -106,7 +129,7 @@ func (f *fakeRepo) CountParseErrors(_ context.Context, runID int64) (int64, erro
 }
 
 func (f *fakeRepo) GetTestRun(_ context.Context, id int64) (TestRun, error) {
-	if err := f.errs["GetTestRun"]; err != nil {
+	if err := f.fail("GetTestRun"); err != nil {
 		return TestRun{}, err
 	}
 	r, ok := f.runs[id]
@@ -116,6 +139,10 @@ func (f *fakeRepo) GetTestRun(_ context.Context, id int64) (TestRun, error) {
 	r.ExpectedCount = int32(len(f.expected[id]) + len(f.amended[id]))
 	r.ResultCount = int32(len(f.results[id]))
 	r.AmendmentCount = int32(len(f.amended[id]))
+	r.ShardsReceived = nil
+	for _, sh := range f.shards[id] {
+		r.ShardsReceived = append(r.ShardsReceived, sh.Shard)
+	}
 	return r, nil
 }
 
@@ -156,7 +183,8 @@ func (f *fakeRepo) CountTestRuns(_ context.Context, flt RunFilter) (int64, error
 }
 
 func (f *fakeRepo) match(r TestResult, flt ResultFilter) bool {
-	return (flt.Status == nil || r.Status == *flt.Status) && (flt.Correlation == nil || r.Correlation == *flt.Correlation)
+	return (flt.Status == nil || r.Status == *flt.Status) && (flt.Correlation == nil || r.Correlation == *flt.Correlation) &&
+		(flt.Shard == nil || (r.Shard != nil && *r.Shard == *flt.Shard))
 }
 
 func (f *fakeRepo) ListRunResults(_ context.Context, runID int64, flt ResultFilter, limit, offset int32) ([]TestResult, error) {
@@ -460,5 +488,50 @@ func (f *fakeRepo) CompleteLiveRun(_ context.Context, runID int64, status RunSta
 	now := time.Now()
 	r.Status, r.CompletedAt, r.ReportSHA256 = status, &now, sha
 	f.runs[runID] = r
+	return nil
+}
+
+func (f *fakeRepo) InsertRunShard(_ context.Context, runID int64, sh RunShard) (bool, error) {
+	if err := f.errs["InsertRunShard"]; err != nil {
+		return false, err
+	}
+	if f.shards == nil {
+		f.shards = map[int64][]RunShard{}
+	}
+	for _, x := range f.shards[runID] {
+		if x.Shard == sh.Shard {
+			return false, nil
+		}
+	}
+	f.shards[runID] = append(f.shards[runID], sh)
+	slices.SortFunc(f.shards[runID], func(a, b RunShard) int { return int(a.Shard - b.Shard) })
+	return true, nil
+}
+
+func (f *fakeRepo) ListRunShards(_ context.Context, runID int64) ([]RunShard, error) {
+	if err := f.fail("ListRunShards"); err != nil {
+		return nil, err
+	}
+	out := slices.Clone(f.shards[runID])
+	for i := range out {
+		for _, r := range f.results[runID] {
+			if r.Shard != nil && *r.Shard == out[i].Shard {
+				out[i].ResultCount++
+			}
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) FinishShardedRun(_ context.Context, runID int64, status RunStatus) error {
+	if err := f.errs["FinishShardedRun"]; err != nil {
+		return err
+	}
+	r := f.runs[runID]
+	if r.Mode == ModeSharded && r.Status == RunRunning {
+		now := time.Now()
+		r.Status, r.CompletedAt = status, &now
+		f.runs[runID] = r
+	}
 	return nil
 }

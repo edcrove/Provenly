@@ -2294,6 +2294,15 @@ paths:
           required: false
           schema:
             $ref: "#/components/schemas/Correlation"
+        - name: shard
+          in: query
+          required: false
+          description: Only the results reported by this shard of a sharded run.
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
       responses:
         "200":
           description: Page of results
@@ -2513,6 +2522,21 @@ paths:
             be incomplete and its untested test cases may simply not have run.
           schema:
             $ref: "#/components/schemas/ExecutionStatus"
+        - name: shard
+          in: query
+          required: false
+          description: |
+            `i/N`: this report is shard `i` of the `N` (2 to 100) reports of one logical run (same provider, runId and
+            runAttempt), e.g. a test matrix. The first shard creates the run (mode `sharded`, `executionStatus`
+            `running`, its snapshot taken then); each shard adds its results once (201; re-sending a shard is a
+            replay, 200); the run completes when every shard arrived (cancelled if a shard was, else interrupted if a
+            shard was, else completed) and `run.completed` webhooks fire then, once. A different `N`, a shard for a
+            run reported without shards (or the opposite) and a shard after the run ended are 409. To end a run whose
+            shards will not all arrive, call `POST /api/v1/ingestion/finalize`.
+          schema:
+            type: string
+            pattern: "^[0-9]{1,3}/[0-9]{1,3}$"
+          example: 2/4
       requestBody:
         required: true
         description: |
@@ -2558,6 +2582,72 @@ paths:
           $ref: "#/components/responses/PayloadTooLarge"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+  /api/v1/ingestion/finalize:
+    post:
+      tags: [ingestion]
+      operationId: finalizeShardedRun
+      security:
+        - apiKeyAuth: []
+        - bearerAuth: []
+        - cookieAuth: []
+      summary: End a sharded run whose missing shards will not arrive
+      description: |
+        For a CI job that runs after every shard (e.g. `if: always()`): a sharded run still waiting for shards ends as
+        `interrupted`, its missing shards named in `warnings`, and `run.completed` webhooks fire. A run that already
+        ended is returned unchanged (200); a run that is not sharded is 409. No request body; the run is identified
+        like in the ingestion.
+      parameters:
+        - name: project
+          in: query
+          required: false
+          description: Key of the project the run belongs to (default the API key's project, else `TC`).
+          schema:
+            type: string
+            pattern: "^[A-Z][A-Z0-9]{1,9}$"
+        - name: provider
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-z0-9][a-z0-9_-]{0,49}$"
+        - name: runId
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9._-]{1,100}$"
+        - name: runAttempt
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+      responses:
+        "201":
+          description: The run was waiting for shards and ended as interrupted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionResponse"
+        "200":
+          description: The run had already ended; returned unchanged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -3575,8 +3665,8 @@ components:
     RunExecutionStatus:
       type: string
       description: |
-        How the run's execution ended (`completed`, `interrupted`, `cancelled`), or `running` while a manual run
-        still receives results.
+        How the run's execution ended (`completed`, `interrupted`, `cancelled`), or `running` while a manual, live
+        or sharded run still receives results.
       enum: [running, completed, interrupted, cancelled]
 
     RunVerdict:
@@ -3649,11 +3739,38 @@ components:
         - suite
         - mode
         - startedBy
+        - shards
       properties:
         mode:
           type: string
-          enum: [batch, manual, live]
-          description: How the results arrive - one CI report (batch), recorded by people (manual) or streamed (live).
+          enum: [batch, manual, live, sharded]
+          description: |
+            How the results arrive - one CI report (batch), recorded by people (manual), streamed (live) or one
+            report per shard (sharded).
+        shards:
+          description: How far a sharded run got (null - not sharded).
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [total, received, missing]
+          properties:
+            total:
+              type: integer
+              format: int32
+              minimum: 2
+              maximum: 100
+            received:
+              type: array
+              description: The shards that arrived, ascending.
+              items:
+                type: integer
+                format: int32
+            missing:
+              type: array
+              description: The shards that have not arrived, ascending (after a finalization, they never will).
+              items:
+                type: integer
+                format: int32
         startedBy:
           type: string
           nullable: true
@@ -4843,7 +4960,13 @@ components:
         - retried
         - recordedBy
         - failedStep
+        - shard
       properties:
+        shard:
+          type: integer
+          format: int32
+          nullable: true
+          description: The shard of a sharded run that reported the result (null otherwise).
         recordedBy:
           type: string
           nullable: true
@@ -5191,12 +5314,17 @@ components:
     ParseError:
       type: object
       additionalProperties: false
-      required: [index, testName, message, persisted, severity]
+      required: [index, testName, message, persisted, severity, shard]
       properties:
+        shard:
+          type: integer
+          format: int32
+          nullable: true
+          description: The shard of a sharded run whose report it belongs to (null otherwise).
         index:
           type: integer
           format: int32
-          description: 0-based position of the testcase in document order
+          description: 0-based position of the testcase in document order (in its shard's report)
         testName:
           type: string
         message:

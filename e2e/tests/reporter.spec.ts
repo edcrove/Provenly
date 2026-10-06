@@ -53,4 +53,32 @@ test.describe('Playwright reporter (DEC-15)', () => {
     const results = await (await request.get(`${apiURL}/api/v1/test-runs/${run.id}/results`)).json()
     expect(results.items.map((r: { attempt: number; status: string }) => `${r.attempt}:${r.status}`).sort()).toEqual(['1:failed', '1:passed', '2:passed'])
   })
+
+  test('[BE-E2E-028] two sharded reporters build one run that completes when both shards reported', async ({ request, provenly }) => {
+    const key = uniqueProjectKey()
+    await provenly.createProject(key, 'Sharded')
+    const pay = await provenly.createTestCase({ title: 'pay', project: key, automated: true })
+    const refund = await provenly.createTestCase({ title: 'refund', project: key, automated: true })
+    const token = (await (await request.post(`${apiURL}/api/v1/projects/${key}/api-keys`, { data: { name: 'Matrix' } })).json()).token as string
+    const runId = uniqueRunId()
+    const shard = async (current: number, title: string, status: PwTestResult['status']) => {
+      const logs: string[] = []
+      const reporter = new ProvenlyReporter({ url: apiURL, apiKey: token, provider: 'github', runId, runAttempt: 1, env: {}, log: (m) => logs.push(m) })
+      reporter.onBegin({ shard: { current, total: 2 } })
+      const t = pwTest(`s${current}`, title)
+      reporter.onTestEnd(t, pwResult(0, status, status === 'failed' ? 'boom' : ''))
+      await reporter.onEnd({ status: 'passed' })
+      expect(logs).toEqual([`shard ${current}/2: live streaming is off for sharded runs; the report is sent when this shard ends`])
+      return (await (await request.get(`${apiURL}/api/v1/test-runs?project=${key}`)).json()).items
+    }
+
+    const afterFirst = await shard(1, `pays ${pay.key}`, 'passed')
+    expect(afterFirst).toHaveLength(1)
+    expect(afterFirst[0]).toMatchObject({ mode: 'sharded', executionStatus: 'running', shards: { total: 2, received: [1], missing: [2] }, outcome: { verdict: 'incomplete' } })
+    const afterSecond = await shard(2, `refunds ${refund.key}`, 'failed')
+    expect(afterSecond).toHaveLength(1)
+    expect(afterSecond[0]).toMatchObject({ executionStatus: 'completed', shards: { received: [1, 2], missing: [] }, outcome: { verdict: 'failed', passed: 1, failed: 1 } })
+    const results = await (await request.get(`${apiURL}/api/v1/test-runs/${afterSecond[0].id}/results?shard=2`)).json()
+    expect(results.items.map((r: { testName: string; shard: number }) => `${r.shard}:${r.testName}`)).toEqual([`2:checkout.spec.ts › refunds ${refund.key}`])
+  })
 })

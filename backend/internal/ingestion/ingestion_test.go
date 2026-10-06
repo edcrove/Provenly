@@ -105,10 +105,24 @@ type fakeRecorder struct {
 	storedStart *time.Time
 	// storedSuite simulates the suite recorded for an existing run.
 	storedSuite *string
+	// shardRun, when set, is the sharded run RecordRun returns; finalRun, finished and finalErr answer FinalizeShardedRun.
+	shardRun *execution.TestRun
+	finalRun execution.TestRun
+	finished bool
+	finalErr error
+	gotFinal [4]any
+}
+
+func (f *fakeRecorder) FinalizeShardedRun(_ context.Context, projectID int64, provider, runID string, attempt int32) (execution.TestRun, bool, error) {
+	f.gotFinal = [4]any{projectID, provider, runID, attempt}
+	return f.finalRun, f.finished, f.finalErr
 }
 
 func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []int64, rs []execution.NewResult, pe []execution.ParseError) (execution.TestRun, bool, error) {
 	f.gotRun, f.gotExp, f.gotResults, f.gotParse = run, exp, rs, pe
+	if f.shardRun != nil {
+		return *f.shardRun, f.created, f.recordErr
+	}
 	digest := run.ReportSHA256
 	if f.storedDigest != "" {
 		digest = f.storedDigest

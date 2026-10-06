@@ -19,6 +19,8 @@ type Querier interface {
 	CountRunEvents(ctx context.Context, testRunID int64) (int32, error)
 	CountRunResults(ctx context.Context, arg CountRunResultsParams) (int64, error)
 	CountTestRuns(ctx context.Context, arg CountTestRunsParams) (int64, error)
+	// Every shard arrived (or CI finalized the run): its execution status and completion time.
+	FinishShardedRun(ctx context.Context, arg FinishShardedRunParams) error
 	FinishTestRun(ctx context.Context, arg FinishTestRunParams) error
 	GetTestRun(ctx context.Context, id int64) (GetTestRunRow, error)
 	GetTestRunIDByExternalID(ctx context.Context, arg GetTestRunIDByExternalIDParams) (int64, error)
@@ -30,6 +32,8 @@ type Querier interface {
 	InsertParseErrors(ctx context.Context, arg []InsertParseErrorsParams) (int64, error)
 	// Appends one live event; an event id already received for the run is a duplicate delivery and is skipped (0 rows).
 	InsertRunEvent(ctx context.Context, arg InsertRunEventParams) (int64, error)
+	// Records a shard of a running sharded run; a shard already received is a replay (0 rows).
+	InsertRunShard(ctx context.Context, arg InsertRunShardParams) (int64, error)
 	InsertTestResults(ctx context.Context, arg []InsertTestResultsParams) (int64, error)
 	InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error)
 	// Whether a test case is in a run's universe: its snapshot or its amendments.
@@ -61,6 +65,7 @@ type Querier interface {
 	ListRunEvents(ctx context.Context, testRunID int64) ([]TestRunEvent, error)
 	// retried: a later attempt of the same test exists in the run, so this one is not its logical result.
 	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]ListRunResultsRow, error)
+	ListRunShards(ctx context.Context, testRunID int64) ([]ListRunShardsRow, error)
 	// Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status, the
 	// test they belong to and their attempt) of the given runs, in one read.
 	ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]ListSummaryInputsRow, error)

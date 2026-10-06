@@ -25,6 +25,7 @@ type TestResult struct {
 	Attempt             int32
 	RecordedBy          pgtype.Text
 	FailedStep          pgtype.Int4
+	Shard               pgtype.Int4
 }
 
 type TestRun struct {
@@ -46,6 +47,7 @@ type TestRun struct {
 	SuiteName     pgtype.Text
 	Mode          string
 	StartedBy     pgtype.Text
+	ShardTotal    pgtype.Int4
 }
 
 type TestRunAmendment struct {
@@ -85,4 +87,13 @@ type TestRunParseError struct {
 	Message   string
 	Persisted bool
 	Severity  string
+	Shard     pgtype.Int4
+}
+
+type TestRunShard struct {
+	TestRunID    int64
+	Shard        int32
+	ReportSha256 string
+	Status       string
+	ReceivedAt   pgtype.Timestamptz
 }

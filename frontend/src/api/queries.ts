@@ -824,15 +824,16 @@ export function useTestRunResults(
   page: number,
   status?: ResultStatus,
   correlation?: Correlation,
+  shard?: number,
 ) {
   return useQuery({
-    queryKey: [...keys.testRun(id), 'results', status, correlation, page],
+    queryKey: [...keys.testRun(id), 'results', status, correlation, shard, page],
     placeholderData: (prev, q) =>
-      previousPage([...keys.testRun(id), 'results', status, correlation, page], prev, q?.queryKey),
+      previousPage([...keys.testRun(id), 'results', status, correlation, shard, page], prev, q?.queryKey),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/test-runs/{testRunId}/results', {
-          params: { path: { testRunId: id }, query: { page, status, correlation } },
+          params: { path: { testRunId: id }, query: { page, status, correlation, shard } },
         }),
       ),
   })

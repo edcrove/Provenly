@@ -487,6 +487,9 @@ export function useQuality(projectKey: string, staleDays: number, window: number
   return useQuery({
     queryKey: [...keys.projects, projectKey, 'quality', staleDays, window],
     enabled: projectKey !== '',
+    // Changing the stale days or the flaky window keeps the current figures on screen (and the selects mounted,
+    // with their focus) until the new ones arrive; another project starts from loading.
+    placeholderData: (prev, q) => (q?.queryKey[keys.projects.length] === projectKey ? prev : undefined),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/projects/{projectKey}/quality', {

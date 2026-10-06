@@ -14,6 +14,7 @@ import { useCurrentProject } from '@/features/projects/currentProject'
 import { formatDateTime, formatPercent, plural } from '@/lib/format'
 import { verificationLabel, verificationVariant } from '@/lib/issues'
 import { coverageLabel, coverageVariant } from '@/lib/requirements'
+import { verdictLabel } from '@/lib/status'
 
 function Stat({
   label,
@@ -37,26 +38,30 @@ function Stat({
   )
 }
 
+/** The run's verdict in words for screen readers; a running run's verdict is provisional. */
+const runVerdict = (r: TestRun) =>
+  `${verdictLabel(r.outcome.verdict)}${r.executionStatus === 'running' ? ' so far (running)' : ''}`
+
 /** Pass rate of the latest runs, oldest first: one bar per run, red when its verdict is not passed. */
 function Trend({ runs }: { runs: TestRun[] }) {
   const ordered = [...runs].reverse()
   if (ordered.length === 0) return <p className="text-muted-foreground text-sm">No runs yet.</p>
   return (
     <div className="grid gap-2">
-      <div className="flex h-32 items-end gap-1" role="list" aria-label="Pass rate of the latest runs">
+      <ul className="flex h-32 items-end gap-1" aria-label="Pass rate of the latest runs">
         {ordered.map((r) => (
-          <Link
-            key={r.id}
-            to={`/test-runs/${r.id}`}
-            role="listitem"
-            title={`#${r.id} · ${r.outcome.verdict} · ${formatPercent(r.outcome.passRate)} of executed passed`}
-            aria-label={`Run #${r.id}: ${formatPercent(r.outcome.passRate)}`}
-            data-testid={`trend-${r.id}`}
-            className={`min-h-1 max-w-12 flex-1 rounded-t ${r.outcome.verdict === 'passed' ? 'bg-emerald-600' : 'bg-red-600'}`}
-            style={{ height: `${Math.max(r.outcome.passRate, 2)}%` }}
-          />
+          <li key={r.id} className="flex h-full max-w-12 flex-1 items-end">
+            <Link
+              to={`/test-runs/${r.id}`}
+              title={`#${r.id} · ${r.outcome.verdict} · ${formatPercent(r.outcome.passRate)} of executed passed`}
+              aria-label={`Run #${r.id}: ${runVerdict(r)}, ${formatPercent(r.outcome.passRate)} of executed passed`}
+              data-testid={`trend-${r.id}`}
+              className={`min-h-1 w-full rounded-t ${r.outcome.verdict === 'passed' ? 'bg-emerald-600' : 'bg-red-600'}`}
+              style={{ height: `${Math.max(r.outcome.passRate, 2)}%` }}
+            />
+          </li>
         ))}
-      </div>
+      </ul>
       <p className="text-muted-foreground text-xs">
         Pass rate (% of executed) of the latest {ordered.length} runs, oldest first. Red: the run did not
         pass.

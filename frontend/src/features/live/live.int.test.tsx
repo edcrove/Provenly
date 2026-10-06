@@ -2,6 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { LiveRun } from '@/api/client'
+import { summary } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { renderRoute } from '@/test/render'
 
@@ -82,6 +83,22 @@ describe('FE-INT-043 live runs', () => {
     expect(screen.getByText(/runner finished/)).toBeInTheDocument()
     expect(screen.queryByTestId('live-TC-154')).not.toBeInTheDocument()
   }, 10000)
+
+  it("FE-INT-043 a running run's pass rate reads as provisional everywhere and keeps itself current", async () => {
+    db.runs[0] = { ...db.runs[0], mode: 'live', executionStatus: 'running' }
+    db.live[7] = live()
+    const detail = renderRoute('/test-runs/7')
+    expect(await screen.findByTestId('run-pass-rate')).toHaveTextContent(/of executed passed so far$/)
+    expect(await screen.findByText('Pass rate so far')).toBeInTheDocument()
+    // The summary polls while the run runs: new counts show without a reload.
+    db.summaries[7] = summary({ testRunId: 7, executedTotal: 9 })
+    await waitFor(() => expect(screen.getByTestId('executed-total')).toHaveTextContent('9'), {
+      timeout: 4000,
+    })
+    detail.unmount()
+    renderRoute('/test-runs')
+    expect(await screen.findByTestId('pass-rate')).toHaveTextContent(/so far$/)
+  })
 
   it('FE-INT-043 a reconciled run without mismatches is consistent; batch runs have no live panel', async () => {
     db.runs[0] = { ...db.runs[0], mode: 'live' }

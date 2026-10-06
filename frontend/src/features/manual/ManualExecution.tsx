@@ -25,36 +25,47 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
   const [note, setNote] = useState('')
   const [step, setStep] = useState('')
   const key = outcome.testCaseKey ?? String(outcome.testCaseId)
+  // A failed step means the test failed or was blocked: never drop it silently on Pass or Skip.
+  const stepOnly = step.trim() !== ''
   return (
     <TableRow data-testid={`manual-${key}`}>
       <TableCell className="font-mono">
-        <Link to={`/test-cases/${outcome.testCaseId}`} target="_blank" className="underline">
+        <Link to={`/test-cases/${outcome.testCaseId}`} target="_blank" rel="noopener" className="underline">
           {key}
+          <span aria-hidden="true"> ↗</span>
+          <span className="sr-only"> (opens in a new tab)</span>
         </Link>
       </TableCell>
       <TableCell>
         <StatusBadge status={outcome.status} />
       </TableCell>
-      <TableCell className="grid gap-1">
-        <div className="flex flex-wrap gap-1">
-          <Input
-            aria-label={`Note for ${key}`}
-            placeholder="Note (optional)"
-            className="h-8 w-48"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-          <Input
-            aria-label={`Failed step of ${key}`}
-            placeholder="Step"
-            type="number"
-            min={1}
-            className="h-8 w-20"
-            value={step}
-            onChange={(e) => setStep(e.target.value)}
-          />
+      <TableCell>
+        <div className="grid gap-1">
+          <div className="flex flex-wrap gap-1">
+            <Input
+              aria-label={`Note for ${key}`}
+              placeholder="Note (optional)"
+              className="h-8 w-48"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+            <Input
+              aria-label={`Failed step of ${key}`}
+              placeholder="Step"
+              type="number"
+              min={1}
+              className="h-8 w-20"
+              value={step}
+              onChange={(e) => setStep(e.target.value)}
+            />
+          </div>
+          {stepOnly ? (
+            <p className="text-muted-foreground text-xs" data-testid={`step-hint-${key}`}>
+              A failed step goes with Fail or Blocked; clear it to pass or skip.
+            </p>
+          ) : null}
+          {record.error ? <ErrorAlert error={record.error} title={`Could not record ${key}`} /> : null}
         </div>
-        {record.error ? <ErrorAlert error={record.error} title={`Could not record ${key}`} /> : null}
       </TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-1">
@@ -63,7 +74,7 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
               key={a.status}
               size="sm"
               variant={a.status === 'passed' ? 'default' : 'outline'}
-              disabled={record.isPending}
+              disabled={record.isPending || (stepOnly && (a.status === 'passed' || a.status === 'skipped'))}
               onClick={() =>
                 record.mutate(
                   {

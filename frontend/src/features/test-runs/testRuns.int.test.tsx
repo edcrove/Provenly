@@ -76,8 +76,17 @@ describe('FE-INT-008 test run list', () => {
   it('FE-INT-008 shows the empty state and paginates', async () => {
     db.runs = []
     const first = renderRoute('/test-runs')
-    expect(await screen.findByText(/No test runs yet/)).toBeInTheDocument()
+    expect(await screen.findByText(/^No test runs yet/)).toBeInTheDocument()
     first.unmount()
+    // The empty state names the filter that emptied the list.
+    localStorage.setItem('provenly.project', 'TC')
+    const inProject = renderRoute('/test-runs')
+    expect(await screen.findByText(/^No test runs in TC yet/)).toBeInTheDocument()
+    inProject.unmount()
+    const ofSuite = renderRoute('/test-runs?project=TC&suite=nightly')
+    expect(await screen.findByText('No runs of suite nightly yet.')).toBeInTheDocument()
+    ofSuite.unmount()
+    localStorage.removeItem('provenly.project')
 
     db.runs = Array.from({ length: 21 }, (_, i) => testRun({ id: i + 1, externalRunId: `github:${i + 1}:1` }))
     const { user, router } = renderRoute('/test-runs')
@@ -489,6 +498,20 @@ describe('FE-INT-021 result error details', () => {
         errorDetails: 'failure: total mismatch\nexpected 10 got 9\n\nfailure: tax mismatch\nexpected 2 got 1',
       }),
       testResult({ id: 2, testName: 'no details', status: 'failed', errorMessage: 'boom', errorDetails: '' }),
+      testResult({
+        id: 3,
+        testName: 'long',
+        status: 'failed',
+        errorMessage: `expected ${'x'.repeat(200)} end`,
+        errorDetails: '',
+      }),
+      testResult({
+        id: 4,
+        testName: 'lines',
+        status: 'failed',
+        errorMessage: 'first\nsecond\nthird',
+        errorDetails: '',
+      }),
     ]
     const { user } = renderRoute('/test-runs/7')
     const table = await screen.findByRole('table', { name: 'Results' })
@@ -496,7 +519,11 @@ describe('FE-INT-021 result error details', () => {
     expect(within(table).queryByText(/tax mismatch/)).not.toBeInTheDocument()
     const toggle = within(table).getByRole('button', { name: 'Show error details of total mismatch' })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    expect(within(table).getAllByRole('button', { name: /Show error details/ })).toHaveLength(1)
+    // A short message without details has nothing more to show; a long one (clamped to two lines) opens in full.
+    expect(within(table).getAllByRole('button', { name: /Show error details/ })).toHaveLength(3)
+    expect(
+      within(table).queryByRole('button', { name: 'Show error details of boom' }),
+    ).not.toBeInTheDocument()
 
     await user.click(toggle)
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
@@ -506,5 +533,7 @@ describe('FE-INT-021 result error details', () => {
     )
     await user.click(within(table).getByRole('button', { name: 'Hide error details of total mismatch' }))
     expect(within(table).queryByTestId('error-details')).not.toBeInTheDocument()
+    await user.click(within(table).getByRole('button', { name: /^Show error details of expected x+ end$/ }))
+    expect(within(table).getByTestId('error-details').textContent).toBe(`expected ${'x'.repeat(200)} end`)
   })
 })

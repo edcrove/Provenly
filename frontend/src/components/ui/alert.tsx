@@ -19,7 +19,13 @@ function Alert({
   ...props
 }: React.ComponentProps<'div'> & VariantProps<typeof alertVariants>) {
   return (
-    <div data-slot="alert" role="alert" className={cn(alertVariants({ variant }), className)} {...props} />
+    // Only errors interrupt a screen reader (role=alert); notices are announced politely (role=status).
+    <div
+      data-slot="alert"
+      role={variant === 'destructive' ? 'alert' : 'status'}
+      className={cn(alertVariants({ variant }), className)}
+      {...props}
+    />
   )
 }
 

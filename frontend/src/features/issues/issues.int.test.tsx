@@ -45,7 +45,7 @@ describe('FE-INT-041 issues and verification', () => {
     expect(row).toHaveTextContent('Known issue')
 
     await u.selectOptions(screen.getByLabelText('State'), 'closed')
-    expect(await screen.findByText('No issues here.')).toBeInTheDocument()
+    expect(await screen.findByText('No closed issues.')).toBeInTheDocument()
     await u.selectOptions(screen.getByLabelText('State'), 'open')
     expect(await screen.findByTestId('issue-PAY-7')).toBeInTheDocument()
     await u.selectOptions(screen.getByLabelText('State'), '')
@@ -143,8 +143,15 @@ describe('FE-INT-041 issues and verification', () => {
     expect(screen.queryByRole('button', { name: 'Close issue' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Open in the tracker' })).not.toBeInTheDocument()
     detail.unmount()
-    renderRoute('/issues/TC/987654')
+    const unknown = renderRoute('/issues/TC/987654')
     expect(await screen.findByText('Not found')).toBeInTheDocument()
+    unknown.unmount()
+    // A malformed id is not found at once (it used to load forever).
+    for (const bad of ['abc', '0']) {
+      const page = renderRoute(`/issues/TC/${bad}`)
+      expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+      page.unmount()
+    }
   })
 
   it('FE-INT-041 a closed issue without tests says so; a test outside the first page shows its id', async () => {

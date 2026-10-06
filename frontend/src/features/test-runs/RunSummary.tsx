@@ -7,7 +7,7 @@ import { formatPercent, plural, sumPercents } from '@/lib/format'
 import { resultStatuses, summaryStatuses } from '@/lib/status'
 
 /** Snapshot-based summary: counts, % of expected, % of executed and execution %. */
-export function RunSummary({ summary }: { summary: TestRunSummary }) {
+export function RunSummary({ summary, running = false }: { summary: TestRunSummary; running?: boolean }) {
   const untested = summary.testCases.filter((c) => c.status === 'untested')
   const flaky = summary.testCases.filter((c) => c.flaky)
   // A share of nothing is not 0%: with no expected or no executed test case the percentage is undefined.
@@ -43,7 +43,7 @@ export function RunSummary({ summary }: { summary: TestRunSummary }) {
           </div>
         </div>
         <div className="rounded-md border p-3">
-          <div className="text-muted-foreground">Pass rate</div>
+          <div className="text-muted-foreground">Pass rate{running ? ' so far' : ''}</div>
           <div className="text-2xl font-semibold" data-testid="pass-rate">
             {ofExecuted(summary.percentOfExecuted.passed)}
           </div>

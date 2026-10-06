@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 
 import type { Requirement } from '@/api/client'
 import { useRequirement, useRequirementMutations, useTestCases } from '@/api/queries'
+import { NotFoundPage } from '@/app/NotFoundPage'
 import { PageTitle } from '@/components/PageTitle'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -116,6 +117,7 @@ export function RequirementDetailPage() {
   const req = useRequirement(projectKey, id)
   const m = useRequirementMutations(projectKey)
   const edit = can(useProjectRole(projectKey), 'member')
+  if (!id) return <NotFoundPage />
   return (
     <QueryState page query={req}>
       {(r) => (

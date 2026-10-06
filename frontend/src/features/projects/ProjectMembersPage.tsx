@@ -138,7 +138,7 @@ export function ProjectMembersPage() {
           <CardDescription>Who works in this project and with which role.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
-          <QueryState query={members} page>
+          <QueryState query={members}>
             {(data) => (
               <>
                 <Table>

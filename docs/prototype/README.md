@@ -408,6 +408,13 @@ questions went to Ed.
   cross-module foreign-key exception; compose passes the standard OpenTelemetry variables; self-hosting says no
   image is published yet, to deploy from the release tag's checkout and requires Compose v2.24+.
 
+**Domain**
+- Manual and live runs record when they started (the run page and history said "Started —").
+- A live run's reconciliation counts final results outside the run's universe (a manual or deprecated test case CI
+  ran): their live events no longer read as `live_only` mismatches.
+- A suite run explains results outside its universe by the suite ("outside suite Release, or not automated"), not
+  only by automation.
+
 ### 23. Review agents (technical experts and user personas)
 
 - **What**: fourteen read-only subagents in `.claude/agents/` — technical experts (`reviewer-api-contract`,

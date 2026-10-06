@@ -11,10 +11,18 @@ import { useProjectRole } from '@/features/projects/useProjectRole'
 import { can } from '@/lib/roles'
 import { correlationExplanation, diagnosticCount, invalidCorrelations } from '@/lib/status'
 
-function outsideUniverseMessage(n: number): string {
-  return n === 1
-    ? '1 result points to a test case that was not automated when this run was created, so it is not counted in this summary. If it should be automated, mark it so future runs include it; a maintainer can also include it in this run.'
-    : `${n} results point to test cases that were not automated when this run was created, so they are not counted in this summary. If they should be automated, mark them so future runs include them; a maintainer can also include them in this run.`
+/** Why results fall outside the universe depends on how it was chosen: a suite run only expects its suite. */
+function outsideUniverseMessage(n: number, suite?: string): string {
+  const one = n === 1
+  const subject = one ? '1 result points to a test case' : `${n} results point to test cases`
+  const it = one ? 'it' : 'them'
+  const why = suite
+    ? `outside suite ${suite} (or not automated) when this run was created`
+    : `that ${one ? 'was' : 'were'} not automated when this run was created`
+  const fix = suite
+    ? `If ${one ? 'it belongs' : 'they belong'} to the suite, add ${it} to it so its future runs include ${it}`
+    : `If ${one ? 'it' : 'they'} should be automated, mark ${it} so future runs include ${it}`
+  return `${subject} ${why}, so ${one ? 'it is' : 'they are'} not counted in this summary. ${fix}; a maintainer can also include ${it} in this run.`
 }
 
 /** Maintainers include the TC in this run's universe, with a reason (DEC-42): the run is then marked as edited. */
@@ -82,7 +90,16 @@ function OutsideUniverseCase({ id, testRunId }: { id: number; testRunId: number 
 }
 
 /** Results excluded from the summary because their TC-ID is not valid or not in the snapshot. */
-export function RunDiagnostics({ summary, testRunId }: { summary: TestRunSummary; testRunId: number }) {
+export function RunDiagnostics({
+  summary,
+  testRunId,
+  suite,
+}: {
+  summary: TestRunSummary
+  testRunId: number
+  /** The run's suite name, when it is a suite run. */
+  suite?: string
+}) {
   const { diagnostics } = summary
   return (
     <div className="grid gap-2 text-sm">
@@ -103,7 +120,7 @@ export function RunDiagnostics({ summary, testRunId }: { summary: TestRunSummary
       )}
       {summary.outsideUniverse > 0 && (
         <div className="grid gap-2 rounded-md border p-3" role="status">
-          <p data-testid="outside-universe">{outsideUniverseMessage(summary.outsideUniverse)}</p>
+          <p data-testid="outside-universe">{outsideUniverseMessage(summary.outsideUniverse, suite)}</p>
           <ul className="grid gap-2" aria-label="Test cases outside the expected universe">
             {summary.outsideUniverseTestCaseIds.map((id) => (
               <OutsideUniverseCase key={id} id={id} testRunId={testRunId} />

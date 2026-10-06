@@ -162,3 +162,6 @@ targets:
   - id: FE-INT-049
     description: sharded runs - a running sharded run shows how many shards arrived and which it waits for, an interrupted one names the shards that never arrived, a complete one only counts them; results show their shard and filter by it; runs without shards show none of it
     surfaces: [src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/RunResults.tsx, src/api/queries.ts]
+  - id: FE-INT-050
+    description: find a test case by its TC-ID - typing a key in any case narrows the list to it (?key=) and clearing brings everything back; an unknown key says so; text that is not a key is explained and not sent; a malformed ?key= in the address is ignored
+    surfaces: [src/features/test-cases/TestCaseListPage.tsx, src/api/queries.ts]

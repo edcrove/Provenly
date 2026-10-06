@@ -40,6 +40,7 @@ test.describe('Agents: MCP server (prototype feature 19)', () => {
 
     const found = await tool('search_test_cases', { project: key })
     expect(found.items.map((i: { key: string }) => i.key)).toEqual([tc.key])
+    expect((await tool('search_test_cases', { key: tc.key })).items.map((i: { id: number }) => i.id)).toEqual([tc.id])
     expect((await tool('get_test_case_history', { testCaseId: tc.id })).items[0]).toMatchObject({ result: { status: 'failed' }, run: { id: runId } })
     expect(await tool('get_test_run', { testRunId: runId })).toMatchObject({ outcome: { verdict: 'failed' } })
     expect((await tool('get_project_quality', { projectKey: key })).testCases).toMatchObject({ active: 1, automated: 1 })

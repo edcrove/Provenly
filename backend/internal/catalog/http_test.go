@@ -391,3 +391,34 @@ func serveWith(api API, method, target, body, ifMatch string) *httptest.Response
 	mux.ServeHTTP(rec, req)
 	return rec
 }
+
+// ?key=<PROJECT>-<number> narrows the list to that test case: zero or one item (card #53).
+func TestHandlerKeyFilter(t *testing.T) {
+	api := &stubAPI{}
+	rec := serve(api, "GET", "/api/v1/test-cases?key=CHK-12", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, []int64{1}, api.gotFilter.ProjectIDs)
+	assert.Equal(t, ptr(int64(12)), api.gotFilter.Number)
+	serve(api, "GET", "/api/v1/test-cases?key=CHK-999999999999999999&status=active", "")
+	assert.Equal(t, ptr(int64(999999999999999999)), api.gotFilter.Number)
+
+	for _, bad := range []string{"", "chk-12", "CHK12", "CHK-0", "CHK-012", "C-1", "CHK-1000000000000000000", "CHK-12,CHK-13"} {
+		rec = serve(&stubAPI{}, "GET", "/api/v1/test-cases?key="+bad, "")
+		assert.Equal(t, http.StatusBadRequest, rec.Code, bad)
+		assert.Contains(t, rec.Body.String(), `"field":"key"`, bad)
+	}
+
+	empty := func(guard authz.Guard, api *stubAPI, target string) {
+		t.Helper()
+		api.gotFilter = ListFilter{}
+		rec := serveAs(guard, api, "GET", target, "")
+		assert.Equal(t, http.StatusOK, rec.Code, target)
+		assert.Contains(t, rec.Body.String(), `"totalItems":0`, target)
+		assert.Contains(t, rec.Body.String(), `"items":[]`, target)
+		assert.Nil(t, api.gotFilter.Number, "nothing is listed: %s", target)
+	}
+	empty(adminGuard, &stubAPI{projectErr: apperr.NotFound("project NOPE not found")}, "/api/v1/test-cases?key=NOPE-1")
+	empty(memberOf(map[int64]authz.Role{9: authz.RoleViewer}), &stubAPI{}, "/api/v1/test-cases?key=CHK-1")
+	rec = serve(&stubAPI{projectErr: errors.New("db down")}, "GET", "/api/v1/test-cases?key=CHK-1", "")
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+}

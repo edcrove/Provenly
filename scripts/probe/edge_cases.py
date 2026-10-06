@@ -88,6 +88,12 @@ def main():
         sys.exit(f"cannot create a test case ({st}): is the API up at {base}?")
     a, a_key = tc["id"], tc["key"]
     b = call(base, "POST", "/test-cases", {"title": "probe-b"})[1]["id"]
+    # ?key= (card #53): the exact key gives one item, an unknown one none, anything else is a 400.
+    st, body = call(base, "GET", "/test-cases?key=" + a_key)
+    check("list by key", [st, (body or {}).get("totalItems")], [200, 1])
+    check("list by unknown key", call(base, "GET", "/test-cases?key=NOPE-1")[1].get("totalItems"), 0)
+    for bad in ["", a_key.lower(), "TC-0", "TC-1,TC-2", "TC-" + "9" * 19, "%20" + a_key]:
+        check(f"list by key={bad!r}", call(base, "GET", "/test-cases?key=" + bad)[0], 400)
     sa = call(base, "POST", f"/test-cases/{a}/steps", {"action": "s1"})[1]["id"]
     sb = call(base, "POST", f"/test-cases/{b}/steps", {"action": "b1"})[1]["id"]
     xml = b'<testsuite name="probe"><testcase name="ok" time="1"/></testsuite>'

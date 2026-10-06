@@ -83,6 +83,9 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   (400 `validation_error`) and the one 404 for an unknown or invisible project (`project <KEY> not found`), whether the
   key comes in the path, `?project=`, a body field or the ingestion; `projectkey.Resolve` looks the key up and checks the
   caller's role, so every module resolves a project the same way.
+- `GET /api/v1/test-cases?key=<PROJECT>-<number>` (card #53) finds a test case by its key: zero or one item, combinable
+  with the other filters; a key of an unknown or invisible project gives no item (not a 404), anything that is not a
+  key is a 400. The MCP `search_test_cases` tool takes it too.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,
   `totalItems`, `totalPages`.
 - Query parameters: unknown ones are ignored; every known parameter is applied and validated (an invalid value of a

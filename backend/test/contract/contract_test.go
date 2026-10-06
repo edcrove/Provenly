@@ -157,6 +157,37 @@ func TestTestCases(t *testing.T) {
 	e.GET(path+"/results").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
 }
 
+// TestKeyFilter: ?key=<PROJECT>-<number> finds a test case by its key, zero or one item (card #53).
+func TestKeyFilter(t *testing.T) {
+	s := fresh(t)
+	e := api(t, s, 1<<20)
+	e.POST("/api/v1/projects").WithJSON(map[string]any{"key": "CHK", "name": "Checkout"}).Expect().Status(http.StatusCreated)
+	e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "tc one"}).Expect().Status(http.StatusCreated)
+	e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "pay", "project": "CHK"}).Expect().Status(http.StatusCreated)
+	e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "refund", "project": "CHK"}).Expect().Status(http.StatusCreated)
+	list := func(r *httpexpect.Request) *httpexpect.Object {
+		return r.Expect().Status(http.StatusOK).JSON().Object()
+	}
+	one := list(e.GET("/api/v1/test-cases").WithQuery("key", "CHK-2")).HasValue("totalItems", 1)
+	one.Value("items").Array().Value(0).Object().HasValue("key", "CHK-2").HasValue("title", "refund")
+	list(e.GET("/api/v1/test-cases").WithQuery("key", "CHK-2").WithQuery("project", "CHK")).HasValue("totalItems", 1)
+	list(e.GET("/api/v1/test-cases").WithQuery("key", "CHK-2").WithQuery("project", "TC")).HasValue("totalItems", 0)
+	list(e.GET("/api/v1/test-cases").WithQuery("key", "CHK-2").WithQuery("status", "deprecated")).HasValue("totalItems", 0)
+	list(e.GET("/api/v1/test-cases").WithQuery("key", "CHK-9")).HasValue("totalItems", 0).Value("items").Array().IsEmpty()
+	list(e.GET("/api/v1/test-cases").WithQuery("key", "NOPE-1")).HasValue("totalItems", 0)
+	list(e.GET("/api/v1/test-cases").WithQuery("key", "TC-1")).HasValue("totalItems", 1)
+	for _, bad := range []string{"", "chk-2", "CHK-0", "CHK2", "CHK-2,CHK-1"} {
+		e.GET("/api/v1/test-cases").WithQuery("key", bad).Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().
+			Value("errors").Array().Value(0).Object().HasValue("field", "key")
+	}
+
+	// A user without a role in CHK does not learn that CHK-2 exists.
+	tok := e.POST("/api/v1/invitations").WithJSON(map[string]any{}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw()
+	outsider := as(anon(t, s, 1<<20), e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": tok, "username": "out", "displayName": "Out", "password": "outsider password"}).
+		Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
+	list(outsider.GET("/api/v1/test-cases").WithQuery("key", "CHK-2")).HasValue("totalItems", 0)
+}
+
 func TestProjects(t *testing.T) {
 	e := api(t, fresh(t), 1<<20)
 

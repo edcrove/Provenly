@@ -168,7 +168,7 @@ def main():
     for bad in ["", "x", "1/1", "0/2", "3/2", "1/101", "1/2/3", "%201/2"]:
         check(f"ingest shard={bad!r}", call(base, "POST", "/ingestion/junit?" + q.format(60) + f"&shard={bad}", raw=b"<testsuite/>", ctype="application/xml")[0], 400)
     st, body = call(base, "POST", "/ingestion/junit?" + q.format(60) + "&shard=1/2", raw=b"<testsuite/>", ctype="application/xml")
-    check("ingest first shard", (st, (body or {}).get("testRun", {}).get("executionStatus")), (201, "running"))
+    check("ingest first shard", [st, (body or {}).get("testRun", {}).get("executionStatus")], [201, "running"])
     check("ingest same shard again", call(base, "POST", "/ingestion/junit?" + q.format(60) + "&shard=1/2", raw=b"<testsuite/>", ctype="application/xml")[0], 200)
     check("ingest shard with another total", call(base, "POST", "/ingestion/junit?" + q.format(60) + "&shard=2/3", raw=b"<testsuite/>", ctype="application/xml")[0], 409)
     check("ingest sharded run without shard", call(base, "POST", "/ingestion/junit?" + q.format(60), raw=b"<testsuite/>", ctype="application/xml")[0], 409)

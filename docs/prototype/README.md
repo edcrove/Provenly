@@ -375,6 +375,15 @@ questions went to Ed.
   still work.
 - The HTTP server cuts off clients that trickle a request (read and idle timeouts).
 
+**API contract and probe**
+- Webhook and GitHub routes validate `{projectKey}`, member routes validate `{username}`, before any lookup: a NUL or
+  invalid UTF-8 byte was a 500; it is a 400 on every route (the spec lists it).
+- The edge-case probe also runs against the API port in CI (nginx's limits hid the API's own), signs in for the
+  oversized upload, and sweeps malformed keys and usernames and the paging of users, invitations, members and API
+  keys.
+- The Playwright reporter clips live event names to 1000 characters and drops an over-long TC-ID: one long title
+  used to make the API reject the whole event batch.
+
 ### 23. Review agents (technical experts and user personas)
 
 - **What**: fourteen read-only subagents in `.claude/agents/` — technical experts (`reviewer-api-contract`,

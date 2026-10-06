@@ -7,7 +7,15 @@ import { formatPercent, plural, sumPercents } from '@/lib/format'
 import { resultStatuses, summaryStatuses } from '@/lib/status'
 
 /** Snapshot-based summary: counts, % of expected, % of executed and execution %. */
-export function RunSummary({ summary, running = false }: { summary: TestRunSummary; running?: boolean }) {
+export function RunSummary({
+  summary,
+  running = false,
+  manual = false,
+}: {
+  summary: TestRunSummary
+  running?: boolean
+  manual?: boolean
+}) {
   const untested = summary.testCases.filter((c) => c.status === 'untested')
   const flaky = summary.testCases.filter((c) => c.flaky)
   // A share of nothing is not 0%: with no expected or no executed test case the percentage is undefined.
@@ -65,7 +73,7 @@ export function RunSummary({ summary, running = false }: { summary: TestRunSumma
           {summaryStatuses.map((s) => (
             <TableRow key={s} data-testid={`summary-${s}`}>
               <TableCell>
-                <StatusBadge status={s} />
+                <StatusBadge status={s} manual={manual} />
               </TableCell>
               <TableCell>{summary.counts[s]}</TableCell>
               <TableCell>{ofExpected(summary.percentOfExpected[s])}</TableCell>
@@ -94,6 +102,7 @@ export function RunSummary({ summary, running = false }: { summary: TestRunSumma
         the run was created (the active automated test cases, of its suite if it names one; a manual run's own
         selection)
         {summary.amendedTestCaseIds.length > 0 ? ', plus the test cases a maintainer included later' : ''}.
+        {manual ? ' Blocked is stored as error.' : ''}
       </p>
       {flaky.length > 0 && (
         <div className="text-sm" data-testid="flaky-cases">

@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   correlationVariant,
   executionVariant,
+  statusLabel,
   statusVariant,
   verdictLabel,
   verdictVariant,
@@ -11,10 +12,11 @@ import {
   type Verdict,
 } from '@/lib/status'
 
-export function StatusBadge({ status }: { status: SummaryStatus }) {
+/** A result status; in a manual run, error reads Blocked. */
+export function StatusBadge({ status, manual = false }: { status: SummaryStatus; manual?: boolean }) {
   return (
     <Badge variant={statusVariant(status)} data-testid="status-badge">
-      {status}
+      {statusLabel(status, manual)}
     </Badge>
   )
 }

@@ -382,6 +382,11 @@ Notion Decision Register; each one ships in its own PR.
   npm packages and Docker images.
 - **Passwords (card #60):** the minimum counts characters, not bytes (`contraseña` is 10); the maximum stays 72 bytes and the
   forms and the error say non-ASCII letters count as 2 to 4. Same rule for `PROVENLY_ADMIN_PASSWORD`.
+- **Status labels (card #65):** a manual run shows its stored `error` as **Blocked** (summary, badge, results filter,
+  test case history; footnote "Blocked is stored as error"), CI runs keep `error`; a percentage of nothing reads "—"
+  with its counts ("0 of 0 executed", a grey trend bar), while the API keeps 0; "Failures without an open issue (N)"
+  replaces "New failures (no open issue)"; a manual run without results says "Nothing recorded yet."
+
 
 ### 24. Review-panel audit (2026-10-06): fixes
 

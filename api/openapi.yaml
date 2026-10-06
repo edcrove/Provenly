@@ -3882,7 +3882,7 @@ components:
           format: double
           minimum: 0
           maximum: 100
-          description: Percentage of executed TC-IDs that passed (0 when none was executed)
+          description: Percentage of executed TC-IDs that passed; 0 when executed=0 (the UI shows —).
 
     TestRun:
       type: object
@@ -5259,6 +5259,7 @@ components:
     StatusPercentages:
       type: object
       additionalProperties: false
+      description: Percentages of the expected test cases per status; all 0 when the run expects none (expectedTotal=0).
       required: [untested, passed, failed, error, skipped]
       properties:
         untested:
@@ -5275,6 +5276,7 @@ components:
     ExecutedPercentages:
       type: object
       additionalProperties: false
+      description: Percentages of the executed test cases per status; all 0 when none was executed (executedTotal=0).
       required: [passed, failed, error, skipped]
       properties:
         passed:
@@ -5444,6 +5446,7 @@ components:
           $ref: "#/components/schemas/ExecutedPercentages"
         executionPercent:
           type: number
+          description: Executed test cases as a percentage of the expected ones; 0 when expectedTotal=0.
         diagnostics:
           $ref: "#/components/schemas/DiagnosticCounts"
         outsideUniverse:

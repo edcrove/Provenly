@@ -168,3 +168,6 @@ targets:
   - id: FE-INT-051
     description: account offboarding - an administrator deactivates another user after an inline confirmation (Cancel focused) and reactivates them; a password reset link is shown once and lets the person choose a new password (mismatch and too-short explained) and sign in; a used or missing link says so; a deactivated user gets the usual sign-in refusal
     surfaces: [src/features/auth/UsersPage.tsx, src/features/auth/ResetPasswordPage.tsx, src/features/auth/links.ts, src/api/queries.ts]
+  - id: FE-INT-052
+    description: status labels (card #65) - a manual run reads its stored error as Blocked in the summary (with the footnote "Blocked is stored as error"), the results, the status filter and the test case history, while a CI run keeps "error"; a manual run without results says "Nothing recorded yet."; a run that executed nothing has a grey trend bar and reads "— (0 of N executed)"; failures without an open issue are counted, in normal weight, each linking its test case
+    surfaces: [src/lib/status.ts, src/components/StatusBadge.tsx, src/features/test-runs/RunSummary.tsx, src/features/test-runs/RunResults.tsx, src/features/test-runs/TestRunDetailPage.tsx, src/features/test-cases/TestCaseHistory.tsx, src/features/issues/RunKnownIssues.tsx, src/features/dashboard/DashboardPage.tsx]

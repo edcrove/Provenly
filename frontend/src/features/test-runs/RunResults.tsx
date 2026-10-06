@@ -11,7 +11,14 @@ import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDuration } from '@/lib/format'
-import { correlationExplanation, correlations, pickEnum, positiveInt, resultStatuses } from '@/lib/status'
+import {
+  correlationExplanation,
+  correlations,
+  pickEnum,
+  positiveInt,
+  resultStatuses,
+  statusLabel,
+} from '@/lib/status'
 
 /** Individual results of a run as ingested, filterable by status and TC-ID correlation. */
 /** The message is clamped to two lines: a long one without details still opens in full. */
@@ -19,7 +26,15 @@ const CLAMPED_MESSAGE = 120
 const expandable = (r: { errorMessage: string; errorDetails: string }) =>
   r.errorDetails !== '' || r.errorMessage.length > CLAMPED_MESSAGE || r.errorMessage.includes('\n')
 
-export function RunResults({ testRunId, shards }: { testRunId: number; shards?: number }) {
+export function RunResults({
+  testRunId,
+  shards,
+  manual = false,
+}: {
+  testRunId: number
+  shards?: number
+  manual?: boolean
+}) {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
   const status = pickEnum(params.get('status'), resultStatuses)
@@ -56,7 +71,7 @@ export function RunResults({ testRunId, shards }: { testRunId: number; shards?: 
           <option value="">All statuses</option>
           {resultStatuses.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {statusLabel(s, manual)}
             </option>
           ))}
         </NativeSelect>
@@ -104,7 +119,11 @@ export function RunResults({ testRunId, shards }: { testRunId: number; shards?: 
                 {data.items.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-muted-foreground">
-                      {status || correlation || shard ? 'No results match the filters.' : 'No results yet.'}
+                      {status || correlation || shard
+                        ? 'No results match the filters.'
+                        : manual
+                          ? 'Nothing recorded yet.'
+                          : 'No results yet.'}
                     </TableCell>
                   </TableRow>
                 )}
@@ -134,7 +153,7 @@ export function RunResults({ testRunId, shards }: { testRunId: number; shards?: 
                       <TableCell>{r.testName}</TableCell>
                       <TableCell>
                         <span className="flex flex-wrap items-center gap-1">
-                          <StatusBadge status={r.status} />
+                          <StatusBadge status={r.status} manual={manual} />
                           <AttemptBadge attempt={r.attempt} retried={r.retried} />
                           {r.shard ? (
                             <Badge variant="outline" title={`Reported by shard ${r.shard}`}>

@@ -38,7 +38,7 @@ export function TestCaseHistory({ testCaseId }: { testCaseId: number }) {
                   <TableRow key={result.id}>
                     <TableCell>
                       <span className="flex items-center gap-2">
-                        <StatusBadge status={result.status} />
+                        <StatusBadge status={result.status} manual={run.mode === 'manual'} />
                         <AttemptBadge attempt={result.attempt} retried={result.retried} />
                         {result.correlation === 'deprecated' ? (
                           <Badge

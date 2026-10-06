@@ -49,22 +49,35 @@ function Trend({ runs }: { runs: TestRun[] }) {
   return (
     <div className="grid gap-2">
       <ul className="flex h-32 items-end gap-1" aria-label="Pass rate of the latest runs">
-        {ordered.map((r) => (
-          <li key={r.id} className="flex h-full max-w-12 flex-1 items-end">
-            <Link
-              to={`/test-runs/${r.id}`}
-              title={`#${r.id} · ${r.outcome.verdict} · ${formatPercent(r.outcome.passRate)} of executed passed`}
-              aria-label={`Run #${r.id}: ${runVerdict(r)}, ${formatPercent(r.outcome.passRate)} of executed passed`}
-              data-testid={`trend-${r.id}`}
-              className={`min-h-1 w-full rounded-t ${r.outcome.verdict === 'passed' ? 'bg-emerald-600' : 'bg-red-600'}`}
-              style={{ height: `${Math.max(r.outcome.passRate, 2)}%` }}
-            />
-          </li>
-        ))}
+        {ordered.map((r) => {
+          // A run that executed nothing has no pass rate: a grey stub, not a 0% red bar.
+          const rate =
+            r.outcome.executed > 0
+              ? `${formatPercent(r.outcome.passRate)} of executed passed`
+              : '0 of 0 executed'
+          const colour =
+            r.outcome.executed === 0
+              ? 'bg-muted-foreground/40'
+              : r.outcome.verdict === 'passed'
+                ? 'bg-emerald-600'
+                : 'bg-red-600'
+          return (
+            <li key={r.id} className="flex h-full max-w-12 flex-1 items-end">
+              <Link
+                to={`/test-runs/${r.id}`}
+                title={`#${r.id} · ${r.outcome.verdict} · ${rate}`}
+                aria-label={`Run #${r.id}: ${runVerdict(r)}, ${rate}`}
+                data-testid={`trend-${r.id}`}
+                className={`min-h-1 w-full rounded-t ${colour}`}
+                style={{ height: `${Math.max(r.outcome.passRate, 2)}%` }}
+              />
+            </li>
+          )
+        })}
       </ul>
       <p className="text-muted-foreground text-xs">
         Pass rate (% of executed) of the latest {ordered.length} runs, oldest first. Red: the run did not
-        pass.
+        pass; grey: it executed no test case.
       </p>
     </div>
   )

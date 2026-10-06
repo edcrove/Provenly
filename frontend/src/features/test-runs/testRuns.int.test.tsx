@@ -193,7 +193,7 @@ describe('FE-INT-009 test run detail and summary', () => {
     expect(await screen.findByTestId('execution-percent')).toHaveTextContent('—')
     expect(screen.getByTestId('execution-counts')).toHaveTextContent('0 of 0 test cases executed')
     expect(screen.getByTestId('pass-rate')).toHaveTextContent('—')
-    expect(screen.getByTestId('run-pass-rate')).toHaveTextContent('No test case executed')
+    expect(screen.getByTestId('run-pass-rate')).toHaveTextContent('— (0 of 0 executed)')
     expect(screen.getByTestId('verdict-badge')).toHaveTextContent('no tests')
     // FE-INT-048: a share of nothing is "—", never 0%.
     expect(

@@ -11,6 +11,7 @@ import {
   pickEnum,
   positiveInt,
   resultStatuses,
+  statusLabel,
   statusVariant,
   summaryStatuses,
   verdictLabel,
@@ -61,6 +62,13 @@ describe('status helpers', () => {
     expect(verdictVariant('no_tests')).toBe('outline')
     expect(verdictLabel('no_tests')).toBe('no tests')
     expect(verdictLabel('passed')).toBe('passed')
+  })
+
+  it("reads a manual run's stored error as Blocked, and nothing else changes (card #65)", () => {
+    expect(statusLabel('error', true)).toBe('Blocked')
+    expect(statusLabel('error')).toBe('error')
+    expect(statusLabel('failed', true)).toBe('failed')
+    expect(statusLabel('untested', true)).toBe('untested')
   })
 
   it('explains every correlation', () => {

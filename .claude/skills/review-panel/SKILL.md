@@ -1,6 +1,6 @@
 ---
 name: review-panel
-description: Run Provenly's review panel — technical expert subagents (API contract, database, security, tests, frontend, domain) on a diff or PR, and/or user persona subagents (QA lead, developer, manual tester, DevOps, engineering manager) on the UI flows — then consolidate, verify and report their findings. Use before opening or merging a PR, when validating a card, after UI changes, or when Ed asks for a review "con los agentes", "con los expertos" or "con las personas".
+description: Run Provenly's review panel — technical expert subagents (API contract, database, security, tests, frontend, domain) on a diff or PR, the architect and product owner on the whole project, and/or user persona subagents (QA lead, developer, manual tester, DevOps, engineering manager) on the UI flows — then consolidate, verify and report their findings. Use before opening or merging a PR, when validating a card, after UI changes, or when Ed asks for a review "con los agentes", "con los expertos" or "con las personas".
 ---
 
 # Review panel
@@ -21,6 +21,9 @@ The agents live in `.claude/agents/` and are read-only: they report, Claude veri
   | `frontend/src` | `reviewer-frontend` |
   | catalog, execution, ingestion, insights behavior | `reviewer-domain` |
 
+- Whole-product reviews (before closing a milestone, after a large batch of features, or when Ed asks):
+  `architect` for the codebase (or a module) and `product-owner` for vision fit, drift and future ideas. They do
+  not need a diff; give them the scope.
 - Personas, for UI or flow changes and before closing a milestone: regenerate `make screenshots` first, then run
   the personas whose journeys the change touches (all five for a milestone).
 
@@ -32,6 +35,8 @@ Give each one the target (PR number or base), the card or goal in one sentence, 
 - Merge duplicates; keep the strongest severity.
 - Verify every blocker and major yourself (reproduce, read the code, run the test). Mark each finding
   `confirmed`, `not reproducible` or `needs Ed` (product, scope or UX decisions are Ed's).
+- Product-owner suggestions are proposals for Ed and the Notion Incubator, never implemented directly; architect
+  refactors larger than a local fix become cards (or a proposal to Ed), not drive-by changes.
 - Confirmed findings are fixed under the standing authorization (Card workflow 2 in `CLAUDE.md`) with a
   regression test that fails without the fix (Card workflow 4); persona frictions that change product behavior or
   wording beyond a clear defect go to Ed with a recommendation.

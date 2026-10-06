@@ -661,7 +661,7 @@ export interface paths {
         };
         /**
          * The audit log, newest first - every authenticated change made through the API (administrators)
-         * @description One event per successful POST, PUT, PATCH or DELETE: who (a username, or an API key by prefix and name), the operation (method and route), the request path and the project it addressed. Request bodies are never recorded. MCP calls (reads) and live run events are not audited.
+         * @description One event per successful POST, PUT, PATCH or DELETE: who (a username, or an API key by prefix and name), the operation (method and route) and in words ("edited CHK-4 step 3"), the request path, the project it changed and the test case it touched. Request bodies are never recorded. MCP calls (reads) and live run events are not audited. Events recorded before the summary existed have none, and only a project their path named.
          */
         get: operations["listAuditEvents"];
         put?: never;
@@ -2144,9 +2144,19 @@ export interface components {
             action: string;
             /** @example /api/v1/test-cases/153 */
             path: string;
-            /** @description The project key the request addressed (path or ?project=); null when it named none. */
+            /** @description The project the change addressed: its path or `?project=`, else the project its authorization allowed (a test case, a step, a run). Null when none. */
             project: string | null;
             status: number;
+            /**
+             * @description What the change did, in words; null for events recorded before summaries existed.
+             * @example edited CHK-4 step 3
+             */
+            summary: string | null;
+            /**
+             * @description The key of the test case the change touched, if any.
+             * @example CHK-4
+             */
+            testCase: string | null;
         };
         AuditEventPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["AuditEvent"][];
@@ -4058,6 +4068,8 @@ export interface operations {
                 project?: string;
                 /** @description Only events of this actor (a username, exactly as listed). */
                 actor?: string;
+                /** @description Only events that touched this test case (its key). */
+                testCase?: string;
             };
             header?: never;
             path?: never;

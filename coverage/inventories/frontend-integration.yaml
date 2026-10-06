@@ -168,3 +168,6 @@ targets:
   - id: FE-INT-051
     description: account offboarding - an administrator deactivates another user after an inline confirmation (Cancel focused) and reactivates them; a password reset link is shown once and lets the person choose a new password (mismatch and too-short explained) and sign in; a used or missing link says so; a deactivated user gets the usual sign-in refusal
     surfaces: [src/features/auth/UsersPage.tsx, src/features/auth/ResetPasswordPage.tsx, src/features/auth/links.ts, src/api/queries.ts]
+  - id: FE-INT-054
+    description: readable audit entries (card #48) - each change reads in words with its path as the detail (older events show their route), and the log filters by test case key (typed in any case)
+    surfaces: [src/features/audit/AuditPage.tsx, src/api/queries.ts]

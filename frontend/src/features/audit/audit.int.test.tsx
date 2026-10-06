@@ -13,6 +13,8 @@ const event = (id: number, extra: Partial<(typeof db.audit)[number]> = {}) => ({
   path: '/api/v1/test-cases',
   project: null,
   status: 201,
+  summary: 'created a test case',
+  testCase: null,
   ...extra,
 })
 
@@ -29,7 +31,7 @@ describe('FE-INT-046 audit log', () => {
     )
     for (let i = 3; i <= 22; i++) db.audit.push(event(i))
     const { user: u } = renderRoute('/audit')
-    expect(await screen.findByTestId('audit-22')).toHaveTextContent('POST /api/v1/test-cases')
+    expect(await screen.findByTestId('audit-22')).toHaveTextContent('created a test case/api/v1/test-cases')
     expect(screen.getByRole('link', { name: 'Audit' })).toBeInTheDocument()
     await u.click(screen.getByRole('button', { name: /next/i }))
     const ana = await screen.findByTestId('audit-1')
@@ -55,5 +57,38 @@ describe('FE-INT-046 audit log', () => {
     renderRoute('/audit')
     expect(await screen.findByText(/administrator/i)).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Audit' })).not.toBeInTheDocument()
+  })
+})
+
+describe('FE-INT-054 readable audit entries', () => {
+  it('FE-INT-054 each change reads in words with its path as the detail, and the log filters by test case (card #48)', async () => {
+    db.audit.push(
+      event(1, {
+        summary: null,
+        action: 'PATCH /api/v1/test-cases/{testCaseId}',
+        path: '/api/v1/test-cases/9',
+      }),
+      event(2, {
+        summary: 'edited CHK-4 step 3',
+        action: 'PATCH /api/v1/test-cases/{testCaseId}/steps/{stepId}',
+        path: '/api/v1/test-cases/4/steps/30',
+        project: 'CHK',
+        testCase: 'CHK-4',
+      }),
+    )
+    const { user: u, router } = renderRoute('/audit')
+    const edit = await screen.findByTestId('audit-2')
+    expect(edit).toHaveTextContent('edited CHK-4 step 3/api/v1/test-cases/4/steps/30')
+    expect(edit).toHaveTextContent('CHK')
+    // An event recorded before summaries existed shows its route.
+    expect(screen.getByTestId('audit-1')).toHaveTextContent(
+      'PATCH /api/v1/test-cases/{testCaseId}/api/v1/test-cases/9',
+    )
+
+    await u.type(screen.getByLabelText('Test case'), ' chk-4 ')
+    await u.click(screen.getByRole('button', { name: 'Filter' }))
+    await waitFor(() => expect(screen.queryByTestId('audit-1')).not.toBeInTheDocument())
+    expect(router.state.location.search).toBe('?testCase=CHK-4')
+    expect(screen.getByTestId('audit-2')).toBeInTheDocument()
   })
 })

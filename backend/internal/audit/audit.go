@@ -15,6 +15,7 @@ import (
 
 	"github.com/edcrove/provenly/backend/internal/identity"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/auditnote"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
@@ -28,12 +29,17 @@ type Event struct {
 	Path       string
 	ProjectKey string
 	Status     int32
+	// Summary says what the change did ("edited CHK-4 step 3"); empty for events recorded before it existed.
+	Summary string
+	// TestCaseKey is the test case the change touched (CHK-4), if any.
+	TestCaseKey string
 }
 
 // Filter narrows the log; empty fields match everything.
 type Filter struct {
-	ProjectKey string
-	Actor      string
+	ProjectKey  string
+	Actor       string
+	TestCaseKey string
 }
 
 // Repository is the persistence port of the audit module.
@@ -50,12 +56,16 @@ type Access interface {
 
 // Service records and lists audit events.
 type Service struct {
-	repo   Repository
-	access Access
+	repo     Repository
+	access   Access
+	resolver Resolver
 }
 
 // NewService builds a Service.
 func NewService(repo Repository, access Access) *Service { return &Service{repo: repo, access: access} }
+
+// SetResolver lets the log name the projects, test cases and steps that changes touched.
+func (s *Service) SetResolver(r Resolver) { s.resolver = r }
 
 // Page is one page of events.
 type Page = pagination.Result[Event]
@@ -66,6 +76,7 @@ func (s *Service) Events(ctx context.Context, f Filter, page pagination.Page) (P
 	v.Check(utf8.RuneCountInString(f.Actor) <= 200, "actor", "must be at most 200 characters")
 	v.CheckText("actor", f.Actor)
 	v.Check(utf8.RuneCountInString(f.ProjectKey) <= 50, "project", "must be at most 50 characters")
+	v.Check(utf8.RuneCountInString(f.TestCaseKey) <= 40, "testCase", "must be at most 40 characters")
 	v.CheckText("project", f.ProjectKey)
 	if err := v.Err(); err != nil {
 		return Page{}, err
@@ -105,13 +116,30 @@ func truncate(s string, n int) string {
 	return s
 }
 
-// record stores the event of a successful change; a failure is logged, never returned (the change happened).
-func (s *Service) record(r *http.Request, action string, status int) {
-	project := r.PathValue("projectKey")
-	if project == "" {
-		project = r.URL.Query().Get("project")
+// project is the key of the project a change addressed: in its path or ?project=, else the one its authorization
+// allowed (a test case, a step or a run is attributed to its project).
+func (s *Service) project(r *http.Request, note *auditnote.Note) string {
+	if p := r.PathValue("projectKey"); p != "" {
+		return p
 	}
-	e := Event{Actor: actor(r.Context()), Action: action, Path: truncate(storable(r.URL.Path), 2000), ProjectKey: truncate(storable(project), 50), Status: int32(status)}
+	if p := r.URL.Query().Get("project"); p != "" {
+		return p
+	}
+	if id := note.ProjectID(); id != 0 && s.resolver != nil {
+		if key, err := s.resolver.ProjectKey(r.Context(), id); err == nil {
+			return key
+		}
+	}
+	return ""
+}
+
+// record stores the event of a successful change; a failure is logged, never returned (the change happened).
+func (s *Service) record(r *http.Request, action string, status int, note *auditnote.Note, t target) {
+	e := Event{
+		Actor: actor(r.Context()), Action: action, Path: truncate(storable(r.URL.Path), 2000),
+		ProjectKey: truncate(storable(s.project(r, note)), 50), Status: int32(status),
+		Summary: truncate(storable(t.summary(action)), 300), TestCaseKey: t.testCaseKey,
+	}
 	if err := s.repo.Insert(context.WithoutCancel(r.Context()), e); err != nil {
 		slog.ErrorContext(r.Context(), "audit event not recorded", "action", action, "error", err)
 	}
@@ -138,10 +166,13 @@ func (a Router) HandleFunc(pattern string, h func(http.ResponseWriter, *http.Req
 		return
 	}
 	a.next.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		ctx, note := auditnote.Open(r.Context())
+		r = r.WithContext(ctx)
+		t := a.svc.resolve(r, pattern)
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		h(sw, r)
 		if sw.status < 300 {
-			a.svc.record(r, pattern, sw.status)
+			a.svc.record(r, pattern, sw.status, note, t)
 		}
 	})
 }

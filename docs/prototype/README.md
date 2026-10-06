@@ -387,6 +387,11 @@ Notion Decision Register; each one ships in its own PR.
   npm packages and Docker images.
 - **Passwords (card #60):** the minimum counts characters, not bytes (`contraseña` is 10); the maximum stays 72 bytes and the
   forms and the error say non-ASCII letters count as 2 to 4. Same rule for `PROVENLY_ADMIN_PASSWORD`.
+- **Readable audit (card #48):** changes to a test case, a step, a suite, a run or anything else are filed under their
+  project (the one the request was allowed into), read in words ("edited CHK-4 step 3", the path as detail) and filter
+  by test case (`?testCase=CHK-4`); events recorded before keep only their route (not backfilled: the log is
+  append-only).
+
 
 ### 24. Review-panel audit (2026-10-06): fixes
 

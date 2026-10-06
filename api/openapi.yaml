@@ -1223,8 +1223,10 @@ paths:
       summary: The audit log, newest first - every authenticated change made through the API (administrators)
       description: >-
         One event per successful POST, PUT, PATCH or DELETE: who (a username, or an API key by prefix and name),
-        the operation (method and route), the request path and the project it addressed. Request bodies are never
-        recorded. MCP calls (reads) and live run events are not audited.
+        the operation (method and route) and in words ("edited CHK-4 step 3"), the request path, the project it
+        changed and the test case it touched. Request bodies are never recorded. MCP calls (reads) and live run
+        events are not audited. Events recorded before the summary existed have none, and only a project their path
+        named.
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
@@ -1243,6 +1245,14 @@ paths:
             type: string
             minLength: 1
             maxLength: 200
+        - name: testCase
+          in: query
+          required: false
+          description: Only events that touched this test case (its key).
+          schema:
+            type: string
+            pattern: "^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,17}$"
+            example: CHK-4
       responses:
         "200":
           description: Page of events
@@ -4590,7 +4600,7 @@ components:
     AuditEvent:
       type: object
       additionalProperties: false
-      required: [id, occurredAt, actor, action, path, project, status]
+      required: [id, occurredAt, actor, action, path, project, status, summary, testCase]
       properties:
         id:
           type: integer
@@ -4611,9 +4621,21 @@ components:
         project:
           type: string
           nullable: true
-          description: The project key the request addressed (path or ?project=); null when it named none.
+          description: >-
+            The project the change addressed: its path or `?project=`, else the project its authorization allowed
+            (a test case, a step, a run). Null when none.
         status:
           type: integer
+        summary:
+          type: string
+          nullable: true
+          description: What the change did, in words; null for events recorded before summaries existed.
+          example: edited CHK-4 step 3
+        testCase:
+          type: string
+          nullable: true
+          description: The key of the test case the change touched, if any.
+          example: CHK-4
 
     AuditEventPage:
       allOf:

@@ -331,6 +331,7 @@ function maintainedProject(raw: string | readonly string[] | undefined): Project
 const DIMENSION = /^[a-z][a-z0-9-]{0,29}$/
 /** A project the user maintains, for integrations (any unknown or malformed key is 404, like the server). */
 function integrationProject(raw: string | readonly string[] | undefined): Project | Response {
+  if (typeof raw !== 'string' || !KEY.test(raw)) return validation('projectKey', 'must be a project key')
   const p = db.projects.find((x) => x.key === raw)
   if (!p) return notFound(`project ${String(raw)}`)
   return requireRole(p.id, 'maintainer', () => notFound(`project ${String(raw)}`)) ?? p

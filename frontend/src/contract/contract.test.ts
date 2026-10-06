@@ -1894,6 +1894,7 @@ const withWebhook = () => {
 const hook31 = { projectKey: 'TC', webhookId: 31 }
 const hook404 = { projectKey: 'TC', webhookId: 987654 }
 const nope = { projectKey: 'NOPE' }
+const badKey = { projectKey: 'tc' }
 const hookBody = { url: 'https://hooks.example.com/p', events: ['run.completed' as const] }
 const withGitHub =
   (repository = 'acme/shop', tokenHint = '…1234') =>
@@ -1910,6 +1911,27 @@ const withGitHub =
   }
 const ghBody = { repository: 'acme/shop', token: 'ghp_x' }
 const integrationScenarios: Scenario[] = [
+  // A malformed project key is a 400 before any lookup.
+  {
+    op: 'GET /api/v1/projects/{projectKey}/webhooks',
+    status: 400,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/webhooks', { params: { path: badKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/github',
+    status: 400,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/github', { params: { path: badKey } }),
+  },
+  {
+    op: 'DELETE /api/v1/projects/{projectKey}/github',
+    status: 400,
+    call: (c) => c.DELETE('/api/v1/projects/{projectKey}/github', { params: { path: badKey } }),
+  },
+  {
+    op: 'POST /api/v1/projects/{projectKey}/github/sync',
+    status: 400,
+    call: (c) => c.POST('/api/v1/projects/{projectKey}/github/sync', { params: { path: badKey } }),
+  },
   {
     op: 'GET /api/v1/projects/{projectKey}/webhooks',
     status: 200,

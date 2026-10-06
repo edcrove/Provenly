@@ -54,6 +54,8 @@ func TestDeactivate(t *testing.T) {
 	assert.Equal(t, u.DeactivatedAt, again.DeactivatedAt, "deactivating twice changes nothing")
 	_, _, err = s.CreatePasswordReset(ctx, a, "ana")
 	assert.Equal(t, apperr.KindConflict, kindOf(t, err), "no reset link for a deactivated user")
+	_, err = s.SetMember(WithUser(ctx, a), 1, "ana", "member")
+	assert.Equal(t, apperr.KindConflict, kindOf(t, err), "a deactivated user joins no project")
 
 	back, err := s.Reactivate(ctx, a, "ana")
 	require.NoError(t, err)

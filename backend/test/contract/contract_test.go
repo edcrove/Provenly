@@ -216,6 +216,7 @@ func TestOffboarding(t *testing.T) {
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": "ana", "password": "ana password"}).Expect().
 		Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("detail", "invalid username or password")
 	admin.POST("/api/v1/users/ana/password-reset").Expect().Status(http.StatusConflict)
+	admin.PUT("/api/v1/projects/TC/members/ana").WithJSON(map[string]any{"role": "member"}).Expect().Status(http.StatusConflict)
 	admin.GET("/api/v1/users").Expect().Status(http.StatusOK).JSON().Object().Value("items").Array().Value(1).Object().
 		HasValue("username", "ana").Value("deactivatedAt").String().NotEmpty()
 	admin.POST("/api/v1/users/ana/reactivate").Expect().Status(http.StatusOK).JSON().Object().HasValue("deactivatedAt", nil)

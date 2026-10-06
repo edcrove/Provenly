@@ -1253,6 +1253,8 @@ export const handlers = [
         if (!memberRoleOk(role)) return validation('role', 'must be one of maintainer, member, viewer')
         const u = db.users.find((x) => x.username === params.username)
         if (!u) return notFound(`user ${String(params.username)}`)
+        if (u.deactivatedAt)
+          return problem(409, 'conflict', `${u.username} is deactivated: reactivate the account first`)
         db.members = db.members.filter((m) => !(m.projectId === p.id && m.userId === u.id))
         db.members.push({ projectId: p.id, userId: u.id, role, since: now() })
         return respond({ user: u, role, since: now() })

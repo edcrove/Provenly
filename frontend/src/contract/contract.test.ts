@@ -489,6 +489,15 @@ const roleScenarios: Scenario[] = [
       [400, addAna, ana, { role: 'owner' }],
       [403, asViewer, ana, { role: 'maintainer' }],
       [404, undefined, ana, { role: 'member' }],
+      [
+        409,
+        () => {
+          addAna()
+          db.users[db.users.length - 1].deactivatedAt = '2026-10-06T10:00:00Z'
+        },
+        ana,
+        { role: 'member' },
+      ],
       [500, fail, ana, { role: 'member' }],
     ] as const
   ).map(([status, setup, path, body]): Scenario => ({

@@ -353,10 +353,10 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 
 ### 23. Review agents (technical experts and user personas)
 
-- **What**: thirteen read-only subagents in `.claude/agents/` — technical experts (`reviewer-api-contract`,
+- **What**: fourteen read-only subagents in `.claude/agents/` — technical experts (`reviewer-api-contract`,
   `reviewer-database`, `reviewer-security`, `reviewer-tests`, `reviewer-frontend`, `reviewer-domain`) that review a
   diff against the repo's rules and return findings with severity and `path:line`, and user personas
-  (`persona-qa-lead`, `persona-developer`, `persona-manual-tester`, `persona-devops`, `persona-engineering-manager`)
+  (`persona-qa-lead`, `persona-developer`, `persona-sdet`, `persona-manual-tester`, `persona-devops`, `persona-engineering-manager`)
   that walk their journeys over the screenshots or a running stack and report friction.
 - **Feature coverage audit**: `reviewer-tests` also runs per feature — it derives the acceptance criteria from the
   card, decisions and contract, plans every test from zero (before reading the existing ones), then maps the plan

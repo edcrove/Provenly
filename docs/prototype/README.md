@@ -358,6 +358,9 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
   diff against the repo's rules and return findings with severity and `path:line`, and user personas
   (`persona-qa-lead`, `persona-developer`, `persona-manual-tester`, `persona-devops`, `persona-engineering-manager`)
   that walk their journeys over the screenshots or a running stack and report friction.
+- **Feature coverage audit**: `reviewer-tests` also runs per feature — it derives the acceptance criteria from the
+  card, decisions and contract, plans every test from zero (before reading the existing ones), then maps the plan
+  to the tests that exist and reports a traceability matrix with covered, partial and missing conditions.
 - **Whole-project reviewers**: `architect` reviews the codebase as a whole (module boundaries, layering,
   consistency, data access, runtime, evolvability) and proposes incremental refactors; `product-owner` checks the
   product against Ed's vision and decisions (Notion, Trello, docs, screenshots), reports drift and gaps and

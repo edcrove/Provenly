@@ -21,6 +21,10 @@ The agents live in `.claude/agents/` and are read-only: they report, Claude veri
   | `frontend/src` | `reviewer-frontend` |
   | catalog, execution, ingestion, insights behavior | `reviewer-domain` |
 
+- Feature coverage audit: when validating a card, closing a milestone or when Ed asks whether a feature is fully
+  tested, run `reviewer-tests` in Mode 2 per feature (one agent per feature, in parallel): it plans the tests of
+  the acceptance criteria from zero, then maps them to the existing tests and lists every gap. Missing tests it
+  reports are written (Card workflow 4) and proven to fail without the code they guard.
 - Whole-product reviews (before closing a milestone, after a large batch of features, or when Ed asks):
   `architect` for the codebase (or a module) and `product-owner` for vision fit, drift and future ideas. They do
   not need a diff; give them the scope.

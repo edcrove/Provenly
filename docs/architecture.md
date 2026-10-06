@@ -78,6 +78,10 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 
 - Errors: `application/problem+json` with a stable `code` (`validation_error`, `not_found`, `invalid_junit`, …) and
   optional field `errors`. Internal errors never leak details.
+- Project keys (card #45): `platform/projectkey` holds the one key pattern, the one field message for a malformed key
+  (400 `validation_error`) and the one 404 for an unknown or invisible project (`project <KEY> not found`), whether the
+  key comes in the path, `?project=`, a body field or the ingestion; `projectkey.Resolve` looks the key up and checks the
+  caller's role, so every module resolves a project the same way.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,
   `totalItems`, `totalPages`.
 - Query parameters: unknown ones are ignored; every known parameter is applied and validated (an invalid value of a

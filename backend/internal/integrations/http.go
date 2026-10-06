@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/edcrove/provenly/backend/internal/catalog"
-	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 )
 
 // API is the integrations use cases exposed over REST.
@@ -144,9 +144,9 @@ type githubRequest struct {
 // reaches the database.
 func keyed(handle func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		key := r.PathValue("projectKey")
-		if !catalog.ProjectKeyPattern.MatchString(key) {
-			httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "projectKey", Message: catalog.ProjectKeyMessage}))
+		key, err := projectkey.Path(r)
+		if err != nil {
+			httpx.WriteError(w, r, err)
 			return
 		}
 		handle(w, r, key)

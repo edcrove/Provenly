@@ -307,13 +307,16 @@ async function readBody(request: Request): Promise<Record<string, unknown> | und
   }
 }
 
+// The API's message for a malformed project key (platform/projectkey).
+const PROJECT_KEY_MESSAGE =
+  'must be a project key: 2 to 10 upper-case letters or digits, starting with a letter (e.g. CHK)'
 const KEY = /^[A-Z][A-Z0-9]{1,9}$/
 
 /** Resolves ?project=<KEY> like the server: absent is every project, malformed is 400, unknown is 404. */
 function projectFilter(url: URL): Project | undefined | Response {
   if (!url.searchParams.has('project')) return undefined
   const key = url.searchParams.get('project') ?? ''
-  if (!KEY.test(key)) return validation('project', 'must be a project key')
+  if (!KEY.test(key)) return validation('project', PROJECT_KEY_MESSAGE)
   return db.projects.find((p) => p.key === key) ?? notFound(`project ${key}`)
 }
 
@@ -325,7 +328,7 @@ function withoutProject({ projectId, ...k }: MockDb['apiKeys'][number]): ApiKey 
 
 /** A project the signed-in user maintains (or administers), like the server: else 400, 404 or 403. */
 function maintainedProject(raw: string | readonly string[] | undefined): Project | Response {
-  if (!KEY.test(String(raw))) return validation('projectKey', 'must be a project key')
+  if (!KEY.test(String(raw))) return validation('projectKey', PROJECT_KEY_MESSAGE)
   const p = db.projects.find((x) => x.key === raw)
   if (!p) return notFound(`project ${String(raw)}`)
   return requireRole(p.id, 'maintainer', () => notFound(`project ${String(raw)}`)) ?? p
@@ -334,7 +337,7 @@ function maintainedProject(raw: string | readonly string[] | undefined): Project
 const DIMENSION = /^[a-z][a-z0-9-]{0,29}$/
 /** A project the user maintains, for integrations (any unknown or malformed key is 404, like the server). */
 function integrationProject(raw: string | readonly string[] | undefined): Project | Response {
-  if (typeof raw !== 'string' || !KEY.test(raw)) return validation('projectKey', 'must be a project key')
+  if (typeof raw !== 'string' || !KEY.test(raw)) return validation('projectKey', PROJECT_KEY_MESSAGE)
   const p = db.projects.find((x) => x.key === raw)
   if (!p) return notFound(`project ${String(raw)}`)
   return requireRole(p.id, 'maintainer', () => notFound(`project ${String(raw)}`)) ?? p
@@ -372,7 +375,7 @@ function dimensionDto({ projectId, ...d }: MockDb['dimensions'][number]): Dimens
 
 /** A project the signed-in user sees (viewer and up), like the server. */
 function visibleProject(raw: string | readonly string[] | undefined): Project | Response {
-  if (!KEY.test(String(raw))) return validation('projectKey', 'must be a project key')
+  if (!KEY.test(String(raw))) return validation('projectKey', PROJECT_KEY_MESSAGE)
   const p = db.projects.find((x) => x.key === raw)
   if (!p || !roleIn(p.id)) return notFound(`project ${String(raw)}`)
   return p
@@ -932,7 +935,7 @@ export const handlers = [
       jsonGuard(async ({ request }) => {
         const body = await readBody(request)
         const key = String(body?.project ?? '')
-        if (!KEY.test(key)) return validation('project', 'must be a project key')
+        if (!KEY.test(key)) return validation('project', PROJECT_KEY_MESSAGE)
         const name = typeof body?.name === 'string' ? body.name.trim() : ''
         if (!name) return validation('name', 'is required')
         const scope = body?.scope ?? 'manual'
@@ -1224,7 +1227,7 @@ export const handlers = [
   http.get(
     `${BASE}/projects/:projectKey/members`,
     guard(({ params, request }) => {
-      if (!KEY.test(String(params.projectKey))) return validation('projectKey', 'must be a project key')
+      if (!KEY.test(String(params.projectKey))) return validation('projectKey', PROJECT_KEY_MESSAGE)
       const p = db.projects.find((x) => x.key === params.projectKey)
       if (!p || !roleIn(p.id)) return notFound(`project ${String(params.projectKey)}`)
       const items = db.members
@@ -1238,7 +1241,7 @@ export const handlers = [
     `${BASE}/projects/:projectKey/members/:username`,
     guard(
       jsonGuard(async ({ params, request }) => {
-        if (!KEY.test(String(params.projectKey))) return validation('projectKey', 'must be a project key')
+        if (!KEY.test(String(params.projectKey))) return validation('projectKey', PROJECT_KEY_MESSAGE)
         const p = db.projects.find((x) => x.key === params.projectKey)
         if (!p || !roleIn(p.id)) return notFound(`project ${String(params.projectKey)}`)
         if (roleIn(p.id) !== 'admin' && roleIn(p.id) !== 'maintainer')
@@ -1256,7 +1259,7 @@ export const handlers = [
   http.delete(
     `${BASE}/projects/:projectKey/members/:username`,
     guard(({ params }) => {
-      if (!KEY.test(String(params.projectKey))) return validation('projectKey', 'must be a project key')
+      if (!KEY.test(String(params.projectKey))) return validation('projectKey', PROJECT_KEY_MESSAGE)
       const p = db.projects.find((x) => x.key === params.projectKey)
       if (!p || !roleIn(p.id)) return notFound(`project ${String(params.projectKey)}`)
       if (roleIn(p.id) !== 'admin' && roleIn(p.id) !== 'maintainer')
@@ -1326,7 +1329,7 @@ export const handlers = [
       const url = new URL(request.url)
       const project = url.searchParams.get('project')
       const actor = url.searchParams.get('actor')
-      if (project !== null && !KEY.test(project)) return validation('project', 'must be a project key')
+      if (project !== null && !KEY.test(project)) return validation('project', PROJECT_KEY_MESSAGE)
       if (actor === '') return validation('actor', 'must not be empty')
       if (!currentUser().isAdmin) return forbidden()
       const items = db.audit
@@ -1665,7 +1668,7 @@ export const handlers = [
           .trim()
           .toUpperCase()
         const name = String(body?.name ?? '').trim()
-        if (!KEY.test(key)) return validation('key', 'must be a project key')
+        if (!KEY.test(key)) return validation('key', PROJECT_KEY_MESSAGE)
         if (!name) return validation('name', 'must not be empty')
         if (db.projects.some((p) => p.key === key))
           return problem(409, 'conflict', `project ${key} already exists`)
@@ -1754,7 +1757,7 @@ export const handlers = [
         if (!body || 'id' in body) return validation('body', 'unknown field "id"')
         if (!title) return validation('title', 'is required')
         const key = String(body.project ?? 'TC')
-        if (!KEY.test(key)) return validation('project', 'must be a project key')
+        if (!KEY.test(key)) return validation('project', PROJECT_KEY_MESSAGE)
         const p = db.projects.find((x) => x.key === key)
         if (!p) return notFound(`project ${key}`)
         const denied = requireRole(p.id, 'member', () => notFound(`project ${key}`))

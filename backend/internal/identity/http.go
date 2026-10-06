@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 )
 
 // CookieName is the browser session cookie (HttpOnly, SameSite=Strict).
@@ -39,9 +39,6 @@ type API interface {
 type Projects interface {
 	ProjectIDByKey(ctx context.Context, key string) (int64, error)
 }
-
-// ProjectKeyPattern mirrors the catalog's project key format (validated before any lookup).
-var ProjectKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 
 type memberDTO struct {
 	User  UserDTO   `json:"user"`
@@ -301,9 +298,9 @@ func writeProjectError(w http.ResponseWriter, r *http.Request, err error) {
 
 // projectID resolves the {projectKey} path segment (400 when malformed, 404 when unknown).
 func (h *Handler) projectID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	key := r.PathValue("projectKey")
-	if !ProjectKeyPattern.MatchString(key) {
-		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "projectKey", Message: "must be a project key"}))
+	key, err := projectkey.Path(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
 		return 0, false
 	}
 	id, err := h.projects.ProjectIDByKey(r.Context(), key)
@@ -466,8 +463,8 @@ func (h *Handler) createInvitation(w http.ResponseWriter, r *http.Request) {
 	}
 	in := CreateInvitationInput{Email: req.Email, Note: req.Note, Role: req.Role}
 	if req.Project != "" {
-		if !ProjectKeyPattern.MatchString(req.Project) {
-			httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "project", Message: "must be a project key"}))
+		if !projectkey.Valid(req.Project) {
+			httpx.WriteError(w, r, projectkey.Invalid("project"))
 			return
 		}
 		id, err := h.projects.ProjectIDByKey(r.Context(), req.Project)

@@ -17,6 +17,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/ingestion/junit"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 )
 
 // API is the set of ingestion use cases exposed over REST.
@@ -85,7 +86,7 @@ func runMeta(q url.Values, charset string) (RunMeta, error) {
 		fields = append(fields, apperr.FieldError{Field: "status", Message: "must be one of completed, interrupted, cancelled"})
 	}
 	if q.Has("project") && meta.ProjectKey == "" {
-		fields = append(fields, apperr.FieldError{Field: "project", Message: catalog.ProjectKeyMessage})
+		fields = append(fields, apperr.FieldError{Field: "project", Message: projectkey.Message})
 	}
 	if q.Has("suite") && meta.SuiteKey == "" {
 		fields = append(fields, apperr.FieldError{Field: "suite", Message: catalog.SuiteKeyMessage})

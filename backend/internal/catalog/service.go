@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/etag"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 )
 
 // Field limits (mirrored in the OpenAPI contract).
@@ -22,8 +22,8 @@ const (
 	maxProjectDesc = 2000
 )
 
-// ProjectKeyPattern is the format of a project key (mirrored in the OpenAPI contract and the database).
-var ProjectKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
+// ProjectKeyPattern is the format of a project key (projectkey.Pattern).
+var ProjectKeyPattern = projectkey.Pattern
 
 // Service holds the catalog use cases. It is the only entry point of the
 // module for REST handlers, other modules and future interfaces (MCP).
@@ -38,7 +38,7 @@ func NewService(repo Repository) *Service { return &Service{repo: repo} }
 
 func notFound(id int64) error { return apperr.NotFound("test case %d not found", id) }
 
-func projectNotFound(key string) error { return apperr.NotFound("project %s not found", key) }
+func projectNotFound(key string) error { return projectkey.NotFound(key) }
 
 func mapNotFound(err error, id int64) error {
 	if errors.Is(err, ErrNotFound) {
@@ -244,7 +244,7 @@ func (s *Service) CreateProject(ctx context.Context, in CreateProjectInput) (Pro
 	in.Key = strings.ToUpper(strings.TrimSpace(in.Key))
 	in.Name = strings.TrimSpace(in.Name)
 	var v apperr.Validator
-	v.Check(ProjectKeyPattern.MatchString(in.Key), "key", "must be 2 to 10 letters or digits, starting with a letter (e.g. CHK)")
+	projectkey.Check(&v, "key", in.Key)
 	validateProjectText(&v, &in.Name, &in.Description)
 	if err := v.Err(); err != nil {
 		return Project{}, err

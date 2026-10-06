@@ -13,6 +13,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 )
 
 // ManualScope tells which test cases a manual run expects.
@@ -108,7 +109,7 @@ func (m *Manual) Start(ctx context.Context, in ManualRunInput) (execution.TestRu
 		in.Scope = ScopeManual
 	}
 	var v apperr.Validator
-	v.Check(catalog.ProjectKeyPattern.MatchString(in.ProjectKey), "project", catalog.ProjectKeyMessage)
+	projectkey.Check(&v, "project", in.ProjectKey)
 	v.Check(in.SuiteKey == "" || catalog.SuiteKeyPattern.MatchString(in.SuiteKey), "suite", catalog.SuiteKeyMessage)
 	v.Check(in.Name != "", "name", "is required")
 	v.Check(utf8.RuneCountInString(in.Name) <= maxManualName, "name", fmt.Sprintf("must be at most %d characters", maxManualName))
@@ -121,10 +122,7 @@ func (m *Manual) Start(ctx context.Context, in ManualRunInput) (execution.TestRu
 	if err := v.Err(); err != nil {
 		return execution.TestRun{}, err
 	}
-	p, err := m.catalog.ProjectByKey(ctx, in.ProjectKey)
-	if err == nil {
-		err = m.access.Require(ctx, p.ID, authz.RoleMember, apperr.NotFound("project %s not found", in.ProjectKey))
-	}
+	p, err := projectkey.Resolve(ctx, "project", in.ProjectKey, m.catalog.ProjectByKey, catalog.ProjectID, m.access, authz.RoleMember)
 	if err != nil {
 		return execution.TestRun{}, err
 	}

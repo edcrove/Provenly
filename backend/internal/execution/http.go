@@ -12,6 +12,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
+	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
 )
 
 // API is the set of execution use cases exposed over REST.
@@ -36,9 +37,6 @@ type TestCaseChecker interface {
 	ProjectIDByKey(ctx context.Context, key string) (int64, error)
 	Keys(ctx context.Context, ids []int64) (map[int64]string, error)
 }
-
-// ProjectKeyPattern mirrors the catalog's project key format (validated before any lookup).
-var ProjectKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 
 var suiteKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,29}$`)
 
@@ -355,14 +353,14 @@ func (h *Handler) Register(mux httpx.Router) {
 // visibleProjects narrows the run list to ?project=<KEY> (which the user must see) or to every project the
 // user can see (nil: every project, for administrators).
 func (h *Handler) visibleProjects(r *http.Request) ([]int64, error) {
-	key, err := httpx.PatternQuery(r, "project", ProjectKeyPattern, "must be a project key: 2 to 10 upper-case letters or digits, starting with a letter")
+	key, err := projectkey.Query(r)
 	if err != nil {
 		return nil, err
 	}
 	if key != nil {
 		id, err := h.catalog.ProjectIDByKey(r.Context(), *key)
 		if err == nil {
-			err = h.guard.Require(r.Context(), id, authz.RoleViewer, apperr.NotFound("project %s not found", *key))
+			err = h.guard.Require(r.Context(), id, authz.RoleViewer, projectkey.NotFound(*key))
 		}
 		return []int64{id}, err
 	}

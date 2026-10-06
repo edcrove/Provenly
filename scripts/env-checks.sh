@@ -98,9 +98,12 @@ ok "CA build-cache key"
 # Hot reload: air rebuilds the API on a source change; the UI is the Vite dev server.
 make --no-print-directory dev ENV=qa >/dev/null 2>&1
 api_logs() { docker compose --env-file envs/qa.env -f docker-compose.yml -f docker-compose.dev.yml logs --since "$since" api 2>&1; }
+# Wait for air's first build to serve: a change made before air takes its first (polling) snapshot is not seen.
+for _ in $(seq 1 120); do curl_ -o /dev/null http://localhost:8180/readyz 2>/dev/null && break; sleep 1; done
 since=$(date +%s)
-touch backend/cmd/provenly/main.go
-for _ in $(seq 1 60); do
+for i in $(seq 1 60); do
+  # Touch again every 10 s in case a poll cycle missed the change.
+  [ $((i % 10)) = 1 ] && touch backend/cmd/provenly/main.go
   api_logs | grep -q 'building' && break
   sleep 1
 done

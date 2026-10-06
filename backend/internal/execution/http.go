@@ -18,6 +18,7 @@ import (
 // API is the set of execution use cases exposed over REST.
 type API interface {
 	GetRun(ctx context.Context, id int64) (TestRun, error)
+	RunProject(ctx context.Context, id int64) (int64, error)
 	ListRuns(ctx context.Context, f RunFilter, page pagination.Page) (pagination.Result[TestRun], error)
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, page pagination.Page) (pagination.Result[TestResult], error)
 	Summary(ctx context.Context, runID int64) (Summary, error)
@@ -316,22 +317,19 @@ func NewHandler(api API, catalog TestCaseChecker, guard authz.Guard) *Handler {
 	return &Handler{api: api, catalog: catalog, guard: guard}
 }
 
-type runKey struct{}
-
 // onRun authorizes routes on /test-runs/{testRunId}: the run's project must be visible to the user (else 404)
 // and give at least minRole (else 403). A malformed id is left to next.
 func (h *Handler) onRun(minRole authz.Role, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if id, err := httpx.PathID(r, "testRunId"); err == nil {
-			run, err := h.api.GetRun(r.Context(), id)
+			project, err := h.api.RunProject(r.Context(), id)
 			if err == nil {
-				err = h.guard.Require(r.Context(), run.ProjectID, minRole, runNotFound(id))
+				err = h.guard.Require(r.Context(), project, minRole, runNotFound(id))
 			}
 			if err != nil {
 				httpx.WriteError(w, r, err)
 				return
 			}
-			r = r.WithContext(context.WithValue(r.Context(), runKey{}, run))
 		}
 		next(w, r)
 	}
@@ -392,12 +390,17 @@ func (h *Handler) listRuns(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getRun(w http.ResponseWriter, r *http.Request) {
-	if _, err := httpx.PathID(r, "testRunId"); err != nil {
+	id, err := httpx.PathID(r, "testRunId")
+	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	// Loaded and authorized by onRun.
-	httpx.WriteJSON(w, http.StatusOK, RunDTO(r.Context().Value(runKey{}).(TestRun)))
+	run, err := h.api.GetRun(r.Context(), id) // authorized by onRun
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, RunDTO(run))
 }
 
 func enumStrings[T ~string](values []T) []string {

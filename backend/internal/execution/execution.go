@@ -365,6 +365,8 @@ type Repository interface {
 	ListFlakyCounts(ctx context.Context, projectID int64, window, limit int32) ([]FlakyCount, error)
 	// FinishTestRun ends a running run with a final status.
 	FinishTestRun(ctx context.Context, id int64, status RunStatus) error
+	// GetRunProject returns the project of a run (ErrNotFound when it does not exist).
+	GetRunProject(ctx context.Context, id int64) (int64, error)
 	// InsertRunShard records a shard of a running sharded run; false when it was already received.
 	InsertRunShard(ctx context.Context, runID int64, shard RunShard) (bool, error)
 	// ListRunShards returns the received shards of a run, ascending.

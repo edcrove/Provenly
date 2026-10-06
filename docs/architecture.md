@@ -41,6 +41,7 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 | Step text: action 1..2000 non-blank characters, expected result ≤ 2000 | service validation (400) backed by `CHECK`s (`test_steps_action_not_blank`, `test_steps_expected_result_length`, migration 00008) |
 | Ingested results and parse errors are the source of truth | written by the transaction that creates their run, and while a manual or live run is running (recorded results, the final report completing a live run); triggers forbid inserts into finished runs, any `UPDATE` and `DELETE` (migrations 00010, 00023, 00026) |
 | `untested` is never persisted | `CHECK` on `test_results.status`; derived in `execution.ComputeSummary` |
+| A run's outcome is derived on read, cheaply | routes on a run authorize it by `GetRunProject` (project only); only `GET /test-runs/{id}` loads the run and computes its outcome; a live poll reads the run and its summary inputs once (BE-INT-066, card #44) |
 | `testCaseId` only for valid or deprecated correlations (deprecated results stay in history) | `CHECK ((correlation IN ('valid','deprecated')) = (test_case_id IS NOT NULL))` |
 
 ## Identity and sessions (module `identity`)

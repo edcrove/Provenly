@@ -358,6 +358,9 @@ Notion Decision Register; each one ships in its own PR.
 
 - **Find by key (card #53):** `GET /api/v1/test-cases?key=CHK-12` gives zero or one test case (MCP `search_test_cases`
   takes `key` too); the test case list has a TC-ID search box.
+- **Cheaper run reads (card #44, S):** routes on a run authorize it with its project alone (`GetRunProject`); only
+  `GET /test-runs/{id}` loads the run and its outcome, and a live poll reads the run and its summary inputs once
+  (five statements whatever the run's size, BE-INT-066). Persisted counters (M) stay as an option if needed.
 - **Variants and flaky (card #58):** repeated names without an attempt signal are variants of the test (a failure
   among them fails the test case; the ingestion warns how many), and a test case that failed or errored in a run is
   not flaky there, in the summary, the dashboard ranking and the latest status alike.

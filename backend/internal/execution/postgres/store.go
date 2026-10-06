@@ -529,3 +529,9 @@ func (s *Store) ListRunShards(ctx context.Context, runID int64) ([]execution.Run
 func (s *Store) FinishShardedRun(ctx context.Context, runID int64, status execution.RunStatus) error {
 	return s.q.FinishShardedRun(ctx, executiondb.FinishShardedRunParams{ID: runID, Status: string(status)})
 }
+
+// GetRunProject implements execution.Repository.
+func (s *Store) GetRunProject(ctx context.Context, id int64) (int64, error) {
+	p, err := s.q.GetRunProject(ctx, id)
+	return p, notFound(err)
+}

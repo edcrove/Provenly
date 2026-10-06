@@ -42,6 +42,8 @@ targets:
     description: parse errors and unknown durations are stored with the run, listed and replayed
   - id: BE-INT-019
     description: the run execution status reported by CI (completed/interrupted/cancelled) is stored and never changed by replays
+  - id: BE-INT-020
+    description: every persistence adapter method propagates a database failure (closed pool) instead of hiding it
   - id: BE-INT-021
     description: editing test case content and steps (edit, reorder, delete) keeps the TC-ID and leaves the result history unchanged
   - id: BE-INT-022

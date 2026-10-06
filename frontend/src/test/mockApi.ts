@@ -51,6 +51,8 @@ export interface MockDb {
   /** Requirements by project id; latest is the latest result status of each test case (coverage). */
   requirements: (Requirement & { projectId: number })[]
   latest: Record<number, 'passed' | 'failed' | 'error' | 'skipped'>
+  /** The latest conclusive result (passed, failed, error) and its run, when the latest one was skipped; else latest. */
+  conclusive: Record<number, { status: 'passed' | 'failed' | 'error'; runId: number }>
   /** Live state of live runs, by run id (what GET /test-runs/{id}/live answers). */
   live: Record<number, LiveRun>
   /** Flaky test case counts the quality endpoint reports (by test case id). */
@@ -98,6 +100,7 @@ export function seed(): MockDb {
     suites: [],
     requirements: [],
     latest: {},
+    conclusive: {},
     issues: [],
     webhooks: [],
     deliveries: [],
@@ -472,14 +475,13 @@ function suiteMembers(projectId: number, raw: unknown): number[] | Response {
 type Outcome = TestRunSummary['testCases'][number]
 
 /** The summary of a manual run, recomputed from its test cases' latest results. */
-function manualSummary(runId: number, cases: Outcome[]): TestRunSummary {
+/** The counts and percentages of a summary recomputed from its test cases, like the server. */
+function recount(cases: Outcome[]): Partial<TestRunSummary> {
   const count = (st: string) => cases.filter((c) => c.status === st).length
   const executed = cases.length - count('untested')
   const pct = (n: number, of: number) => (of ? (n * 100) / of : 0)
-  return summary({
-    testRunId: runId,
+  return {
     expectedTotal: cases.length,
-    snapshotTotal: cases.length,
     executedTotal: executed,
     counts: {
       untested: count('untested'),
@@ -502,8 +504,40 @@ function manualSummary(runId: number, cases: Outcome[]): TestRunSummary {
       skipped: pct(count('skipped'), executed),
     },
     executionPercent: pct(executed, cases.length),
-    diagnostics: { missing: 0, malformed: 0, unknown: 0, deprecated: 0, wrongProject: 0, total: 0 },
     testCases: cases,
+  }
+}
+
+/** The run outcome derived from its summary, like execution.Summary.Outcome on the server. */
+function outcomeOf(s: TestRunSummary): TestRun['outcome'] {
+  const c = s.counts
+  const verdict: TestRun['outcome']['verdict'] =
+    s.expectedTotal === 0
+      ? 'no_tests'
+      : c.failed + c.error > 0
+        ? 'failed'
+        : c.untested + c.skipped > 0
+          ? 'incomplete'
+          : 'passed'
+  return {
+    verdict,
+    executed: s.executedTotal,
+    passed: c.passed,
+    failed: c.failed,
+    error: c.error,
+    skipped: c.skipped,
+    untested: c.untested,
+    passRate: s.percentOfExecuted.passed,
+    flaky: s.testCases.filter((t) => t.flaky).length,
+  }
+}
+
+function manualSummary(runId: number, cases: Outcome[]): TestRunSummary {
+  return summary({
+    testRunId: runId,
+    snapshotTotal: cases.length,
+    diagnostics: { missing: 0, malformed: 0, unknown: 0, deprecated: 0, wrongProject: 0, total: 0 },
+    ...recount(cases),
   })
 }
 
@@ -557,7 +591,10 @@ function issueDto({ projectId, ...i }: MockDb['issues'][number]): Issue {
   void projectId
   const testCases = i.testCaseIds.map((id) => {
     const latest = db.latest[id]
-    const evidence = latest === 'skipped' || latest === undefined ? null : latest
+    // The evidence is the latest conclusive result: a skipped run keeps the previous one (the server's
+    // LatestConclusive), and only says the latest was inconclusive.
+    const kept = db.conclusive[id]
+    const evidence = latest === 'skipped' || latest === undefined ? (kept?.status ?? null) : latest
     const status: Issue['verification']['testCases'][number]['status'] =
       evidence === null
         ? 'unverified'
@@ -572,7 +609,7 @@ function issueDto({ projectId, ...i }: MockDb['issues'][number]): Issue {
       testCaseId: id,
       status,
       evidence,
-      evidenceRunId: evidence ? 1 : null,
+      evidenceRunId: evidence ? (latest === 'skipped' || latest === undefined ? kept!.runId : 1) : null,
       latestInconclusive: latest === 'skipped',
     }
   })
@@ -624,7 +661,22 @@ export const handlers = [
       if (p instanceof Response) return p
       const active = db.testCases.filter((t) => t.projectId === p.id && t.status === 'active')
       const automated = active.filter((t) => t.automated).length
-      const never = active.filter((t) => !db.results.some((r) => r.testCaseId === t.id))
+      // Last execution: the newest run with a result for the test case, like the server.
+      const lastRun = (id: number) =>
+        db.results
+          .filter((r) => r.testCaseId === id)
+          .map((r) => db.runs.find((run) => run.id === r.testRunId)?.createdAt ?? '')
+          .sort()
+          .at(-1)
+      const never = active.filter((t) => lastRun(t.id) === undefined)
+      const cutoff = Date.now() - staleDays * 24 * 3600 * 1000
+      const stale = active
+        .map((t) => ({ t, last: lastRun(t.id) }))
+        .filter(
+          (x): x is { t: (typeof active)[number]; last: string } =>
+            x.last !== undefined && Date.parse(x.last) < cutoff,
+        )
+        .sort((a, b) => a.last.localeCompare(b.last))
       return respond({
         testCases: {
           active: active.length,
@@ -635,8 +687,11 @@ export const handlers = [
         execution: {
           staleDays,
           neverExecuted: never.length,
-          stale: 0,
-          testCases: never.map((t) => ({ testCaseId: t.id, testCaseKey: t.key, lastExecutedAt: null })),
+          stale: stale.length,
+          testCases: [
+            ...never.map((t) => ({ testCaseId: t.id, testCaseKey: t.key, lastExecutedAt: null })),
+            ...stale.map(({ t, last }) => ({ testCaseId: t.id, testCaseKey: t.key, lastExecutedAt: last })),
+          ],
         },
         flaky: {
           window,
@@ -987,6 +1042,7 @@ export const handlers = [
         })
         db.results.push(result)
         run.resultCount++
+        run.outcome = outcomeOf(db.summaries[run.id])
         return respond(result, 201)
       }),
     ),
@@ -1231,7 +1287,7 @@ export const handlers = [
         if (p instanceof Response) return p
         const name = String((await readBody(request))?.name ?? '').trim()
         if (!name || name.length > 100) return validation('name', 'must be 1 to 100 characters')
-        const id = db.nextId++
+        const id = ++db.nextId
         const hex = id.toString(16).padStart(8, '0')
         const key = {
           id,
@@ -1296,7 +1352,7 @@ export const handlers = [
         const p = integrationProject(params.projectKey)
         if (p instanceof Response) return p
         const w = {
-          id: db.nextId++,
+          id: ++db.nextId,
           projectId: p.id,
           url,
           events: ['run.completed' as const],
@@ -1334,7 +1390,7 @@ export const handlers = [
       const w = webhookOf(p, params.webhookId)
       if (w instanceof Response) return w
       const d: WebhookDelivery = {
-        id: db.nextId++,
+        id: ++db.nextId,
         webhookId: w.id,
         event: 'ping',
         status: 'pending',
@@ -1966,8 +2022,12 @@ export const handlers = [
         if (!s.outsideUniverseTestCaseIds.includes(testCaseId))
           return validation('testCaseId', 'has no valid result in this run')
         const tc = db.testCases.find((t) => t.id === testCaseId)
+        // Its logical result in this run: the highest attempt (the server reads it the same way).
+        const latest = db.results
+          .filter((r) => r.testRunId === run.id && r.testCaseId === testCaseId)
+          .sort((a, b) => b.attempt - a.attempt)[0]
         const amendment: Amendment = {
-          id: db.nextId++,
+          id: ++db.nextId,
           testRunId: run.id,
           testCaseId,
           testCaseKey: tc?.key ?? `TC-${testCaseId}`,
@@ -1977,17 +2037,27 @@ export const handlers = [
           createdAt: now(),
         }
         db.amendments.push(amendment)
+        const cases: Outcome[] = [
+          ...s.testCases,
+          {
+            testCaseId,
+            testCaseKey: amendment.testCaseKey,
+            status: (latest?.status ?? 'passed') as Outcome['status'],
+            resultCount: 1,
+            flaky: false,
+          },
+        ]
         Object.assign(s, {
-          expectedTotal: s.expectedTotal + 1,
           outsideUniverse: Math.max(0, s.outsideUniverse - 1),
           outsideUniverseTestCaseIds: s.outsideUniverseTestCaseIds.filter((id) => id !== testCaseId),
           amendedTestCaseIds: [...s.amendedTestCaseIds, testCaseId].sort((a, b) => a - b),
-          testCases: [
-            ...s.testCases,
-            { testCaseId, testCaseKey: amendment.testCaseKey, status: 'passed', resultCount: 1 },
-          ],
+          ...recount(cases),
         })
-        Object.assign(run, { amendmentCount: run.amendmentCount + 1, expectedCount: run.expectedCount + 1 })
+        Object.assign(run, {
+          amendmentCount: run.amendmentCount + 1,
+          expectedCount: run.expectedCount + 1,
+          outcome: outcomeOf(s),
+        })
         return respond(amendment, 201)
       }),
     ),

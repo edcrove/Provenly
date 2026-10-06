@@ -154,6 +154,18 @@ describe('FE-INT-041 issues and verification', () => {
     }
   })
 
+  it('FE-INT-041 a skipped latest run keeps the previous conclusive evidence, like the server', async () => {
+    db.issues.push(jiraIssue())
+    db.latest[153] = 'skipped'
+    db.conclusive[153] = { status: 'failed', runId: 7 }
+    renderRoute('/issues/TC/960')
+    const row = await screen.findByTestId('reproducing-153')
+    expect(within(row).getByTestId('status-badge')).toHaveTextContent('failed')
+    expect(within(row).getByRole('link', { name: 'run #7' })).toHaveAttribute('href', '/test-runs/7')
+    expect(row).toHaveTextContent('latest run skipped it')
+    expect(screen.getByTestId('verification-badge')).toHaveTextContent('Known issue')
+  })
+
   it('FE-INT-041 a closed issue without tests says so; a test outside the first page shows its id', async () => {
     db.issues.push({ ...jiraIssue(), testCaseIds: [], state: 'closed', closedAt: at })
     const detail = renderRoute('/issues/TC/960')

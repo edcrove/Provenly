@@ -24,13 +24,62 @@ func TestPlatform(t *testing.T) {
 	t.Run("BE-INT-001_migrations_apply_down_and_up_reproducibly", func(t *testing.T) {
 		ctx := context.Background()
 		require.NoError(t, postgres.Migrate(ctx, db.Pool, "status"))
+		// fingerprint lists every object the migrations own in the public schema: tables and their columns, constraints,
+		// indexes, functions, triggers, sequences and types.
+		fingerprint := func() []string {
+			rows, err := db.Pool.Query(ctx, `
+				SELECT 'table ' || table_name || '.' || column_name || ' ' || data_type || ' ' || is_nullable || ' ' || coalesce(column_default, '')
+				  FROM information_schema.columns WHERE table_schema = 'public' AND table_name <> 'goose_db_version'
+				UNION ALL SELECT 'constraint ' || conrelid::regclass || ' ' || conname || ' ' || pg_get_constraintdef(oid)
+				  FROM pg_constraint WHERE connamespace = 'public'::regnamespace AND conrelid::regclass::text <> 'goose_db_version'
+				UNION ALL SELECT 'index ' || indexname || ' ' || indexdef FROM pg_indexes
+				  WHERE schemaname = 'public' AND tablename <> 'goose_db_version'
+				UNION ALL SELECT 'function ' || p.proname || ' ' || md5(pg_get_functiondef(p.oid)) FROM pg_proc p
+				  WHERE p.pronamespace = 'public'::regnamespace
+				UNION ALL SELECT 'trigger ' || tgrelid::regclass || ' ' || tgname FROM pg_trigger t
+				  JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal AND c.relnamespace = 'public'::regnamespace
+				UNION ALL SELECT 'sequence ' || sequence_name FROM information_schema.sequences
+				  WHERE sequence_schema = 'public' AND sequence_name NOT LIKE 'goose_db_version%'
+				UNION ALL SELECT 'type ' || t.typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+				  WHERE n.nspname = 'public' AND t.typtype IN ('e', 'd', 'c') AND NOT EXISTS (SELECT 1 FROM pg_class r WHERE r.reltype = t.oid)
+				ORDER BY 1`)
+			require.NoError(t, err)
+			var out []string
+			for rows.Next() {
+				var line string
+				require.NoError(t, rows.Scan(&line))
+				out = append(out, line)
+			}
+			require.NoError(t, rows.Err())
+			return out
+		}
+		tables := func() []string {
+			rows, err := db.Pool.Query(ctx, `SELECT table_name FROM information_schema.tables
+				WHERE table_schema = 'public' AND table_name <> 'goose_db_version' ORDER BY 1`)
+			require.NoError(t, err)
+			var out []string
+			for rows.Next() {
+				var name string
+				require.NoError(t, rows.Scan(&name))
+				out = append(out, name)
+			}
+			return out
+		}
+		before := fingerprint()
+		require.Greater(t, len(before), 300, "the fingerprint sees the schema")
+
+		// Every down migration removes what its up created: nothing of the schema is left behind.
 		require.NoError(t, postgres.Migrate(ctx, db.Pool, "reset"))
-		var n int
-		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_name LIKE 'test_%'`).Scan(&n))
-		assert.Equal(t, 0, n)
+		assert.Empty(t, fingerprint())
+
+		// Up again: the exact tables, and the same schema object for object.
 		require.NoError(t, postgres.Migrate(ctx, db.Pool, "up"))
-		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_name LIKE 'test_%'`).Scan(&n))
-		assert.Equal(t, 12, n)
+		assert.Equal(t, []string{"api_keys", "audit_events", "classification_dimensions", "classification_values",
+			"github_connections", "invitations", "issue_test_cases", "issues", "project_members", "projects",
+			"requirement_test_cases", "requirements", "test_case_classifications", "test_case_tags", "test_cases",
+			"test_results", "test_run_amendments", "test_run_events", "test_run_expected_cases", "test_run_parse_errors",
+			"test_runs", "test_steps", "test_suite_cases", "test_suites", "users", "webhook_deliveries", "webhooks"}, tables())
+		assert.Equal(t, before, fingerprint())
 		assert.ErrorContains(t, postgres.Migrate(ctx, db.Pool, "sideways"), "migrate sideways")
 	})
 

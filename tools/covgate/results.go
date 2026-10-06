@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -26,6 +27,25 @@ func (t testIDs) record(name string, passed bool) {
 			t.failed[m[1]] = true
 		}
 	}
+}
+
+// unknown lists the ids with the prefix (e.g. "BE-INT-") that tests carry but the inventory does not declare: a
+// test id outside the inventory is never gated, so a typo or a forgotten entry would go unnoticed.
+func (t testIDs) unknown(prefix string, inv []InventoryTarget) []string {
+	declared := map[string]bool{}
+	for _, i := range inv {
+		declared[i.ID] = true
+	}
+	var out []string
+	for _, m := range []map[string]bool{t.passed, t.failed} {
+		for id := range m {
+			if strings.HasPrefix(id, prefix) && !declared[id] && !slices.Contains(out, id) {
+				out = append(out, id)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // covered is true when the id has passing tests and no failing ones.

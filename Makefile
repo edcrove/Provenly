@@ -14,8 +14,14 @@ DEV_COMPOSE := $(COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml
 TIMESTAMP   := $(shell date +%Y%m%d-%H%M%S)
 # Optional CA for image builds behind a TLS-intercepting proxy. Its hash is a build arg so changing the CA
 # invalidates the cached layer that installs it (build secrets are not part of the cache key).
-export EXTRA_CA_CERT
 export EXTRA_CA_ID := $(if $(EXTRA_CA_CERT),$(firstword $(shell sha256sum $(EXTRA_CA_CERT) 2>/dev/null)),none)
+# Docker Compose reads a build secret outside the project only with an extra entitlement: compose gets a copy
+# inside it (.extra-ca.pem, gitignored).
+ifneq ($(EXTRA_CA_CERT),)
+$(shell [ "$(EXTRA_CA_CERT)" -ef .extra-ca.pem ] || cp "$(EXTRA_CA_CERT)" .extra-ca.pem)
+override EXTRA_CA_CERT := ./.extra-ca.pem
+endif
+export EXTRA_CA_CERT
 # Local, non-docker runs (make dev-backend / dev-frontend / migrate) read an optional .env.local
 # (copy .env.example); without it they use the qa database. The variables are loaded only
 # into those recipes so they never leak into the docker environments' configuration.

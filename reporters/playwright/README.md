@@ -1,4 +1,4 @@
-# @provenly/playwright-reporter
+# provenly-playwright-reporter
 
 The first native Provenly reporter (DEC-15). While Playwright runs it starts a **live run** in Provenly and streams
 `test.started` / `test.finished` events; when the run ends it sends the authoritative **JUnit report** (one testcase
@@ -7,21 +7,20 @@ reconciles it with the events. Provenly being unreachable never fails your tests
 
 ## Install
 
-> **Not on npm yet.** The `@provenly` npm scope is not registered to this project yet (the published name is pending
-> a decision), so installing `@provenly/playwright-reporter` from the registry would get someone else's package or
-> fail. Until a release says otherwise, install it from a checkout of this repository:
->
-> ```bash
-> (cd /path/to/Provenly/reporters/playwright && npm ci && npm run build)
-> npm i -D /path/to/Provenly/reporters/playwright
-> ```
+```bash
+npm i -D provenly-playwright-reporter
+```
+
+Published unscoped (the `@provenly` npm scope is not this project's) with npm provenance, from this repository's
+release workflow; the release notes give the npm version of each tag. Before a release, install it from a checkout:
+`(cd /path/to/Provenly/reporters/playwright && npm ci && npm run build) && npm i -D /path/to/Provenly/reporters/playwright`.
 
 ## Use
 
 ```ts
 // playwright.config.ts
 export default defineConfig({
-  reporter: [['list'], ['@provenly/playwright-reporter', { project: 'CHK' }]],
+  reporter: [['list'], ['provenly-playwright-reporter', { project: 'CHK' }]],
 })
 ```
 

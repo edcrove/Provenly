@@ -1,4 +1,4 @@
-// @provenly/playwright-reporter — the first native Provenly reporter (DEC-15).
+// provenly-playwright-reporter — the first native Provenly reporter (DEC-15).
 //
 // While Playwright runs, it starts a live run in Provenly and streams test.started / test.finished events; when the
 // run ends it sends the authoritative JUnit report (one testcase per attempt, with the test's TC-ID and attempt as

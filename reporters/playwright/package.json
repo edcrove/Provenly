@@ -1,5 +1,5 @@
 {
-  "name": "@provenly/playwright-reporter",
+  "name": "provenly-playwright-reporter",
   "version": "0.1.0",
   "description": "Playwright reporter for Provenly: streams a live run while tests execute and sends the final JUnit report with each test's TC-ID",
   "license": "Apache-2.0",

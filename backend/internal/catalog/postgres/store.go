@@ -579,10 +579,12 @@ func (s *Store) UpdateSuite(ctx context.Context, projectID int64, key string, in
 
 // SetSuiteCases implements catalog.Repository.
 func (s *Store) SetSuiteCases(ctx context.Context, suiteID, projectID int64, ids []int64) error {
-	if err := s.q.LockLinkParent(ctx, catalogdb.LockLinkParentParams{Kind: "suite", ID: suiteID}); err != nil {
-		return err
+	// One error path: the lock and the delete fail the same way (a broken connection).
+	err := s.q.LockLinkParent(ctx, catalogdb.LockLinkParentParams{Kind: "suite", ID: suiteID})
+	if err == nil {
+		err = s.q.DeleteSuiteCases(ctx, catalogdb.DeleteSuiteCasesParams{SuiteID: suiteID, Keep: ids})
 	}
-	if err := s.q.DeleteSuiteCases(ctx, catalogdb.DeleteSuiteCasesParams{SuiteID: suiteID, Keep: ids}); err != nil {
+	if err != nil {
 		return err
 	}
 	return s.q.AddSuiteCases(ctx, catalogdb.AddSuiteCasesParams{SuiteID: suiteID, ProjectID: projectID, TestCaseIds: nonNil(ids)})
@@ -649,10 +651,12 @@ func (s *Store) UpdateRequirement(ctx context.Context, projectID, id int64, in c
 
 // SetRequirementTestCases implements catalog.Repository.
 func (s *Store) SetRequirementTestCases(ctx context.Context, requirementID, projectID int64, ids []int64) error {
-	if err := s.q.LockLinkParent(ctx, catalogdb.LockLinkParentParams{Kind: "requirement", ID: requirementID}); err != nil {
-		return err
+	// One error path: the lock and the delete fail the same way (a broken connection).
+	err := s.q.LockLinkParent(ctx, catalogdb.LockLinkParentParams{Kind: "requirement", ID: requirementID})
+	if err == nil {
+		err = s.q.DeleteRequirementLinks(ctx, catalogdb.DeleteRequirementLinksParams{RequirementID: requirementID, Keep: ids})
 	}
-	if err := s.q.DeleteRequirementLinks(ctx, catalogdb.DeleteRequirementLinksParams{RequirementID: requirementID, Keep: ids}); err != nil {
+	if err != nil {
 		return err
 	}
 	return s.q.AddRequirementLinks(ctx, catalogdb.AddRequirementLinksParams{RequirementID: requirementID, ProjectID: projectID, TestCaseIds: nonNil(ids)})
@@ -720,10 +724,12 @@ func (s *Store) UpdateIssue(ctx context.Context, projectID, id int64, in catalog
 
 // SetIssueTestCases implements catalog.Repository.
 func (s *Store) SetIssueTestCases(ctx context.Context, issueID, projectID int64, ids []int64) error {
-	if err := s.q.LockLinkParent(ctx, catalogdb.LockLinkParentParams{Kind: "issue", ID: issueID}); err != nil {
-		return err
+	// One error path: the lock and the delete fail the same way (a broken connection).
+	err := s.q.LockLinkParent(ctx, catalogdb.LockLinkParentParams{Kind: "issue", ID: issueID})
+	if err == nil {
+		err = s.q.DeleteIssueLinks(ctx, catalogdb.DeleteIssueLinksParams{IssueID: issueID, Keep: ids})
 	}
-	if err := s.q.DeleteIssueLinks(ctx, catalogdb.DeleteIssueLinksParams{IssueID: issueID, Keep: ids}); err != nil {
+	if err != nil {
 		return err
 	}
 	return s.q.AddIssueLinks(ctx, catalogdb.AddIssueLinksParams{IssueID: issueID, ProjectID: projectID, TestCaseIds: nonNil(ids)})

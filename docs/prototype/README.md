@@ -100,7 +100,7 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P7-6 | Limits | Attempts beyond 100 keep the last 100 with a warning; invalid attempt/retry values are first attempts with a warning; Surefire attempt details come from `<stackTrace>`, their duration is unknown | Broken reporters never fail ingestion |
 | P8-1 | Encodings | `Content-Encoding: gzip` (and `x-gzip`); no encoding or `identity` as before; anything else (br, deflate, lists) stays a 415 | D6; gzip is what CI tools produce with one command |
 | P8-2 | Size limit | `PROVENLY_MAX_INGEST_BYTES` applies to the decompressed report (413 problem past it) and the compressed body is read through the same limit | D6; a gzip bomb never expands past the limit in memory |
-| P8-3 | Broken streams | Not gzip, truncated or corrupt: 400 `validation_error` on `body` | Client error with the reason, never a 500 |
+| P8-3 | Broken streams | Not gzip, truncated or corrupt: 400 `invalid_junit` ("body is not valid gzip: …"); **superseded 2026-10-06** (it was `validation_error` on `body`) | An unreadable report, like broken XML; CI scripts branch on one code |
 | P8-4 | CI step | The API key page's ready-to-paste step now gzips the report (`gzip -c junit.xml \| curl ... --data-binary @-`) | Smaller uploads by default |
 | P9-1 | Model | Per-project **dimensions** with controlled **values** (key + display name) and free **tags** per test case; one value per dimension per test case | Planning #26: orthogonal dimensions, structured data for reporting, tags complement but do not replace them; multi-valued needs (several platforms) use tags |
 | P9-2 | Built-ins | Every project (existing ones by migration, new ones by a database trigger) gets feature, component, level, depth, type, risk and platform; level, depth, type and risk come with standard values, feature/component/platform start empty | Planning #26 list; **execution mode is not a dimension**: it is the existing `automated` flag (one source of truth) |
@@ -359,6 +359,8 @@ Notion Decision Register; each one ships in its own PR.
 - **Variants and flaky (card #58):** repeated names without an attempt signal are variants of the test (a failure
   among them fails the test case; the ingestion warns how many), and a test case that failed or errored in a run is
   not flaky there, in the summary, the dashboard ranking and the latest status alike.
+- **Broken gzip is an unreadable report:** a body sent as gzip that is not gzip, truncated or corrupt answers
+  `400 invalid_junit` ("body is not valid gzip: …"), like broken XML (replaces P8-3, which said `validation_error`).
 - **Supply chain (card #50):** every GitHub Action is pinned to a commit SHA with its version as a comment
   (`scripts/docs-check.sh` fails on an unpinned `uses:`), and Dependabot proposes updates for actions, Go modules,
   npm packages and Docker images.

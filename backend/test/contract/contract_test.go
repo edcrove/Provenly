@@ -790,8 +790,12 @@ func TestIngestionMediaTypes(t *testing.T) {
 	_ = ow.Close()
 	send("gzip", "application/xml", other.Bytes()).WithHeader("Content-Encoding", "gzip").Expect().
 		Status(http.StatusOK).JSON().Object().HasValue("created", false).Value("warnings").Array().Length().IsEqual(1)
-	send("gzip-broken", "application/xml", []byte{0x1f, 0x8b}).WithHeader("Content-Encoding", "gzip").Expect().
-		Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "validation_error")
+	// A body that is not gzip, truncated or corrupt is an unreadable report: 400 invalid_junit.
+	for name, body := range map[string][]byte{"broken": {0x1f, 0x8b}, "truncated": zipped.Bytes()[:15], "plain": []byte(`<testsuite/>`)} {
+		send("gzip-"+name, "application/xml", body).WithHeader("Content-Encoding", "gzip").Expect().
+			Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "invalid_junit").
+			Value("detail").String().HasPrefix("body is not valid gzip")
+	}
 	send("br", "application/xml", []byte(`<testsuite/>`)).WithHeader("Content-Encoding", "br").Expect().
 		Status(http.StatusUnsupportedMediaType).JSON(problemOpts).Object().HasValue("code", "unsupported_media_type")
 	var bomb bytes.Buffer

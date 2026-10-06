@@ -177,3 +177,6 @@ targets:
   - id: FE-INT-054
     description: readable audit entries (card #48) - each change reads in words with its path as the detail (older events show their route), and the log filters by test case key (typed in any case)
     surfaces: [src/features/audit/AuditPage.tsx, src/api/queries.ts]
+  - id: FE-INT-055
+    description: sign-in events in the audit log (card #49) - a failed sign-in by an unknown username reads "unknown" with the client address (the user agent on hover) and what happened in words
+    surfaces: [src/features/audit/AuditPage.tsx]

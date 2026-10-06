@@ -16,6 +16,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/identity"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/auditnote"
+	"github.com/edcrove/provenly/backend/internal/platform/clientinfo"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
@@ -33,6 +34,9 @@ type Event struct {
 	Summary string
 	// TestCaseKey is the test case the change touched (CHK-4), if any.
 	TestCaseKey string
+	// IP and UserAgent are the client's (card #49); empty for events recorded before.
+	IP        string
+	UserAgent string
 }
 
 // Filter narrows the log; empty fields match everything.
@@ -140,6 +144,8 @@ func (s *Service) record(r *http.Request, action string, status int, note *audit
 		ProjectKey: truncate(storable(s.project(r, note)), 50), Status: int32(status),
 		Summary: truncate(storable(t.summary(action)), 300), TestCaseKey: t.testCaseKey,
 	}
+	client := clientinfo.From(r.Context())
+	e.IP, e.UserAgent = client.IP, truncate(storable(client.UserAgent), 500)
 	if err := s.repo.Insert(context.WithoutCancel(r.Context()), e); err != nil {
 		slog.ErrorContext(r.Context(), "audit event not recorded", "action", action, "error", err)
 	}

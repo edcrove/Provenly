@@ -2,6 +2,7 @@ package config
 
 import (
 	"log/slog"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -38,6 +39,7 @@ func TestLoadOverrides(t *testing.T) {
 		"PROVENLY_WEBHOOKS_ALLOW_PRIVATE":          "false",
 		"PROVENLY_GITHUB_API_URL":                  "https://github.example.com/api/v3/",
 		"PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS": "0",
+		"PROVENLY_TRUSTED_PROXIES":                 "10.0.0.0/8, 192.168.1.1",
 	}))
 	require.NoError(t, err)
 	assert.Equal(t, Config{
@@ -46,6 +48,7 @@ func TestLoadOverrides(t *testing.T) {
 		JWTSecret: []byte(strings.Repeat("k", 32)), AdminUsername: "admin", AdminPassword: "correct horse",
 		SecretsKey: []byte(strings.Repeat("k", 32)), GitHubAPIURL: "https://github.example.com/api/v3",
 		WebhookDeliveryRetentionDays: 0,
+		TrustedProxies:               []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8"), netip.MustParsePrefix("192.168.1.1/32")},
 	}, cfg)
 }
 
@@ -93,6 +96,7 @@ func TestLoadErrors(t *testing.T) {
 		"PROVENLY_WEBHOOKS_ALLOW_PRIVATE":               {"PROVENLY_DATABASE_URL": "x", "PROVENLY_WEBHOOKS_ALLOW_PRIVATE": "sometimes"},
 		"must be set together":                          {"PROVENLY_DATABASE_URL": "x", "PROVENLY_ADMIN_USERNAME": "admin"},
 		`RETENTION_DAYS must be a whole number of days from 0 (keep) to 36500, got "-1"`: {"PROVENLY_DATABASE_URL": "x", "PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS": "-1"},
+		`PROVENLY_TRUSTED_PROXIES: "proxy.local" is not an IP address or CIDR range`:     {"PROVENLY_DATABASE_URL": "x", "PROVENLY_TRUSTED_PROXIES": "proxy.local"},
 		`got "90d"`:   {"PROVENLY_DATABASE_URL": "x", "PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS": "90d"},
 		`got "36501"`: {"PROVENLY_DATABASE_URL": "x", "PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS": "36501"},
 		"public demo password": {"PROVENLY_DATABASE_URL": "x", "PROVENLY_ENV": "prod", "PROVENLY_JWT_SECRET": strings.Repeat("k", 32),

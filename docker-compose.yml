@@ -32,6 +32,7 @@ x-app-env: &app-env
   PROVENLY_WEBHOOKS_ALLOW_PRIVATE: ${PROVENLY_WEBHOOKS_ALLOW_PRIVATE:-}
   PROVENLY_GITHUB_API_URL: ${PROVENLY_GITHUB_API_URL:-}
   PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS: ${PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS:-}
+  PROVENLY_TRUSTED_PROXIES: ${PROVENLY_TRUSTED_PROXIES:-}
   # OpenTelemetry: set an OTLP/HTTP endpoint (e.g. http://collector:4318) to export traces. The SDK's standard
   # variables pass through (a hosted collector needs its headers; empty ones mean the SDK defaults).
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}

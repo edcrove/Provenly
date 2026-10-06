@@ -18,4 +18,6 @@ type AuditEvent struct {
 	Status      int32
 	Summary     pgtype.Text
 	TestCaseKey pgtype.Text
+	Ip          pgtype.Text
+	UserAgent   pgtype.Text
 }

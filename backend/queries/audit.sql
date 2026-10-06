@@ -1,6 +1,7 @@
 -- name: InsertAuditEvent :exec
-INSERT INTO audit_events (actor, action, path, project_key, status, summary, test_case_key)
-VALUES (@actor, @action, @path, sqlc.narg('project_key'), @status, sqlc.narg('summary'), sqlc.narg('test_case_key'));
+INSERT INTO audit_events (actor, action, path, project_key, status, summary, test_case_key, ip, user_agent)
+VALUES (@actor, @action, @path, sqlc.narg('project_key'), @status, sqlc.narg('summary'), sqlc.narg('test_case_key'),
+        sqlc.narg('ip'), sqlc.narg('user_agent'));
 
 -- name: ListAuditEvents :many
 -- Newest first, narrowed by project, actor and/or test case.

@@ -32,8 +32,9 @@ func (q *Queries) CountAuditEvents(ctx context.Context, arg CountAuditEventsPara
 }
 
 const insertAuditEvent = `-- name: InsertAuditEvent :exec
-INSERT INTO audit_events (actor, action, path, project_key, status, summary, test_case_key)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO audit_events (actor, action, path, project_key, status, summary, test_case_key, ip, user_agent)
+VALUES ($1, $2, $3, $4, $5, $6, $7,
+        $8, $9)
 `
 
 type InsertAuditEventParams struct {
@@ -44,6 +45,8 @@ type InsertAuditEventParams struct {
 	Status      int32
 	Summary     pgtype.Text
 	TestCaseKey pgtype.Text
+	Ip          pgtype.Text
+	UserAgent   pgtype.Text
 }
 
 func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error {
@@ -55,12 +58,14 @@ func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventPara
 		arg.Status,
 		arg.Summary,
 		arg.TestCaseKey,
+		arg.Ip,
+		arg.UserAgent,
 	)
 	return err
 }
 
 const listAuditEvents = `-- name: ListAuditEvents :many
-SELECT id, occurred_at, actor, action, path, project_key, status, summary, test_case_key FROM audit_events
+SELECT id, occurred_at, actor, action, path, project_key, status, summary, test_case_key, ip, user_agent FROM audit_events
 WHERE ($1::text IS NULL OR project_key = $1)
   AND ($2::text IS NULL OR actor = $2)
   AND ($3::text IS NULL OR test_case_key = $3)
@@ -101,6 +106,8 @@ func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams
 			&i.Status,
 			&i.Summary,
 			&i.TestCaseKey,
+			&i.Ip,
+			&i.UserAgent,
 		); err != nil {
 			return nil, err
 		}

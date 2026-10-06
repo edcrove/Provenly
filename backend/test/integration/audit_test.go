@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"sync"
 	"testing"
@@ -57,8 +58,9 @@ func TestAudit(t *testing.T) {
 
 		page, err := s.Audit.Events(ctx, audit.Filter{}, pagination.Page{Number: 1, Size: 100})
 		require.NoError(t, err)
-		require.Equal(t, int64(13), page.Total)
-		last := page.Items[len(page.Items)-1]
+		require.Equal(t, int64(14), page.Total, "the 13 changes and the sign-in (card #49)")
+		assert.Equal(t, "signed in", page.Items[len(page.Items)-1].Summary)
+		last := page.Items[len(page.Items)-2]
 		assert.Equal(t, "admin", last.Actor)
 		assert.Equal(t, "POST /api/v1/projects", last.Action)
 		hook := page.Items[10]
@@ -81,7 +83,10 @@ func TestAudit(t *testing.T) {
 		for _, e := range []audit.Event{
 			{Actor: "", Action: "POST /x", Path: "/x", Status: 201},
 			{Actor: "a", Action: "GET /x", Path: "/x", Status: 200},
-			{Actor: "a", Action: "POST /x", Path: "/x", Status: 404},
+			{Actor: "a", Action: "POST /x", Path: "/x", Status: 199},
+			{Actor: "a", Action: "POST /x", Path: "/x", Status: 600},
+			{Actor: "a", Action: "POST /x", Path: "/x", Status: 201, IP: strings.Repeat("1", 46)},
+			{Actor: "a", Action: "POST /x", Path: "/x", Status: 201, UserAgent: strings.Repeat("u", 501)},
 			{Actor: "a", Action: "POST /x", Path: "", Status: 201},
 		} {
 			assert.Error(t, store.Insert(ctx, e), "%+v", e)
@@ -153,5 +158,65 @@ func TestAudit(t *testing.T) {
 			assert.Equal(t, key, e.TestCaseKey)
 			assert.Equal(t, "CHK", e.ProjectKey)
 		}
+	})
+
+	t.Run("BE-INT-071_sign_ins_failures_lockouts_and_public_routes_are_audited_with_the_client_never_a_secret", func(t *testing.T) {
+		s, ctx := fresh(t)
+		require.NoError(t, s.Identity.Bootstrap(context.Background(), "admin", "correct horse"))
+		s.TrustedProxies = []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}
+		srv := httptest.NewServer(app.NewHandler(s, 1<<20))
+		defer srv.Close()
+		post := func(path, body, token string) (int, map[string]any) {
+			req, _ := http.NewRequest("POST", srv.URL+path, strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("User-Agent", "integration-agent/1")
+			req.Header.Set("X-Forwarded-For", "192.0.2.1, 198.51.100.7")
+			if token != "" {
+				req.Header.Set("Authorization", "Bearer "+token)
+			}
+			res, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer res.Body.Close()
+			var out map[string]any
+			_ = json.NewDecoder(res.Body).Decode(&out)
+			return res.StatusCode, out
+		}
+		code, _ := post("/api/v1/auth/login", `{"username":"ghost","password":"secret-guess-1"}`, "")
+		require.Equal(t, 401, code)
+		code, _ = post("/api/v1/auth/login", `{"username":"admin","password":"secret-guess-2"}`, "")
+		require.Equal(t, 401, code)
+		code, sess := post("/api/v1/auth/login", `{"username":"admin","password":"correct horse"}`, "")
+		require.Equal(t, 200, code)
+		token := sess["token"].(string)
+		code, inv := post("/api/v1/invitations", `{}`, token)
+		require.Equal(t, 201, code)
+		code, _ = post("/api/v1/invitations/accept", `{"token":"`+inv["token"].(string)+`","username":"ana","displayName":"Ana","password":"ana password"}`, "")
+		require.Equal(t, 201, code)
+		code, _ = post("/api/v1/auth/logout", ``, token)
+		require.Equal(t, 204, code)
+		for range 5 {
+			post("/api/v1/auth/login", `{"username":"ana","password":"secret-guess-3"}`, "")
+		}
+		code, _ = post("/api/v1/auth/login", `{"username":"ana","password":"ana password"}`, "")
+		require.Equal(t, 429, code)
+
+		page, err := s.Audit.Events(ctx, audit.Filter{}, pagination.Page{Number: 1, Size: 100})
+		require.NoError(t, err)
+		var got []string
+		for _, e := range page.Items {
+			got = append(got, fmt.Sprintf("%s %d %s", e.Actor, e.Status, e.Summary))
+			assert.Equal(t, "198.51.100.7", e.IP, "the nearest hop the trusted proxy added")
+			assert.Equal(t, "integration-agent/1", e.UserAgent)
+		}
+		assert.Equal(t, []string{
+			"ana 429 was refused: too many failed sign-ins",
+			"ana 401 failed to sign in", "ana 401 failed to sign in", "ana 401 failed to sign in", "ana 401 failed to sign in", "ana 401 failed to sign in",
+			"admin 204 signed out", "ana 201 accepted an invitation", "admin 201 created an invitation",
+			"admin 200 signed in", "admin 401 failed to sign in", "unknown 401 failed to sign in",
+		}, got)
+		var leaked int
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_events WHERE (audit_events.*)::text LIKE '%secret-guess%'
+			OR (audit_events.*)::text LIKE '%ghost%' OR (audit_events.*)::text LIKE '%ana password%'`).Scan(&leaked))
+		assert.Zero(t, leaked, "no password, token or unknown username is stored")
 	})
 }

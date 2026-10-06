@@ -101,7 +101,17 @@ export function AuditPage() {
                   {data.items.map((e) => (
                     <TableRow key={e.id} data-testid={`audit-${e.id}`}>
                       <TableCell className="whitespace-nowrap">{formatDateTime(e.occurredAt)}</TableCell>
-                      <TableCell>{e.actor}</TableCell>
+                      <TableCell>
+                        <div>{e.actor}</div>
+                        {e.ip ? (
+                          <div
+                            className="text-muted-foreground font-mono text-xs"
+                            title={e.userAgent ?? undefined}
+                          >
+                            {e.ip}
+                          </div>
+                        ) : null}
+                      </TableCell>
                       <TableCell>
                         {/* What it did in words; older events have only the route. The path is the detail. */}
                         <div>{e.summary ?? <span className="font-mono text-xs">{e.action}</span>}</div>

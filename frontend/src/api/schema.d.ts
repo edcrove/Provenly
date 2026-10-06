@@ -661,7 +661,7 @@ export interface paths {
         };
         /**
          * The audit log, newest first - every authenticated change made through the API (administrators)
-         * @description One event per successful POST, PUT, PATCH or DELETE: who (a username, or an API key by prefix and name), the operation (method and route) and in words ("edited CHK-4 step 3"), the request path, the project it changed and the test case it touched. Request bodies are never recorded. MCP calls (reads) and live run events are not audited. Events recorded before the summary existed have none, and only a project their path named.
+         * @description One event per successful POST, PUT, PATCH or DELETE, and one per sign-in event (a sign-in that succeeds, fails with 401 or is refused with 429, a sign-out, an accepted invitation, a password reset; the actor is the account, or `unknown` when the username matches none). Each keeps the client IP and user agent. Who (a username, or an API key by prefix and name), the operation (method and route) and in words ("edited CHK-4 step 3"), the request path, the project it changed and the test case it touched. Request bodies are never recorded. MCP calls (reads) and live run events are not audited. Events recorded before the summary existed have none, and only a project their path named.
          */
         get: operations["listAuditEvents"];
         put?: never;
@@ -2146,6 +2146,7 @@ export interface components {
             path: string;
             /** @description The project the change addressed: its path or `?project=`, else the project its authorization allowed (a test case, a step, a run). Null when none. */
             project: string | null;
+            /** @description The HTTP status the request answered (2xx for changes; 401 or 429 for refused sign-ins). */
             status: number;
             /**
              * @description What the change did, in words; null for events recorded before summaries existed.
@@ -2157,6 +2158,13 @@ export interface components {
              * @example CHK-4
              */
             testCase: string | null;
+            /**
+             * @description The client's address: the peer, or the nearest X-Forwarded-For hop added by a proxy listed in PROVENLY_TRUSTED_PROXIES. Null for events recorded before it was kept.
+             * @example 198.51.100.7
+             */
+            ip: string | null;
+            /** @description The client's User-Agent (at most 500 characters). */
+            userAgent: string | null;
         };
         AuditEventPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["AuditEvent"][];

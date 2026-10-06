@@ -5,9 +5,12 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/edcrove/provenly/backend/internal/platform/clientinfo"
 )
 
 // Config is the process configuration.
@@ -31,6 +34,9 @@ type Config struct {
 	WebhooksAllowPrivate bool
 	// GitHubAPIURL is the GitHub REST API the GitHub connector calls (GitHub Enterprise or a test double).
 	GitHubAPIURL string
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For names the client in the audit log
+	// (PROVENLY_TRUSTED_PROXIES: addresses and CIDR ranges, comma-separated; none by default).
+	TrustedProxies []netip.Prefix
 	// WebhookDeliveryRetentionDays is how many days finished webhook deliveries are kept (default 90; 0 keeps them).
 	WebhookDeliveryRetentionDays int
 	// OTLPExport is true when an OpenTelemetry OTLP endpoint is configured (OTEL_EXPORTER_OTLP_ENDPOINT or
@@ -115,6 +121,11 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 		cfg.WebhooksAllowPrivate = b
 	}
+	proxies, err := clientinfo.ParseTrusted(getenv("PROVENLY_TRUSTED_PROXIES"))
+	if err != nil {
+		return Config{}, fmt.Errorf("PROVENLY_TRUSTED_PROXIES: %w", err)
+	}
+	cfg.TrustedProxies = proxies
 	cfg.WebhookDeliveryRetentionDays = defaultDeliveryRetentionDays
 	if raw := getenv("PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS"); raw != "" {
 		days, err := strconv.Atoi(raw)

@@ -251,6 +251,14 @@ the route names, then stores a `summary` ("deleted CHK-4 step 3", from the `summ
 `test_case_key` (`GET /audit?testCase=CHK-4`). Events recorded before have neither and are not backfilled: the table is
 append-only.
 
+Card #49 records sign-in events, which have no signed-in caller: `identity.Service` reports them through its
+`AuthLog` port (implemented by `audit.Service`) — a sign-in that succeeds, fails (401) or is locked out (429), a
+sign-out with a valid session, an accepted invitation, a password reset — with the account's username, or `unknown`
+when it matches none (a typed username or password is never stored). Every event, changes included, keeps the client
+IP and user agent from `platform/clientinfo`: the peer address, or the nearest `X-Forwarded-For` hop added by a proxy
+in `PROVENLY_TRUSTED_PROXIES` (none by default). Each sign-in event is also a structured log line
+(`event=auth.login_failed actor=… ip=…`).
+
 ## Releases and sign-in throttle (prototype feature 21)
 
 `identity.Service.Login` consults an in-memory throttle keyed by the normalized username before checking the

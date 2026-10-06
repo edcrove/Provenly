@@ -74,6 +74,7 @@ sql:
     schema:
       - migrations/00029_audit.sql
       - migrations/00034_audit_summary.sql
+      - migrations/00036_audit_sign_ins.sql
     queries: queries/audit.sql
     gen:
       go:

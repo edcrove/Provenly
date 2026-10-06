@@ -169,5 +169,6 @@ func (s *Service) ResetPassword(ctx context.Context, token, password string) (Se
 	if err != nil {
 		return Session{}, err
 	}
+	s.authEvent(ctx, AuthPasswordReset, user.Username, 200)
 	return s.issue(user)
 }

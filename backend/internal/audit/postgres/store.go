@@ -24,7 +24,7 @@ func text(s string) pgtype.Text { return pgtype.Text{String: s, Valid: s != ""} 
 // Insert implements audit.Repository.
 func (s *Store) Insert(ctx context.Context, e audit.Event) error {
 	return s.q.InsertAuditEvent(ctx, auditdb.InsertAuditEventParams{Actor: e.Actor, Action: e.Action, Path: e.Path, ProjectKey: text(e.ProjectKey), Status: e.Status,
-		Summary: text(e.Summary), TestCaseKey: text(e.TestCaseKey)})
+		Summary: text(e.Summary), TestCaseKey: text(e.TestCaseKey), Ip: text(e.IP), UserAgent: text(e.UserAgent)})
 }
 
 // List implements audit.Repository.
@@ -33,7 +33,7 @@ func (s *Store) List(ctx context.Context, f audit.Filter, limit, offset int32) (
 	out := make([]audit.Event, len(rows))
 	for i, r := range rows {
 		out[i] = audit.Event{ID: r.ID, OccurredAt: r.OccurredAt.Time, Actor: r.Actor, Action: r.Action, Path: r.Path, ProjectKey: r.ProjectKey.String, Status: r.Status,
-			Summary: r.Summary.String, TestCaseKey: r.TestCaseKey.String}
+			Summary: r.Summary.String, TestCaseKey: r.TestCaseKey.String, IP: r.Ip.String, UserAgent: r.UserAgent.String}
 	}
 	return out, err
 }

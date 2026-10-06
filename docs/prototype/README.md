@@ -401,6 +401,9 @@ Notion Decision Register; each one ships in its own PR.
 - **Retention (card #51):** finished webhook deliveries older than `PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS` (default
   90, `0` keeps them) are purged hourly by the delivery worker, in batches of 1,000 under an advisory lock, and the
   count is logged; pending deliveries, audit events and run results are never purged.
+- **Sign-in audit (card #49):** sign-ins (succeeded, failed, locked out), sign-outs, accepted invitations and password
+  resets are audited with the client IP and user agent (`X-Forwarded-For` only through `PROVENLY_TRUSTED_PROXIES`)
+  and logged as `event=auth.*`; the actor is the account or `unknown`, never a typed secret.
 
 
 ### 24. Review-panel audit (2026-10-06): fixes

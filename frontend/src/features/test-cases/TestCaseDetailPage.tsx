@@ -138,6 +138,10 @@ function Definition({ tc }: { tc: TestCase }) {
           </AlertDescription>
         </Alert>
       ) : null}
+      {/* The edit form shows its own errors; outside it (e.g. "Mark as automated") a failed update must not be silent. */}
+      {update.error && !editing ? (
+        <ErrorAlert error={update.error} title="Could not update the test case" />
+      ) : null}
 
       <Card>
         <CardHeader>

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 
 import type { Issue } from '@/api/client'
 import { useIssue, useIssueMutations, useTestCases } from '@/api/queries'
+import { NotFoundPage } from '@/app/NotFoundPage'
 import { PageTitle } from '@/components/PageTitle'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -129,6 +130,7 @@ export function IssueDetailPage() {
   const issue = useIssue(projectKey, id)
   const m = useIssueMutations(projectKey)
   const edit = can(useProjectRole(projectKey), 'member')
+  if (!id) return <NotFoundPage />
   return (
     <QueryState page query={issue}>
       {(i) => (

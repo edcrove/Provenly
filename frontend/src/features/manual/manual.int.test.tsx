@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
-import { testCase } from '@/test/fixtures'
+import { project, testCase } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { renderRoute } from '@/test/render'
 import { server } from '@/test/server'
@@ -84,6 +84,22 @@ describe('FE-INT-039 manual execution', () => {
     await u.click(within(panel).getByRole('button', { name: 'Cancel run' }))
     await waitFor(() => expect(screen.queryByTestId('manual-execution')).not.toBeInTheDocument())
     expect(screen.getByTestId('execution-badge')).toHaveTextContent('cancelled')
+  })
+
+  it('FE-INT-039 starts in the project the select shows when the user cannot write to the default one', async () => {
+    db.projects.push(project({ id: 2, key: 'CHK', name: 'Checkout', description: '' }))
+    db.users.push({ ...db.users[0], id: 2, username: 'ana', isAdmin: false })
+    db.members.push({ projectId: 1, userId: 2, role: 'viewer', since: at })
+    db.members.push({ projectId: 2, userId: 2, role: 'member', since: at })
+    db.session = 2
+    const { user: u, router } = renderRoute('/test-runs/manual')
+    await u.type(await screen.findByLabelText('What is being tested'), 'Checkout pass')
+    const select = screen.getByLabelText('Project')
+    await within(select).findByRole('option', { name: /^CHK/ })
+    expect(select).toHaveValue('CHK')
+    await u.click(screen.getByRole('button', { name: 'Start manual run' }))
+    await waitFor(() => expect(router.state.location.pathname).toMatch(/^\/test-runs\/\d+$/))
+    expect(db.runs.at(-1)).toMatchObject({ projectId: 2 })
   })
 
   it('FE-INT-039 a suite and every test case can be chosen; failures to start are shown; viewers only read', async () => {

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { http, HttpResponse } from 'msw'
 
-import { testCase, testRun } from '@/test/fixtures'
+import { project, testCase, testRun } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { renderRoute } from '@/test/render'
 import { server } from '@/test/server'
@@ -77,11 +77,22 @@ describe('FE-INT-038 suites and partial runs', () => {
 
     db.runs.push(testRun({ id: 8, suite: { key: 'release', name: 'Release' } }))
     await u.click(screen.getByRole('link', { name: 'Runs of this suite' }))
-    expect(router.state.location.search).toBe('?suite=release')
-    expect(await screen.findByTestId('suite-filter')).toHaveTextContent('Runs of suite release')
+    expect(router.state.location.search).toBe('?project=TC&suite=release')
+    expect(await screen.findByTestId('suite-filter')).toHaveTextContent('Runs of suite TC/release')
     expect(await screen.findByText('#8')).toBeInTheDocument()
     expect(screen.queryByText('#7')).not.toBeInTheDocument()
     expect(screen.getByTestId('suite-badge')).toHaveTextContent('suite: Release')
+  })
+
+  it('FE-INT-038 the runs of a suite follow the link\'s project, not the one chosen in the header', async () => {
+    db.projects.push(project({ id: 2, key: 'CHK', name: 'Checkout', description: '' }))
+    db.runs.push(testRun({ id: 8, suite: { key: 'release', name: 'Release' } }))
+    db.runs.push(testRun({ id: 9, projectId: 2, suite: { key: 'release', name: 'Checkout release' } }))
+    localStorage.setItem('provenly.project', 'CHK')
+    renderRoute('/test-runs?project=TC&suite=release')
+    expect(await screen.findByText('#8')).toBeInTheDocument()
+    expect(screen.queryByText('#9')).not.toBeInTheDocument()
+    expect(screen.getByTestId('suite-filter')).toHaveTextContent('Runs of suite TC/release')
   })
 
   it('FE-INT-038 a failed change is reported; viewers only read; unknown suites are not found', async () => {

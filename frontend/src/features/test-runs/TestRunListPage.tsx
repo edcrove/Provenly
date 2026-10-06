@@ -18,9 +18,11 @@ import { positiveInt } from '@/lib/status'
 export function TestRunListPage() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
-  const { project } = useCurrentProject()
-  // ?suite=<key>: the runs of one suite (linked from the suite page).
+  const { project: current } = useCurrentProject()
+  // ?project=<key>&suite=<key>: the runs of one suite (linked from the suite page). Suite keys are per project, so
+  // the link's project wins over the one chosen in the header.
   const suite = params.get('suite') ?? ''
+  const project = (suite && params.get('project')) || current
   const query = useTestRuns(page, project || undefined, suite || undefined)
   const projects = useProjects()
   const projectKey = (id: number) => projects.data?.items.find((p) => p.id === id)?.key ?? '—'
@@ -42,7 +44,12 @@ export function TestRunListPage() {
         </div>
         {suite ? (
           <p className="text-muted-foreground text-sm" data-testid="suite-filter">
-            Runs of suite <span className="font-mono">{suite}</span> ·{' '}
+            Runs of suite{' '}
+            <span className="font-mono">
+              {project ? `${project}/` : ''}
+              {suite}
+            </span>{' '}
+            ·{' '}
             <Link to="/test-runs" className="underline">
               All runs
             </Link>

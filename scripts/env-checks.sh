@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Checks of the docker environments that the CI smoke steps do not cover (Dockerized Environments card):
-# image facts, data isolation between environments, a snapshot used as a seed, qa dump/restore, prod's
+# image facts, data isolation between environments, a snapshot used as a seed, qa dump/restore, scheduled backups, prod's
 # guards (refusals without CONFIRM=prod, a dump before a confirmed reset), the CA build-cache key and hot
 # reload. Run after `docker compose up` (demo) and `make up ENV=qa` in the CI docker job.
 # It creates envs/prod.env, writes backups/ and resets prod: CI only.
@@ -54,6 +54,29 @@ make --no-print-directory db-restore ENV=qa FILE="$dump" >/dev/null 2>&1
 [ "$(count http://localhost:8180 "env-checks after dump $run")" = 0 ] || fail "db-restore did not bring qa back to the dump"
 [ "$(count http://localhost:8180 "env-checks qa only $run")" = 1 ] || fail "db-restore lost data from the dump"
 ok "db-dump / db-restore"
+
+# Scheduled backups (card #63): the backup profile dumps at start (pg_dump -Fc, renamed when complete), rotates only
+# after a successful dump, reports healthy, and make db-restore restores its .dump.
+bk=$(mktemp -d)
+touch -d '20 days ago' "$bk/qa-old.dump"
+touch -d '3 days ago' "$bk/qa-recent.dump"
+qa_backup() { BACKUP_DIR="$bk" docker compose --env-file envs/qa.env --profile backup "$@"; }
+# A failing dump (an unknown host) leaves the dumps it would have rotated.
+qa_backup run --rm -e PGHOST=nowhere --entrypoint /bin/sh backup /opt/backup/backup.sh >/dev/null 2>&1 && fail "a backup without its database succeeded"
+[ -f "$bk/qa-old.dump" ] || fail "a failed backup rotated old dumps"
+qa_backup up -d --wait backup >/dev/null 2>&1 || fail "the backup service did not become healthy"
+{ [ ! -f "$bk/qa-old.dump" ] && [ -f "$bk/qa-recent.dump" ]; } || fail "rotation must remove only dumps past BACKUP_RETENTION_DAYS"
+ls "$bk"/*.partial >/dev/null 2>&1 && fail "a backup left a partial file"
+api http://localhost:8180 -o /dev/null -H 'Content-Type: application/json' -X POST http://localhost:8180/api/v1/test-cases \
+  -d "{\"title\":\"env-checks after backup $run\",\"automated\":false}"
+scheduled=$(ls -t "$bk"/qa-2*.dump | head -1)
+# The restore recreates qa: the backup container goes first so nothing holds its network.
+qa_backup rm -sf backup >/dev/null 2>&1
+make --no-print-directory db-restore ENV=qa FILE="$scheduled" >/dev/null 2>&1 || fail "db-restore refused the scheduled .dump"
+[ "$(count http://localhost:8180 "env-checks after backup $run")" = 0 ] || fail "restoring the scheduled backup kept later data"
+[ "$(count http://localhost:8180 "env-checks qa only $run")" = 1 ] || fail "the scheduled backup lost data"
+rm -rf "$bk"
+ok "scheduled backups: dump, rotation after success, healthcheck, restore"
 
 # prod: credentials outside the repo, every destructive target refused without CONFIRM=prod.
 { git check-ignore -q envs/prod.env && git check-ignore -q backups/; } || fail "envs/prod.env and backups/ must be gitignored"

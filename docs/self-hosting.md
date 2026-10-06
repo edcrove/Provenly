@@ -68,6 +68,20 @@ make db-restore ENV=prod CONFIRM=prod FILE=backups/<file>.sql # takes a dump fir
 
 Back up `envs/prod.env` too (it holds `PROVENLY_SECRETS_KEY`), separately from the dumps.
 
+**Scheduled backups.** Add `COMPOSE_PROFILES=backup` to `envs/prod.env` (or pass `--profile backup`) and the `backup`
+service dumps the database with `pg_dump -Fc` once when it starts and then on `BACKUP_SCHEDULE` (cron syntax, UTC;
+default `17 3 * * *`, daily at 03:17). Each dump is written to a temporary file and renamed when complete
+(`<env>-<timestamp>.dump` in `BACKUP_DIR`, default `./backups`), and only after a successful dump are the ones older
+than `BACKUP_RETENTION_DAYS` (default 14) deleted, so a failing database never costs the dumps you have. The service
+is healthy while its last success is under 26 hours old (`docker compose ps`, or your monitoring). Restore one with
+`make db-restore ENV=prod CONFIRM=prod FILE=backups/<file>.dump`.
+
+- **Copy the dumps off the host** (object storage, another machine): a backup on the same disk dies with it. The
+  dumps hold every test case, run and user (password hashes), so store them as carefully as the database.
+- **The dumps do not hold `PROVENLY_SECRETS_KEY`**, which seals webhook signing secrets and connector tokens: keep it
+  with `envs/prod.env`, apart from the dumps. Restored without it, those secrets cannot be read back (re-create the
+  webhooks and reconnect GitHub).
+
 ## 5. Upgrade
 
 1. Read the release notes; take a dump (`make db-dump ENV=prod`).

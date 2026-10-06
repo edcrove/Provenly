@@ -394,6 +394,10 @@ Notion Decision Register; each one ships in its own PR.
 - **Confirmations (card #56):** completing a manual run with untested test cases, cancelling it, deleting a step and
   revoking an API key ask inline first, with the safe option focused (the deprecate pattern); in a manual run only
   the recorded result's button is highlighted and saving says what was saved ("Saved · failed at step 3").
+- **Scheduled backups (card #63):** the compose `backup` profile dumps the database (`pg_dump -Fc`, renamed when
+  complete) at start and on `BACKUP_SCHEDULE`, rotates dumps older than `BACKUP_RETENTION_DAYS` only after a successful
+  one, and is healthy while the last success is recent; `make db-restore` restores a `.dump`. Self-hosting documents
+  the off-host copy and that `PROVENLY_SECRETS_KEY` is not in the dump.
 
 
 ### 24. Review-panel audit (2026-10-06): fixes

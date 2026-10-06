@@ -3,12 +3,14 @@ import { Link } from 'react-router'
 
 import type { TestRun, TestRunSummary } from '@/api/client'
 import { useManualRun } from '@/api/queries'
+import { InlineConfirm } from '@/components/InlineConfirm'
 import { ErrorAlert } from '@/components/QueryState'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { plural } from '@/lib/format'
 
 type Outcome = TestRunSummary['testCases'][number]
 
@@ -24,6 +26,7 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
   const { record } = useManualRun(runId)
   const [note, setNote] = useState('')
   const [step, setStep] = useState('')
+  const [saved, setSaved] = useState<string | null>(null)
   const key = outcome.testCaseKey ?? String(outcome.testCaseId)
   // A failed step means the test failed or was blocked: never drop it silently on Pass or Skip.
   const stepOnly = step.trim() !== ''
@@ -37,7 +40,7 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
         </Link>
       </TableCell>
       <TableCell>
-        <StatusBadge status={outcome.status} />
+        <StatusBadge status={outcome.status} manual />
       </TableCell>
       <TableCell>
         <div className="grid gap-1">
@@ -64,7 +67,13 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
               A failed step goes with Fail or Blocked; clear it to pass or skip.
             </p>
           ) : null}
-          {record.error ? <ErrorAlert error={record.error} title={`Could not record ${key}`} /> : null}
+          {record.error ? (
+            <ErrorAlert error={record.error} title={`Could not record ${key}`} />
+          ) : saved ? (
+            <p role="status" className="text-muted-foreground text-xs" data-testid={`saved-${key}`}>
+              {saved}
+            </p>
+          ) : null}
         </div>
       </TableCell>
       <TableCell>
@@ -73,7 +82,9 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
             <Button
               key={a.status}
               size="sm"
-              variant={a.status === 'passed' ? 'default' : 'outline'}
+              // Only the recorded result is highlighted, so a row tells at a glance what was recorded.
+              variant={a.status === outcome.status ? 'default' : 'outline'}
+              aria-pressed={a.status === outcome.status}
               disabled={record.isPending || (stepOnly && (a.status === 'passed' || a.status === 'skipped'))}
               onClick={() =>
                 record.mutate(
@@ -87,6 +98,9 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
                   },
                   {
                     onSuccess: () => {
+                      const failedStep =
+                        (a.status === 'failed' || a.status === 'error') && step ? ` at step ${step}` : ''
+                      setSaved(`Saved · ${a.label === 'Blocked' ? 'blocked' : a.status}${failedStep}`)
                       setNote('')
                       setStep('')
                     },
@@ -142,12 +156,35 @@ export function ManualExecution({ run, summary }: { run: TestRun; summary: TestR
         </Table>
         {finish.error ? <ErrorAlert error={finish.error} title="Could not finish the run" /> : null}
         <div className="flex flex-wrap gap-2">
-          <Button disabled={finish.isPending} onClick={() => finish.mutate('completed')}>
-            Complete run
-          </Button>
-          <Button variant="outline" disabled={finish.isPending} onClick={() => finish.mutate('cancelled')}>
-            Cancel run
-          </Button>
+          {/* Finishing cannot be undone: completing with untested test cases and cancelling ask first. */}
+          <InlineConfirm
+            label="Confirm completing the run"
+            question={`${plural(left, 'test case')} ${left === 1 ? 'is' : 'are'} still untested. Complete anyway?`}
+            confirmLabel="Complete anyway"
+            pending={finish.isPending}
+            onConfirm={(close) => finish.mutate('completed', { onSettled: close })}
+            trigger={(open) => (
+              <Button
+                disabled={finish.isPending}
+                onClick={() => (left > 0 ? open() : finish.mutate('completed'))}
+              >
+                Complete run
+              </Button>
+            )}
+          />
+          <InlineConfirm
+            label="Confirm cancelling the run"
+            question={`Cancel this run? Recorded results are kept${left > 0 ? `; ${left} untested stay untested` : ''}.`}
+            confirmLabel="Cancel run"
+            dismissLabel="Keep the run"
+            pending={finish.isPending}
+            onConfirm={(close) => finish.mutate('cancelled', { onSettled: close })}
+            trigger={(open) => (
+              <Button variant="outline" disabled={finish.isPending} onClick={open}>
+                Cancel run…
+              </Button>
+            )}
+          />
         </div>
       </CardContent>
     </Card>

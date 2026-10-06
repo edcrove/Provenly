@@ -28,11 +28,29 @@ func (s *Service) Scope(ctx context.Context) (authz.Scope, error) {
 	if err != nil {
 		return authz.Scope{}, err
 	}
-	if u.IsAdmin {
+	t, byToken := TokenFrom(ctx)
+	if u.IsAdmin && !byToken {
 		return authz.Scope{All: true}, nil
 	}
-	roles, err := s.repo.ListUserMemberships(ctx, u.ID)
-	return authz.Scope{Roles: roles}, err
+	roles := map[int64]authz.Role{}
+	if !u.IsAdmin {
+		if roles, err = s.repo.ListUserMemberships(ctx, u.ID); err != nil {
+			return authz.Scope{}, err
+		}
+	}
+	if !byToken {
+		return authz.Scope{Roles: roles}, nil
+	}
+	// A personal access token sees only the projects it was given (and still belongs to).
+	scoped := map[int64]authz.Role{}
+	for _, id := range t.ProjectIDs {
+		if u.IsAdmin {
+			scoped[id] = authz.RoleAdmin
+		} else if r, ok := roles[id]; ok {
+			scoped[id] = r
+		}
+	}
+	return authz.Scope{Roles: scoped}, nil
 }
 
 // RoleIn returns the user's role in a project (authz.RoleAdmin for administrators).
@@ -70,6 +88,9 @@ func (s *Service) require(ctx context.Context, projectID int64, minRole authz.Ro
 	case role < minRole:
 		return apperr.Forbidden("this needs the %s role in the project (you are %s)", minRole, role)
 	}
+	if t, ok := TokenFrom(ctx); ok && !t.covers(projectID) {
+		return errTokenProject
+	}
 	return nil
 }
 
@@ -85,7 +106,7 @@ func (s *Service) RequireAdmin(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return requireAdmin(u)
+	return requireAdmin(ctx, u)
 }
 
 // errProjectHidden answers a project the caller cannot see. The HTTP adapter rewrites it with the requested key, so

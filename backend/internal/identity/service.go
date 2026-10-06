@@ -256,7 +256,10 @@ func (s *Service) ChangePassword(ctx context.Context, u User, current, next stri
 	return s.issue(updated)
 }
 
-func requireAdmin(u User) error {
+func requireAdmin(ctx context.Context, u User) error {
+	if _, ok := TokenFrom(ctx); ok {
+		return errTokenAdmin
+	}
 	if !u.IsAdmin {
 		return apperr.Forbidden("only administrators can manage users and invitations")
 	}
@@ -265,7 +268,7 @@ func requireAdmin(u User) error {
 
 // ListUsers returns a page of users by username (administrators only).
 func (s *Service) ListUsers(ctx context.Context, actor User, page pagination.Page) (pagination.Result[User], error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requireAdmin(ctx, actor); err != nil {
 		return pagination.Result[User]{}, err
 	}
 	n, err := s.repo.CountUsers(ctx)
@@ -287,7 +290,7 @@ func TokenDigest(token string) []byte {
 
 // CreateInvitation creates an invitation and returns its token, which is never stored nor shown again.
 func (s *Service) CreateInvitation(ctx context.Context, actor User, in CreateInvitationInput) (Invitation, string, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requireAdmin(ctx, actor); err != nil {
 		return Invitation{}, "", err
 	}
 	in.Note = strings.TrimSpace(in.Note)
@@ -320,7 +323,7 @@ func (s *Service) CreateInvitation(ctx context.Context, actor User, in CreateInv
 
 // ListInvitations returns a page of invitations, newest first (administrators only).
 func (s *Service) ListInvitations(ctx context.Context, actor User, page pagination.Page) (pagination.Result[Invitation], error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requireAdmin(ctx, actor); err != nil {
 		return pagination.Result[Invitation]{}, err
 	}
 	n, err := s.repo.CountInvitations(ctx)
@@ -336,7 +339,7 @@ func (s *Service) ListInvitations(ctx context.Context, actor User, page paginati
 
 // RevokeInvitation makes a pending invitation unusable (administrators only).
 func (s *Service) RevokeInvitation(ctx context.Context, actor User, id int64) (Invitation, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requireAdmin(ctx, actor); err != nil {
 		return Invitation{}, err
 	}
 	inv, err := s.repo.RevokeInvitation(ctx, id)

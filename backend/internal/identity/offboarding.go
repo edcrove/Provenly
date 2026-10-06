@@ -28,10 +28,10 @@ func (s *Service) userByUsername(ctx context.Context, username string) (User, er
 }
 
 // Deactivate stops a user's access at once: their sessions are refused from the next request and they cannot sign
-// in. Project API keys are the project's and keep working. Administrators only; nobody deactivates themselves, and
+// in, and their personal access tokens are revoked. Project API keys are the project's and keep working. Administrators only; nobody deactivates themselves, and
 // the last active administrator stays.
 func (s *Service) Deactivate(ctx context.Context, actor User, username string) (User, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requireAdmin(ctx, actor); err != nil {
 		return User{}, err
 	}
 	var out User
@@ -60,14 +60,17 @@ func (s *Service) Deactivate(ctx context.Context, actor User, username string) (
 		if out, err = r.SetUserDeactivated(ctx, u.ID, &now); err != nil {
 			return err
 		}
-		return r.VoidPasswordResets(ctx, u.ID)
+		if err := r.VoidPasswordResets(ctx, u.ID); err != nil {
+			return err
+		}
+		return r.RevokeUserTokens(ctx, u.ID)
 	})
 	return out, err
 }
 
 // Reactivate gives a deactivated user their access back (administrators only).
 func (s *Service) Reactivate(ctx context.Context, actor User, username string) (User, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requireAdmin(ctx, actor); err != nil {
 		return User{}, err
 	}
 	u, err := s.userByUsername(ctx, username)
@@ -80,7 +83,7 @@ func (s *Service) Reactivate(ctx context.Context, actor User, username string) (
 // CreatePasswordReset makes a single-use link to set a new password for an active user (administrators only). Its
 // token is shown once; any earlier pending link of the user stops working.
 func (s *Service) CreatePasswordReset(ctx context.Context, actor User, username string) (PasswordReset, string, error) {
-	if err := requireAdmin(actor); err != nil {
+	if err := requireAdmin(ctx, actor); err != nil {
 		return PasswordReset{}, "", err
 	}
 	u, err := s.userByUsername(ctx, username)
@@ -164,7 +167,10 @@ func (s *Service) ResetPassword(ctx context.Context, token, password string) (Se
 		if err := r.MarkPasswordResetUsed(ctx, reset.ID); err != nil {
 			return err
 		}
-		return r.VoidPasswordResets(ctx, u.ID)
+		if err := r.VoidPasswordResets(ctx, u.ID); err != nil {
+			return err
+		}
+		return r.RevokeUserTokens(ctx, u.ID)
 	})
 	if err != nil {
 		return Session{}, err

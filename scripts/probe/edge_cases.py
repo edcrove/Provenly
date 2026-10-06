@@ -116,11 +116,35 @@ def main():
         check(f"search q={bad[:12]!r}", call(base, "GET", "/test-cases?q=" + bad)[0], 400)
 
     project = a_key.split("-")[0]
+    # Personal access tokens (card #62): read-only, scoped to their projects, expiring within a year; bad input is 400.
+    tokens = "/auth/tokens"
+    for body in [{}, {"name": "x"}, {"name": "x", "projects": []}, {"name": "x", "projects": ["NOPE99"]},
+                 {"name": "x", "projects": [project], "expiresInDays": 366}, {"name": "x", "projects": [project], "expiresInDays": 0},
+                 {"name": "x\u0000", "projects": [project]}, {"name": "x", "projects": [project] * 51}, {"name": 5, "projects": [project]},
+                 {"name": "x", "projects": "TC"}]:
+        check(f"POST {tokens} {str(body)[:50]}", call(base, "POST", tokens, body)[0], 400)
+    check("POST tokens text/plain", call(base, "POST", tokens, raw=b"{}", ctype="text/plain")[0], 415)
+    st, made = call(base, "POST", tokens, {"name": "probe", "projects": [project]})
+    check("POST tokens", st, 201)
+    pat = {"Authorization": "Bearer " + (made or {}).get("token", "")}
+    check("token reads its project", call(base, "GET", f"/projects/{project}/suites", headers=pat)[0], 200)
+    check("token writes", call(base, "POST", "/test-cases", {"title": "probe-pat"}, headers=pat)[0], 403)
+    check("token administers", call(base, "GET", "/users", headers=pat)[0], 403)
+    check("token makes tokens", call(base, "POST", tokens, {"name": "x", "projects": [project]}, headers=pat)[0], 403)
+    for bad in ["pvly_pat_", "pvly_pat_00000000_" + "A" * 43, (made or {}).get("token", "") + "x"]:
+        check(f"bad token {bad[:20]}", call(base, "GET", "/auth/me", headers={"Authorization": "Bearer " + bad})[0], 401)
+    for tid, exp in [("0", 400), ("abc", 400), ("9223372036854775808", 400), ("999999999", 404)]:
+        check(f"revoke token {tid}", call(base, "POST", f"{tokens}/{tid}/revoke")[0], exp)
+    tid = (made or {}).get("personalAccessToken", {}).get("id")
+    check("revoke token", call(base, "POST", f"{tokens}/{tid}/revoke")[0], 200)
+    check("revoke token again", call(base, "POST", f"{tokens}/{tid}/revoke")[0], 409)
+    check("revoked token", call(base, "GET", f"/projects/{project}/suites", headers=pat)[0], 401)
+
     lists = ["/projects", "/test-cases", "/test-runs", f"/test-cases/{a}/steps", f"/test-cases/{a}/results",
              f"/test-runs/{run_id}/results", f"/test-runs/{run_id}/parse-errors",
              # DEC-78: the project's catalog lists are paged too.
              f"/projects/{project}/suites", f"/projects/{project}/requirements", f"/projects/{project}/issues",
-             f"/projects/{project}/dimensions", f"/projects/{project}/webhooks"]
+             f"/projects/{project}/dimensions", f"/projects/{project}/webhooks", "/auth/tokens"]
     for path in lists:
         for qs, exp in [("page=21474838&pageSize=100", 400), ("page=0", 400), ("page=", 400), ("pageSize=101", 400),
                         ("page=1.5", 400), ("page=abc", 400), ("page=999", 200), ("page=2&page=x", 200),

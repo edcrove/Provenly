@@ -114,6 +114,34 @@ export function useChangePassword() {
   })
 }
 
+const tokensKey = ['auth', 'tokens']
+
+/** The signed-in person's personal access tokens (card #62). */
+export function useTokens(page: number) {
+  return useQuery({
+    queryKey: [...tokensKey, page],
+    placeholderData: (prev, q) => previousPage([...tokensKey, page], prev, q?.queryKey),
+    queryFn: async () => unwrap(await api.GET('/api/v1/auth/tokens', { params: { query: { page } } })),
+  })
+}
+
+export function useTokenMutations() {
+  const qc = useQueryClient()
+  const onSettled = () => qc.invalidateQueries({ queryKey: tokensKey })
+  return {
+    create: useExclusiveMutation({
+      mutationFn: async (body: { name: string; projects: string[]; expiresInDays: number }) =>
+        unwrap(await api.POST('/api/v1/auth/tokens', { body })),
+      onSettled,
+    }),
+    revoke: useExclusiveMutation({
+      mutationFn: async (tokenId: number) =>
+        unwrap(await api.POST('/api/v1/auth/tokens/{tokenId}/revoke', { params: { path: { tokenId } } })),
+      onSettled,
+    }),
+  }
+}
+
 export function useAcceptInvitation() {
   const qc = useQueryClient()
   return useExclusiveMutation({

@@ -59,3 +59,5 @@ targets:
     description: sharded runs through the public API - two Playwright reporters with --shard 1/2 and 2/2 and a project API key send one report each (no live streaming); the first creates a running sharded run (incomplete, shard 2 missing), the second completes it with both shards' results, each marked and filterable by shard
   - id: BE-E2E-029
     description: long lists through the public API (DEC-78) - requirements answer a page with coverageCounts over every page and reject pageSize 101; test cases are found by key in lower case and by title in any case among 105; a blank q is 400
+  - id: BE-E2E-030
+    description: personal access tokens through the public API (card #62) - 366 days is refused, a 365-day token over one project reads its test cases through REST and MCP from a cookie-less client, gets 403 for another project, administration and any write ("read-only"), records its last use and is 401 once revoked

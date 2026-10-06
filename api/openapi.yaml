@@ -38,6 +38,7 @@ servers:
 security:
   - bearerAuth: []
   - cookieAuth: []
+  - personalAccessToken: []
 tags:
   - name: system
   - name: auth
@@ -163,8 +164,97 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/auth/tokens:
+    get:
+      tags: [auth]
+      operationId: listPersonalAccessTokens
+      summary: List the signed-in person's personal access tokens, newest first
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Page of tokens (never the tokens themselves)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalAccessTokenPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [auth]
+      operationId: createPersonalAccessToken
+      summary: Create a read-only personal access token over some of your projects (card #62)
+      description: >-
+        For scripts and MCP clients: send it as `Authorization: Bearer <token>`. It reads (GET and MCP) the projects it
+        names, with the person's role there, and nothing else: a change, an administration route or another project
+        answers 403; an expired or revoked token, or one of a deactivated person, 401. It always expires (default 90
+        days, at most 365) and is returned once; only its digest is kept. Creating one needs a session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePersonalAccessTokenRequest"
+      responses:
+        "201":
+          description: The token and its secret (shown only now)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedPersonalAccessToken"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/auth/tokens/{tokenId}/revoke:
+    parameters:
+      - name: tokenId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      tags: [auth]
+      operationId: revokePersonalAccessToken
+      summary: Revoke one of your personal access tokens at once
+      responses:
+        "200":
+          description: The revoked token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalAccessToken"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -488,6 +578,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
     patch:
@@ -541,6 +633,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -712,6 +806,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -874,6 +970,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -929,6 +1027,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -1026,6 +1126,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -1114,6 +1216,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -1219,6 +1323,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -1597,6 +1703,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -1685,6 +1793,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -1822,6 +1932,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
     post:
@@ -1877,6 +1989,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
     patch:
@@ -2006,6 +2120,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
     post:
@@ -2173,6 +2289,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -2205,6 +2323,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -2306,6 +2426,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -2436,6 +2558,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -2481,6 +2605,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -2504,6 +2630,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -2530,6 +2658,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -2554,6 +2684,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -2839,6 +2971,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: pvk_ project API key
+    personalAccessToken:
+      type: http
+      scheme: bearer
+      bearerFormat: pvly_pat_ personal access token (read-only)
   parameters:
     IfMatch:
       name: If-Match
@@ -3011,7 +3147,7 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
     Forbidden:
-      description: Signed in but not allowed (e.g. not an administrator)
+      description: Signed in but not allowed (e.g. not an administrator, or a personal access token outside its projects or making a change)
       content:
         application/problem+json:
           schema:
@@ -3413,6 +3549,92 @@ components:
       properties:
         role:
           $ref: "#/components/schemas/ProjectRole"
+
+    PersonalAccessToken:
+      type: object
+      additionalProperties: false
+      required: [id, name, prefix, projects, status, createdAt, expiresAt, lastUsedAt, revokedAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        prefix:
+          type: string
+          description: First characters of the token, to tell tokens apart (the token itself is never shown again).
+          pattern: "^pvly_pat_[0-9a-f]{8}$"
+        projects:
+          type: array
+          description: Keys of the projects the token reads.
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, expired, revoked]
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last request made with the token (recorded at most once a minute).
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    PersonalAccessTokenPage:
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/PersonalAccessToken"
+
+    CreatePersonalAccessTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [name, projects]
+      properties:
+        name:
+          type: string
+          description: What the token is for (e.g. a script or an MCP client); 1 to 100 characters.
+          example: Claude Desktop
+        projects:
+          type: array
+          description: Keys of 1 to 50 projects you belong to.
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+          example: [CHK]
+        expiresInDays:
+          type: integer
+          minimum: 1
+          maximum: 365
+          default: 90
+
+    CreatedPersonalAccessToken:
+      type: object
+      additionalProperties: false
+      required: [personalAccessToken, token]
+      properties:
+        personalAccessToken:
+          $ref: "#/components/schemas/PersonalAccessToken"
+        token:
+          type: string
+          description: "The token: send it as `Authorization: Bearer <token>`. Shown only once."
+          pattern: "^pvly_pat_[0-9a-f]{8}_[A-Za-z0-9_-]{43}$"
 
     ApiKey:
       type: object

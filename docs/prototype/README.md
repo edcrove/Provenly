@@ -415,6 +415,12 @@ Notion Decision Register; each one ships in its own PR.
   by key or number; the suite, requirement and issue pickers search on the server, list 50 and say "Showing 50 of N,
   type to search."; linked test cases read with their key (`testCaseKey`), never `#id`. MCP `search_test_cases` takes
   `q`, `list_requirements` and `list_issues` take `page`.
+- **Personal access tokens (card #62):** a person makes read-only tokens (`pvly_pat_…`, shown once, hashed) on the
+  Account page for some of their projects, expiring in 30 to 365 days (90 by default), with last use and revocation;
+  deactivating the person revokes them. With one, REST GETs and MCP read those projects with the person's role; a
+  change, administration or another project is `403`, an expired or revoked token `401`. Creating and revoking are
+  audited. The MCP command on the Account page now uses a token instead of signing in with the password (every
+  authenticated operation may now answer `403`; the contract says so).
 
 
 ### 24. Review-panel audit (2026-10-06): fixes

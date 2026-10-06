@@ -63,6 +63,8 @@ var summaries = map[string]string{
 	"POST /api/v1/projects/{projectKey}/github/sync":                                  "synchronized GitHub",
 	"POST /api/v1/auth/logout":                                                        "signed out",
 	"POST /api/v1/auth/password":                                                      "changed their password",
+	"POST /api/v1/auth/tokens":                                                        "created a personal access token",
+	"POST /api/v1/auth/tokens/{tokenId}/revoke":                                       "revoked personal access token #{tokenId}",
 	"POST /api/v1/invitations":                                                        "created an invitation",
 	"POST /api/v1/invitations/{invitationId}/revoke":                                  "revoked invitation #{invitationId}",
 	"POST /api/v1/users/{username}/deactivate":                                        "deactivated {username}",

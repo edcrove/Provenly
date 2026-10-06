@@ -3,6 +3,7 @@ import { http, HttpResponse, type JsonBodyType } from 'msw'
 import type {
   Amendment,
   ApiKey,
+  PersonalAccessToken,
   AuditEvent,
   Dimension,
   GitHubConnection,
@@ -46,6 +47,8 @@ export interface MockDb {
   members: { projectId: number; userId: number; role: MemberRole; since: string }[]
   /** CI API keys by project id. */
   apiKeys: (ApiKey & { projectId: number })[]
+  /** Personal access tokens, by user id (card #62). */
+  tokens: (PersonalAccessToken & { userId: number })[]
   /** Snapshot amendments (DEC-42), all runs. */
   amendments: Amendment[]
   /** Suites (with their members for static ones) by project id. */
@@ -98,6 +101,7 @@ export function seed(): MockDb {
     session: 1,
     members: [],
     apiKeys: [],
+    tokens: [],
     amendments: [],
     dimensions: seedDimensions(1),
     suites: [],
@@ -247,13 +251,39 @@ const publicGuard =
   (info) =>
     db.failing ? problem(500, 'internal_error', 'an unexpected error occurred') : fn(info)
 
+/** Routes a personal access token reads whatever its projects: the person, their tokens, the project list, MCP. */
+const UNSCOPED = /\/api\/v1\/(auth\/me|auth\/tokens|projects|mcp)$/
+
+/**
+ * A personal access token (Authorization: Bearer pvly_pat_...) of the signed-in user, like the server (card #62):
+ * revoked or expired is a 401; a change, administration or a project it does not cover is a 403. A route without
+ * a project in its path or ?project= reads the default project's data (the mock keeps it all in TC).
+ */
+function tokenRefusal(request: Request): Response | undefined {
+  const bearer = request.headers.get('Authorization')?.match(/^Bearer (pvly_pat_[0-9a-f]{8})_/)?.[1]
+  if (!bearer) return undefined
+  const t = db.tokens.find((x) => x.prefix === bearer && x.userId === db.session)
+  if (!t || t.revokedAt || Date.parse(t.expiresAt) <= Date.now())
+    return problem(401, 'unauthorized', 'the personal access token is invalid, expired or revoked')
+  const url = new URL(request.url)
+  if (request.method !== 'GET' && !url.pathname.endsWith('/api/v1/mcp'))
+    return problem(403, 'forbidden', 'a personal access token is read-only: sign in to make changes')
+  if (UNSCOPED.test(url.pathname)) return undefined
+  if (/\/api\/v1\/(users|invitations|audit)/.test(url.pathname))
+    return problem(403, 'forbidden', 'a personal access token cannot be used for administration')
+  const key = url.pathname.match(/\/projects\/([^/]+)/)?.[1] ?? url.searchParams.get('project') ?? 'TC'
+  return t.projects.includes(key)
+    ? undefined
+    : problem(403, 'forbidden', 'this personal access token does not cover the project')
+}
+
 /** Wraps a handler that needs a session, like every other API operation. */
 const guard =
   (fn: Handler): Handler =>
   (info) =>
     db.session === null && !db.failing
       ? problem(401, 'unauthorized', 'sign in to continue')
-      : publicGuard(fn)(info)
+      : (tokenRefusal(info.request) ?? publicGuard(fn)(info))
 
 const currentUser = () => db.users.find((u) => u.id === db.session)!
 const session = (u: User) => ({ token: `token-${u.id}`, expiresAt: '2026-10-05T22:00:00Z', user: u })
@@ -327,6 +357,11 @@ function projectFilter(url: URL): Project | undefined | Response {
 function withoutProject({ projectId, ...k }: MockDb['apiKeys'][number]): ApiKey {
   void projectId
   return k
+}
+
+function tokenDto({ userId, ...t }: MockDb['tokens'][number]): PersonalAccessToken {
+  void userId
+  return t
 }
 
 /** A project the signed-in user maintains (or administers), like the server: else 400, 404 or 403. */
@@ -1354,6 +1389,69 @@ export const handlers = [
       if (k.revokedAt) return problem(409, 'conflict', `API key ${id} is already revoked`)
       Object.assign(k, { status: 'revoked', revokedAt: now() })
       return respond(withoutProject(k))
+    }),
+  ),
+  http.get(
+    `${BASE}/auth/tokens`,
+    guard(({ request }) => {
+      const items = db.tokens
+        .filter((t) => t.userId === db.session)
+        .sort((a, b) => b.id - a.id)
+        .map(tokenDto)
+      return respond(pageOf(new URL(request.url), items))
+    }),
+  ),
+  http.post(
+    `${BASE}/auth/tokens`,
+    guard(
+      jsonGuard(async ({ request }) => {
+        const body = (await readBody(request)) ?? {}
+        const name = String(body.name ?? '').trim()
+        if (!name || name.length > 100) return validation('name', 'must be 1 to 100 characters')
+        const days = Number(body.expiresInDays ?? 90)
+        if (!Number.isInteger(days) || days < 1 || days > 365)
+          return validation('expiresInDays', 'must be 1 to 365 days')
+        const named: string[] = Array.isArray(body.projects) ? (body.projects as string[]) : []
+        const projects = [...new Set(named)]
+        if (named.length === 0 || named.length > 50)
+          return validation('projects', 'must name 1 to 50 projects')
+        for (const key of projects) {
+          const p = db.projects.find((x) => x.key === key)
+          if (!p || !roleIn(p.id)) return validation('projects', 'must be projects you belong to')
+        }
+        const id = ++db.nextId
+        const hex = id.toString(16).padStart(8, '0')
+        const created = now()
+        const token = {
+          id,
+          userId: db.session!,
+          name,
+          prefix: `pvly_pat_${hex}`,
+          projects,
+          status: 'active' as const,
+          createdAt: created,
+          expiresAt: new Date(Date.parse(created) + days * 86_400_000).toISOString(),
+          lastUsedAt: null,
+          revokedAt: null,
+        }
+        db.tokens.push(token)
+        return respond(
+          { personalAccessToken: tokenDto(token), token: `pvly_pat_${hex}_${'t'.repeat(43)}` },
+          201,
+        )
+      }),
+    ),
+  ),
+  http.post(
+    `${BASE}/auth/tokens/:tokenId/revoke`,
+    guard(({ params }) => {
+      const id = pathId(params.tokenId)
+      if (id === undefined) return validation('tokenId', 'must be a positive integer')
+      const t = db.tokens.find((x) => x.id === id && x.userId === db.session)
+      if (!t) return notFound(`personal access token ${id}`)
+      if (t.revokedAt) return problem(409, 'conflict', `personal access token ${id} is already revoked`)
+      Object.assign(t, { status: 'revoked', revokedAt: now() })
+      return respond(tokenDto(t))
     }),
   ),
   http.get(

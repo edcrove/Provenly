@@ -178,6 +178,18 @@ type Repository interface {
 	// LockPasswordResetByToken locks the link until the transaction ends (ErrNotFound for an unknown token).
 	LockPasswordResetByToken(ctx context.Context, digest []byte) (PasswordReset, error)
 	MarkPasswordResetUsed(ctx context.Context, id int64) error
+	// CreateToken stores a personal access token with its projects (call it in a transaction).
+	CreateToken(ctx context.Context, t NewPersonalAccessToken) (PersonalAccessToken, error)
+	ListTokens(ctx context.Context, userID int64, limit, offset int32) ([]PersonalAccessToken, error)
+	CountTokens(ctx context.Context, userID int64) (int64, error)
+	GetToken(ctx context.Context, userID, id int64) (PersonalAccessToken, error)
+	GetTokenByDigest(ctx context.Context, digest []byte) (PersonalAccessToken, error)
+	// RevokeToken returns ErrNotFound when the token is not the user's or is already revoked.
+	RevokeToken(ctx context.Context, userID, id int64) (PersonalAccessToken, error)
+	// RevokeUserTokens revokes every token the user still has.
+	RevokeUserTokens(ctx context.Context, userID int64) error
+	// TouchToken records a use (at most once a minute).
+	TouchToken(ctx context.Context, id int64) error
 }
 
 type userKey struct{}

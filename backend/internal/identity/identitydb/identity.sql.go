@@ -11,6 +11,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addPersonalAccessTokenProjects = `-- name: AddPersonalAccessTokenProjects :exec
+INSERT INTO personal_access_token_projects (token_id, project_id)
+SELECT $1, unnest($2::bigint[])
+`
+
+type AddPersonalAccessTokenProjectsParams struct {
+	TokenID    int64
+	ProjectIds []int64
+}
+
+func (q *Queries) AddPersonalAccessTokenProjects(ctx context.Context, arg AddPersonalAccessTokenProjectsParams) error {
+	_, err := q.db.Exec(ctx, addPersonalAccessTokenProjects, arg.TokenID, arg.ProjectIds)
+	return err
+}
+
 const countAPIKeys = `-- name: CountAPIKeys :one
 SELECT count(*) FROM api_keys WHERE project_id = $1
 `
@@ -39,6 +54,17 @@ SELECT count(*) FROM invitations
 
 func (q *Queries) CountInvitations(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, countInvitations)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPersonalAccessTokens = `-- name: CountPersonalAccessTokens :one
+SELECT count(*) FROM personal_access_tokens WHERE user_id = $1
+`
+
+func (q *Queries) CountPersonalAccessTokens(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countPersonalAccessTokens, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -176,6 +202,46 @@ func (q *Queries) CreatePasswordReset(ctx context.Context, arg CreatePasswordRes
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.UsedAt,
+	)
+	return i, err
+}
+
+const createPersonalAccessToken = `-- name: CreatePersonalAccessToken :one
+INSERT INTO personal_access_tokens (user_id, name, prefix, token_sha256, created_at, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, user_id, name, prefix, token_sha256, created_at, expires_at, last_used_at, revoked_at
+`
+
+type CreatePersonalAccessTokenParams struct {
+	UserID      int64
+	Name        string
+	Prefix      string
+	TokenSha256 []byte
+	CreatedAt   pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
+// created_at comes with expires_at from the same clock, so a 365-day token is exactly within the bound.
+func (q *Queries) CreatePersonalAccessToken(ctx context.Context, arg CreatePersonalAccessTokenParams) (PersonalAccessToken, error) {
+	row := q.db.QueryRow(ctx, createPersonalAccessToken,
+		arg.UserID,
+		arg.Name,
+		arg.Prefix,
+		arg.TokenSha256,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+	)
+	var i PersonalAccessToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Prefix,
+		&i.TokenSha256,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
 	)
 	return i, err
 }
@@ -323,6 +389,67 @@ func (q *Queries) GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (s
 	return role, err
 }
 
+const getPersonalAccessToken = `-- name: GetPersonalAccessToken :one
+SELECT t.id, t.user_id, t.name, t.prefix, t.token_sha256, t.created_at, t.expires_at, t.last_used_at, t.revoked_at, ARRAY(SELECT p.project_id FROM personal_access_token_projects p WHERE p.token_id = t.id ORDER BY p.project_id)::bigint[] AS project_ids
+FROM personal_access_tokens t WHERE t.id = $1 AND t.user_id = $2
+`
+
+type GetPersonalAccessTokenParams struct {
+	ID     int64
+	UserID int64
+}
+
+type GetPersonalAccessTokenRow struct {
+	PersonalAccessToken PersonalAccessToken
+	ProjectIds          []int64
+}
+
+func (q *Queries) GetPersonalAccessToken(ctx context.Context, arg GetPersonalAccessTokenParams) (GetPersonalAccessTokenRow, error) {
+	row := q.db.QueryRow(ctx, getPersonalAccessToken, arg.ID, arg.UserID)
+	var i GetPersonalAccessTokenRow
+	err := row.Scan(
+		&i.PersonalAccessToken.ID,
+		&i.PersonalAccessToken.UserID,
+		&i.PersonalAccessToken.Name,
+		&i.PersonalAccessToken.Prefix,
+		&i.PersonalAccessToken.TokenSha256,
+		&i.PersonalAccessToken.CreatedAt,
+		&i.PersonalAccessToken.ExpiresAt,
+		&i.PersonalAccessToken.LastUsedAt,
+		&i.PersonalAccessToken.RevokedAt,
+		&i.ProjectIds,
+	)
+	return i, err
+}
+
+const getPersonalAccessTokenByToken = `-- name: GetPersonalAccessTokenByToken :one
+SELECT t.id, t.user_id, t.name, t.prefix, t.token_sha256, t.created_at, t.expires_at, t.last_used_at, t.revoked_at, ARRAY(SELECT p.project_id FROM personal_access_token_projects p WHERE p.token_id = t.id ORDER BY p.project_id)::bigint[] AS project_ids
+FROM personal_access_tokens t WHERE t.token_sha256 = $1
+`
+
+type GetPersonalAccessTokenByTokenRow struct {
+	PersonalAccessToken PersonalAccessToken
+	ProjectIds          []int64
+}
+
+func (q *Queries) GetPersonalAccessTokenByToken(ctx context.Context, tokenSha256 []byte) (GetPersonalAccessTokenByTokenRow, error) {
+	row := q.db.QueryRow(ctx, getPersonalAccessTokenByToken, tokenSha256)
+	var i GetPersonalAccessTokenByTokenRow
+	err := row.Scan(
+		&i.PersonalAccessToken.ID,
+		&i.PersonalAccessToken.UserID,
+		&i.PersonalAccessToken.Name,
+		&i.PersonalAccessToken.Prefix,
+		&i.PersonalAccessToken.TokenSha256,
+		&i.PersonalAccessToken.CreatedAt,
+		&i.PersonalAccessToken.ExpiresAt,
+		&i.PersonalAccessToken.LastUsedAt,
+		&i.PersonalAccessToken.RevokedAt,
+		&i.ProjectIds,
+	)
+	return i, err
+}
+
 const getUser = `-- name: GetUser :one
 SELECT id, username, display_name, email, password_hash, is_admin, created_at, updated_at, deactivated_at FROM users WHERE id = $1
 `
@@ -436,6 +563,54 @@ func (q *Queries) ListInvitations(ctx context.Context, arg ListInvitationsParams
 			&i.RevokedAt,
 			&i.ProjectID,
 			&i.ProjectRole,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPersonalAccessTokens = `-- name: ListPersonalAccessTokens :many
+SELECT t.id, t.user_id, t.name, t.prefix, t.token_sha256, t.created_at, t.expires_at, t.last_used_at, t.revoked_at, ARRAY(SELECT p.project_id FROM personal_access_token_projects p WHERE p.token_id = t.id ORDER BY p.project_id)::bigint[] AS project_ids
+FROM personal_access_tokens t WHERE t.user_id = $1 ORDER BY t.id DESC LIMIT $3 OFFSET $2
+`
+
+type ListPersonalAccessTokensParams struct {
+	UserID     int64
+	PageOffset int32
+	PageLimit  int32
+}
+
+type ListPersonalAccessTokensRow struct {
+	PersonalAccessToken PersonalAccessToken
+	ProjectIds          []int64
+}
+
+// Each token with its projects, in id order.
+func (q *Queries) ListPersonalAccessTokens(ctx context.Context, arg ListPersonalAccessTokensParams) ([]ListPersonalAccessTokensRow, error) {
+	rows, err := q.db.Query(ctx, listPersonalAccessTokens, arg.UserID, arg.PageOffset, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPersonalAccessTokensRow
+	for rows.Next() {
+		var i ListPersonalAccessTokensRow
+		if err := rows.Scan(
+			&i.PersonalAccessToken.ID,
+			&i.PersonalAccessToken.UserID,
+			&i.PersonalAccessToken.Name,
+			&i.PersonalAccessToken.Prefix,
+			&i.PersonalAccessToken.TokenSha256,
+			&i.PersonalAccessToken.CreatedAt,
+			&i.PersonalAccessToken.ExpiresAt,
+			&i.PersonalAccessToken.LastUsedAt,
+			&i.PersonalAccessToken.RevokedAt,
+			&i.ProjectIds,
 		); err != nil {
 			return nil, err
 		}
@@ -691,6 +866,35 @@ func (q *Queries) RevokeInvitation(ctx context.Context, id int64) (Invitation, e
 	return i, err
 }
 
+const revokePersonalAccessToken = `-- name: RevokePersonalAccessToken :execrows
+UPDATE personal_access_tokens SET revoked_at = now()
+WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
+`
+
+type RevokePersonalAccessTokenParams struct {
+	ID     int64
+	UserID int64
+}
+
+// No row when the token is not the user's or is already revoked.
+func (q *Queries) RevokePersonalAccessToken(ctx context.Context, arg RevokePersonalAccessTokenParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokePersonalAccessToken, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeUserPersonalAccessTokens = `-- name: RevokeUserPersonalAccessTokens :exec
+UPDATE personal_access_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL
+`
+
+// Deactivating a user revokes every token they still have.
+func (q *Queries) RevokeUserPersonalAccessTokens(ctx context.Context, userID int64) error {
+	_, err := q.db.Exec(ctx, revokeUserPersonalAccessTokens, userID)
+	return err
+}
+
 const setPasswordHash = `-- name: SetPasswordHash :one
 UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2 RETURNING id, username, display_name, email, password_hash, is_admin, created_at, updated_at, deactivated_at
 `
@@ -752,6 +956,17 @@ WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 mi
 // Records a use at most once a minute: a busy CI does not write on every report.
 func (q *Queries) TouchAPIKey(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, touchAPIKey, id)
+	return err
+}
+
+const touchPersonalAccessToken = `-- name: TouchPersonalAccessToken :exec
+UPDATE personal_access_tokens SET last_used_at = now()
+WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')
+`
+
+// Records a use at most once a minute: a busy script does not write on every request.
+func (q *Queries) TouchPersonalAccessToken(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, touchPersonalAccessToken, id)
 	return err
 }
 

@@ -44,7 +44,7 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 37 | Test case list narrowed to the current project (CHK-1…) | `37-test-cases-in-project.png` |
 | 38 | Run of the CHK project: CHK keys and a wrong_project diagnostic | `38-test-run-in-project.png` |
 | 39 | Users and invitations (admin): a new invitation link shown once | `39-users-and-invitations.png` |
-| 40 | Account: identity, password change and the command that connects an MCP agent as the user | `40-account.png` |
+| 40 | Account: identity, password change, personal access tokens and the command that connects an MCP agent with one | `40-account.png` |
 | 41 | Joining Provenly from an invitation link | `41-accept-invitation.png` |
 | 42 | Sign-in with a wrong password | `42-sign-in-error.png` |
 | 43 | Project page: members and roles managed by an administrator or maintainer | `43-project-members.png` |
@@ -75,3 +75,4 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 68 | The audit log of a project (administrators): who changed what, user or CI API key, with the route and path | `68-audit-log.png` |
 | 69 | A sharded run (one CI matrix, one report per shard): two of three shards arrived, results marked with their shard and filterable by it | `69-test-run-sharded.png` |
 | 70 | Users (admin): deactivate (after a confirmation) or reactivate an account, and a single-use password reset link shown once | `70-users-offboarding.png` |
+| 71 | Account: a read-only personal access token for an MCP client over one project, shown once with its MCP command (card #62) | `71-account-personal-access-tokens.png` |

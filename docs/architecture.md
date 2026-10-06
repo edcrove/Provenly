@@ -9,7 +9,7 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 | `catalog` (Test Catalog) | `projects`, `test_cases`, `test_steps`, `classification_dimensions`, `classification_values`, `test_case_classifications`, `test_case_tags`, `test_suites`, `test_suite_cases`, `requirements`, `requirement_test_cases`, `issues`, `issue_test_cases` | `catalog.Service` | `execution` only through `ResultReader` (latest results for coverage and verification) |
 | `execution` (TestRun/Execution) | `test_runs`, `test_run_expected_cases`, `test_results`, `test_run_parse_errors`, `test_run_amendments`, `test_run_events` | `execution.Service` | `catalog` only through `TestCaseChecker` (404 on history) |
 | `ingestion` | none | `ingestion.Service` (JUnit, manual and live runs) | `catalog` (`ExpectedUniverse`, `Statuses`), `execution` (`RecordRun`, `Diagnostics`) |
-| `identity` | `users`, `invitations`, `project_members`, `api_keys` | `identity.Service`, `identity.Protect` | `catalog` (project keys) |
+| `identity` | `users`, `invitations`, `project_members`, `api_keys`, `personal_access_tokens` | `identity.Service`, `identity.Protect` | `catalog` (project keys) |
 | `insights` | none | `insights.Service` (quality indicators) | `catalog`, `execution` |
 | `audit` | `audit_events` (append-only) | `audit.Service`, `audit.Wrap` (router) | `identity` (who called, admin check) |
 | `integrations` | `webhooks`, `webhook_deliveries`, `github_connections` | `integrations.Service` | `catalog` (`ProjectByKey`, `ProjectByID`, `ImportIssues`), `identity` (access); hears completed runs from `ingestion` through `RunNotifier` |
@@ -70,6 +70,15 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 - CI reports with project API keys (`pvk_...`, `Authorization: Bearer` only; SHA-256 stored, shown once).
   `identity.ProtectWithKeys` wraps ingestion: a key authenticates as the key (no user) and `Require` lets it report
   into its own project only; every other route rejects keys. Maintainers create, list and revoke them.
+- People's scripts and MCP clients read with personal access tokens (card #62, `pvly_pat_...`, `Authorization:
+  Bearer` only; SHA-256 stored, shown once; `personal_access_tokens` + `personal_access_token_projects`, never deleted
+  or edited, by trigger). A token belongs to one person and names 1 to 50 of their projects; it always expires (default
+  90 days, at most 365, enforced by a CHECK). `identity.RequireUser` authenticates it as its person and puts the token
+  in the context: only GET and MCP pass (anything else `403`, "read-only"); `Require` adds "the token covers the
+  project" after the role check (a hidden project is still `404`, a visible one outside the token `403`); `Scope`
+  narrows lists to the token's projects; `requireAdmin` refuses every token (`403`). Revoked, expired or a deactivated
+  person's token: `401`. Deactivation revokes the person's tokens. Creating and revoking need a session and are
+  audited; `last_used_at` is written at most once a minute.
 
 ## Roles (package `platform/authz`)
 
@@ -236,7 +245,8 @@ refuses anything else. Secrets Provenly only verifies (passwords, API keys) stay
 
 `internal/mcp` serves `POST /api/v1/mcp` (Streamable HTTP, JSON-RPC, JSON responses) on the session routes. It owns
 no use cases: each tool is a GET on the application's own router (`app.NewHandler` binds it after registering the
-routes) with the caller's `Authorization`/`Cookie`, so authorization, validation and JSON shapes are the REST ones.
+routes) with the caller's `Authorization`/`Cookie`, so authorization, validation and JSON shapes are the REST ones
+(a personal access token reads through MCP exactly as through REST: its projects only).
 Path arguments must be key-shaped (no `/` or dot segments) so a tool cannot address another route.
 
 ## Audit log (prototype feature 20)

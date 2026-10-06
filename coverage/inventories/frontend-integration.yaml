@@ -148,7 +148,7 @@ targets:
     description: project integrations - a maintainer adds a webhook and sees its signing secret once, pings it, pauses and resumes it, and pages its deliveries (status, attempts, answer); connects GitHub Issues (repository, labels, token shown only as a hint), syncs (created/updated), sees a failed sync's error, changes the repository keeping the token, rotates the token and disconnects; an unreadable token, failed writes and a failed read are reported; members and viewers see no integrations
     surfaces: [src/features/projects/WebhooksSection.tsx, src/features/projects/GitHubSection.tsx, src/features/projects/ProjectMembersPage.tsx]
   - id: FE-INT-045
-    description: the account page shows how to connect an MCP client (Claude Code) as the signed-in user - sign in for a session token, then register the endpoint with it
+    description: the account page shows how to connect an MCP client (Claude Code) with a personal access token - the command registers the endpoint with the token, never signing in with the password (card #62)
     surfaces: [src/features/auth/AccountPage.tsx]
   - id: FE-INT-046
     description: audit log - an administrator reads who changed what (users and API keys, route, path, project), pages, filters by project (normalized) and actor and sees an empty result; other users have no Audit link and are refused
@@ -183,3 +183,6 @@ targets:
   - id: FE-INT-056
     description: long lists (DEC-78) - the dashboard's coverage and verification counts come from the server over every page (45 requirements, the archived one left out; 30 issues); requirements, issues, suites and webhooks are listed by page; the test case pickers search the server by key or title, say "Showing 50 of N, type to search.", say when nothing matches, link what was found and show keys, never ids
     surfaces: [src/components/TestCasePicker.tsx, src/features/dashboard/DashboardPage.tsx, src/features/requirements/RequirementsPage.tsx, src/features/requirements/RequirementDetailPage.tsx, src/features/issues/IssuesPage.tsx, src/features/issues/IssueDetailPage.tsx, src/features/suites/SuitesPage.tsx, src/features/suites/SuiteDetailPage.tsx, src/features/projects/WebhooksSection.tsx, src/lib/usePage.ts, src/api/queries.ts]
+  - id: FE-INT-057
+    description: personal access tokens on the account page (card #62) - a token is made for chosen projects with a lifetime (90 days by default, 30 chosen), shown once with its MCP command, listed with projects, status and last use (never its secret) and revoked after an inline confirmation (Cancel focused); a refused token says why; the agents card's MCP command uses a token placeholder, never the password
+    surfaces: [src/features/auth/TokensSection.tsx, src/features/auth/AccountPage.tsx, src/lib/mcpSnippet.ts, src/api/queries.ts]

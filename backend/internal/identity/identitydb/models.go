@@ -45,6 +45,23 @@ type PasswordReset struct {
 	UsedAt      pgtype.Timestamptz
 }
 
+type PersonalAccessToken struct {
+	ID          int64
+	UserID      int64
+	Name        string
+	Prefix      string
+	TokenSha256 []byte
+	CreatedAt   pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+	LastUsedAt  pgtype.Timestamptz
+	RevokedAt   pgtype.Timestamptz
+}
+
+type PersonalAccessTokenProject struct {
+	TokenID   int64
+	ProjectID int64
+}
+
 type Project struct {
 	ID          int64
 	Key         string

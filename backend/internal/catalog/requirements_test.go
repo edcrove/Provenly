@@ -131,6 +131,7 @@ func TestRequirementsLifecycle(t *testing.T) {
 	results.err = nil
 	for method, call := range map[string]func() error{
 		"ListRequirements": func() error { _, err := svc.Requirements(ctx, DefaultProjectID, nil); return err },
+		"ListTestCaseKeys": func() error { _, err := svc.Requirements(ctx, DefaultProjectID, nil); return err },
 		"GetRequirement":   func() error { _, err := svc.Requirement(ctx, DefaultProjectID, r1.ID); return err },
 		"NextNativeRequirementNumber": func() error {
 			_, err := svc.CreateRequirement(ctx, DefaultProjectID, RequirementInput{Title: "x"})

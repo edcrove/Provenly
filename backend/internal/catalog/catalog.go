@@ -153,6 +153,10 @@ type ListFilter struct {
 	Automated *bool
 	// Number narrows to the test case with this number (with ProjectIDs: one key).
 	Number *int64
+	// Search is a LIKE pattern (escaped) the title must contain, or SearchNumber the number it must have: a picker's
+	// text search by key or title (DEC-78).
+	Search       *string
+	SearchNumber *int64
 }
 
 // Requirement providers: native requirements are written in Provenly; the others mirror an external tool.

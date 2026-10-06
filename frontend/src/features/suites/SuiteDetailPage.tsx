@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 
 import type { Suite } from '@/api/client'
@@ -6,45 +5,33 @@ import { useSuite, useSuiteMutations, useTestCases } from '@/api/queries'
 import { PageTitle } from '@/components/PageTitle'
 import { Pagination } from '@/components/Pagination'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
+import { TestCasePicker } from '@/components/TestCasePicker'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useProjectRole } from '@/features/projects/useProjectRole'
 import { can } from '@/lib/roles'
 import { positiveInt } from '@/lib/status'
 import { selectionLabel } from '@/lib/suites'
 
-/** Adds one of the project's active test cases to a static suite. */
+/** Adds one of the project's active test cases to a static suite, searching by key or title (DEC-78). */
 function AddCase({ suite, projectKey }: { suite: Suite; projectKey: string }) {
   const m = useSuiteMutations(projectKey)
-  const candidates = useTestCases(1, { project: projectKey, status: 'active', pageSize: 100 })
-  const [picked, setPicked] = useState('')
   const members = suite.testCaseIds ?? []
-  const options = (candidates.data?.items ?? []).filter((tc) => !members.includes(tc.id))
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <NativeSelect aria-label="Test case to add" value={picked} onChange={(e) => setPicked(e.target.value)}>
-        <option value="">Choose a test case…</option>
-        {options.map((tc) => (
-          <option key={tc.id} value={tc.id}>
-            {tc.key} · {tc.title}
-          </option>
-        ))}
-      </NativeSelect>
-      <Button
-        size="sm"
-        disabled={!picked || m.setCases.isPending}
-        onClick={() =>
-          m.setCases.mutate(
-            { suiteKey: suite.key, testCaseIds: [...members, Number(picked)] },
-            { onSuccess: () => setPicked('') },
-          )
+    <div className="grid gap-2">
+      <TestCasePicker
+        projectKey={projectKey}
+        label="Test case to add"
+        action="Add to suite"
+        activeOnly
+        exclude={members}
+        pending={m.setCases.isPending}
+        onPick={(id, done) =>
+          m.setCases.mutate({ suiteKey: suite.key, testCaseIds: [...members, id] }, { onSuccess: done })
         }
-      >
-        Add to suite
-      </Button>
+      />
       {m.setCases.error ? <ErrorAlert error={m.setCases.error} title="Could not change the suite" /> : null}
     </div>
   )

@@ -123,8 +123,9 @@ func TestIssuesLifecycle(t *testing.T) {
 	assert.ErrorIs(t, err, errBoom)
 	results.err = nil
 	for method, call := range map[string]func() error{
-		"ListIssues": func() error { _, err := svc.Issues(ctx, DefaultProjectID, IssueFilter{}); return err },
-		"GetIssue":   func() error { _, err := svc.Issue(ctx, DefaultProjectID, i1.ID); return err },
+		"ListIssues":       func() error { _, err := svc.Issues(ctx, DefaultProjectID, IssueFilter{}); return err },
+		"ListTestCaseKeys": func() error { _, err := svc.Issues(ctx, DefaultProjectID, IssueFilter{}); return err },
+		"GetIssue":         func() error { _, err := svc.Issue(ctx, DefaultProjectID, i1.ID); return err },
 		"NextNativeIssueNumber": func() error {
 			_, err := svc.CreateIssue(ctx, DefaultProjectID, IssueInput{Title: "x"})
 			return err

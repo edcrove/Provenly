@@ -2,8 +2,9 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 
 import type { Suite } from '@/api/client'
-import { useDimensions, useSuiteMutations, useSuites } from '@/api/queries'
+import { useDimensions, useSuiteMutations, useSuitesPage } from '@/api/queries'
 import { PageTitle } from '@/components/PageTitle'
+import { Pagination } from '@/components/Pagination'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { useProjectRole } from '@/features/projects/useProjectRole'
 import { can } from '@/lib/roles'
+import { usePage } from '@/lib/usePage'
 
 import { selectionLabel } from '@/lib/suites'
 
@@ -141,7 +143,8 @@ function SuiteRow({ suite, projectKey }: { suite: Suite; projectKey: string }) {
 /** The suites of the current project: named selections of test cases that CI reports partial runs for. */
 export function SuitesPage() {
   const { project } = useCurrentProject()
-  const suites = useSuites(project)
+  const [page, setPage] = usePage(project)
+  const suites = useSuitesPage(project, page)
   const manage = can(useProjectRole(project), 'maintainer')
   return (
     <Card>
@@ -163,28 +166,36 @@ export function SuitesPage() {
           <>
             <QueryState query={suites}>
               {(data) => (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Key</TableHead>
-                      <TableHead>Kind</TableHead>
-                      <TableHead>Selection</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.items.length === 0 && (
+                <>
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={4} className="text-muted-foreground">
-                          No suites in {project} yet.
-                        </TableCell>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Key</TableHead>
+                        <TableHead>Kind</TableHead>
+                        <TableHead>Selection</TableHead>
                       </TableRow>
-                    )}
-                    {data.items.map((s) => (
-                      <SuiteRow key={s.key} suite={s} projectKey={project} />
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {data.items.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-muted-foreground">
+                            No suites in {project} yet.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {data.items.map((s) => (
+                        <SuiteRow key={s.key} suite={s} projectKey={project} />
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <Pagination
+                    page={data.page}
+                    totalPages={data.totalPages}
+                    totalItems={data.totalItems}
+                    onPageChange={setPage}
+                  />
+                </>
               )}
             </QueryState>
             {manage ? <NewSuite projectKey={project} /> : null}

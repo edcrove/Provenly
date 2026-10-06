@@ -62,7 +62,7 @@ func TestSuiteHandlers(t *testing.T) {
 		contains             string
 		want                 suiteCall
 	}{
-		{"GET", "/api/v1/projects/TC/suites", "", 200, `{"items":[{"key":"release","name":"Release","description":"","kind":"static","query":null`, suiteCall{projectID: 1}},
+		{"GET", "/api/v1/projects/TC/suites", "", 200, `"items":[{"key":"release","name":"Release","description":"","kind":"static","query":null`, suiteCall{projectID: 1}},
 		{"POST", "/api/v1/projects/TC/suites", `{"key":"q","name":"Q","kind":"query","query":{"tag":"smoke","classification":["risk:high"]}}`, 201, `"testCaseIds":[153,154]`,
 			suiteCall{projectID: 1, in: SuiteInput{Key: "q", Name: "Q", Kind: SuiteKindQuery, Query: SuiteQuery{Tag: ptr("smoke"), Classified: []string{"risk:high"}}}}},
 		{"POST", "/api/v1/projects/TC/suites", `{"key":"r","name":"R","kind":"static","testCaseIds":[1]}`, 201, `"caseCount":2`,
@@ -83,6 +83,7 @@ func TestSuiteHandlers(t *testing.T) {
 
 	for _, b := range []struct{ method, target, body, field string }{
 		{"GET", "/api/v1/projects/tc/suites", "", "projectKey"},
+		{"GET", "/api/v1/projects/TC/suites?page=0", "", "page"},
 		{"GET", "/api/v1/projects/TC/suites/Bad", "", "suiteKey"},
 		{"PATCH", "/api/v1/projects/TC/suites/Bad", `{"name":"x"}`, "suiteKey"},
 		{"PUT", "/api/v1/projects/TC/suites/Bad/cases", `{"testCaseIds":[]}`, "suiteKey"},

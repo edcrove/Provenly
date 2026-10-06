@@ -408,6 +408,13 @@ Notion Decision Register; each one ships in its own PR.
 - **Sign-in audit (card #49):** sign-ins (succeeded, failed, locked out), sign-outs, accepted invitations and password
   resets are audited with the client IP and user agent (`X-Forwarded-For` only through `PROVENLY_TRUSTED_PROXIES`)
   and logged as `event=auth.*`; the actor is the account or `unknown`, never a typed secret.
+- **Long lists (card #47, DEC-78):** suites, requirements, issues, dimensions and webhooks are paged like every other
+  list (`page`, `pageSize`; **the response changes from a bare array to the page envelope** `items`, `page`,
+  `pageSize`, `totalItems`, `totalPages`). Requirements add `coverageCounts` and issues `verificationCounts`, counted
+  over every page (the dashboard reads them). `GET /test-cases?q=` searches by title (any case, wildcards literal) or
+  by key or number; the suite, requirement and issue pickers search on the server, list 50 and say "Showing 50 of N,
+  type to search."; linked test cases read with their key (`testCaseKey`), never `#id`. MCP `search_test_cases` takes
+  `q`, `list_requirements` and `list_issues` take `page`.
 
 
 ### 24. Review-panel audit (2026-10-06): fixes

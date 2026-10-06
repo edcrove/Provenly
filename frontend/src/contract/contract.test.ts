@@ -1027,6 +1027,49 @@ const taxonomyScenarios: Scenario[] = [
     status: 400,
     call: (c) => c.GET('/api/v1/test-cases', { params: { query: { key: 'tc-153' } } }),
   },
+  // DEC-78: pickers search by key or title (?q=), and every catalog list is paged.
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 200,
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { project: 'TC', q: 'tc-153' } } }),
+  },
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 400,
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { q: ' ' } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/requirements',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/requirements', {
+        params: { path: tcKey, query: { pageSize: 101 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/issues',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/issues', { params: { path: tcKey, query: { page: 0 } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/suites',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/suites', { params: { path: tcKey, query: { page: 0 } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/dimensions',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/dimensions', { params: { path: tcKey, query: { pageSize: 0 } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/webhooks',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/projects/{projectKey}/webhooks', { params: { path: tcKey, query: { page: 0 } } }),
+  },
 ]
 
 const smoke = { projectKey: 'TC', suiteKey: 'smoke' }

@@ -8,12 +8,22 @@ import (
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
+	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
 // CoverageCaseDTO is the latest status of one covering test case (null: no result yet).
 type CoverageCaseDTO struct {
-	TestCaseID int64   `json:"testCaseId"`
-	Status     *string `json:"status"`
+	TestCaseID  int64   `json:"testCaseId"`
+	TestCaseKey *string `json:"testCaseKey"`
+	Status      *string `json:"status"`
+}
+
+// keyOf is the key of a test case, or nil when unknown.
+func keyOf(keys map[int64]string, id int64) *string {
+	if k, ok := keys[id]; ok {
+		return &k
+	}
+	return nil
 }
 
 // CoverageDTO is the wire form of Coverage.
@@ -46,7 +56,7 @@ type RequirementDTO struct {
 func requirementDTO(r RequirementView) RequirementDTO {
 	cases := make([]CoverageCaseDTO, len(r.TestCaseIDs))
 	for i, id := range r.TestCaseIDs {
-		cases[i] = CoverageCaseDTO{TestCaseID: id}
+		cases[i] = CoverageCaseDTO{TestCaseID: id, TestCaseKey: keyOf(r.Keys, id)}
 		if st := r.Coverage.Latest[id]; st != "" {
 			cases[i].Status = &st
 		}
@@ -60,8 +70,11 @@ func requirementDTO(r RequirementView) RequirementDTO {
 	}
 }
 
-type requirementList struct {
-	Items []RequirementDTO `json:"items"`
+// requirementPage is a page of requirements with the coverage of every active requirement that matches (not only
+// this page's; archived ones are not counted).
+type requirementPage struct {
+	httpx.PageResponse[RequirementDTO]
+	CoverageCounts map[string]int `json:"coverageCounts"`
 }
 
 type requirementRequest struct {
@@ -104,6 +117,11 @@ type linksRequest struct {
 }
 
 func (h *Handler) listRequirements(w http.ResponseWriter, r *http.Request) {
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
 	var testCase *int64
 	if raw := r.URL.Query(); raw.Has("testCase") {
 		id, err := strconv.ParseInt(raw.Get("testCase"), 10, 64)
@@ -122,11 +140,13 @@ func (h *Handler) listRequirements(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	out := requirementList{Items: make([]RequirementDTO, len(reqs))}
-	for i, req := range reqs {
-		out.Items[i] = requirementDTO(req)
+	counts := map[string]int{}
+	for _, req := range reqs {
+		if req.ArchivedAt == nil {
+			counts[req.Coverage.Status]++
+		}
 	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	httpx.WriteJSON(w, http.StatusOK, requirementPage{httpx.NewPage(pagination.Slice(reqs, page), requirementDTO), counts})
 }
 
 func (h *Handler) createRequirement(w http.ResponseWriter, r *http.Request) {

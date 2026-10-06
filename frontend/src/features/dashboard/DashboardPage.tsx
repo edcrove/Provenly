@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 
 import type { Issue, Requirement, TestRun } from '@/api/client'
-import { useIssues, useQuality, useRequirements, useTestRuns } from '@/api/queries'
+import { useIssuesPage, useQuality, useRequirementsPage, useTestRuns } from '@/api/queries'
 import { PageTitle } from '@/components/PageTitle'
 import { QueryState } from '@/components/QueryState'
 import { VerdictBadge } from '@/components/StatusBadge'
@@ -83,16 +83,16 @@ function Trend({ runs }: { runs: TestRun[] }) {
   )
 }
 
-/** Counts per status, in a fixed order, as badges. */
+/** Counts per status (from the server, over every page), in a fixed order, as badges. */
 function Breakdown<S extends string>({
   statuses,
-  items,
+  counts,
   label,
   variant,
   testId,
 }: {
   statuses: S[]
-  items: S[]
+  counts: Partial<Record<string, number>>
   label: (s: S) => string
   variant: (s: S) => 'outline' | 'secondary' | 'destructive' | 'warning' | 'success'
   testId: string
@@ -100,10 +100,10 @@ function Breakdown<S extends string>({
   return (
     <div className="flex flex-wrap gap-2" data-testid={testId}>
       {statuses
-        .filter((s) => items.includes(s))
+        .filter((s) => (counts[s] ?? 0) > 0)
         .map((s) => (
           <Badge key={s} variant={variant(s)}>
-            {label(s)}: {items.filter((i) => i === s).length}
+            {label(s)}: {counts[s]}
           </Badge>
         ))}
     </div>
@@ -131,8 +131,9 @@ function ProjectDashboard({ project }: { project: string }) {
   const [window, setWindow] = useState(20)
   const runs = useTestRuns(1, project)
   const quality = useQuality(project, staleDays, window)
-  const requirements = useRequirements(project)
-  const issues = useIssues(project)
+  // One item per page: the dashboard only needs the totals and the counts over every page (DEC-78).
+  const requirements = useRequirementsPage(project, 1, 1)
+  const issues = useIssuesPage(project, {}, 1, 1)
   const latest = runs.data?.items[0]
   return (
     <div className="grid gap-4">
@@ -203,12 +204,12 @@ function ProjectDashboard({ project }: { project: string }) {
           <CardContent>
             <QueryState query={requirements}>
               {(data) =>
-                data.items.length === 0 ? (
+                data.totalItems === 0 ? (
                   <p className="text-muted-foreground text-sm">No requirements yet.</p>
                 ) : (
                   <Breakdown
                     statuses={coverageOrder}
-                    items={data.items.filter((r) => !r.archivedAt).map((r) => r.coverage.status)}
+                    counts={data.coverageCounts}
                     label={coverageLabel}
                     variant={coverageVariant}
                     testId="coverage-breakdown"
@@ -225,12 +226,12 @@ function ProjectDashboard({ project }: { project: string }) {
           <CardContent>
             <QueryState query={issues}>
               {(data) =>
-                data.items.length === 0 ? (
+                data.totalItems === 0 ? (
                   <p className="text-muted-foreground text-sm">No issues yet.</p>
                 ) : (
                   <Breakdown
                     statuses={verificationOrder}
-                    items={data.items.map((i) => i.verification.status)}
+                    counts={data.verificationCounts}
                     label={verificationLabel}
                     variant={verificationVariant}
                     testId="verification-breakdown"

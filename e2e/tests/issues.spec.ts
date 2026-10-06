@@ -70,7 +70,7 @@ test.describe('Issues and verification (DEC-8)', () => {
     await page.getByLabel('Title').fill('Sign-in rejects valid passwords')
     await page.getByRole('button', { name: 'Add issue' }).click()
     await page.getByRole('link', { name: 'I-1' }).click()
-    await page.getByLabel('Test case to link').selectOption({ label: `${login.key} · Sign in works` })
+    await page.getByLabel('Test case to link', { exact: true }).selectOption({ label: `${login.key} · Sign in works` })
     await page.getByRole('button', { name: 'Link test case' }).click()
     await expect(page.getByTestId('verification-badge')).toHaveText('Known issue')
     await expect(page.getByTestId(`reproducing-${login.id}`)).toContainText(`run #${run}`)

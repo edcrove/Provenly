@@ -93,7 +93,11 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   with the other filters; a key of an unknown or invisible project gives no item (not a 404), anything that is not a
   key is a 400. The MCP `search_test_cases` tool takes it too.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,
-  `totalItems`, `totalPages`.
+  `totalItems`, `totalPages`. Every list is paged, the project's suites, requirements, issues, dimensions and webhooks
+  included (DEC-78); counts a screen needs over the whole list come with the page (`coverageCounts`,
+  `verificationCounts`) instead of fetching every page. Pickers search on the server: `GET /api/v1/test-cases?q=`
+  matches the title (case-insensitive, `%` and `_` literal) or a key or number (`chk-12`, `12`); blank or over 200
+  characters is a 400.
 - Query parameters: unknown ones are ignored; every known parameter is applied and validated (an invalid value of a
   known parameter is a `400` even when unknown ones are present). A known parameter present but empty (`status=`) is
   invalid; a repeated one uses its first value. Exception (card #55): the ingestion's `pipeline`, `branch` and `commit`

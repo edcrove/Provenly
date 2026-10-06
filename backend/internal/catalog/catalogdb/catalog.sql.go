@@ -133,16 +133,20 @@ WHERE ($1::text IS NULL OR status = $1::text)
   AND ($5::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = $5::bigint AND m.test_case_id = test_cases.id))
   AND ($6::boolean IS NULL OR automated = $6::boolean)
   AND ($7::bigint IS NULL OR number = $7::bigint)
+  AND ($8::text IS NULL OR title ILIKE '%' || $8::text || '%' ESCAPE '\'
+       OR number = $9::bigint)
 `
 
 type CountTestCasesParams struct {
-	Status     pgtype.Text
-	ProjectIds []int64
-	Tag        pgtype.Text
-	Classified []string
-	SuiteID    pgtype.Int8
-	Automated  pgtype.Bool
-	Number     pgtype.Int8
+	Status       pgtype.Text
+	ProjectIds   []int64
+	Tag          pgtype.Text
+	Classified   []string
+	SuiteID      pgtype.Int8
+	Automated    pgtype.Bool
+	Number       pgtype.Int8
+	Search       pgtype.Text
+	SearchNumber pgtype.Int8
 }
 
 func (q *Queries) CountTestCases(ctx context.Context, arg CountTestCasesParams) (int64, error) {
@@ -154,6 +158,8 @@ func (q *Queries) CountTestCases(ctx context.Context, arg CountTestCasesParams) 
 		arg.SuiteID,
 		arg.Automated,
 		arg.Number,
+		arg.Search,
+		arg.SearchNumber,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -1275,20 +1281,24 @@ WHERE ($1::text IS NULL OR status = $1::text)
   AND ($5::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = $5::bigint AND m.test_case_id = test_cases.id))
   AND ($6::boolean IS NULL OR automated = $6::boolean)
   AND ($7::bigint IS NULL OR number = $7::bigint)
+  AND ($8::text IS NULL OR title ILIKE '%' || $8::text || '%' ESCAPE '\'
+       OR number = $9::bigint)
 ORDER BY id DESC
-LIMIT $9 OFFSET $8
+LIMIT $11 OFFSET $10
 `
 
 type ListTestCasesParams struct {
-	Status     pgtype.Text
-	ProjectIds []int64
-	Tag        pgtype.Text
-	Classified []string
-	SuiteID    pgtype.Int8
-	Automated  pgtype.Bool
-	Number     pgtype.Int8
-	PageOffset int32
-	PageLimit  int32
+	Status       pgtype.Text
+	ProjectIds   []int64
+	Tag          pgtype.Text
+	Classified   []string
+	SuiteID      pgtype.Int8
+	Automated    pgtype.Bool
+	Number       pgtype.Int8
+	Search       pgtype.Text
+	SearchNumber pgtype.Int8
+	PageOffset   int32
+	PageLimit    int32
 }
 
 // classified holds distinct dimension:value pairs that must all hold (AND); a test case has one value per
@@ -1302,6 +1312,8 @@ func (q *Queries) ListTestCases(ctx context.Context, arg ListTestCasesParams) ([
 		arg.SuiteID,
 		arg.Automated,
 		arg.Number,
+		arg.Search,
+		arg.SearchNumber,
 		arg.PageOffset,
 		arg.PageLimit,
 	)

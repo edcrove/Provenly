@@ -70,9 +70,9 @@ func TestIssueHandlers(t *testing.T) {
 		contains             string
 		want                 issueCall
 	}{
-		{"GET", base, "", 200, `{"items":[{"id":5,"provider":"jira","externalId":"PAY-7"`, issueCall{projectID: 1}},
+		{"GET", base, "", 200, `"items":[{"id":5,"provider":"jira","externalId":"PAY-7"`, issueCall{projectID: 1}},
 		{"GET", base + "?testCase=153&state=open", "", 200,
-			`"verification":{"status":"known_issue","testCases":[{"testCaseId":153,"status":"known_issue","evidence":"failed","evidenceRunId":9,"latestInconclusive":false},{"testCaseId":154,"status":"unverified","evidence":null,"evidenceRunId":null,"latestInconclusive":true}]}`,
+			`"verification":{"status":"known_issue","testCases":[{"testCaseId":153,"testCaseKey":null,"status":"known_issue","evidence":"failed","evidenceRunId":9,"latestInconclusive":false},{"testCaseId":154,"testCaseKey":null,"status":"unverified","evidence":null,"evidenceRunId":null,"latestInconclusive":true}]}`,
 			issueCall{projectID: 1, filter: IssueFilter{TestCaseID: ptr(int64(153)), State: ptr("open")}}},
 		{"POST", base, `{"title":"Crash","provider":"github","externalId":"4","url":"https://x","description":"d","state":"closed","providerStatus":"done"}`, 201, `"closedAt":null`,
 			issueCall{projectID: 1, in: IssueInput{Title: "Crash", Provider: "github", ExternalID: "4", URL: "https://x", Description: "d", State: "closed", ProviderStatus: "done"}}},
@@ -92,6 +92,7 @@ func TestIssueHandlers(t *testing.T) {
 	for _, b := range []struct{ method, target, body, field string }{
 		{"GET", base + "?testCase=x", "", "testCase"},
 		{"GET", base + "?testCase=0", "", "testCase"},
+		{"GET", base + "?pageSize=101", "", "pageSize"},
 		{"GET", "/api/v1/projects/tc/issues", "", "projectKey"},
 		{"GET", base + "/x", "", "issueId"},
 		{"PATCH", base + "/0", `{"title":"x"}`, "issueId"},

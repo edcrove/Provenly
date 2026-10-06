@@ -8,11 +8,13 @@ import (
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
+	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
 // LinkVerificationDTO is the wire form of LinkVerification.
 type LinkVerificationDTO struct {
 	TestCaseID         int64   `json:"testCaseId"`
+	TestCaseKey        *string `json:"testCaseKey"`
 	Status             string  `json:"status"`
 	Evidence           *string `json:"evidence"`
 	EvidenceRunID      *int64  `json:"evidenceRunId"`
@@ -46,7 +48,7 @@ type IssueDTO struct {
 func issueDTO(is IssueView) IssueDTO {
 	links := make([]LinkVerificationDTO, len(is.Verification.Links))
 	for i, l := range is.Verification.Links {
-		links[i] = LinkVerificationDTO{TestCaseID: l.TestCaseID, Status: l.Status, EvidenceRunID: l.EvidenceRunID, LatestInconclusive: l.LatestInconclusive}
+		links[i] = LinkVerificationDTO{TestCaseID: l.TestCaseID, TestCaseKey: keyOf(is.Keys, l.TestCaseID), Status: l.Status, EvidenceRunID: l.EvidenceRunID, LatestInconclusive: l.LatestInconclusive}
 		if l.Evidence != "" {
 			ev := l.Evidence
 			links[i].Evidence = &ev
@@ -60,8 +62,10 @@ func issueDTO(is IssueView) IssueDTO {
 	}
 }
 
-type issueList struct {
-	Items []IssueDTO `json:"items"`
+// issuePage is a page of issues with the verification of every issue that matches (not only this page's).
+type issuePage struct {
+	httpx.PageResponse[IssueDTO]
+	VerificationCounts map[string]int `json:"verificationCounts"`
 }
 
 type issueRequest struct {
@@ -97,6 +101,11 @@ type updateIssueRequest struct {
 }
 
 func (h *Handler) listIssues(w http.ResponseWriter, r *http.Request) {
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
 	var f IssueFilter
 	q := r.URL.Query()
 	if q.Has("testCase") {
@@ -120,11 +129,11 @@ func (h *Handler) listIssues(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	out := issueList{Items: make([]IssueDTO, len(issues))}
-	for i, is := range issues {
-		out.Items[i] = issueDTO(is)
+	counts := map[string]int{}
+	for _, is := range issues {
+		counts[is.Verification.Status]++
 	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	httpx.WriteJSON(w, http.StatusOK, issuePage{httpx.NewPage(pagination.Slice(issues, page), issueDTO), counts})
 }
 
 func (h *Handler) createIssue(w http.ResponseWriter, r *http.Request) {

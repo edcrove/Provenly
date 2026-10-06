@@ -45,3 +45,12 @@ func Map[T, U any](r Result[T], f func(T) U) Result[U] {
 	}
 	return Result[U]{Items: items, Page: r.Page, Total: r.Total}
 }
+
+// Slice is page p of all: lists read whole (a project's suites, requirements, issues, webhooks, dimensions) answer
+// with the same page envelope as the others (DEC-78).
+func Slice[T any](all []T, p Page) Result[T] {
+	total := int64(len(all))
+	start := min(int64(p.Number-1)*int64(p.Size), total)
+	end := min(start+int64(p.Size), total)
+	return Result[T]{Items: all[start:end], Page: p, Total: total}
+}

@@ -75,7 +75,8 @@ test.describe('Integrations: webhooks and GitHub Issues (prototype feature 18)',
       expect(github.received[0].headers.authorization).toBe('Bearer ghp_e2e_token_4321')
       const issues = (await (await request.get(`${base}/issues`)).json()).items
       expect(issues.map((i: { externalId: string; state: string }) => `${i.externalId}:${i.state}`).sort()).toEqual(['21:open', '7:closed'])
-      expect((await request.put(`${base}/github`, { data: { repository: 'acme/nope' } })).status()).toBe(200)
+      expect((await request.put(`${base}/github`, { data: { repository: 'acme/nope' } })).status()).toBe(400)
+      expect((await request.put(`${base}/github`, { data: { repository: 'acme/nope', token: 'ghp_e2e_token_4321' } })).status()).toBe(200)
       const failed = await request.post(`${base}/github/sync`)
       expect(failed.status()).toBe(200) // the double answers [] for unknown repositories
       expect((await request.delete(`${base}/github`)).status()).toBe(204)

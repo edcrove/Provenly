@@ -1447,7 +1447,7 @@ export interface components {
         };
         CreatedInvitation: {
             invitation: components["schemas"]["Invitation"];
-            /** @description Shown only here; the link is `<web origin>/accept-invite?token=<token>` */
+            /** @description Shown only here; the link is `<web origin>/accept-invite#token=<token>` (in the fragment, never sent to a server) */
             token: string;
         };
         AcceptInvitationRequest: {

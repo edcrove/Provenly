@@ -94,7 +94,7 @@ describe('FE-INT-027 users and invitations', () => {
     await u.type(screen.getByLabelText('Note (optional)'), 'QA')
     await u.click(screen.getByRole('button', { name: 'Create invitation link' }))
     const link = await screen.findByTestId('invitation-link')
-    expect(link.textContent).toMatch(/\/accept-invite\?token=invite-\d+$/)
+    expect(link.textContent).toMatch(/\/accept-invite#token=invite-\d+$/)
     expect(screen.getByLabelText('Email (optional)')).toHaveValue('')
     await u.click(screen.getByRole('button', { name: 'Copy link' }))
     expect(writeText).toHaveBeenCalledWith(link.textContent)
@@ -172,7 +172,7 @@ describe('FE-INT-028 accepting an invitation', () => {
     db.session = null
     db.invitations.push(invitation({ id: 70, email: 'carla@example.com' }))
     db.invitationTokens['invite-70'] = 70
-    return renderRoute(`/accept-invite?token=${token}`)
+    return renderRoute(`/accept-invite#token=${token}`)
   }
 
   it('FE-INT-028 creates the account and signs the new user in', async () => {

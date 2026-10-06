@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -35,6 +36,9 @@ type Config struct {
 	OTLPExport bool
 }
 
+// Environments are the accepted PROVENLY_ENV values; only prod gets the production guards.
+var Environments = []string{"development", "ci", "demo", "qa", "prod"}
+
 // DemoAdminPassword is the published password of the local demo administrator; prod refuses it.
 const DemoAdminPassword = "provenly-demo"
 
@@ -52,6 +56,11 @@ func Load(getenv func(string) string) (Config, error) {
 		DatabaseURL:    getenv("PROVENLY_DATABASE_URL"),
 		MaxIngestBytes: 10 << 20,
 		OTLPExport:     getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" || getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != "",
+	}
+	// An unknown environment name (e.g. "production") would silently get development defaults: random keys, the
+	// SSRF guard off and the demo password accepted. Only the known names are accepted.
+	if !slices.Contains(Environments, cfg.Env) {
+		return Config{}, fmt.Errorf("PROVENLY_ENV must be one of %s, got %q", strings.Join(Environments, ", "), cfg.Env)
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("PROVENLY_DATABASE_URL is required")

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { invitationLink, safeNext } from './links'
+import { invitationLink, invitationToken, safeNext } from './links'
 
 describe('auth links', () => {
   it('only follows next paths inside the app', () => {
@@ -11,10 +11,17 @@ describe('auth links', () => {
 
   it('builds the invitation link from the web origin', () => {
     expect(invitationLink('a b/c', 'https://provenly.example')).toBe(
-      'https://provenly.example/accept-invite?token=a%20b%2Fc',
+      'https://provenly.example/accept-invite#token=a%20b%2Fc',
     )
     vi.stubGlobal('location', { origin: 'http://localhost:3000' })
-    expect(invitationLink('tok')).toBe('http://localhost:3000/accept-invite?token=tok')
+    expect(invitationLink('tok')).toBe('http://localhost:3000/accept-invite#token=tok')
     vi.unstubAllGlobals()
+  })
+
+  it('reads the invitation token from the fragment, or from the query of older links', () => {
+    expect(invitationToken('#token=a%20b%2Fc', '')).toBe('a b/c')
+    expect(invitationToken('', '?token=old')).toBe('old')
+    expect(invitationToken('#token=new', '?token=old')).toBe('new')
+    expect(invitationToken('', '')).toBe('')
   })
 })

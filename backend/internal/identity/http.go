@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -290,6 +291,14 @@ func (h *Handler) toInvitationDTO(i Invitation) invitationDTO {
 	return dto
 }
 
+// writeProjectError writes err, naming the requested project key when the project is not visible to the caller.
+func writeProjectError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, errProjectHidden) {
+		err = ProjectNotFound(r.PathValue("projectKey"))
+	}
+	httpx.WriteError(w, r, err)
+}
+
 // projectID resolves the {projectKey} path segment (400 when malformed, 404 when unknown).
 func (h *Handler) projectID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	key := r.PathValue("projectKey")
@@ -308,7 +317,7 @@ func (h *Handler) projectID(w http.ResponseWriter, r *http.Request) (int64, bool
 func (h *Handler) listMembers(w http.ResponseWriter, r *http.Request) {
 	page, err := httpx.ParsePage(r)
 	if err != nil {
-		httpx.WriteError(w, r, err)
+		writeProjectError(w, r, err)
 		return
 	}
 	id, ok := h.projectID(w, r)
@@ -317,7 +326,7 @@ func (h *Handler) listMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.api.ListMembers(r.Context(), id, page)
 	if err != nil {
-		httpx.WriteError(w, r, err)
+		writeProjectError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, toMemberDTO))
@@ -336,7 +345,7 @@ func pathUsername(w http.ResponseWriter, r *http.Request) (string, bool) {
 func (h *Handler) setMember(w http.ResponseWriter, r *http.Request) {
 	var req memberRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
-		httpx.WriteError(w, r, err)
+		writeProjectError(w, r, err)
 		return
 	}
 	id, ok := h.projectID(w, r)
@@ -349,7 +358,7 @@ func (h *Handler) setMember(w http.ResponseWriter, r *http.Request) {
 	}
 	m, err := h.api.SetMember(r.Context(), id, username, req.Role)
 	if err != nil {
-		httpx.WriteError(w, r, err)
+		writeProjectError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toMemberDTO(m))
@@ -365,7 +374,7 @@ func (h *Handler) removeMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.api.RemoveMember(r.Context(), id, username); err != nil {
-		httpx.WriteError(w, r, err)
+		writeProjectError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -509,7 +518,7 @@ func (h *Handler) accept(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) listAPIKeys(w http.ResponseWriter, r *http.Request) {
 	page, err := httpx.ParsePage(r)
 	if err != nil {
-		httpx.WriteError(w, r, err)
+		writeProjectError(w, r, err)
 		return
 	}
 	id, ok := h.projectID(w, r)
@@ -518,7 +527,7 @@ func (h *Handler) listAPIKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := h.api.ListAPIKeys(r.Context(), id, page)
 	if err != nil {
-		httpx.WriteError(w, r, err)
+		writeProjectError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, toAPIKeyDTO))
@@ -527,7 +536,7 @@ func (h *Handler) listAPIKeys(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	var req apiKeyRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
-		httpx.WriteError(w, r, err)
+		writeProjectError(w, r, err)
 		return
 	}
 	id, ok := h.projectID(w, r)
@@ -536,7 +545,7 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	k, token, err := h.api.CreateAPIKey(r.Context(), id, req.Name)
 	if err != nil {
-		httpx.WriteError(w, r, err)
+		writeProjectError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, createdAPIKeyDTO{APIKey: toAPIKeyDTO(k), Token: token})
@@ -545,7 +554,7 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	keyID, err := httpx.PathID(r, "apiKeyId")
 	if err != nil {
-		httpx.WriteError(w, r, err)
+		writeProjectError(w, r, err)
 		return
 	}
 	id, ok := h.projectID(w, r)
@@ -554,7 +563,7 @@ func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	k, err := h.api.RevokeAPIKey(r.Context(), id, keyID)
 	if err != nil {
-		httpx.WriteError(w, r, err)
+		writeProjectError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toAPIKeyDTO(k))

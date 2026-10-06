@@ -620,13 +620,15 @@ def main():
     for body, exp in [({}, 400), ({"repository": "acme/shop"}, 400), ({"repository": "acme", "token": "t"}, 400),
                       ({"repository": "acme/shop/x", "token": "t"}, 400), ({"repository": "acme/shop", "token": ""}, 400),
                       ({"repository": "acme/shop", "token": "t" * 501}, 400), ({"repository": "acme/shop", "token": "t\u0000"}, 400),
-                      ({"repository": "acme/shop", "token": "t", "labels": "l" * 201}, 400), ({"repository": "acme/shop", "token": 1}, 400)]:
+                      ({"repository": "acme/shop", "token": "t", "labels": "l" * 201}, 400), ({"repository": "acme/shop", "token": 1}, 400),
+                      ({"repository": "../..", "token": "t"}, 400), ({"repository": "acme/..", "token": "t"}, 400)]:
         check(f"connect GitHub {str(body)[:50]}", call(base, "PUT", gh, body)[0], exp)
     check("connect GitHub text/plain", call(base, "PUT", gh, raw=b"{}", ctype="text/plain")[0], 415)
     st, conn = call(base, "PUT", gh, {"repository": "acme/shop", "token": "ghp_probe_secret_9876"})
     check("connect GitHub", f"{st} {conn.get('tokenHint') if isinstance(conn, dict) else ''}", "200 …9876")
     check("the token never comes back", int("ghp_probe_secret" not in json.dumps(call(base, "GET", gh)[1])), 1)
-    check("change the repository keeping the token", call(base, "PUT", gh, {"repository": "acme/web"})[1].get("tokenHint"), "…9876")
+    check("change the labels keeping the token", call(base, "PUT", gh, {"repository": "ACME/shop", "labels": "qa"})[1].get("tokenHint"), "…9876")
+    check("another repository needs the token again", call(base, "PUT", gh, {"repository": "otherorg/secret"})[0], 400)
     check("disconnect GitHub", call(base, "DELETE", gh)[0], 204)
 
     # Agents (prototype feature 19): the MCP endpoint answers every malformed message with a JSON-RPC error or a

@@ -123,11 +123,13 @@ describe('FE-INT-044 project integrations', () => {
     expect(await within(conn).findByText('Synced: 2 created, 1 updated.')).toBeInTheDocument()
     await waitFor(() => expect(conn).not.toHaveTextContent('Last sync: never'))
 
-    // Change the repository only (the token is kept), to one whose sync fails.
+    // Another repository needs the token again; the labels alone keep it. Move to one whose sync fails.
     const repo = screen.getByLabelText('Repository')
+    expect(screen.getByLabelText('New token (optional)')).not.toBeRequired()
     await u.clear(repo)
     await u.type(repo, 'acme/down')
-    expect(screen.getByLabelText('New token (optional)')).not.toBeRequired()
+    expect(screen.getByLabelText('Token')).toBeRequired()
+    await u.type(screen.getByLabelText('Token'), 'ghp_secret1234')
     await u.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() =>
       expect(screen.getByTestId('github-connection')).toHaveTextContent(
@@ -162,6 +164,7 @@ describe('FE-INT-044 project integrations', () => {
     const repo = screen.getByLabelText('Repository')
     await u.clear(repo)
     await u.type(repo, 'not a repo')
+    await u.type(screen.getByLabelText('Token'), 'ghp_secret1234')
     await u.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('Could not save the connection')).toBeInTheDocument()
     server.use(http.delete('*/api/v1/projects/:projectKey/github', () => fail500()))

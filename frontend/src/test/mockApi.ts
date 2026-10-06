@@ -1375,12 +1375,15 @@ export const handlers = [
       jsonGuard(async ({ params, request }) => {
         const body = (await readBody(request)) ?? {}
         const repository = String(body.repository ?? '')
-        if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) return validation('repository', 'must be owner/name')
+        if (!/^[\w.-]+\/[\w.-]+$/.test(repository) || repository.split('/').some((x) => /^\.+$/.test(x)))
+          return validation('repository', 'must be owner/name')
         const p = integrationProject(params.projectKey)
         if (p instanceof Response) return p
         const current = db.github.find((x) => x.projectId === p.id)
         const token = typeof body.token === 'string' ? body.token : undefined
         if (!current && !token) return validation('token', 'is required to connect')
+        if (current && !token && current.repository.toLowerCase() !== repository.toLowerCase())
+          return validation('token', 'is required to change the repository')
         const c = {
           projectId: p.id,
           repository,

@@ -3197,7 +3197,7 @@ components:
           $ref: "#/components/schemas/Invitation"
         token:
           type: string
-          description: Shown only here; the link is `<web origin>/accept-invite?token=<token>`
+          description: Shown only here; the link is `<web origin>/accept-invite#token=<token>` (in the fragment, never sent to a server)
 
     AcceptInvitationRequest:
       type: object

@@ -77,9 +77,14 @@ func (s *Service) RequireAdmin(ctx context.Context) error {
 	return requireAdmin(u)
 }
 
-func projectNotFound(projectID int64) error {
-	return apperr.NotFound("project %d not found", projectID)
-}
+// errProjectHidden answers a project the caller cannot see. The HTTP adapter rewrites it with the requested key, so
+// an invisible project reads exactly like an unknown one (no internal id, no hint that it exists).
+var errProjectHidden = apperr.NotFound("project not found")
+
+func projectNotFound(int64) error { return errProjectHidden }
+
+// ProjectNotFound is the answer for an unknown or invisible project key (the same text as the catalog's).
+func ProjectNotFound(key string) error { return apperr.NotFound("project %s not found", key) }
 
 // ListMembers returns a page of a project's members by username (anyone who can see the project).
 func (s *Service) ListMembers(ctx context.Context, projectID int64, page pagination.Page) (pagination.Result[Member], error) {

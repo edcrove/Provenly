@@ -88,6 +88,13 @@ def main():
         sys.exit(f"cannot create a test case ({st}): is the API up at {base}?")
     a, a_key = tc["id"], tc["key"]
     b = call(base, "POST", "/test-cases", {"title": "probe-b"})[1]["id"]
+    # Offboarding (card #61): nobody deactivates themselves; unknown users are 404; reset links are single-use 404s.
+    check("deactivate yourself", call(base, "POST", "/users/admin/deactivate")[0], (409, 404))
+    check("deactivate unknown user", call(base, "POST", "/users/nobody-probe/deactivate")[0], 404)
+    check("reset link for unknown user", call(base, "POST", "/users/nobody-probe/password-reset")[0], 404)
+    check("reset with a made-up token", call(base, "POST", "/password-reset", {"token": "made-up", "password": "a long password"})[0], 404)
+    check("reset with a short password", call(base, "POST", "/password-reset", {"token": "made-up", "password": "x"})[0], 400)
+    check("reset without JSON", call(base, "POST", "/password-reset", raw=b"{}", ctype="text/plain")[0], 415)
     # ?key= (card #53): the exact key gives one item, an unknown one none, anything else is a 400.
     st, body = call(base, "GET", "/test-cases?key=" + a_key)
     check("list by key", [st, (body or {}).get("totalItems")], [200, 1])

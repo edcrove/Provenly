@@ -35,6 +35,16 @@ type Invitation struct {
 	ProjectRole    pgtype.Text
 }
 
+type PasswordReset struct {
+	ID          int64
+	UserID      int64
+	TokenSha256 []byte
+	CreatedBy   pgtype.Int8
+	CreatedAt   pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+	UsedAt      pgtype.Timestamptz
+}
+
 type Project struct {
 	ID          int64
 	Key         string
@@ -78,12 +88,13 @@ type TestStep struct {
 }
 
 type User struct {
-	ID           int64
-	Username     string
-	DisplayName  string
-	Email        pgtype.Text
-	PasswordHash string
-	IsAdmin      bool
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
+	ID            int64
+	Username      string
+	DisplayName   string
+	Email         pgtype.Text
+	PasswordHash  string
+	IsAdmin       bool
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	DeactivatedAt pgtype.Timestamptz
 }

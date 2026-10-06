@@ -192,6 +192,121 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/users/{username}/deactivate:
+    post:
+      tags: [users]
+      operationId: deactivateUser
+      summary: Deactivate a user (administrators)
+      description: |
+        The user's sessions are refused from their next request and they cannot sign in (the same answer as a wrong
+        password); their pending password reset links stop working. Project API keys belong to their project and keep
+        working. Nobody deactivates themselves (409) and the last active administrator stays (409). Deactivating a
+        deactivated user changes nothing.
+      parameters:
+        - $ref: "#/components/parameters/Username"
+      responses:
+        "200":
+          description: The user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/users/{username}/reactivate:
+    post:
+      tags: [users]
+      operationId: reactivateUser
+      summary: Reactivate a deactivated user (administrators)
+      description: |
+        The user can sign in again with their password (or a new reset link). Reactivating an active user changes
+        nothing.
+      parameters:
+        - $ref: "#/components/parameters/Username"
+      responses:
+        "200":
+          description: The user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/users/{username}/password-reset:
+    post:
+      tags: [users]
+      operationId: createPasswordReset
+      summary: Make a single-use password reset link for a user (administrators)
+      description: |
+        The token is shown once (only its digest is stored) and works for 24 hours, once; a new link voids the user's
+        earlier ones. A deactivated user gets none (409). The person opens `/reset-password?token=...` and chooses a
+        new password, which signs every older session of theirs out.
+      parameters:
+        - $ref: "#/components/parameters/Username"
+      responses:
+        "201":
+          description: The link's token, shown once
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordResetLink"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/password-reset:
+    post:
+      tags: [users]
+      operationId: resetPassword
+      security: []
+      summary: Set a new password with a reset link and sign in
+      description: |
+        A link that is unknown, expired, already used or of a deactivated user is the same 404. Older sessions end.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password set and signed in (session cookie set)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/invitations:
     get:
       tags: [users]
@@ -462,6 +577,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "500":
           $ref: "#/components/responses/InternalError"
     delete:
@@ -3040,8 +3157,13 @@ components:
     User:
       type: object
       additionalProperties: false
-      required: [id, username, displayName, email, isAdmin, createdAt]
+      required: [id, username, displayName, email, isAdmin, createdAt, deactivatedAt]
       properties:
+        deactivatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When an administrator deactivated the user (null - active). A deactivated user cannot sign in.
         id:
           type: integer
           format: int64
@@ -3059,6 +3181,31 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    PasswordResetLink:
+      type: object
+      additionalProperties: false
+      required: [username, token, expiresAt]
+      properties:
+        username:
+          type: string
+        token:
+          type: string
+          description: Shown once; the link is `/reset-password?token=<token>`.
+        expiresAt:
+          type: string
+          format: date-time
+
+    ResetPasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [token, password]
+      properties:
+        token:
+          type: string
+        password:
+          type: string
+          description: At least 10 characters, at most 72 bytes.
 
     UserPage:
       allOf:

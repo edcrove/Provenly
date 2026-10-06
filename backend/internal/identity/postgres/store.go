@@ -65,7 +65,7 @@ func timePtr(t pgtype.Timestamptz) *time.Time {
 func toUser(r identitydb.User) identity.User {
 	return identity.User{
 		ID: r.ID, Username: r.Username, DisplayName: r.DisplayName, Email: strPtr(r.Email), PasswordHash: r.PasswordHash,
-		IsAdmin: r.IsAdmin, CreatedAt: r.CreatedAt.Time, UpdatedAt: r.UpdatedAt.Time,
+		IsAdmin: r.IsAdmin, CreatedAt: r.CreatedAt.Time, UpdatedAt: r.UpdatedAt.Time, DeactivatedAt: timePtr(r.DeactivatedAt),
 	}
 }
 
@@ -293,4 +293,68 @@ func (s *Store) RevokeAPIKey(ctx context.Context, projectID, id int64) (identity
 // TouchAPIKey implements identity.Repository.
 func (s *Store) TouchAPIKey(ctx context.Context, id int64) error {
 	return s.q.TouchAPIKey(ctx, id)
+}
+
+// SetUserDeactivated implements identity.Repository.
+func (s *Store) SetUserDeactivated(ctx context.Context, id int64, at *time.Time) (identity.User, error) {
+	r, err := s.q.SetUserDeactivated(ctx, identitydb.SetUserDeactivatedParams{ID: id, DeactivatedAt: tsArg(at)})
+	if err != nil {
+		return identity.User{}, notFound(err)
+	}
+	return toUser(r), nil
+}
+
+// CountActiveAdmins implements identity.Repository.
+func (s *Store) CountActiveAdmins(ctx context.Context) (int64, error) {
+	return s.q.CountActiveAdmins(ctx)
+}
+
+// VoidPasswordResets implements identity.Repository.
+func (s *Store) VoidPasswordResets(ctx context.Context, userID int64) error {
+	return s.q.VoidPasswordResets(ctx, userID)
+}
+
+func toPasswordReset(r identitydb.PasswordReset) identity.PasswordReset {
+	out := identity.PasswordReset{ID: r.ID, UserID: r.UserID, TokenSHA256: r.TokenSha256, CreatedAt: r.CreatedAt.Time,
+		ExpiresAt: r.ExpiresAt.Time, UsedAt: timePtr(r.UsedAt)}
+	if r.CreatedBy.Valid {
+		by := r.CreatedBy.Int64
+		out.CreatedBy = &by
+	}
+	return out
+}
+
+// CreatePasswordReset implements identity.Repository.
+func (s *Store) CreatePasswordReset(ctx context.Context, p identity.PasswordReset) (identity.PasswordReset, error) {
+	params := identitydb.CreatePasswordResetParams{UserID: p.UserID, TokenSha256: p.TokenSHA256,
+		ExpiresAt: pgtype.Timestamptz{Time: p.ExpiresAt, Valid: true}}
+	if p.CreatedBy != nil {
+		params.CreatedBy = pgtype.Int8{Int64: *p.CreatedBy, Valid: true}
+	}
+	r, err := s.q.CreatePasswordReset(ctx, params)
+	if err != nil {
+		return identity.PasswordReset{}, err
+	}
+	return toPasswordReset(r), nil
+}
+
+// LockPasswordResetByToken implements identity.Repository.
+func (s *Store) LockPasswordResetByToken(ctx context.Context, digest []byte) (identity.PasswordReset, error) {
+	r, err := s.q.LockPasswordResetByToken(ctx, digest)
+	if err != nil {
+		return identity.PasswordReset{}, notFound(err)
+	}
+	return toPasswordReset(r), nil
+}
+
+// MarkPasswordResetUsed implements identity.Repository.
+func (s *Store) MarkPasswordResetUsed(ctx context.Context, id int64) error {
+	return s.q.MarkPasswordResetUsed(ctx, id)
+}
+
+func tsArg(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
 }

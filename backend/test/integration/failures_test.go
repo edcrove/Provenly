@@ -143,12 +143,21 @@ func TestPersistenceFailures(t *testing.T) {
 				return err
 			},
 
-			"identity.InTx":                   func() error { return idn.InTx(ctx, func(identity.Repository) error { return nil }) },
-			"identity.CountUsers":             func() error { _, err := idn.CountUsers(ctx); return err },
-			"identity.CreateUser":             func() error { _, err := idn.CreateUser(ctx, identity.NewUser{}); return err },
-			"identity.GetUser":                func() error { _, err := idn.GetUser(ctx, 1); return err },
-			"identity.GetUserByUsername":      func() error { _, err := idn.GetUserByUsername(ctx, "x"); return err },
-			"identity.ListUsers":              func() error { _, err := idn.ListUsers(ctx, 10, 0); return err },
+			"identity.InTx":                func() error { return idn.InTx(ctx, func(identity.Repository) error { return nil }) },
+			"identity.CountUsers":          func() error { _, err := idn.CountUsers(ctx); return err },
+			"identity.CreateUser":          func() error { _, err := idn.CreateUser(ctx, identity.NewUser{}); return err },
+			"identity.GetUser":             func() error { _, err := idn.GetUser(ctx, 1); return err },
+			"identity.GetUserByUsername":   func() error { _, err := idn.GetUserByUsername(ctx, "x"); return err },
+			"identity.ListUsers":           func() error { _, err := idn.ListUsers(ctx, 10, 0); return err },
+			"identity.SetUserDeactivated":  func() error { _, err := idn.SetUserDeactivated(ctx, 1, nil); return err },
+			"identity.CountActiveAdmins":   func() error { _, err := idn.CountActiveAdmins(ctx); return err },
+			"identity.VoidPasswordResets":  func() error { return idn.VoidPasswordResets(ctx, 1) },
+			"identity.CreatePasswordReset": func() error { _, err := idn.CreatePasswordReset(ctx, identity.PasswordReset{}); return err },
+			"identity.LockPasswordResetByToken": func() error {
+				_, err := idn.LockPasswordResetByToken(ctx, make([]byte, 32))
+				return err
+			},
+			"identity.MarkPasswordResetUsed":  func() error { return idn.MarkPasswordResetUsed(ctx, 1) },
 			"identity.SetPasswordHash":        func() error { _, err := idn.SetPasswordHash(ctx, 1, "$2a$x"); return err },
 			"identity.CreateInvitation":       func() error { _, err := idn.CreateInvitation(ctx, identity.NewInvitation{}); return err },
 			"identity.ListInvitations":        func() error { _, err := idn.ListInvitations(ctx, 10, 0); return err },

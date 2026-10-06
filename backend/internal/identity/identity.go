@@ -20,6 +20,20 @@ type User struct {
 	IsAdmin      bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
+	// DeactivatedAt is when an administrator deactivated the user (nil: active).
+	DeactivatedAt *time.Time
+}
+
+// PasswordReset is a single-use link to set a new password; only the digest of its token is stored.
+type PasswordReset struct {
+	ID          int64
+	UserID      int64
+	TokenSHA256 []byte
+	// CreatedBy is the administrator who made it (nil: the break-glass command).
+	CreatedBy *int64
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	UsedAt    *time.Time
 }
 
 // InvitationStatus is derived from an invitation's timestamps.
@@ -155,6 +169,15 @@ type Repository interface {
 	RevokeAPIKey(ctx context.Context, projectID, id int64) (APIKey, error)
 	// TouchAPIKey records a use (at most once a minute).
 	TouchAPIKey(ctx context.Context, id int64) error
+	// SetUserDeactivated deactivates (at) or reactivates (nil) a user.
+	SetUserDeactivated(ctx context.Context, id int64, at *time.Time) (User, error)
+	CountActiveAdmins(ctx context.Context) (int64, error)
+	// VoidPasswordResets marks every pending reset link of a user used.
+	VoidPasswordResets(ctx context.Context, userID int64) error
+	CreatePasswordReset(ctx context.Context, r PasswordReset) (PasswordReset, error)
+	// LockPasswordResetByToken locks the link until the transaction ends (ErrNotFound for an unknown token).
+	LockPasswordResetByToken(ctx context.Context, digest []byte) (PasswordReset, error)
+	MarkPasswordResetUsed(ctx context.Context, id int64) error
 }
 
 type userKey struct{}

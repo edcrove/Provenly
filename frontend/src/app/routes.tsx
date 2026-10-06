@@ -1,6 +1,7 @@
 import { Navigate, type RouteObject } from 'react-router'
 
 import { AcceptInvitePage } from '@/features/auth/AcceptInvitePage'
+import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage'
 import { AccountPage } from '@/features/auth/AccountPage'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { UsersPage } from '@/features/auth/UsersPage'
@@ -27,6 +28,7 @@ import { AuditPage } from '@/features/audit/AuditPage'
 export const routes: RouteObject[] = [
   { path: 'login', element: <LoginPage /> },
   { path: 'accept-invite', element: <AcceptInvitePage /> },
+  { path: 'reset-password', element: <ResetPasswordPage /> },
   {
     element: <Layout />,
     children: [

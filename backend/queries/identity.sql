@@ -98,3 +98,26 @@ RETURNING *;
 -- Records a use at most once a minute: a busy CI does not write on every report.
 UPDATE api_keys SET last_used_at = now()
 WHERE id = @id AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute');
+
+-- name: SetUserDeactivated :one
+-- deactivated_at NULL reactivates the user.
+UPDATE users SET deactivated_at = sqlc.narg('deactivated_at'), updated_at = now() WHERE id = @id RETURNING *;
+
+-- name: CountActiveAdmins :one
+SELECT count(*) FROM users WHERE is_admin AND deactivated_at IS NULL;
+
+-- name: VoidPasswordResets :exec
+-- A new link, or a used one, voids the user's other pending links.
+UPDATE password_resets SET used_at = now() WHERE user_id = @user_id AND used_at IS NULL;
+
+-- name: CreatePasswordReset :one
+INSERT INTO password_resets (user_id, token_sha256, created_by, expires_at)
+VALUES (@user_id, @token_sha256, sqlc.narg('created_by'), @expires_at)
+RETURNING *;
+
+-- name: LockPasswordResetByToken :one
+-- Locks the link so two uses of it cannot both set a password.
+SELECT * FROM password_resets WHERE token_sha256 = @token_sha256 FOR UPDATE;
+
+-- name: MarkPasswordResetUsed :exec
+UPDATE password_resets SET used_at = now() WHERE id = @id AND used_at IS NULL;

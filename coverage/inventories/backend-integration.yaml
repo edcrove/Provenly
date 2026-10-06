@@ -136,3 +136,5 @@ targets:
     description: a test case is found by its project and number (the key filter) - each project numbers its own test cases, so a number alone matches one per project and a number with its project at most one
   - id: BE-INT-066
     description: a live poll (authorizing the run by its project, then its live state) costs at most five statements, the same for a run of 1 or 300 test cases (it read the run three times and its summary inputs twice)
+  - id: BE-INT-067
+    description: offboarding on a real database - a deactivated user's session stops at once and the last administrator stays; ten concurrent uses of one reset link set the password once; a newer link voids the older; reset links are never deleted, only marked used once, with a 32-byte digest and an expiry after creation

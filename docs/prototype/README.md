@@ -356,6 +356,8 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 The audit's open decisions and cards were refined by the product owner and the six personas and recorded in the
 Notion Decision Register; each one ships in its own PR.
 
+- **Stale by execution date (card #52):** "Not executed recently" counts from the start of a test case's latest run
+  (`startedAt`, the upload time when the report gave none), so a late upload of an old run does not make it look fresh.
 - **Find by key (card #53):** `GET /api/v1/test-cases?key=CHK-12` gives zero or one test case (MCP `search_test_cases`
   takes `key` too); the test case list has a TC-ID search box.
 - **Cheaper run reads (card #44, S):** routes on a run authorize it with its project alone (`GetRunProject`); only

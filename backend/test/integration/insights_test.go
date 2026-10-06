@@ -33,9 +33,9 @@ func TestInsights(t *testing.T) {
 			return `<testcase name="` + name + `" classname="c"><properties><property name="tc-id" value="` + key + `"/><property name="attempt" value="1"/></properties><failure message="x"/></testcase>` +
 				`<testcase name="` + name + `" classname="c"><properties><property name="tc-id" value="` + key + `"/><property name="attempt" value="2"/></properties></testcase>`
 		}
-		ingestCases("1", tcProp("old", old.Key(), ""), retried("pay", pay.Key()))
-		// Age the first run (its identity is immutable to the application, not to a replica-role session).
-		_, err := db.Pool.Exec(ctx, `BEGIN; SET LOCAL session_replication_role = replica; UPDATE test_runs SET created_at = now() - interval '30 days'; COMMIT`)
+		// The first run started long ago but its report arrives now (a late upload): it counts by its start.
+		oldReport := strings.Replace(junitFor(tcProp("old", old.Key(), ""), retried("pay", pay.Key())), "2026-09-28T10:00:00", "2025-01-01T10:00:00", 1)
+		_, err := s.Ingestion.IngestJUnit(ctx, meta("1", 1), strings.NewReader(oldReport))
 		require.NoError(t, err)
 		ingestCases("2", retried("login", login.Key()), retried("pay", pay.Key()))
 		ingestCases("3", retried("login", login.Key()), tcProp("pay", pay.Key(), `<failure message="still failing"/>`))
@@ -58,17 +58,26 @@ func TestInsights(t *testing.T) {
 		require.Len(t, q.StaleCases, 2)
 		assert.Equal(t, never.Key(), q.StaleCases[0].Key, "never executed first")
 		assert.Equal(t, old.Key(), q.StaleCases[1].Key)
-		// The last execution is exactly the first (backdated) run's creation time.
-		var created time.Time
-		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT min(created_at) FROM test_runs`).Scan(&created))
-		assert.True(t, created.Equal(*q.StaleCases[1].LastExecutedAt), "last executed %v, run created %v", *q.StaleCases[1].LastExecutedAt, created)
+		// The last execution is the first run's start, not its (recent) upload (card #52).
+		assert.True(t, time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC).Equal(*q.StaleCases[1].LastExecutedAt), "last executed %v", *q.StaleCases[1].LastExecutedAt)
 		assert.Equal(t, []insights.FlakyCase{{TestCaseID: login.ID, Key: login.Key(), Runs: 2}, {TestCaseID: pay.ID, Key: pay.Key(), Runs: 2}}, q.Flaky,
 			"pay failed for good in run 3: flaky in runs 1 and 2 only")
 
-		q, err = s.Insights.Quality(ctx, insights.Query{ProjectKey: "TC", Window: 2, StaleDays: 60})
+		q, err = s.Insights.Quality(ctx, insights.Query{ProjectKey: "TC", Window: 2, StaleDays: 365})
 		require.NoError(t, err)
-		assert.Equal(t, int32(0), q.Stale)
+		assert.Equal(t, int32(1), q.Stale, "old started in 2025: stale even over a year, though uploaded today")
 		assert.Equal(t, []insights.FlakyCase{{TestCaseID: login.ID, Key: login.Key(), Runs: 1}}, q.Flaky,
 			"the latest two runs are the manual one and run 3")
+	})
+
+	t.Run("BE-INT-068_last_execution_falls_back_to_the_upload_time_when_the_report_has_no_start", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, err := s.Catalog.Create(ctx, catalog.CreateInput{ProjectID: catalog.DefaultProjectID, Title: "no start", Automated: true})
+		require.NoError(t, err)
+		_, err = s.Ingestion.IngestJUnit(ctx, meta("nostart", 1), strings.NewReader(`<testsuite name="s">`+tcProp("x", tc.Key(), "")+`</testsuite>`))
+		require.NoError(t, err)
+		q, err := s.Insights.Quality(ctx, insights.Query{ProjectKey: "TC", StaleDays: 1})
+		require.NoError(t, err)
+		assert.Equal(t, int32(0), q.Stale, "uploaded now, no start: executed now")
 	})
 }

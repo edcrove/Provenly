@@ -3802,7 +3802,10 @@ export interface operations {
     getProjectQuality: {
         parameters: {
             query?: {
-                /** @description An active test case not executed for more days than this is stale (default 14). */
+                /**
+                 * @description An active test case not executed for more days than this is stale (default 14). Its last execution is the
+                 *     start of its latest run (`startedAt`; the upload time when the report gave none), not when the report arrived.
+                 */
                 staleDays?: number;
                 /** @description How many of the latest runs flakiness is counted over (default 20). */
                 window?: number;

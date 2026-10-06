@@ -91,7 +91,7 @@ func TestRecordRunLeavesAFutureStartUnknown(t *testing.T) {
 }
 
 func TestRecordRunErrors(t *testing.T) {
-	for _, m := range []string{"InTx", "InsertTestRun", "InsertExpectedCases", "InsertTestResults", "InsertParseErrors", "GetTestRun"} {
+	for _, m := range []string{"InTx", "InsertTestRun", "LockTestRun", "InsertExpectedCases", "InsertTestResults", "InsertParseErrors", "GetTestRun"} {
 		svc, repo, ctx := setup()
 		repo.errs[m] = errBoom
 		_, _, err := svc.RecordRun(ctx, run(1), []int64{1}, nil, nil)

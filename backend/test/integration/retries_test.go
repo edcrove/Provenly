@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/edcrove/provenly/backend/internal/catalog"
 	"github.com/edcrove/provenly/backend/internal/execution"
+	"github.com/edcrove/provenly/backend/internal/ingestion/junit"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
@@ -58,5 +60,52 @@ func TestRetries(t *testing.T) {
 
 		_, err = db.Pool.Exec(ctx, `UPDATE test_results SET attempt = 2`)
 		assert.Error(t, err, "results stay immutable")
+	})
+
+	t.Run("BE-INT-061_repeated_names_without_an_attempt_signal_are_variants_a_failure_fails_the_test_case_and_is_never_flaky", func(t *testing.T) {
+		s, ctx := fresh(t)
+		create := func(title string) catalog.TestCase {
+			tc, err := s.Catalog.Create(ctx, catalog.CreateInput{ProjectID: catalog.DefaultProjectID, Title: title, Automated: true})
+			require.NoError(t, err)
+			return tc
+		}
+		same, mixed := create("same"), create("mixed")
+		id := func(n int64) string { return strconv.FormatInt(n, 10) }
+		out, err := s.Ingestion.IngestJUnit(ctx, meta("v1", 1), strings.NewReader(junitFor(
+			tcProp("checkout", id(same.ID), `<failure message="boom"/>`),
+			tcProp("checkout", id(same.ID), ""),                                // same suite, class and name, no attempt signal: a variant
+			tcProp("login", id(mixed.ID), `<flakyFailure message="timeout"/>`), // passed on a retry...
+			tcProp("logout", id(mixed.ID), `<failure message="for good"/>`),    // ...but a variant failed for good
+		)))
+		require.NoError(t, err)
+		assert.Contains(t, out.Warnings, fmt.Sprintf(junit.VariantsNotice, 1))
+
+		sum, err := s.Execution.Summary(ctx, out.Run.ID)
+		require.NoError(t, err)
+		byID := map[int64]execution.TestCaseOutcome{}
+		for _, c := range sum.TestCases {
+			byID[c.TestCaseID] = c
+		}
+		assert.Equal(t, execution.TestCaseOutcome{TestCaseID: same.ID, Status: "failed", ResultCount: 2}, byID[same.ID])
+		assert.Equal(t, execution.TestCaseOutcome{TestCaseID: mixed.ID, Status: "failed", ResultCount: 3}, byID[mixed.ID])
+		assert.Equal(t, int32(0), sum.Flaky)
+
+		results, err := s.Execution.ListRunResults(ctx, out.Run.ID, execution.ResultFilter{}, pagination.Default())
+		require.NoError(t, err)
+		retried := 0
+		for _, r := range results.Items {
+			if r.Retried {
+				retried++
+			}
+		}
+		assert.Equal(t, 1, retried, "both variants are listed and neither is a retry; only login's first attempt is")
+
+		conclusive, _, err := s.Execution.LatestConclusive(ctx, []int64{same.ID, mixed.ID})
+		require.NoError(t, err)
+		assert.Equal(t, map[int64]string{same.ID: "failed", mixed.ID: "failed"}, conclusive)
+
+		flaky, err := s.Execution.FlakyCounts(ctx, catalog.DefaultProjectID, 20, 20)
+		require.NoError(t, err)
+		assert.Empty(t, flaky, "a test case that failed in the run is not flaky")
 	})
 }

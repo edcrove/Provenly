@@ -48,6 +48,25 @@ function Metadata({ run }: { run: TestRun }) {
   )
 }
 
+type Shards = NonNullable<TestRun['shards']>
+
+/** How far a sharded run got: the shards received, and the ones it waits for or that never arrived. */
+function ShardsProgress({ shards, running }: { shards: Shards; running: boolean }) {
+  const missing = shards.missing.join(', ')
+  return (
+    <p className="text-sm" data-testid="run-shards">
+      <span className="font-medium">
+        {shards.received.length} of {shards.total} shards received
+      </span>
+      {shards.missing.length === 0
+        ? null
+        : running
+          ? ` · waiting for shard${shards.missing.length > 1 ? 's' : ''} ${missing}`
+          : ` · shard${shards.missing.length > 1 ? 's' : ''} ${missing} never arrived`}
+    </p>
+  )
+}
+
 export function TestRunDetailPage() {
   const { testRunId } = useParams()
   const id = positiveInt(testRunId, 0)
@@ -77,6 +96,7 @@ export function TestRunDetailPage() {
                 : 'No test case executed'}
             </span>
           </div>
+          {r.shards ? <ShardsProgress shards={r.shards} running={running} /> : null}
           {isInterruptedRun(r.executionStatus) ? (
             <Alert variant="destructive" data-testid="interrupted-run">
               <AlertTitle>
@@ -138,7 +158,7 @@ export function TestRunDetailPage() {
               <CardDescription>Every individual result as ingested (e.g. one per browser).</CardDescription>
             </CardHeader>
             <CardContent>
-              <RunResults testRunId={r.id} />
+              <RunResults testRunId={r.id} shards={r.shards?.total} />
             </CardContent>
           </Card>
         </div>

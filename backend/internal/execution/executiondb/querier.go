@@ -19,6 +19,8 @@ type Querier interface {
 	CountRunEvents(ctx context.Context, testRunID int64) (int32, error)
 	CountRunResults(ctx context.Context, arg CountRunResultsParams) (int64, error)
 	CountTestRuns(ctx context.Context, arg CountTestRunsParams) (int64, error)
+	// Every shard arrived (or CI finalized the run): its execution status and completion time.
+	FinishShardedRun(ctx context.Context, arg FinishShardedRunParams) error
 	FinishTestRun(ctx context.Context, arg FinishTestRunParams) error
 	GetTestRun(ctx context.Context, id int64) (GetTestRunRow, error)
 	GetTestRunIDByExternalID(ctx context.Context, arg GetTestRunIDByExternalIDParams) (int64, error)
@@ -30,20 +32,24 @@ type Querier interface {
 	InsertParseErrors(ctx context.Context, arg []InsertParseErrorsParams) (int64, error)
 	// Appends one live event; an event id already received for the run is a duplicate delivery and is skipped (0 rows).
 	InsertRunEvent(ctx context.Context, arg InsertRunEventParams) (int64, error)
+	// Records a shard of a running sharded run; a shard already received is a replay (0 rows).
+	InsertRunShard(ctx context.Context, arg InsertRunShardParams) (int64, error)
 	InsertTestResults(ctx context.Context, arg []InsertTestResultsParams) (int64, error)
 	InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error)
 	// Whether a test case is in a run's universe: its snapshot or its amendments.
 	IsInUniverse(ctx context.Context, arg IsInUniverseParams) (pgtype.Bool, error)
 	ListAmendments(ctx context.Context, arg ListAmendmentsParams) ([]TestRunAmendment, error)
 	ListDiagnosticResults(ctx context.Context, testRunID int64) ([]ListDiagnosticResultsRow, error)
-	// In a project's latest runs, how many runs each test case was flaky in: one of its tests passed on its last attempt
-	// after a failed or errored one. Manual re-tests are never flaky.
+	// In a project's latest runs, how many runs each test case was flaky in: every result of one of its tests' last
+	// attempt passed after a failed or errored earlier attempt, and the test case did not fail or error in that run (a
+	// variant that failed for good is a failure, not flakiness). Manual re-tests are never flaky.
 	ListFlakyCounts(ctx context.Context, arg ListFlakyCountsParams) ([]ListFlakyCountsRow, error)
 	// When each given test case last had a valid result (the creation time of its latest run with one).
 	ListLastExecuted(ctx context.Context, testCaseIds []int64) ([]ListLastExecutedRow, error)
 	// For each given test case, its latest run with a conclusive logical status (passed, failed or error; skipped runs are
-	// inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test,
-	// aggregated failed > error > skipped > passed, as in summaries.
+	// inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test
+	// (every result of it: repeated names without an attempt signal are variants), aggregated failed > error > skipped >
+	// passed, as in summaries.
 	// Runs are walked newest first per test case and the walk stops at the first conclusive one (index
 	// test_results_case_run_valid_idx), instead of aggregating every run of the test case's history.
 	ListLatestConclusive(ctx context.Context, testCaseIds []int64) ([]ListLatestConclusiveRow, error)
@@ -59,6 +65,7 @@ type Querier interface {
 	ListRunEvents(ctx context.Context, testRunID int64) ([]TestRunEvent, error)
 	// retried: a later attempt of the same test exists in the run, so this one is not its logical result.
 	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]ListRunResultsRow, error)
+	ListRunShards(ctx context.Context, testRunID int64) ([]ListRunShardsRow, error)
 	// Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status, the
 	// test they belong to and their attempt) of the given runs, in one read.
 	ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]ListSummaryInputsRow, error)

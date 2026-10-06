@@ -92,9 +92,9 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P6-4 | Visibility | `amendmentCount` on every run (list, detail, history), an "edited" badge, an "Edited after creation" card with the history, and the summary splits "N in the snapshot + M included later" | DEC-42 asks for a visible mark in list, detail and API |
 | P6-5 | No undo | An amendment cannot be removed | Audit trail; a mistaken inclusion is visible with its reason. Revisit with the audit log (feature 20) if needed |
 | P6-6 | Actor | `authz.Guard.Actor` gives the signed-in user; API keys cannot amend | Amendments are human decisions |
-| P7-1 | Detecting retries | Only when the report says so: Surefire `<flakyFailure>`/`<flakyError>` (failed attempts before a pass) and `<rerunFailure>`/`<rerunError>` (attempts after a failure), or an `attempt` (1-based) / `retry` (0-based, Playwright) testcase property. Repeated names without a signal stay variants | Treating every repeated name as a retry would silently turn failed variants into flaky passes in existing reports |
+| P7-1 | Detecting retries | Only when the report says so: Surefire `<flakyFailure>`/`<flakyError>` (failed attempts before a pass) and `<rerunFailure>`/`<rerunError>` (attempts after a failure), or an `attempt` (1-based) / `retry` (0-based, Playwright) testcase property. Repeated names without a signal stay variants: they share their attempt, a failure among them fails the test case and the ingestion warns how many (2026-10-06) | Treating every repeated name as a retry would silently turn failed variants into flaky passes in existing reports |
 | P7-2 | Test identity | A test is its suite + class + name within the run; its attempts are numbered 1..100 | Variants (e.g. per browser) have different names and keep aggregating failed > error > skipped > passed (D1) |
-| P7-3 | Logical result | The highest attempt of each test (the later one on ties); a pass after a failed or errored attempt is `passed` and **flaky** | MVP D1, whatever the cause |
+| P7-3 | Logical result | The highest attempt of each test (every result of it on ties: variants); a pass after a failed or errored attempt is `passed` and **flaky**, unless the test case failed or errored in the run (2026-10-06) | MVP D1, whatever the cause |
 | P7-4 | Storage | Every attempt is stored as a result with `attempt`; `retried` (a later attempt exists) is derived in queries; results stay immutable | Nothing reported is lost; the history shows every attempt |
 | P7-5 | Exposure | `flaky` in run outcome and summary (TC-IDs), `flaky` per summary test case, `attempt` and `retried` per result; UI: flaky badge (list and detail), flaky test cases, attempt markers in results and history | Flaky passes count as passed but stay visible |
 | P7-6 | Limits | Attempts beyond 100 keep the last 100 with a warning; invalid attempt/retry values are first attempts with a warning; Surefire attempt details come from `<stackTrace>`, their duration is unknown | Broken reporters never fail ingestion |
@@ -356,8 +356,16 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 The audit's open decisions and cards were refined by the product owner and the six personas and recorded in the
 Notion Decision Register; each one ships in its own PR.
 
+- **Variants and flaky (card #58):** repeated names without an attempt signal are variants of the test (a failure
+  among them fails the test case; the ingestion warns how many), and a test case that failed or errored in a run is
+  not flaky there, in the summary, the dashboard ranking and the latest status alike.
 - **Broken gzip is an unreadable report:** a body sent as gzip that is not gzip, truncated or corrupt answers
   `400 invalid_junit` ("body is not valid gzip: …"), like broken XML (replaces P8-3, which said `validation_error`).
+- **Sharded runs (card #57):** one logical CI run may arrive as N reports (`?shard=i/N`; the Playwright reporter reads
+  `--shard`): the first creates a running run, each shard is taken once, the last completes it (webhook once) and
+  `POST /api/v1/ingestion/finalize` ends one whose shards will not all arrive as interrupted, naming the missing ones.
+  Results carry their shard (filter `?shard=`); the run page shows "2 of 3 shards received" (screenshot 69). A GitHub
+  re-run of only the failed shard jobs (attempt N inheriting the shards of N-1) goes to the Incubator.
 - **Supply chain (card #50):** every GitHub Action is pinned to a commit SHA with its version as a comment
   (`scripts/docs-check.sh` fails on an unpinned `uses:`), and Dependabot proposes updates for actions, Go modules,
   npm packages and Docker images.

@@ -100,6 +100,14 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   JUnit XML as `application/xml` body (one request per complete report; `text/xml` and `*+xml` too; a Content-Type
   `charset` overrides the XML declaration; `Content-Encoding: gzip` is accepted with the size limit on the decompressed body (a broken gzip stream is `400 invalid_junit`), other encodings are a 415; every parameter error is listed at once). `201` creates the run, `200` is an idempotent
   replay (nothing re-processed).
+- Sharded runs (card #57): `?shard=i/N` (2 ≤ N ≤ 100) makes a report one of the N of a logical run (same provider,
+  runId and runAttempt). The first shard creates the run (mode `sharded`, `running`, snapshot taken then); each shard is
+  a row of `test_run_shards` (digest, status; append-only, accepted only while the run runs and within `shard_total`)
+  and its results and parse errors carry it. Shards are serialized by the run's row lock; the one that completes the
+  set finishes the run with the worst shard status (cancelled > interrupted > completed) and fires `run.completed` once.
+  A shard answers for its own report (results count, diagnostics, parse errors, replay digest and status). A different
+  N, a shard for an unsharded run (or the opposite) and a shard after the end are 409. `POST /api/v1/ingestion/finalize`
+  ends a waiting run as interrupted with its missing shards named; `GET …/results?shard=` filters by shard.
 
 ## Taxonomy (prototype feature 9)
 
@@ -229,8 +237,11 @@ password (so a locked account costs no bcrypt), counts `invalid username or pass
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its
-suite + class + name in the run; its highest attempt is its logical result (flaky when it passed after a failed or
-errored attempt). The summary aggregates logical results per TC-ID with failed > error > skipped > passed.
+suite + class + name in the run; its highest attempt is its logical result (flaky when every result of it passed after a
+failed or errored attempt). Repeated names without an attempt signal share their attempt and stay variants (the
+ingestion warns how many). The summary aggregates logical results per TC-ID with failed > error > skipped > passed, and
+a TC-ID whose aggregate is failed or error is never flaky (a variant failed for good); `ListFlakyCounts` and
+`ListLatestConclusive` apply the same rules in SQL.
 
 ## JUnit → TC-ID extraction
 

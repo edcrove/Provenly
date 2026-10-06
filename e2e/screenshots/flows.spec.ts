@@ -518,5 +518,19 @@ test('UI flows', async ({ page }) => {
   await page.goto('/audit?project=CHK')
   await expect(page.locator('[data-testid^="audit-"]').first()).toBeVisible()
   await shot(page, 'audit-log')
+  // Sharded runs (card #57): two of three shards arrived; the run waits for shard 2 and its results tell their shard.
+  let shardedRun = 0
+  for (const [shard, xml] of [
+    ['1/3', junit(tc('pay visa', 'CHK-1'))],
+    ['3/3', junit(`<testcase name="refund" classname="web" time="0.412"><failure message="Refund total is 0.00"/><properties><property name="tc-id" value="CHK-2"/></properties></testcase>`)],
+  ]) {
+    const shardParams = new URLSearchParams({ project: 'CHK', provider: 'github', runId: '5170', runAttempt: '1', pipeline: 'checkout matrix', branch: 'main', commit: '9a8b7c6d5e', shard })
+    const res = await request.post(`${api}/ingestion/junit?${shardParams}`, { headers: { 'Content-Type': 'application/xml' }, data: xml })
+    expect(res.status()).toBe(201)
+    shardedRun = ((await res.json()) as { testRun: { id: number } }).testRun.id
+  }
+  await page.goto(`/test-runs/${shardedRun}`)
+  await expect(page.getByTestId('run-shards')).toContainText('2 of 3 shards received')
+  await shot(page, 'test-run-sharded')
   await page.getByLabel('Current project').selectOption('')
 })

@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
@@ -64,6 +65,15 @@ type TestRunDTO struct {
 	// Mode is how the results arrive (batch, manual, live); StartedBy who started a manual run.
 	Mode      RunMode `json:"mode"`
 	StartedBy *string `json:"startedBy"`
+	// Shards tells how far a sharded run got (null: not sharded).
+	Shards *ShardsDTO `json:"shards"`
+}
+
+// ShardsDTO is the progress of a sharded run: of Total reports, the shards Received and Missing (ascending).
+type ShardsDTO struct {
+	Total    int32   `json:"total"`
+	Received []int32 `json:"received"`
+	Missing  []int32 `json:"missing"`
 }
 
 // SuiteRefDTO names a suite as it was when the run was created.
@@ -100,6 +110,9 @@ func RunDTO(r TestRun) TestRunDTO {
 	if r.StartedBy != "" {
 		dto.StartedBy = &r.StartedBy
 	}
+	if r.ShardTotal > 0 {
+		dto.Shards = &ShardsDTO{Total: r.ShardTotal, Received: append([]int32{}, r.ShardsReceived...), Missing: append([]int32{}, r.MissingShards()...)}
+	}
 	return dto
 }
 
@@ -124,6 +137,8 @@ type TestResultDTO struct {
 	// RecordedBy is who recorded a manual result (null for CI results); FailedStep the step where it failed.
 	RecordedBy *string `json:"recordedBy"`
 	FailedStep *int32  `json:"failedStep"`
+	// Shard is the shard of a sharded run that reported the result (null otherwise).
+	Shard *int32 `json:"shard"`
 }
 
 // ResultDTO converts a TestResult to its wire form, with the display key of its test case when known.
@@ -140,7 +155,7 @@ func resultDTO(r TestResult, keys map[int64]string) TestResultDTO {
 		ID: r.ID, TestRunID: r.TestRunID, TestCaseID: r.TestCaseID, TestCaseKey: key, RequestedTestCaseID: r.RequestedTestCaseID,
 		Correlation: r.Correlation, TestName: r.TestName, ClassName: r.ClassName, SuiteName: r.SuiteName, Status: r.Status,
 		DurationMs: r.DurationMs, ErrorMessage: r.ErrorMessage, ErrorDetails: r.ErrorDetails, CreatedAt: r.CreatedAt,
-		Attempt: r.Attempt, Retried: r.Retried, FailedStep: r.FailedStep,
+		Attempt: r.Attempt, Retried: r.Retried, FailedStep: r.FailedStep, Shard: r.Shard,
 	}
 	if r.RecordedBy != "" {
 		dto.RecordedBy = &r.RecordedBy
@@ -166,10 +181,18 @@ type ParseErrorDTO struct {
 	Message   string `json:"message"`
 	Persisted bool   `json:"persisted"`
 	Severity  string `json:"severity"`
+	// Shard is the shard of a sharded run whose report it belongs to (null otherwise).
+	Shard *int32 `json:"shard"`
 }
 
 // ToParseErrorDTO converts a ParseError to its wire form.
-func ToParseErrorDTO(p ParseError) ParseErrorDTO { return ParseErrorDTO(p) }
+func ToParseErrorDTO(p ParseError) ParseErrorDTO {
+	dto := ParseErrorDTO{Index: p.Index, TestName: p.TestName, Message: p.Message, Persisted: p.Persisted, Severity: p.Severity}
+	if p.Shard != 0 {
+		dto.Shard = &p.Shard
+	}
+	return dto
+}
 
 type historyDTO struct {
 	Result TestResultDTO `json:"result"`
@@ -403,8 +426,20 @@ func parseResultFilter(r *http.Request) (ResultFilter, error) {
 		c := Correlation(*corr)
 		f.Correlation = &c
 	}
+	shard, err := httpx.PatternQuery(r, "shard", shardPattern, "must be an integer between 1 and 100")
+	if err != nil {
+		return f, err
+	}
+	if shard != nil {
+		n, _ := strconv.Atoi(*shard)
+		v := int32(n)
+		f.Shard = &v
+	}
 	return f, nil
 }
+
+// shardPattern is a shard number, 1 to 100.
+var shardPattern = regexp.MustCompile(`^([1-9]|[1-9][0-9]|100)$`)
 
 func (h *Handler) listResults(w http.ResponseWriter, r *http.Request) {
 	id, err := httpx.PathID(r, "testRunId")

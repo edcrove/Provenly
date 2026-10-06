@@ -6,6 +6,7 @@ import { useTestRunResults } from '@/api/queries'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
 import { AttemptBadge, CorrelationBadge, StatusBadge } from '@/components/StatusBadge'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -18,12 +19,14 @@ const CLAMPED_MESSAGE = 120
 const expandable = (r: { errorMessage: string; errorDetails: string }) =>
   r.errorDetails !== '' || r.errorMessage.length > CLAMPED_MESSAGE || r.errorMessage.includes('\n')
 
-export function RunResults({ testRunId }: { testRunId: number }) {
+export function RunResults({ testRunId, shards }: { testRunId: number; shards?: number }) {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
   const status = pickEnum(params.get('status'), resultStatuses)
   const correlation = pickEnum(params.get('correlation'), correlations)
-  const query = useTestRunResults(testRunId, page, status, correlation)
+  const requestedShard = positiveInt(params.get('shard'), 0)
+  const shard = shards && requestedShard <= shards ? requestedShard || undefined : undefined
+  const query = useTestRunResults(testRunId, page, status, correlation, shard)
   // Error details (stack traces, every failure of a testcase) open on demand, one row at a time or several.
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const toggle = (id: number) =>
@@ -69,6 +72,20 @@ export function RunResults({ testRunId }: { testRunId: number }) {
             </option>
           ))}
         </NativeSelect>
+        {shards ? (
+          <NativeSelect
+            aria-label="Filter by shard"
+            value={shard ?? ''}
+            onChange={(e) => update('shard', e.target.value)}
+          >
+            <option value="">All shards</option>
+            {Array.from({ length: shards }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                Shard {n}
+              </option>
+            ))}
+          </NativeSelect>
+        ) : null}
       </div>
       <QueryState query={query}>
         {(data) => (
@@ -87,7 +104,7 @@ export function RunResults({ testRunId }: { testRunId: number }) {
                 {data.items.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-muted-foreground">
-                      {status || correlation ? 'No results match the filters.' : 'No results yet.'}
+                      {status || correlation || shard ? 'No results match the filters.' : 'No results yet.'}
                     </TableCell>
                   </TableRow>
                 )}
@@ -119,6 +136,11 @@ export function RunResults({ testRunId }: { testRunId: number }) {
                         <span className="flex flex-wrap items-center gap-1">
                           <StatusBadge status={r.status} />
                           <AttemptBadge attempt={r.attempt} retried={r.retried} />
+                          {r.shard ? (
+                            <Badge variant="outline" title={`Reported by shard ${r.shard}`}>
+                              shard {r.shard}
+                            </Badge>
+                          ) : null}
                         </span>
                       </TableCell>
                       <TableCell>{formatDuration(r.durationMs)}</TableCell>

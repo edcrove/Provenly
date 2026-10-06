@@ -207,6 +207,41 @@ describe('ProvenlyReporter', () => {
   })
 })
 
+describe('sharded runs', () => {
+  it("reads Playwright's --shard, sends ?shard=i/N and does not stream live", async () => {
+    const f = fakeFetch([new Response('{}', { status: 201 })])
+    const log = vi.fn()
+    const r = new ProvenlyReporter({ url: 'https://p.test', fetch: f.fn, log, env: {}, runId: '9', runAttempt: 1 })
+    r.onBegin({ shard: { current: 2, total: 4 } })
+    r.onTestEnd(test(), result())
+    await r.onEnd({ status: 'passed' })
+    expect(f.calls).toHaveLength(1)
+    expect(f.calls[0].url).toBe('https://p.test/api/v1/ingestion/junit?provider=local&runId=9&runAttempt=1&shard=2%2F4')
+    expect(log).toHaveBeenCalledWith('shard 2/4: live streaming is off for sharded runs; the report is sent when this shard ends')
+  })
+
+  it('PROVENLY_SHARD and the shard option win over the config; one shard is no shard', async () => {
+    const shardOf = async (options: { shard?: string; env?: Record<string, string> }, config?: Parameters<ProvenlyReporter['onBegin']>[0]) => {
+      const f = fakeFetch()
+      const r = new ProvenlyReporter({ url: 'https://p.test', fetch: f.fn, log: vi.fn(), live: false, env: {}, ...options })
+      r.onBegin(config)
+      await r.onEnd({ status: 'passed' })
+      return new URL(f.calls[0].url).searchParams.get('shard')
+    }
+    expect(await shardOf({ env: { PROVENLY_SHARD: '3/5' } }, { shard: { current: 1, total: 5 } })).toBe('3/5')
+    expect(await shardOf({ shard: '1/2', env: { PROVENLY_SHARD: '3/5' } })).toBe('1/2')
+    expect(await shardOf({}, { shard: { current: 1, total: 1 } })).toBeNull()
+    expect(await shardOf({}, { shard: null })).toBeNull()
+    expect(await shardOf({})).toBeNull()
+  })
+
+  it('stays silent without a URL even when sharded', () => {
+    const log = vi.fn()
+    new ProvenlyReporter({ log, env: {} }).onBegin({ shard: { current: 1, total: 2 } })
+    expect(log).not.toHaveBeenCalled()
+  })
+})
+
 describe('live event limits', () => {
   it('clips a long test name and drops an over-long TC-ID instead of losing the whole batch', async () => {
     const f = fakeFetch([json({ id: 42 })])

@@ -159,3 +159,6 @@ targets:
   - id: FE-INT-048
     description: audit fixes - a running run's verdict is provisional ("failed so far") in detail and list; the summary total shows "—" when nothing was executed; an unfiltered run without results says "No results yet."; issue and requirement detail links are separated
     surfaces: [src/components/StatusBadge.tsx, src/features/test-runs/RunSummary.tsx, src/features/test-runs/RunResults.tsx, src/features/issues/IssueDetailPage.tsx, src/features/requirements/RequirementDetailPage.tsx]
+  - id: FE-INT-049
+    description: sharded runs - a running sharded run shows how many shards arrived and which it waits for, an interrupted one names the shards that never arrived, a complete one only counts them; results show their shard and filter by it; runs without shards show none of it
+    surfaces: [src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/RunResults.tsx, src/api/queries.ts]

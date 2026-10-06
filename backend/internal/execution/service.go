@@ -42,47 +42,150 @@ func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, r
 	if run.StartedAt != nil && run.StartedAt.After(now) {
 		run.StartedAt = nil // a run cannot start after it is recorded: clock skew or a local time without a zone
 	}
+	sharded := run.ShardTotal > 0
+	insert := InsertRunParams{NewRun: run, ExternalRunID: externalID, Status: status, CompletedAt: &now}
+	if sharded {
+		// The first shard creates the run, running until every shard arrived; each shard keeps its own digest.
+		insert.Mode, insert.Status, insert.CompletedAt, insert.ReportSHA256 = ModeSharded, RunRunning, nil, ""
+		for i := range results {
+			results[i].Shard = run.Shard
+		}
+		for i := range parseErrors {
+			parseErrors[i].Shard = run.Shard
+		}
+	}
 	var (
 		out     TestRun
 		created bool
 	)
 	err := s.repo.InTx(ctx, func(r Repository) error {
-		id, ok, err := r.InsertTestRun(ctx, InsertRunParams{
-			NewRun: run, ExternalRunID: externalID, Status: status, CompletedAt: &now,
-		})
+		id, inserted, err := r.InsertTestRun(ctx, insert)
 		if err != nil {
 			return err
 		}
-		if !ok {
+		if !inserted {
 			if id, err = r.GetTestRunIDByExternalID(ctx, run.ProjectID, externalID); err != nil {
 				return err
 			}
-			// The final report of a running live run completes it: its results become the run's (MVP live runs).
-			current, mode, err := r.LockTestRun(ctx, id)
-			if err != nil {
-				return err
-			}
-			if mode == ModeLive && current == RunRunning {
-				created = true
-				if err := r.InsertTestResults(ctx, id, results); err != nil {
-					return err
-				}
-				if err := r.InsertParseErrors(ctx, id, parseErrors); err != nil {
-					return err
-				}
-				if err := r.CompleteLiveRun(ctx, id, status, run.ReportSHA256); err != nil {
-					return err
-				}
-			}
-		} else {
+		}
+		current, mode, err := r.LockTestRun(ctx, id)
+		if err != nil {
+			return err
+		}
+		switch {
+		case inserted:
 			created = true
 			if err := r.InsertExpectedCases(ctx, id, expected); err != nil {
 				return err
 			}
-			if err := r.InsertTestResults(ctx, id, results); err != nil {
+			if !sharded {
+				if err := insertReport(ctx, r, id, results, parseErrors); err != nil {
+					return err
+				}
+			}
+		case sharded != (mode == ModeSharded):
+			if sharded {
+				return apperr.Conflict("run %s was reported as one report (%s): it takes no shards", externalID, mode)
+			}
+			return apperr.Conflict("run %s is sharded: send each report with ?shard=i/N", externalID)
+		case !sharded && mode == ModeLive && current == RunRunning:
+			// The final report of a running live run completes it: its results become the run's (MVP live runs).
+			created = true
+			if err := insertReport(ctx, r, id, results, parseErrors); err != nil {
 				return err
 			}
-			if err := r.InsertParseErrors(ctx, id, parseErrors); err != nil {
+			if err := r.CompleteLiveRun(ctx, id, status, run.ReportSHA256); err != nil {
+				return err
+			}
+		}
+		if out, err = r.GetTestRun(ctx, id); err != nil {
+			return err
+		}
+		if sharded {
+			if out.ShardTotal != run.ShardTotal {
+				return apperr.Conflict("run %s is split into %d shards, not %d", externalID, out.ShardTotal, run.ShardTotal)
+			}
+			if out.Shards, err = r.ListRunShards(ctx, id); err != nil {
+				return err
+			}
+			if !slices.ContainsFunc(out.Shards, func(sh RunShard) bool { return sh.Shard == run.Shard }) {
+				if out.Status != RunRunning {
+					return apperr.Conflict("run %s is %s: shard %d/%d arrived after it ended", externalID, out.Status, run.Shard, run.ShardTotal)
+				}
+				created = true
+				if _, err := r.InsertRunShard(ctx, id, RunShard{Shard: run.Shard, ReportSHA256: run.ReportSHA256, Status: status}); err != nil {
+					return err
+				}
+				if err := insertReport(ctx, r, id, results, parseErrors); err != nil {
+					return err
+				}
+				if out.Shards, err = r.ListRunShards(ctx, id); err != nil {
+					return err
+				}
+				if len(out.Shards) == int(out.ShardTotal) {
+					if err := r.FinishShardedRun(ctx, id, worstStatus(out.Shards)); err != nil {
+						return err
+					}
+				}
+				shards := out.Shards
+				if out, err = r.GetTestRun(ctx, id); err != nil {
+					return err
+				}
+				out.Shards = shards
+			}
+		}
+		return attachOutcomes(ctx, r, []TestRun{out}, func(_ int, o RunOutcome) { out.Outcome = o })
+	})
+	return out, created, err
+}
+
+func insertReport(ctx context.Context, r Repository, runID int64, results []NewResult, parseErrors []ParseError) error {
+	if err := r.InsertTestResults(ctx, runID, results); err != nil {
+		return err
+	}
+	return r.InsertParseErrors(ctx, runID, parseErrors)
+}
+
+// worstStatus is how a sharded run ended: cancelled if a shard was, else interrupted if a shard was, else completed.
+func worstStatus(shards []RunShard) RunStatus {
+	out := RunCompleted
+	for _, sh := range shards {
+		if sh.Status == RunCancelled {
+			return RunCancelled
+		}
+		if sh.Status == RunInterrupted {
+			out = RunInterrupted
+		}
+	}
+	return out
+}
+
+// FinalizeShardedRun ends a running sharded run whose shards will not all arrive: it becomes interrupted, and its
+// missing shards stay missing. A run that already ended is returned as it is (false).
+func (s *Service) FinalizeShardedRun(ctx context.Context, projectID int64, provider, providerRunID string, attempt int32) (TestRun, bool, error) {
+	externalID := ExternalRunID(provider, providerRunID, attempt)
+	var (
+		out      TestRun
+		finished bool
+	)
+	err := s.repo.InTx(ctx, func(r Repository) error {
+		id, err := r.GetTestRunIDByExternalID(ctx, projectID, externalID)
+		if errors.Is(err, ErrNotFound) {
+			return apperr.NotFound("test run %s not found", externalID)
+		}
+		if err != nil {
+			return err
+		}
+		current, mode, err := r.LockTestRun(ctx, id)
+		if err != nil {
+			return err
+		}
+		if mode != ModeSharded {
+			return apperr.Conflict("run %s is not sharded: it ends with its report", externalID)
+		}
+		if current == RunRunning {
+			finished = true
+			if err := r.FinishShardedRun(ctx, id, RunInterrupted); err != nil {
 				return err
 			}
 		}
@@ -91,7 +194,7 @@ func (s *Service) RecordRun(ctx context.Context, run NewRun, expected []int64, r
 		}
 		return attachOutcomes(ctx, r, []TestRun{out}, func(_ int, o RunOutcome) { out.Outcome = o })
 	})
-	return out, created, err
+	return out, finished, err
 }
 
 // attachOutcomes computes the outcome of each run (one batch read) and hands

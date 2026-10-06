@@ -1247,6 +1247,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingestion/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End a sharded run whose missing shards will not arrive
+         * @description For a CI job that runs after every shard (e.g. `if: always()`): a sharded run still waiting for shards ends as
+         *     `interrupted`, its missing shards named in `warnings`, and `run.completed` webhooks fire. A run that already
+         *     ended is returned unchanged (200); a run that is not sharded is 409. No request body; the run is identified
+         *     like in the ingestion.
+         */
+        post: operations["finalizeShardedRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1630,8 +1653,8 @@ export interface components {
          */
         ExecutionStatus: "completed" | "interrupted" | "cancelled";
         /**
-         * @description How the run's execution ended (`completed`, `interrupted`, `cancelled`), or `running` while a manual run
-         *     still receives results.
+         * @description How the run's execution ended (`completed`, `interrupted`, `cancelled`), or `running` while a manual, live
+         *     or sharded run still receives results.
          * @enum {string}
          */
         RunExecutionStatus: "running" | "completed" | "interrupted" | "cancelled";
@@ -1674,10 +1697,20 @@ export interface components {
         };
         TestRun: {
             /**
-             * @description How the results arrive - one CI report (batch), recorded by people (manual) or streamed (live).
+             * @description How the results arrive - one CI report (batch), recorded by people (manual), streamed (live) or one
+             *     report per shard (sharded).
              * @enum {string}
              */
-            mode: "batch" | "manual" | "live";
+            mode: "batch" | "manual" | "live" | "sharded";
+            /** @description How far a sharded run got (null - not sharded). */
+            shards: {
+                /** Format: int32 */
+                total: number;
+                /** @description The shards that arrived, ascending. */
+                received: number[];
+                /** @description The shards that have not arrived, ascending (after a finalization, they never will). */
+                missing: number[];
+            } | null;
             /** @description Who started a manual run. */
             startedBy: string | null;
             /** @description The suite the run was reported for, as named then (null - the project's automated catalog). */
@@ -2265,6 +2298,11 @@ export interface components {
          */
         Correlation: "valid" | "missing" | "malformed" | "unknown" | "deprecated" | "wrong_project";
         TestResult: {
+            /**
+             * Format: int32
+             * @description The shard of a sharded run that reported the result (null otherwise).
+             */
+            shard: number | null;
             /** @description Who recorded a manual result (null for results reported by CI). */
             recordedBy: string | null;
             /**
@@ -2454,7 +2492,12 @@ export interface components {
         ParseError: {
             /**
              * Format: int32
-             * @description 0-based position of the testcase in document order
+             * @description The shard of a sharded run whose report it belongs to (null otherwise).
+             */
+            shard: number | null;
+            /**
+             * Format: int32
+             * @description 0-based position of the testcase in document order (in its shard's report)
              */
             index: number;
             testName: string;
@@ -5009,6 +5052,8 @@ export interface operations {
                 pageSize?: components["parameters"]["PageSize"];
                 status?: components["schemas"]["ResultStatus"];
                 correlation?: components["schemas"]["Correlation"];
+                /** @description Only the results reported by this shard of a sharded run. */
+                shard?: number;
             };
             header?: never;
             path: {
@@ -5180,6 +5225,17 @@ export interface operations {
                  *     be incomplete and its untested test cases may simply not have run.
                  */
                 status?: components["schemas"]["ExecutionStatus"];
+                /**
+                 * @description `i/N`: this report is shard `i` of the `N` (2 to 100) reports of one logical run (same provider, runId and
+                 *     runAttempt), e.g. a test matrix. The first shard creates the run (mode `sharded`, `executionStatus`
+                 *     `running`, its snapshot taken then); each shard adds its results once (201; re-sending a shard is a
+                 *     replay, 200); the run completes when every shard arrived (cancelled if a shard was, else interrupted if a
+                 *     shard was, else completed) and `run.completed` webhooks fire then, once. A different `N`, a shard for a
+                 *     run reported without shards (or the opposite) and a shard after the run ended are 409. To end a run whose
+                 *     shards will not all arrive, call `POST /api/v1/ingestion/finalize`.
+                 * @example 2/4
+                 */
+                shard?: string;
             };
             header?: never;
             path?: never;
@@ -5225,6 +5281,47 @@ export interface operations {
             409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    finalizeShardedRun: {
+        parameters: {
+            query: {
+                /** @description Key of the project the run belongs to (default the API key's project, else `TC`). */
+                project?: string;
+                provider: string;
+                runId: string;
+                runAttempt: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run had already ended; returned unchanged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionResponse"];
+                };
+            };
+            /** @description The run was waiting for shards and ended as interrupted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };

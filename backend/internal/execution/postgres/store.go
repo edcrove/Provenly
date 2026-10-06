@@ -86,6 +86,7 @@ type runRow struct {
 	ExpectedCount  int32
 	ResultCount    int32
 	AmendmentCount int32
+	ShardsReceived []int32
 }
 
 func toRun(r runRow) execution.TestRun {
@@ -95,7 +96,7 @@ func toRun(r runRow) execution.TestRun {
 		Status: execution.RunStatus(r.Status), ExpectedCount: r.ExpectedCount + r.AmendmentCount, ResultCount: r.ResultCount,
 		AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt.Time, StartedAt: timePtr(r.StartedAt), CompletedAt: timePtr(r.CompletedAt),
 		ReportSHA256: r.ReportSha256, SuiteKey: r.SuiteKey.String, SuiteName: r.SuiteName.String,
-		Mode: execution.RunMode(r.Mode), StartedBy: r.StartedBy.String,
+		Mode: execution.RunMode(r.Mode), StartedBy: r.StartedBy.String, ShardTotal: r.ShardTotal.Int32, ShardsReceived: r.ShardsReceived,
 	}
 }
 
@@ -105,9 +106,12 @@ func toResult(r executiondb.TestResult) execution.TestResult {
 		Correlation: execution.Correlation(r.Correlation), TestName: r.TestName, ClassName: r.ClassName, SuiteName: r.SuiteName,
 		Status: execution.ResultStatus(r.Status), DurationMs: int8Ptr(r.DurationMs), ErrorMessage: r.ErrorMessage,
 		ErrorDetails: r.ErrorDetails, CreatedAt: r.CreatedAt.Time, Attempt: r.Attempt,
-		RecordedBy: r.RecordedBy.String, FailedStep: int4Ptr(r.FailedStep),
+		RecordedBy: r.RecordedBy.String, FailedStep: int4Ptr(r.FailedStep), Shard: int4Ptr(r.Shard),
 	}
 }
+
+// optionalInt4 is NULL for 0.
+func optionalInt4(v int32) pgtype.Int4 { return pgtype.Int4{Int32: v, Valid: v != 0} }
 
 func int4Ptr(v pgtype.Int4) *int32 {
 	if !v.Valid {
@@ -131,7 +135,7 @@ func (s *Store) InsertTestRun(ctx context.Context, p execution.InsertRunParams) 
 		Pipeline: p.Pipeline, Branch: p.Branch, CommitSha: p.Commit, Status: string(p.Status),
 		StartedAt: timestamptz(p.StartedAt), CompletedAt: timestamptz(p.CompletedAt), ReportSha256: p.ReportSHA256,
 		SuiteKey: optionalText(p.SuiteKey), SuiteName: optionalText(p.SuiteName),
-		Mode: string(cmp.Or(p.Mode, execution.ModeBatch)), StartedBy: optionalText(p.StartedBy),
+		Mode: string(cmp.Or(p.Mode, execution.ModeBatch)), StartedBy: optionalText(p.StartedBy), ShardTotal: optionalInt4(p.ShardTotal),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
@@ -160,7 +164,7 @@ func (s *Store) InsertTestResults(ctx context.Context, runID int64, results []ex
 		row := executiondb.InsertTestResultsParams{
 			TestRunID: runID, Correlation: string(r.Correlation), TestName: r.TestName, ClassName: r.ClassName,
 			SuiteName: r.SuiteName, Status: string(r.Status),
-			ErrorMessage: r.ErrorMessage, ErrorDetails: r.ErrorDetails, Attempt: max(r.Attempt, 1),
+			ErrorMessage: r.ErrorMessage, ErrorDetails: r.ErrorDetails, Attempt: max(r.Attempt, 1), Shard: optionalInt4(r.Shard),
 		}
 		if r.TestCaseID != nil {
 			row.TestCaseID = pgtype.Int8{Int64: *r.TestCaseID, Valid: true}
@@ -181,7 +185,8 @@ func (s *Store) InsertTestResults(ctx context.Context, runID int64, results []ex
 func (s *Store) InsertParseErrors(ctx context.Context, runID int64, errs []execution.ParseError) error {
 	rows := make([]executiondb.InsertParseErrorsParams, len(errs))
 	for i, e := range errs {
-		rows[i] = executiondb.InsertParseErrorsParams{TestRunID: runID, CaseIndex: e.Index, TestName: e.TestName, Message: e.Message, Persisted: e.Persisted, Severity: e.Severity}
+		rows[i] = executiondb.InsertParseErrorsParams{TestRunID: runID, CaseIndex: e.Index, TestName: e.TestName, Message: e.Message, Persisted: e.Persisted, Severity: e.Severity,
+			Shard: optionalInt4(e.Shard)}
 	}
 	_, err := s.q.InsertParseErrors(ctx, rows)
 	return err
@@ -195,7 +200,7 @@ func (s *Store) ListParseErrors(ctx context.Context, runID int64, limit, offset 
 	}
 	out := make([]execution.ParseError, len(rows))
 	for i, r := range rows {
-		out[i] = execution.ParseError{Index: r.CaseIndex, TestName: r.TestName, Message: r.Message, Persisted: r.Persisted, Severity: r.Severity}
+		out[i] = execution.ParseError{Index: r.CaseIndex, TestName: r.TestName, Message: r.Message, Persisted: r.Persisted, Severity: r.Severity, Shard: r.Shard.Int32}
 	}
 	return out, nil
 }
@@ -212,7 +217,7 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 		return execution.TestRun{}, notFound(err)
 	}
 	// sqlc.embed: the run's every column, so the mapping cannot drift from the table (audit F12).
-	return toRun(runRow{TestRun: r.TestRun, ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount}), nil
+	return toRun(runRow{TestRun: r.TestRun, ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, ShardsReceived: r.ShardsReceived}), nil
 }
 
 // ListTestRuns implements execution.Repository.
@@ -223,7 +228,7 @@ func (s *Store) ListTestRuns(ctx context.Context, f execution.RunFilter, limit, 
 	}
 	out := make([]execution.TestRun, len(rows))
 	for i, r := range rows {
-		out[i] = toRun(runRow{TestRun: r.TestRun, ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount})
+		out[i] = toRun(runRow{TestRun: r.TestRun, ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, ShardsReceived: r.ShardsReceived})
 	}
 	return out, nil
 }
@@ -241,7 +246,7 @@ func optionalText(s string) pgtype.Text {
 // ListRunResults implements execution.Repository.
 func (s *Store) ListRunResults(ctx context.Context, runID int64, f execution.ResultFilter, limit, offset int32) ([]execution.TestResult, error) {
 	rows, err := s.q.ListRunResults(ctx, executiondb.ListRunResultsParams{
-		TestRunID: runID, Status: filterText(f.Status), Correlation: filterText(f.Correlation), PageLimit: limit, PageOffset: offset,
+		TestRunID: runID, Status: filterText(f.Status), Correlation: filterText(f.Correlation), Shard: int4Arg(f.Shard), PageLimit: limit, PageOffset: offset,
 	})
 	if err != nil {
 		return nil, err
@@ -257,7 +262,7 @@ func (s *Store) ListRunResults(ctx context.Context, runID int64, f execution.Res
 // CountRunResults implements execution.Repository.
 func (s *Store) CountRunResults(ctx context.Context, runID int64, f execution.ResultFilter) (int64, error) {
 	return s.q.CountRunResults(ctx, executiondb.CountRunResultsParams{
-		TestRunID: runID, Status: filterText(f.Status), Correlation: filterText(f.Correlation),
+		TestRunID: runID, Status: filterText(f.Status), Correlation: filterText(f.Correlation), Shard: int4Arg(f.Shard),
 	})
 }
 
@@ -293,7 +298,7 @@ func (s *Store) ListDiagnostics(ctx context.Context, runID int64) ([]execution.D
 	}
 	out := make([]execution.Diagnostic, len(rows))
 	for i, r := range rows {
-		out[i] = execution.Diagnostic{TestName: r.TestName, Correlation: execution.Correlation(r.Correlation), RequestedTestCaseID: textPtr(r.RequestedTestCaseID)}
+		out[i] = execution.Diagnostic{TestName: r.TestName, Correlation: execution.Correlation(r.Correlation), RequestedTestCaseID: textPtr(r.RequestedTestCaseID), Shard: r.Shard.Int32}
 	}
 	return out, nil
 }
@@ -316,8 +321,10 @@ func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, li
 					RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.RunStatus,
 					CreatedAt: r.RunCreatedAt, StartedAt: r.RunStartedAt, CompletedAt: r.RunCompletedAt,
 					ReportSha256: r.ReportSha256, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName, Mode: r.RunMode, StartedBy: r.RunStartedBy,
+					ShardTotal: r.RunShardTotal,
 				},
 				ExpectedCount: r.RunExpectedCount, ResultCount: r.RunResultCount, AmendmentCount: r.RunAmendmentCount,
+				ShardsReceived: r.RunShardsReceived,
 			}),
 		}
 	}
@@ -495,4 +502,30 @@ func (s *Store) ListRunEvents(ctx context.Context, runID int64) ([]execution.Eve
 // CompleteLiveRun implements execution.Repository.
 func (s *Store) CompleteLiveRun(ctx context.Context, runID int64, status execution.RunStatus, reportSHA256 string) error {
 	return s.q.CompleteLiveRun(ctx, executiondb.CompleteLiveRunParams{ID: runID, Status: string(status), ReportSha256: reportSHA256})
+}
+
+// InsertRunShard implements execution.Repository.
+func (s *Store) InsertRunShard(ctx context.Context, runID int64, shard execution.RunShard) (bool, error) {
+	n, err := s.q.InsertRunShard(ctx, executiondb.InsertRunShardParams{
+		TestRunID: runID, Shard: shard.Shard, ReportSha256: shard.ReportSHA256, Status: string(shard.Status),
+	})
+	return n == 1, err
+}
+
+// ListRunShards implements execution.Repository.
+func (s *Store) ListRunShards(ctx context.Context, runID int64) ([]execution.RunShard, error) {
+	rows, err := s.q.ListRunShards(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]execution.RunShard, len(rows))
+	for i, r := range rows {
+		out[i] = execution.RunShard{Shard: r.Shard, ReportSHA256: r.ReportSha256, Status: execution.RunStatus(r.Status), ResultCount: r.ResultCount}
+	}
+	return out, nil
+}
+
+// FinishShardedRun implements execution.Repository.
+func (s *Store) FinishShardedRun(ctx context.Context, runID int64, status execution.RunStatus) error {
+	return s.q.FinishShardedRun(ctx, executiondb.FinishShardedRunParams{ID: runID, Status: string(status)})
 }

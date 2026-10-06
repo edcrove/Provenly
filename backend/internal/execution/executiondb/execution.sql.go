@@ -77,16 +77,23 @@ SELECT count(*) FROM test_results
 WHERE test_run_id = $1
   AND ($2::text IS NULL OR status = $2::text)
   AND ($3::text IS NULL OR correlation = $3::text)
+  AND ($4::int IS NULL OR shard = $4::int)
 `
 
 type CountRunResultsParams struct {
 	TestRunID   int64
 	Status      pgtype.Text
 	Correlation pgtype.Text
+	Shard       pgtype.Int4
 }
 
 func (q *Queries) CountRunResults(ctx context.Context, arg CountRunResultsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countRunResults, arg.TestRunID, arg.Status, arg.Correlation)
+	row := q.db.QueryRow(ctx, countRunResults,
+		arg.TestRunID,
+		arg.Status,
+		arg.Correlation,
+		arg.Shard,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -110,6 +117,21 @@ func (q *Queries) CountTestRuns(ctx context.Context, arg CountTestRunsParams) (i
 	return count, err
 }
 
+const finishShardedRun = `-- name: FinishShardedRun :exec
+UPDATE test_runs SET status = $1, completed_at = now() WHERE id = $2 AND mode = 'sharded' AND status = 'running'
+`
+
+type FinishShardedRunParams struct {
+	Status string
+	ID     int64
+}
+
+// Every shard arrived (or CI finalized the run): its execution status and completion time.
+func (q *Queries) FinishShardedRun(ctx context.Context, arg FinishShardedRunParams) error {
+	_, err := q.db.Exec(ctx, finishShardedRun, arg.Status, arg.ID)
+	return err
+}
+
 const finishTestRun = `-- name: FinishTestRun :exec
 UPDATE test_runs SET status = $1, completed_at = now() WHERE id = $2 AND status = 'running'
 `
@@ -125,10 +147,11 @@ func (q *Queries) FinishTestRun(ctx context.Context, arg FinishTestRunParams) er
 }
 
 const getTestRun = `-- name: GetTestRun :one
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
-    (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
+    (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count,
+    (SELECT coalesce(array_agg(s.shard ORDER BY s.shard), '{}') FROM test_run_shards s WHERE s.test_run_id = r.id)::int[] AS shards_received
 FROM test_runs r WHERE r.id = $1
 `
 
@@ -137,6 +160,7 @@ type GetTestRunRow struct {
 	ExpectedCount  int32
 	ResultCount    int32
 	AmendmentCount int32
+	ShardsReceived []int32
 }
 
 func (q *Queries) GetTestRun(ctx context.Context, id int64) (GetTestRunRow, error) {
@@ -161,9 +185,11 @@ func (q *Queries) GetTestRun(ctx context.Context, id int64) (GetTestRunRow, erro
 		&i.TestRun.SuiteName,
 		&i.TestRun.Mode,
 		&i.TestRun.StartedBy,
+		&i.TestRun.ShardTotal,
 		&i.ExpectedCount,
 		&i.ResultCount,
 		&i.AmendmentCount,
+		&i.ShardsReceived,
 	)
 	return i, err
 }
@@ -242,7 +268,7 @@ SELECT $1, $2, $3, 'valid', $4, $5, '', $6, $7, $8, '',
 FROM test_results x WHERE x.test_run_id = $1 AND x.class_name = $5 AND x.test_name = $4
   AND x.suite_name = ''
 HAVING coalesce(max(x.attempt), 0) < $11::int
-RETURNING id, test_run_id, test_case_id, requested_test_case_id, correlation, test_name, class_name, suite_name, status, duration_ms, error_message, error_details, created_at, attempt, recorded_by, failed_step
+RETURNING id, test_run_id, test_case_id, requested_test_case_id, correlation, test_name, class_name, suite_name, status, duration_ms, error_message, error_details, created_at, attempt, recorded_by, failed_step, shard
 `
 
 type InsertManualResultParams struct {
@@ -293,6 +319,7 @@ func (q *Queries) InsertManualResult(ctx context.Context, arg InsertManualResult
 		&i.Attempt,
 		&i.RecordedBy,
 		&i.FailedStep,
+		&i.Shard,
 	)
 	return i, err
 }
@@ -304,6 +331,7 @@ type InsertParseErrorsParams struct {
 	Message   string
 	Persisted bool
 	Severity  string
+	Shard     pgtype.Int4
 }
 
 const insertRunEvent = `-- name: InsertRunEvent :execrows
@@ -345,6 +373,33 @@ func (q *Queries) InsertRunEvent(ctx context.Context, arg InsertRunEventParams) 
 	return result.RowsAffected(), nil
 }
 
+const insertRunShard = `-- name: InsertRunShard :execrows
+INSERT INTO test_run_shards (test_run_id, shard, report_sha256, status)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (test_run_id, shard) DO NOTHING
+`
+
+type InsertRunShardParams struct {
+	TestRunID    int64
+	Shard        int32
+	ReportSha256 string
+	Status       string
+}
+
+// Records a shard of a running sharded run; a shard already received is a replay (0 rows).
+func (q *Queries) InsertRunShard(ctx context.Context, arg InsertRunShardParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertRunShard,
+		arg.TestRunID,
+		arg.Shard,
+		arg.ReportSha256,
+		arg.Status,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 type InsertTestResultsParams struct {
 	TestRunID           int64
 	TestCaseID          pgtype.Int8
@@ -358,11 +413,12 @@ type InsertTestResultsParams struct {
 	ErrorMessage        string
 	ErrorDetails        string
 	Attempt             int32
+	Shard               pgtype.Int4
 }
 
 const insertTestRun = `-- name: InsertTestRun :one
-INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256, suite_key, suite_name, mode, started_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256, suite_key, suite_name, mode, started_by, shard_total)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 ON CONFLICT (project_id, external_run_id) DO NOTHING
 RETURNING id
 `
@@ -384,6 +440,7 @@ type InsertTestRunParams struct {
 	SuiteName     pgtype.Text
 	Mode          string
 	StartedBy     pgtype.Text
+	ShardTotal    pgtype.Int4
 }
 
 func (q *Queries) InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error) {
@@ -404,6 +461,7 @@ func (q *Queries) InsertTestRun(ctx context.Context, arg InsertTestRunParams) (i
 		arg.SuiteName,
 		arg.Mode,
 		arg.StartedBy,
+		arg.ShardTotal,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -468,7 +526,7 @@ func (q *Queries) ListAmendments(ctx context.Context, arg ListAmendmentsParams) 
 }
 
 const listDiagnosticResults = `-- name: ListDiagnosticResults :many
-SELECT test_name, correlation, requested_test_case_id FROM test_results
+SELECT test_name, correlation, requested_test_case_id, shard FROM test_results
 WHERE test_run_id = $1 AND correlation <> 'valid'
 ORDER BY id
 `
@@ -477,6 +535,7 @@ type ListDiagnosticResultsRow struct {
 	TestName            string
 	Correlation         string
 	RequestedTestCaseID pgtype.Text
+	Shard               pgtype.Int4
 }
 
 func (q *Queries) ListDiagnosticResults(ctx context.Context, testRunID int64) ([]ListDiagnosticResultsRow, error) {
@@ -488,7 +547,12 @@ func (q *Queries) ListDiagnosticResults(ctx context.Context, testRunID int64) ([
 	var items []ListDiagnosticResultsRow
 	for rows.Next() {
 		var i ListDiagnosticResultsRow
-		if err := rows.Scan(&i.TestName, &i.Correlation, &i.RequestedTestCaseID); err != nil {
+		if err := rows.Scan(
+			&i.TestName,
+			&i.Correlation,
+			&i.RequestedTestCaseID,
+			&i.Shard,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -502,18 +566,27 @@ func (q *Queries) ListDiagnosticResults(ctx context.Context, testRunID int64) ([
 const listFlakyCounts = `-- name: ListFlakyCounts :many
 WITH runs AS (
     SELECT id FROM test_runs WHERE project_id = $2 ORDER BY id DESC LIMIT $3
-), tests AS (
-    SELECT t.test_case_id, t.test_run_id,
-        (array_agg(t.status ORDER BY t.attempt DESC, t.id DESC))[1] AS last_status,
-        bool_or(t.status IN ('failed', 'error')) AS any_failure
+), attempts AS (
+    SELECT t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name, t.status, t.attempt,
+        max(t.attempt) OVER (PARTITION BY t.test_run_id, t.test_case_id, t.suite_name, t.class_name, t.test_name) AS last_attempt
     FROM test_results t
-    WHERE t.test_run_id IN (SELECT id FROM runs) AND t.correlation = 'valid' AND t.class_name <> 'provenly-manual'
-    GROUP BY t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name
+    WHERE t.test_run_id IN (SELECT id FROM runs) AND t.correlation = 'valid'
+), tests AS (
+    SELECT a.test_case_id, a.test_run_id, a.class_name,
+        bool_and(a.status = 'passed') FILTER (WHERE a.attempt = a.last_attempt) AS last_passed,
+        coalesce(bool_or(a.status IN ('failed', 'error')) FILTER (WHERE a.attempt < a.last_attempt), false) AS earlier_failure,
+        coalesce(bool_or(a.status IN ('failed', 'error')) FILTER (WHERE a.attempt = a.last_attempt), false) AS last_failure
+    FROM attempts a
+    GROUP BY a.test_case_id, a.test_run_id, a.suite_name, a.class_name, a.test_name
+), flaky AS (
+    SELECT x.test_case_id, x.test_run_id FROM tests x
+    GROUP BY x.test_case_id, x.test_run_id
+    HAVING bool_or(x.last_passed AND x.earlier_failure AND x.class_name <> 'provenly-manual') AND NOT bool_or(x.last_failure)
 )
-SELECT x.test_case_id::bigint AS test_case_id, count(DISTINCT x.test_run_id)::int AS flaky_runs
-FROM tests x WHERE x.last_status = 'passed' AND x.any_failure
-GROUP BY x.test_case_id
-ORDER BY flaky_runs DESC, x.test_case_id
+SELECT f.test_case_id::bigint AS test_case_id, count(*)::int AS flaky_runs
+FROM flaky f
+GROUP BY f.test_case_id
+ORDER BY flaky_runs DESC, f.test_case_id
 LIMIT $1
 `
 
@@ -528,8 +601,9 @@ type ListFlakyCountsRow struct {
 	FlakyRuns  int32
 }
 
-// In a project's latest runs, how many runs each test case was flaky in: one of its tests passed on its last attempt
-// after a failed or errored one. Manual re-tests are never flaky.
+// In a project's latest runs, how many runs each test case was flaky in: every result of one of its tests' last
+// attempt passed after a failed or errored earlier attempt, and the test case did not fail or error in that run (a
+// variant that failed for good is a failure, not flakiness). Manual re-tests are never flaky.
 func (q *Queries) ListFlakyCounts(ctx context.Context, arg ListFlakyCountsParams) ([]ListFlakyCountsRow, error) {
 	rows, err := q.db.Query(ctx, listFlakyCounts, arg.MaxItems, arg.ProjectID, arg.WindowRuns)
 	if err != nil {
@@ -593,10 +667,11 @@ CROSS JOIN LATERAL (
     CROSS JOIN LATERAL (
         SELECT CASE WHEN bool_or(a.status = 'failed') THEN 'failed' WHEN bool_or(a.status = 'error') THEN 'error'
                     WHEN bool_or(a.status = 'skipped') THEN 'skipped' ELSE 'passed' END AS status
-        FROM (SELECT DISTINCT ON (t.suite_name, t.class_name, t.test_name) t.status
+        FROM (SELECT t.status, t.attempt,
+                     max(t.attempt) OVER (PARTITION BY t.suite_name, t.class_name, t.test_name) AS last_attempt
               FROM test_results t
-              WHERE t.test_run_id = r.test_run_id AND t.test_case_id = c.id AND t.correlation = 'valid'
-              ORDER BY t.suite_name, t.class_name, t.test_name, t.attempt DESC, t.id DESC) a
+              WHERE t.test_run_id = r.test_run_id AND t.test_case_id = c.id AND t.correlation = 'valid') a
+        WHERE a.attempt = a.last_attempt
     ) s
     WHERE s.status <> 'skipped'
     ORDER BY r.test_run_id DESC
@@ -612,8 +687,9 @@ type ListLatestConclusiveRow struct {
 }
 
 // For each given test case, its latest run with a conclusive logical status (passed, failed or error; skipped runs are
-// inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test,
-// aggregated failed > error > skipped > passed, as in summaries.
+// inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test
+// (every result of it: repeated names without an attempt signal are variants), aggregated failed > error > skipped >
+// passed, as in summaries.
 // Runs are walked newest first per test case and the walk stops at the first conclusive one (index
 // test_results_case_run_valid_idx), instead of aggregating every run of the test case's history.
 func (q *Queries) ListLatestConclusive(ctx context.Context, testCaseIds []int64) ([]ListLatestConclusiveRow, error) {
@@ -685,9 +761,9 @@ func (q *Queries) ListLatestResults(ctx context.Context, testCaseIds []int64) ([
 }
 
 const listParseErrors = `-- name: ListParseErrors :many
-SELECT case_index, test_name, message, persisted, severity FROM test_run_parse_errors
+SELECT case_index, test_name, message, persisted, severity, shard FROM test_run_parse_errors
 WHERE test_run_id = $1
-ORDER BY case_index
+ORDER BY coalesce(shard, 0), case_index
 LIMIT $3 OFFSET $2
 `
 
@@ -703,6 +779,7 @@ type ListParseErrorsRow struct {
 	Message   string
 	Persisted bool
 	Severity  string
+	Shard     pgtype.Int4
 }
 
 func (q *Queries) ListParseErrors(ctx context.Context, arg ListParseErrorsParams) ([]ListParseErrorsRow, error) {
@@ -720,6 +797,7 @@ func (q *Queries) ListParseErrors(ctx context.Context, arg ListParseErrorsParams
 			&i.Message,
 			&i.Persisted,
 			&i.Severity,
+			&i.Shard,
 		); err != nil {
 			return nil, err
 		}
@@ -739,18 +817,20 @@ WITH page AS (
     SELECT r.id,
         (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
         (SELECT count(*) FROM test_results x WHERE x.test_run_id = r.id)::int AS result_count,
-        (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
+        (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count,
+        (SELECT coalesce(array_agg(s.shard ORDER BY s.shard), '{}') FROM test_run_shards s WHERE s.test_run_id = r.id)::int[] AS shards_received
     FROM test_runs r
     WHERE r.id IN (SELECT q.test_run_id FROM test_results q WHERE q.id IN (SELECT id FROM page))
 )
-SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at, t.attempt, t.recorded_by, t.failed_step, EXISTS (
+SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at, t.attempt, t.recorded_by, t.failed_step, t.shard, EXISTS (
         SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
           AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
     ) AS retried,
     r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
     r.report_sha256, r.suite_key, r.suite_name, r.mode AS run_mode, r.started_by AS run_started_by,
-    c.expected_count AS run_expected_count, c.result_count AS run_result_count, c.amendment_count AS run_amendment_count
+    r.shard_total AS run_shard_total, c.expected_count AS run_expected_count, c.result_count AS run_result_count,
+    c.amendment_count AS run_amendment_count, c.shards_received AS run_shards_received
 FROM test_results t
 JOIN test_runs r ON r.id = t.test_run_id
 JOIN counts c ON c.id = r.id
@@ -784,9 +864,11 @@ type ListResultsForTestCaseRow struct {
 	SuiteName         pgtype.Text
 	RunMode           string
 	RunStartedBy      pgtype.Text
+	RunShardTotal     pgtype.Int4
 	RunExpectedCount  int32
 	RunResultCount    int32
 	RunAmendmentCount int32
+	RunShardsReceived []int32
 }
 
 // The page is chosen first (index on test_case_id, id DESC) and each run's counts
@@ -817,6 +899,7 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 			&i.TestResult.Attempt,
 			&i.TestResult.RecordedBy,
 			&i.TestResult.FailedStep,
+			&i.TestResult.Shard,
 			&i.Retried,
 			&i.RunProjectID,
 			&i.ExternalRunID,
@@ -835,9 +918,11 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 			&i.SuiteName,
 			&i.RunMode,
 			&i.RunStartedBy,
+			&i.RunShardTotal,
 			&i.RunExpectedCount,
 			&i.RunResultCount,
 			&i.RunAmendmentCount,
+			&i.RunShardsReceived,
 		); err != nil {
 			return nil, err
 		}
@@ -887,7 +972,7 @@ func (q *Queries) ListRunEvents(ctx context.Context, testRunID int64) ([]TestRun
 }
 
 const listRunResults = `-- name: ListRunResults :many
-SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at, t.attempt, t.recorded_by, t.failed_step, EXISTS (
+SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlation, t.test_name, t.class_name, t.suite_name, t.status, t.duration_ms, t.error_message, t.error_details, t.created_at, t.attempt, t.recorded_by, t.failed_step, t.shard, EXISTS (
     SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
       AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
 ) AS retried
@@ -895,14 +980,16 @@ FROM test_results t
 WHERE t.test_run_id = $1
   AND ($2::text IS NULL OR t.status = $2::text)
   AND ($3::text IS NULL OR t.correlation = $3::text)
+  AND ($4::int IS NULL OR t.shard = $4::int)
 ORDER BY t.id
-LIMIT $5 OFFSET $4
+LIMIT $6 OFFSET $5
 `
 
 type ListRunResultsParams struct {
 	TestRunID   int64
 	Status      pgtype.Text
 	Correlation pgtype.Text
+	Shard       pgtype.Int4
 	PageOffset  int32
 	PageLimit   int32
 }
@@ -918,6 +1005,7 @@ func (q *Queries) ListRunResults(ctx context.Context, arg ListRunResultsParams) 
 		arg.TestRunID,
 		arg.Status,
 		arg.Correlation,
+		arg.Shard,
 		arg.PageOffset,
 		arg.PageLimit,
 	)
@@ -945,7 +1033,46 @@ func (q *Queries) ListRunResults(ctx context.Context, arg ListRunResultsParams) 
 			&i.TestResult.Attempt,
 			&i.TestResult.RecordedBy,
 			&i.TestResult.FailedStep,
+			&i.TestResult.Shard,
 			&i.Retried,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunShards = `-- name: ListRunShards :many
+SELECT s.shard, s.report_sha256, s.status,
+    (SELECT count(*) FROM test_results t WHERE t.test_run_id = s.test_run_id AND t.shard = s.shard)::int AS result_count
+FROM test_run_shards s WHERE s.test_run_id = $1 ORDER BY s.shard
+`
+
+type ListRunShardsRow struct {
+	Shard        int32
+	ReportSha256 string
+	Status       string
+	ResultCount  int32
+}
+
+func (q *Queries) ListRunShards(ctx context.Context, testRunID int64) ([]ListRunShardsRow, error) {
+	rows, err := q.db.Query(ctx, listRunShards, testRunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRunShardsRow
+	for rows.Next() {
+		var i ListRunShardsRow
+		if err := rows.Scan(
+			&i.Shard,
+			&i.ReportSha256,
+			&i.Status,
+			&i.ResultCount,
 		); err != nil {
 			return nil, err
 		}
@@ -1010,10 +1137,11 @@ func (q *Queries) ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]
 }
 
 const listTestRuns = `-- name: ListTestRuns :many
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
-    (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
+    (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count,
+    (SELECT coalesce(array_agg(s.shard ORDER BY s.shard), '{}') FROM test_run_shards s WHERE s.test_run_id = r.id)::int[] AS shards_received
 FROM test_runs r
 WHERE r.id IN (
     SELECT p.id FROM test_runs p
@@ -1036,6 +1164,7 @@ type ListTestRunsRow struct {
 	ExpectedCount  int32
 	ResultCount    int32
 	AmendmentCount int32
+	ShardsReceived []int32
 }
 
 // The page is chosen first: the per-run counts are only computed for its rows,
@@ -1073,9 +1202,11 @@ func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]L
 			&i.TestRun.SuiteName,
 			&i.TestRun.Mode,
 			&i.TestRun.StartedBy,
+			&i.TestRun.ShardTotal,
 			&i.ExpectedCount,
 			&i.ResultCount,
 			&i.AmendmentCount,
+			&i.ShardsReceived,
 		); err != nil {
 			return nil, err
 		}

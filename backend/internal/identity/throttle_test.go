@@ -153,11 +153,16 @@ func TestLoginThrottleSettles(t *testing.T) {
 	require.NoError(t, err, "the window slides: the first four failures expired")
 
 	repo.errs["GetUserByUsername"] = errors.New("database down")
+	_, err = s.Login(ctx, "admin", "correct horse")
+	require.EqualError(t, err, "database down")
+	delete(repo.errs, "GetUserByUsername")
+	wrong(1)
+	repo.errs["GetUserByUsername"] = errors.New("database down")
 	for range 10 {
 		_, err = s.Login(ctx, "admin", "correct horse")
 		require.EqualError(t, err, "database down")
 	}
 	delete(repo.errs, "GetUserByUsername")
 	_, err = s.Login(ctx, "admin", "correct horse")
-	assert.NoError(t, err, "infrastructure errors are not counted as failed sign-ins")
+	assert.NoError(t, err, "infrastructure errors are not counted as failed sign-ins (the earlier failure stays)")
 }

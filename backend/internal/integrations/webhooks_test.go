@@ -35,6 +35,7 @@ func TestBlockedAddresses(t *testing.T) {
 	for _, ip := range []string{"8.8.8.8", "140.82.112.3", "2606:4700::1111", "64:ff9b::808:808", "2002:808:808::", "100.128.0.1"} {
 		assert.False(t, blocked(net.ParseIP(ip)), ip)
 	}
+	assert.True(t, blocked(nil), "something that is not an address is refused")
 	assert.Error(t, checkDial("tcp", "no-port", nil))
 	assert.ErrorIs(t, checkDial("tcp", "example.com:443", nil), errBlockedAddress)
 	assert.ErrorIs(t, checkDial("tcp", "10.0.0.1:443", nil), errBlockedAddress)

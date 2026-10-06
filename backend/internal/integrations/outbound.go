@@ -62,7 +62,7 @@ func blocked(ip net.IP) bool {
 	}
 	a, ok := netip.AddrFromSlice(ip)
 	if !ok {
-		return true
+		return true // not an address at all
 	}
 	a = a.Unmap()
 	for _, p := range specialPurpose {

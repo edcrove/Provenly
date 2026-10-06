@@ -31,6 +31,7 @@ describe('FE-INT-042 quality dashboard', () => {
       within(screen.getByTestId('stale-cases')).getByRole('link', { name: 'TC-154' }),
     ).toBeInTheDocument()
     expect(screen.getByTestId('stale-cases')).toHaveTextContent('never executed')
+    expect(screen.getByText('By execution start date.')).toBeInTheDocument()
     expect(screen.getByTestId('flaky-cases')).toHaveTextContent('TC-153 flaky in 3 runs')
     expect(screen.getByText('No requirements yet.')).toBeInTheDocument()
     expect(screen.getByText('No issues yet.')).toBeInTheDocument()

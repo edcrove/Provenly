@@ -83,7 +83,9 @@ EXTRA_CA_CERT=/path/to/corporate-ca.pem make up ENV=qa
 
 Build secrets are not part of Docker's cache key, so the Makefile also passes the CA's hash as the `EXTRA_CA_ID` build
 arg: adding or changing the CA re-runs the layer that installs it instead of reusing one built without it. With plain
-`docker compose` set it yourself: `EXTRA_CA_ID=$(sha256sum ca.pem | cut -d' ' -f1)`.
+`docker compose` set it yourself: `EXTRA_CA_ID=$(sha256sum ca.pem | cut -d' ' -f1)`. Recent Docker Compose releases
+read a build secret outside the project only with an extra entitlement, so the Makefile builds from a copy inside it
+(`.extra-ca.pem`, gitignored); with plain `docker compose`, keep the CA file inside the project directory.
 
 ## Data safety
 

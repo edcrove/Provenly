@@ -108,6 +108,7 @@ describe('FE-INT-042 quality dashboard', () => {
     renderRoute('/dashboard')
     expect(await screen.findByText('No runs yet.')).toBeInTheDocument()
     expect(screen.getByTestId('latest-run')).toHaveTextContent('—')
+    expect(screen.getByTestId('latest-run-hint')).toHaveTextContent('No runs yet')
     expect(await screen.findByText('Every active test case ran recently.')).toBeInTheDocument()
     expect(screen.getByText('No flaky test cases.')).toBeInTheDocument()
     expect(screen.getByTestId('automation-rate')).toHaveTextContent('0%')
@@ -119,6 +120,29 @@ describe('FE-INT-042 quality dashboard', () => {
     renderRoute('/dashboard')
     expect(await screen.findByRole('link', { name: /^Run #8: .* so far \(running\)/ })).toBe(
       screen.getByTestId('trend-8'),
+    )
+  })
+
+  it('FE-INT-042 the latest run card tells loading and a failed read from no runs', async () => {
+    localStorage.setItem('provenly.project', 'TC')
+    server.use(
+      http.get('*/api/v1/test-runs', () =>
+        HttpResponse.json(
+          {
+            type: 'about:blank',
+            title: 'Internal Server Error',
+            status: 500,
+            code: 'internal_error',
+            detail: 'x',
+          },
+          { status: 500, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+    renderRoute('/dashboard')
+    expect(await screen.findByTestId('latest-run-hint')).toHaveTextContent('Loading…')
+    await waitFor(() =>
+      expect(screen.getByTestId('latest-run-hint')).toHaveTextContent('Could not load the runs'),
     )
   })
 

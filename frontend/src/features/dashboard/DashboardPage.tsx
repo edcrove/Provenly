@@ -138,9 +138,16 @@ function ProjectDashboard({ project }: { project: string }) {
               —
             </div>
           )}
-          {latest ? (
-            <div className="text-muted-foreground text-xs">{formatDateTime(latest.createdAt)}</div>
-          ) : null}
+          {/* "—" alone cannot tell loading, a failed read and no runs apart. */}
+          <div className="text-muted-foreground text-xs" data-testid="latest-run-hint">
+            {latest
+              ? formatDateTime(latest.createdAt)
+              : runs.isPending
+                ? 'Loading…'
+                : runs.error
+                  ? 'Could not load the runs'
+                  : 'No runs yet'}
+          </div>
         </div>
         <QueryState query={quality}>
           {(q) => (

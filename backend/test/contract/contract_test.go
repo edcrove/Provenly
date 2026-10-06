@@ -188,6 +188,23 @@ func TestKeyFilter(t *testing.T) {
 	list(outsider.GET("/api/v1/test-cases").WithQuery("key", "CHK-2")).HasValue("totalItems", 0)
 }
 
+// TestEmptyRunMetadata: an empty pipeline, branch or commit on the ingestion is the same as absent, the documented
+// exception to "present but empty is a 400" (card #55).
+func TestEmptyRunMetadata(t *testing.T) {
+	e := api(t, fresh(t), 1<<20)
+	send := func(params ...string) *httpexpect.Object {
+		r := e.POST("/api/v1/ingestion/junit").WithQuery("provider", "github").WithQuery("runId", "empty").WithQuery("runAttempt", 1).
+			WithHeader("Content-Type", xmlType).WithText("<testsuite/>")
+		for _, p := range params {
+			r = r.WithQuery(p, "")
+		}
+		return r.Expect().JSON().Object()
+	}
+	run := send("pipeline", "branch", "commit").HasValue("created", true).Value("testRun").Object()
+	run.HasValue("pipeline", "").HasValue("branch", "").HasValue("commit", "")
+	send().HasValue("created", false).Value("warnings").Array().IsEmpty()
+}
+
 func TestProjects(t *testing.T) {
 	e := api(t, fresh(t), 1<<20)
 

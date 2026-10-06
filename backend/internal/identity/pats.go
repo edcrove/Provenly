@@ -24,10 +24,12 @@ const TokenPrefix = "pvly_pat_"
 const (
 	tokenPublicLen = len(TokenPrefix) + 8
 	tokenLen       = tokenPublicLen + 1 + 43
-	// DefaultTokenDays and MaxTokenDays bound a token's life: every token expires (card #62).
+	// DefaultTokenDays is a token's life when none is asked for: every token expires (card #62).
 	DefaultTokenDays = 90
-	MaxTokenDays     = 365
-	maxTokenProjects = 50
+	// MaxTokenDays is the longest life a token may have.
+	MaxTokenDays = 365
+	// MaxTokenProjects bounds the projects a token names (repeats included).
+	MaxTokenProjects = 50
 )
 
 // A personal access token reads: it never changes anything, never administers, and only sees its projects.
@@ -86,6 +88,7 @@ type NewPersonalAccessToken struct {
 	Name        string
 	Prefix      string
 	TokenSHA256 []byte
+	CreatedAt   time.Time
 	ExpiresAt   time.Time
 	ProjectIDs  []int64
 }
@@ -125,7 +128,7 @@ func (s *Service) CreateToken(ctx context.Context, actor User, in CreateTokenInp
 	ids := slices.Clone(in.ProjectIDs)
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
-	v.Check(len(ids) >= 1 && len(ids) <= maxTokenProjects, "projects", fmt.Sprintf("must name 1 to %d projects", maxTokenProjects))
+	v.Check(len(in.ProjectIDs) >= 1 && len(in.ProjectIDs) <= MaxTokenProjects, "projects", fmt.Sprintf("must name 1 to %d projects", MaxTokenProjects))
 	if err := v.Err(); err != nil {
 		return PersonalAccessToken{}, "", err
 	}
@@ -144,12 +147,13 @@ func (s *Service) CreateToken(ctx context.Context, actor User, in CreateTokenInp
 		}
 	}
 	token, prefix := newToken()
+	now := s.now()
 	var out PersonalAccessToken
 	err := s.repo.InTx(ctx, func(r Repository) error {
 		var err error
 		out, err = r.CreateToken(ctx, NewPersonalAccessToken{
 			UserID: actor.ID, Name: name, Prefix: prefix, TokenSHA256: TokenDigest(token),
-			ExpiresAt: s.now().Add(time.Duration(days) * 24 * time.Hour), ProjectIDs: ids,
+			CreatedAt: now, ExpiresAt: now.Add(time.Duration(days) * 24 * time.Hour), ProjectIDs: ids,
 		})
 		return err
 	})

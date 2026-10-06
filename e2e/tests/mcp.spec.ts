@@ -49,11 +49,12 @@ test.describe('Agents: MCP server (prototype feature 19)', () => {
     await agent.dispose()
   })
 
-  test('[FE-E2E-025] the account page shows the command that connects an MCP client as the signed-in user', async ({ page }) => {
+  test('[FE-E2E-025] the account page shows the command that connects an MCP client with a personal access token', async ({ page }) => {
     await page.goto('/account')
     const snippet = page.getByTestId('mcp-snippet')
     await expect(snippet).toContainText('claude mcp add --transport http provenly')
     await expect(snippet).toContainText('/api/v1/mcp')
-    await expect(snippet).toContainText(`"username":"${adminUsername}"`)
+    await expect(snippet).toContainText('Authorization: Bearer YOUR_TOKEN')
+    await expect(snippet).not.toContainText(adminUsername)
   })
 })

@@ -538,5 +538,13 @@ test('UI flows', async ({ page }) => {
   await carlaRow.getByRole('button', { name: 'Password reset link' }).click()
   await expect(carlaRow.getByTestId('reset-link')).toBeVisible()
   await shot(page, 'users-offboarding')
+  // Personal access tokens (card #62): a read-only token for an MCP client over one project, shown once.
+  await page.goto('/account')
+  const tokens = page.getByTestId('tokens')
+  await tokens.getByLabel('Token name').fill('Claude Desktop')
+  await tokens.getByRole('checkbox', { name: /^CHK / }).check()
+  await tokens.getByRole('button', { name: 'Create token' }).click()
+  await expect(tokens.getByTestId('token-secret')).toBeVisible()
+  await shot(page, 'account-personal-access-tokens')
   await page.getByLabel('Current project').selectOption('')
 })

@@ -322,7 +322,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 80, protected, "every operation except health, readiness, sign-in, sign-out, accept and password reset")
+	assert.Equal(t, 83, protected, "every operation except health, readiness, sign-in, sign-out, accept and password reset")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -667,6 +667,9 @@ func TestInternalErrors(t *testing.T) {
 	}
 	problem(e.GET("/api/v1/projects").Expect())
 	problem(e.GET("/api/v1/auth/me").Expect())
+	problem(e.GET("/api/v1/auth/tokens").Expect())
+	problem(e.POST("/api/v1/auth/tokens").WithJSON(map[string]any{"name": "x", "projects": []string{"TC"}}).Expect())
+	problem(e.POST("/api/v1/auth/tokens/1/revoke").Expect())
 	problem(e.GET("/api/v1/projects/TC/members").Expect())
 	problem(e.PUT("/api/v1/projects/TC/members/admin").WithJSON(map[string]any{"role": "viewer"}).Expect())
 	problem(e.DELETE("/api/v1/projects/TC/members/admin").Expect())

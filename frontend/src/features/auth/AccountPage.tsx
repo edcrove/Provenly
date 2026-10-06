@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { mcpSnippet } from '@/lib/mcpSnippet'
 
 import { useCurrentUser } from './currentUser'
+import { TokensSection } from './TokensSection'
 
 const empty = { currentPassword: '', newPassword: '', confirm: '' }
 
@@ -40,7 +41,7 @@ export function AccountPage() {
     )
   }
   return (
-    <div className="grid max-w-2xl gap-6">
+    <div className="grid max-w-4xl gap-6">
       <Card>
         <CardHeader>
           <PageTitle title="Account" />
@@ -110,20 +111,21 @@ export function AccountPage() {
           </form>
         </CardContent>
       </Card>
+      <TokensSection />
       <Card data-testid="agents">
         <CardHeader>
           <CardTitle as="h2" className="text-lg">
             Agents (MCP)
           </CardTitle>
           <CardDescription>
-            AI agents read Provenly through its Model Context Protocol endpoint, as you: they see exactly what
-            you can see, read-only (projects, test cases, runs, history, quality, issues, requirements).
-            Connect one with a session token:
+            AI agents read Provenly through its Model Context Protocol endpoint, as you and read-only
+            (projects, test cases, runs, history, quality, issues, requirements). Connect one with a personal
+            access token (above), limited to the projects you give it:
           </CardDescription>
         </CardHeader>
         <CardContent>
           <pre className="bg-muted overflow-x-auto rounded px-2 py-1 text-xs" data-testid="mcp-snippet">
-            {mcpSnippet(window.location.origin, user.username)}
+            {mcpSnippet(window.location.origin)}
           </pre>
         </CardContent>
       </Card>

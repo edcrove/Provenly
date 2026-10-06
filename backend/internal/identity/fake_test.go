@@ -437,7 +437,7 @@ func (f *fakeRepo) CreateToken(_ context.Context, t NewPersonalAccessToken) (Per
 	}
 	f.nextToken++
 	out := PersonalAccessToken{ID: f.nextToken, UserID: t.UserID, Name: t.Name, Prefix: t.Prefix, TokenSHA256: t.TokenSHA256,
-		ProjectIDs: t.ProjectIDs, CreatedAt: f.now(), ExpiresAt: t.ExpiresAt}
+		ProjectIDs: t.ProjectIDs, CreatedAt: t.CreatedAt, ExpiresAt: t.ExpiresAt}
 	f.tokens[out.ID] = out
 	return out, nil
 }

@@ -359,70 +359,33 @@ func tsArg(t *time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: *t, Valid: true}
 }
 
-func toToken(r identitydb.PersonalAccessToken) identity.PersonalAccessToken {
+func toToken(r identitydb.PersonalAccessToken, projectIDs []int64) identity.PersonalAccessToken {
 	return identity.PersonalAccessToken{
-		ID: r.ID, UserID: r.UserID, Name: r.Name, Prefix: r.Prefix, TokenSHA256: r.TokenSha256,
+		ID: r.ID, UserID: r.UserID, Name: r.Name, Prefix: r.Prefix, TokenSHA256: r.TokenSha256, ProjectIDs: projectIDs,
 		CreatedAt: r.CreatedAt.Time, ExpiresAt: r.ExpiresAt.Time, LastUsedAt: timePtr(r.LastUsedAt), RevokedAt: timePtr(r.RevokedAt),
 	}
-}
-
-// withProjects reads the projects of tokens (one query for a page of them).
-func (s *Store) withProjects(ctx context.Context, rows []identitydb.PersonalAccessToken) ([]identity.PersonalAccessToken, error) {
-	out := make([]identity.PersonalAccessToken, len(rows))
-	ids := make([]int64, len(rows))
-	at := make(map[int64]int, len(rows))
-	for i, r := range rows {
-		out[i], ids[i], at[r.ID] = toToken(r), r.ID, i
-		out[i].ProjectIDs = []int64{}
-	}
-	if len(rows) == 0 {
-		return out, nil
-	}
-	links, err := s.q.ListPersonalAccessTokenProjects(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	for _, l := range links {
-		t := &out[at[l.TokenID]]
-		t.ProjectIDs = append(t.ProjectIDs, l.ProjectID)
-	}
-	return out, nil
-}
-
-func (s *Store) oneToken(ctx context.Context, r identitydb.PersonalAccessToken, err error) (identity.PersonalAccessToken, error) {
-	if err != nil {
-		return identity.PersonalAccessToken{}, notFound(err)
-	}
-	out, err := s.withProjects(ctx, []identitydb.PersonalAccessToken{r})
-	if err != nil {
-		return identity.PersonalAccessToken{}, err
-	}
-	return out[0], nil
 }
 
 // CreateToken implements identity.Repository.
 func (s *Store) CreateToken(ctx context.Context, t identity.NewPersonalAccessToken) (identity.PersonalAccessToken, error) {
 	r, err := s.q.CreatePersonalAccessToken(ctx, identitydb.CreatePersonalAccessTokenParams{
-		UserID: t.UserID, Name: t.Name, Prefix: t.Prefix, TokenSha256: t.TokenSHA256, ExpiresAt: tsArg(&t.ExpiresAt),
+		UserID: t.UserID, Name: t.Name, Prefix: t.Prefix, TokenSha256: t.TokenSHA256, CreatedAt: tsArg(&t.CreatedAt), ExpiresAt: tsArg(&t.ExpiresAt),
 	})
 	if err != nil {
 		return identity.PersonalAccessToken{}, err
 	}
-	if err := s.q.AddPersonalAccessTokenProjects(ctx, identitydb.AddPersonalAccessTokenProjectsParams{TokenID: r.ID, ProjectIds: t.ProjectIDs}); err != nil {
-		return identity.PersonalAccessToken{}, err
-	}
-	out := toToken(r)
-	out.ProjectIDs = t.ProjectIDs
-	return out, nil
+	err = s.q.AddPersonalAccessTokenProjects(ctx, identitydb.AddPersonalAccessTokenProjectsParams{TokenID: r.ID, ProjectIds: t.ProjectIDs})
+	return toToken(r, t.ProjectIDs), err
 }
 
 // ListTokens implements identity.Repository.
 func (s *Store) ListTokens(ctx context.Context, userID int64, limit, offset int32) ([]identity.PersonalAccessToken, error) {
 	rows, err := s.q.ListPersonalAccessTokens(ctx, identitydb.ListPersonalAccessTokensParams{UserID: userID, PageLimit: limit, PageOffset: offset})
-	if err != nil {
-		return nil, err
+	out := make([]identity.PersonalAccessToken, len(rows))
+	for i, r := range rows {
+		out[i] = toToken(r.PersonalAccessToken, r.ProjectIds)
 	}
-	return s.withProjects(ctx, rows)
+	return out, err
 }
 
 // CountTokens implements identity.Repository.
@@ -433,19 +396,25 @@ func (s *Store) CountTokens(ctx context.Context, userID int64) (int64, error) {
 // GetToken implements identity.Repository.
 func (s *Store) GetToken(ctx context.Context, userID, id int64) (identity.PersonalAccessToken, error) {
 	r, err := s.q.GetPersonalAccessToken(ctx, identitydb.GetPersonalAccessTokenParams{ID: id, UserID: userID})
-	return s.oneToken(ctx, r, err)
+	return toToken(r.PersonalAccessToken, r.ProjectIds), notFound(err)
 }
 
 // GetTokenByDigest implements identity.Repository.
 func (s *Store) GetTokenByDigest(ctx context.Context, digest []byte) (identity.PersonalAccessToken, error) {
 	r, err := s.q.GetPersonalAccessTokenByToken(ctx, digest)
-	return s.oneToken(ctx, r, err)
+	return toToken(r.PersonalAccessToken, r.ProjectIds), notFound(err)
 }
 
 // RevokeToken implements identity.Repository.
 func (s *Store) RevokeToken(ctx context.Context, userID, id int64) (identity.PersonalAccessToken, error) {
-	r, err := s.q.RevokePersonalAccessToken(ctx, identitydb.RevokePersonalAccessTokenParams{ID: id, UserID: userID})
-	return s.oneToken(ctx, r, err)
+	n, err := s.q.RevokePersonalAccessToken(ctx, identitydb.RevokePersonalAccessTokenParams{ID: id, UserID: userID})
+	switch {
+	case err != nil:
+		return identity.PersonalAccessToken{}, err
+	case n == 0:
+		return identity.PersonalAccessToken{}, identity.ErrNotFound
+	}
+	return s.GetToken(ctx, userID, id)
 }
 
 // RevokeUserTokens implements identity.Repository.

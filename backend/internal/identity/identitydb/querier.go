@@ -19,6 +19,7 @@ type Querier interface {
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateInvitation(ctx context.Context, arg CreateInvitationParams) (Invitation, error)
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) (PasswordReset, error)
+	// created_at comes with expires_at from the same clock, so a 365-day token is exactly within the bound.
 	CreatePersonalAccessToken(ctx context.Context, arg CreatePersonalAccessTokenParams) (PersonalAccessToken, error)
 	// No row when the username is taken.
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
@@ -27,15 +28,14 @@ type Querier interface {
 	GetAPIKeyByToken(ctx context.Context, tokenSha256 []byte) (ApiKey, error)
 	GetInvitation(ctx context.Context, id int64) (Invitation, error)
 	GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (string, error)
-	GetPersonalAccessToken(ctx context.Context, arg GetPersonalAccessTokenParams) (PersonalAccessToken, error)
-	GetPersonalAccessTokenByToken(ctx context.Context, tokenSha256 []byte) (PersonalAccessToken, error)
+	GetPersonalAccessToken(ctx context.Context, arg GetPersonalAccessTokenParams) (GetPersonalAccessTokenRow, error)
+	GetPersonalAccessTokenByToken(ctx context.Context, tokenSha256 []byte) (GetPersonalAccessTokenByTokenRow, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	ListAPIKeys(ctx context.Context, arg ListAPIKeysParams) ([]ApiKey, error)
 	ListInvitations(ctx context.Context, arg ListInvitationsParams) ([]Invitation, error)
-	// The projects of some tokens, in id order.
-	ListPersonalAccessTokenProjects(ctx context.Context, tokenIds []int64) ([]PersonalAccessTokenProject, error)
-	ListPersonalAccessTokens(ctx context.Context, arg ListPersonalAccessTokensParams) ([]PersonalAccessToken, error)
+	// Each token with its projects, in id order.
+	ListPersonalAccessTokens(ctx context.Context, arg ListPersonalAccessTokensParams) ([]ListPersonalAccessTokensRow, error)
 	ListProjectMembers(ctx context.Context, arg ListProjectMembersParams) ([]ListProjectMembersRow, error)
 	ListUserMemberships(ctx context.Context, userID int64) ([]ListUserMembershipsRow, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
@@ -50,7 +50,7 @@ type Querier interface {
 	// No row when the invitation does not exist or is already accepted or revoked.
 	RevokeInvitation(ctx context.Context, id int64) (Invitation, error)
 	// No row when the token is not the user's or is already revoked.
-	RevokePersonalAccessToken(ctx context.Context, arg RevokePersonalAccessTokenParams) (PersonalAccessToken, error)
+	RevokePersonalAccessToken(ctx context.Context, arg RevokePersonalAccessTokenParams) (int64, error)
 	// Deactivating a user revokes every token they still have.
 	RevokeUserPersonalAccessTokens(ctx context.Context, userID int64) error
 	SetPasswordHash(ctx context.Context, arg SetPasswordHashParams) (User, error)

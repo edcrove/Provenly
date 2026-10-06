@@ -3,6 +3,7 @@ package identity
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -695,6 +696,12 @@ func (h *Handler) createToken(w http.ResponseWriter, r *http.Request) {
 	var req tokenRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		httpx.WriteError(w, r, err)
+		return
+	}
+	if len(req.Projects) > MaxTokenProjects {
+		// Bounded before any key is looked up.
+		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed,
+			apperr.FieldError{Field: "projects", Message: fmt.Sprintf("must name 1 to %d projects", MaxTokenProjects)}))
 		return
 	}
 	// Unknown, invisible and malformed keys are all "not one of your projects" (id 0).

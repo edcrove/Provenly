@@ -3,6 +3,7 @@ package identity
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -110,6 +111,7 @@ func TestPersonalAccessTokenValidation(t *testing.T) {
 		{CreateTokenInput{Name: "x", ProjectIDs: make([]int64, 51)}, "projects"},
 		{CreateTokenInput{Name: "x", ProjectIDs: []int64{2}}, "projects"},
 		{CreateTokenInput{Name: "x", ProjectIDs: []int64{0}}, "projects"},
+		{CreateTokenInput{Name: "x", ProjectIDs: slices.Repeat([]int64{1}, 51)}, "projects"},
 	} {
 		_, _, err := s.CreateToken(asAna, ana, c.in)
 		e, ok := apperr.As(err)
@@ -252,6 +254,7 @@ func TestPersonalAccessTokenRoutes(t *testing.T) {
 		{"POST", "/api/v1/auth/tokens", `{"name":"x","projects":["NOPE"]}`, 400},
 		{"POST", "/api/v1/auth/tokens", `{"name":"x","projects":["chk"]}`, 400},
 		{"POST", "/api/v1/auth/tokens", `{"name":"x","projects":[]}`, 400},
+		{"POST", "/api/v1/auth/tokens", `{"name":"x","projects":[` + strings.Repeat(`"CHK",`, 50) + `"CHK"]}`, 400},
 		{"POST", "/api/v1/auth/tokens", `{"name":"x","projects":["CHK"],"expiresInDays":366}`, 400},
 		{"POST", "/api/v1/auth/tokens", "", 415},
 		{"POST", "/api/v1/auth/tokens/1/revoke", "", 409},

@@ -1027,6 +1027,54 @@ const taxonomyScenarios: Scenario[] = [
     status: 400,
     call: (c) => c.GET('/api/v1/test-cases', { params: { query: { key: 'tc-153' } } }),
   },
+  // Personal access tokens (card #62).
+  { op: 'GET /api/v1/auth/tokens', status: 200, call: (c) => c.GET('/api/v1/auth/tokens') },
+  {
+    op: 'GET /api/v1/auth/tokens',
+    status: 400,
+    call: (c) => c.GET('/api/v1/auth/tokens', { params: { query: { page: 0 } } }),
+  },
+  {
+    op: 'POST /api/v1/auth/tokens',
+    status: 201,
+    call: (c) =>
+      c.POST('/api/v1/auth/tokens', { body: { name: 'MCP', projects: ['TC'], expiresInDays: 30 } }),
+  },
+  {
+    op: 'POST /api/v1/auth/tokens',
+    status: 400,
+    call: (c) => c.POST('/api/v1/auth/tokens', { body: { name: 'MCP', projects: ['NOPE'] } }),
+  },
+  {
+    op: 'POST /api/v1/auth/tokens',
+    status: 400,
+    call: (c) =>
+      c.POST('/api/v1/auth/tokens', { body: { name: 'MCP', projects: ['TC'], expiresInDays: 366 } }),
+  },
+  {
+    op: 'POST /api/v1/auth/tokens/{tokenId}/revoke',
+    status: 200,
+    setup: () => {
+      db.tokens.push({
+        id: 70,
+        userId: db.session!,
+        name: 'x',
+        prefix: 'pvly_pat_00000046',
+        projects: ['TC'],
+        status: 'active',
+        createdAt: '2026-10-05T10:00:00Z',
+        expiresAt: '2027-01-03T10:00:00Z',
+        lastUsedAt: null,
+        revokedAt: null,
+      })
+    },
+    call: (c) => c.POST('/api/v1/auth/tokens/{tokenId}/revoke', { params: { path: { tokenId: 70 } } }),
+  },
+  {
+    op: 'POST /api/v1/auth/tokens/{tokenId}/revoke',
+    status: 404,
+    call: (c) => c.POST('/api/v1/auth/tokens/{tokenId}/revoke', { params: { path: { tokenId: 99 } } }),
+  },
   // DEC-78: pickers search by key or title (?q=), and every catalog list is paged.
   {
     op: 'GET /api/v1/test-cases',
@@ -2450,7 +2498,210 @@ const auditScenarios: Scenario[] = [
   { op: 'GET /api/v1/audit', status: 500, setup: fail, call: (c) => c.GET('/api/v1/audit') },
 ]
 
+// Personal access tokens (card #62): a token over another project reads nothing here and changes nothing anywhere.
+const PAT = { Authorization: `Bearer pvly_pat_0000004d_${'t'.repeat(43)}` }
+const withToken =
+  (overrides: Partial<(typeof db.tokens)[number]> = {}) =>
+  () => {
+    db.tokens.push({
+      id: 77,
+      userId: db.session!,
+      name: 'scripts',
+      prefix: 'pvly_pat_0000004d',
+      projects: ['CHK'],
+      status: 'active',
+      createdAt: '2026-10-05T10:00:00Z',
+      expiresAt: '2099-01-01T00:00:00Z',
+      lastUsedAt: null,
+      revokedAt: null,
+      ...overrides,
+    })
+  }
+const outsideToken = withToken()
+const tokenScenarios: Scenario[] = [
+  { op: 'GET /api/v1/auth/tokens', status: 500, setup: fail, call: (c) => c.GET('/api/v1/auth/tokens') },
+  {
+    op: 'POST /api/v1/auth/tokens',
+    status: 403,
+    setup: withToken({ projects: ['TC'] }),
+    call: (c) => c.POST('/api/v1/auth/tokens', { body: { name: 'x', projects: ['TC'] }, headers: PAT }),
+  },
+  {
+    op: 'POST /api/v1/auth/tokens',
+    status: 415,
+    call: (c) =>
+      c.POST('/api/v1/auth/tokens', {
+        body: { name: 'x', projects: ['TC'] },
+        bodySerializer: (b) => JSON.stringify(b),
+        headers: { 'Content-Type': 'text/plain' },
+      }),
+  },
+  {
+    op: 'POST /api/v1/auth/tokens',
+    status: 500,
+    setup: fail,
+    call: (c) => c.POST('/api/v1/auth/tokens', { body: { name: 'x', projects: ['TC'] } }),
+  },
+  {
+    op: 'POST /api/v1/auth/tokens/{tokenId}/revoke',
+    status: 400,
+    call: (c) => c.POST('/api/v1/auth/tokens/{tokenId}/revoke', { params: { path: { tokenId: 0 } } }),
+  },
+  {
+    op: 'POST /api/v1/auth/tokens/{tokenId}/revoke',
+    status: 403,
+    setup: outsideToken,
+    call: (c) =>
+      c.POST('/api/v1/auth/tokens/{tokenId}/revoke', { params: { path: { tokenId: 77 } }, headers: PAT }),
+  },
+  {
+    op: 'POST /api/v1/auth/tokens/{tokenId}/revoke',
+    status: 409,
+    setup: withToken({ status: 'revoked', revokedAt: '2026-10-05T11:00:00Z' }),
+    call: (c) => c.POST('/api/v1/auth/tokens/{tokenId}/revoke', { params: { path: { tokenId: 77 } } }),
+  },
+  {
+    op: 'POST /api/v1/auth/tokens/{tokenId}/revoke',
+    status: 500,
+    setup: fail,
+    call: (c) => c.POST('/api/v1/auth/tokens/{tokenId}/revoke', { params: { path: { tokenId: 77 } } }),
+  },
+  {
+    op: 'POST /api/v1/auth/password',
+    status: 403,
+    setup: outsideToken,
+    call: (c) =>
+      c.POST('/api/v1/auth/password', {
+        body: { currentPassword: 'correct horse', newPassword: 'a new long password' },
+        headers: PAT,
+      }),
+  },
+  ...(
+    [
+      [
+        'GET /api/v1/projects/{projectKey}/dimensions',
+        (c) => c.GET('/api/v1/projects/{projectKey}/dimensions', { params: { path: tcKey }, headers: PAT }),
+      ],
+      [
+        'GET /api/v1/projects/{projectKey}/issues',
+        (c) => c.GET('/api/v1/projects/{projectKey}/issues', { params: { path: tcKey }, headers: PAT }),
+      ],
+      [
+        'GET /api/v1/projects/{projectKey}/issues/{issueId}',
+        (c) =>
+          c.GET('/api/v1/projects/{projectKey}/issues/{issueId}', {
+            params: { path: { ...tcKey, issueId: 1 } },
+            headers: PAT,
+          }),
+      ],
+      [
+        'GET /api/v1/projects/{projectKey}/members',
+        (c) => c.GET('/api/v1/projects/{projectKey}/members', { params: { path: tcKey }, headers: PAT }),
+      ],
+      [
+        'GET /api/v1/projects/{projectKey}/quality',
+        (c) => c.GET('/api/v1/projects/{projectKey}/quality', { params: { path: tcKey }, headers: PAT }),
+      ],
+      [
+        'GET /api/v1/projects/{projectKey}/requirements',
+        (c) => c.GET('/api/v1/projects/{projectKey}/requirements', { params: { path: tcKey }, headers: PAT }),
+      ],
+      [
+        'GET /api/v1/projects/{projectKey}/requirements/{requirementId}',
+        (c) =>
+          c.GET('/api/v1/projects/{projectKey}/requirements/{requirementId}', {
+            params: { path: { ...tcKey, requirementId: 1 } },
+            headers: PAT,
+          }),
+      ],
+      [
+        'GET /api/v1/projects/{projectKey}/suites',
+        (c) => c.GET('/api/v1/projects/{projectKey}/suites', { params: { path: tcKey }, headers: PAT }),
+      ],
+      [
+        'GET /api/v1/projects/{projectKey}/suites/{suiteKey}',
+        (c) =>
+          c.GET('/api/v1/projects/{projectKey}/suites/{suiteKey}', {
+            params: { path: { ...tcKey, suiteKey: 'smoke' } },
+            headers: PAT,
+          }),
+      ],
+      [
+        'GET /api/v1/test-cases',
+        (c) => c.GET('/api/v1/test-cases', { params: { query: { project: 'TC' } }, headers: PAT }),
+      ],
+      [
+        'GET /api/v1/test-cases/{testCaseId}',
+        (c) =>
+          c.GET('/api/v1/test-cases/{testCaseId}', { params: { path: { testCaseId: 153 } }, headers: PAT }),
+      ],
+      [
+        'GET /api/v1/test-cases/{testCaseId}/results',
+        (c) =>
+          c.GET('/api/v1/test-cases/{testCaseId}/results', {
+            params: { path: { testCaseId: 153 } },
+            headers: PAT,
+          }),
+      ],
+      [
+        'GET /api/v1/test-cases/{testCaseId}/steps',
+        (c) =>
+          c.GET('/api/v1/test-cases/{testCaseId}/steps', {
+            params: { path: { testCaseId: 153 } },
+            headers: PAT,
+          }),
+      ],
+      [
+        'GET /api/v1/test-runs',
+        (c) => c.GET('/api/v1/test-runs', { params: { query: { project: 'TC' } }, headers: PAT }),
+      ],
+      [
+        'GET /api/v1/test-runs/{testRunId}',
+        (c) => c.GET('/api/v1/test-runs/{testRunId}', { params: { path: { testRunId: 7 } }, headers: PAT }),
+      ],
+      [
+        'GET /api/v1/test-runs/{testRunId}/amendments',
+        (c) =>
+          c.GET('/api/v1/test-runs/{testRunId}/amendments', {
+            params: { path: { testRunId: 7 } },
+            headers: PAT,
+          }),
+      ],
+      [
+        'GET /api/v1/test-runs/{testRunId}/live',
+        (c) =>
+          c.GET('/api/v1/test-runs/{testRunId}/live', { params: { path: { testRunId: 7 } }, headers: PAT }),
+      ],
+      [
+        'GET /api/v1/test-runs/{testRunId}/parse-errors',
+        (c) =>
+          c.GET('/api/v1/test-runs/{testRunId}/parse-errors', {
+            params: { path: { testRunId: 7 } },
+            headers: PAT,
+          }),
+      ],
+      [
+        'GET /api/v1/test-runs/{testRunId}/results',
+        (c) =>
+          c.GET('/api/v1/test-runs/{testRunId}/results', {
+            params: { path: { testRunId: 7 } },
+            headers: PAT,
+          }),
+      ],
+      [
+        'GET /api/v1/test-runs/{testRunId}/summary',
+        (c) =>
+          c.GET('/api/v1/test-runs/{testRunId}/summary', {
+            params: { path: { testRunId: 7 } },
+            headers: PAT,
+          }),
+      ],
+    ] as [string, Scenario['call']][]
+  ).map(([op, call]) => ({ op, status: 403, setup: outsideToken, call })),
+]
+
 const scenarios: Scenario[] = [
+  ...tokenScenarios,
   ...auditScenarios,
   ...integrationScenarios,
   ...roleScenarios,

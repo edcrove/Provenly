@@ -111,6 +111,36 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Scheduled backups (card #63), only with the `backup` profile: `docker compose --profile backup up -d` (or
+  # `make up ENV=prod` with COMPOSE_PROFILES=backup in the env file). pg_dump -Fc into BACKUP_DIR on BACKUP_SCHEDULE
+  # (cron, UTC), keeping BACKUP_RETENTION_DAYS; healthy while the last success is recent. See docs/self-hosting.md.
+  backup:
+    image: postgres:16-alpine
+    profiles: [backup]
+    entrypoint: ["/bin/sh", "/opt/backup/entrypoint.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-provenly}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-provenly}
+      PGDATABASE: ${POSTGRES_DB:-provenly}
+      PROVENLY_ENV: ${PROVENLY_ENV:-demo}
+      BACKUP_DIR: /backups
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-17 3 * * *}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+      - ./scripts/backup:/opt/backup:ro
+    healthcheck:
+      test: ["CMD", "/bin/sh", "/opt/backup/healthy.sh"]
+      interval: 1m
+      timeout: 5s
+      start_period: 2m
+      start_interval: 2s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   pgdata:
 

@@ -42,7 +42,8 @@ Ports are bound to `127.0.0.1` (`BIND_ADDR`) because the POC has no authenticati
 | `make down ENV=<env>` | Stop; the data stays in the volume. |
 | `make ps` / `make logs ENV=<env> [SERVICE=api]` | Status and logs. |
 | `make db-dump ENV=<env>` | `pg_dump` to `backups/<env>-<timestamp>.sql` (git-ignored). |
-| `make db-restore ENV=<env> FILE=<dump>` | Replace the environment's data with a dump (prod: `CONFIRM=prod`, dumps first). |
+| `make db-restore ENV=<env> FILE=<dump>` | Replace the environment's data with a dump, a `.sql` or a scheduled `.dump` (prod: `CONFIRM=prod`, dumps first). |
+| `COMPOSE_PROFILES=backup` in the env file | Scheduled `pg_dump -Fc` backups with rotation (`BACKUP_SCHEDULE`, `BACKUP_RETENTION_DAYS`, `BACKUP_DIR`; see `docs/self-hosting.md`). |
 | `make db-reset ENV=<env>` | Delete the data and start again from the environment's seed (prod: `CONFIRM=prod`, dumps first). |
 | `make demo-reset` | Bring `demo` back to exactly the demo snapshot. |
 | `make seed-snapshot FROM=<env> NAME=<name>` | Save an environment's current data as `seeds/<name>.sql`, a new seed (from prod: `CONFIRM=prod`). |
@@ -97,6 +98,7 @@ read a build secret outside the project only with an extra entitlement, so the M
 
 The CI docker job builds the images, starts demo and qa side by side and runs `scripts/smoke.sh`,
 `scripts/readme-flow.sh`, the edge-case probe and `scripts/env-checks.sh`: image facts, isolation between
-environments, a qa snapshot used as a seed, `demo-reset`, a qa `db-dump`/`db-restore` round trip, prod refusing every
+environments, a qa snapshot used as a seed, `demo-reset`, a qa `db-dump`/`db-restore` round trip, scheduled backups (a
+failed dump rotates nothing, rotation by age, healthcheck, restoring a `.dump`), prod refusing every
 destructive target without `CONFIRM=prod`, prod starting empty and dumping before a confirmed reset, the CA build-cache
 key and hot reload. `env-checks.sh` only runs in CI (`CI=true`): it creates `envs/prod.env` and resets prod.

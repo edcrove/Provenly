@@ -147,5 +147,6 @@ describe('FE-INT-020 step editor at the limits', () => {
     await user.click(within(form).getByRole('button', { name: 'Save step' }))
     await waitFor(() => expect(screen.queryByText('Expected: shown')).not.toBeInTheDocument())
     expect(db.steps.find((st) => st.id === 1)?.expectedResult).toBe('')
-  })
+    // 100 rows of controls under coverage on a loaded CI runner take several seconds: the default 5 s is too tight.
+  }, 20_000)
 })

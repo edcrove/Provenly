@@ -364,6 +364,9 @@ Notion Decision Register; each one ships in its own PR.
   documented exception to "present but empty is a 400"), stored as not set; replays compare them the same way.
 - **Stale by execution date (card #52):** "Not executed recently" counts from the start of a test case's latest run
   (`startedAt`, the upload time when the report gave none), so a late upload of an old run does not make it look fresh.
+- **npm name (card #64):** the Playwright reporter is published unscoped as `provenly-playwright-reporter` (the
+  `@provenly` scope is not this project's), with provenance; earlier mentions of `@provenly/playwright-reporter` refer
+  to it.
 - **Find by key (card #53):** `GET /api/v1/test-cases?key=CHK-12` gives zero or one test case (MCP `search_test_cases`
   takes `key` too); the test case list has a TC-ID search box.
 - **Cheaper run reads (card #44, S):** routes on a run authorize it with its project alone (`GetRunProject`); only

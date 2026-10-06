@@ -114,4 +114,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --generate-notes --verify-tag \
-            --notes "Images: ghcr.io/${{ github.repository_owner }}/provenly-api:${GITHUB_REF_NAME} and provenly-web:${GITHUB_REF_NAME}. Self-hosting: docs/self-hosting.md."
+            --notes "Images: ghcr.io/${{ github.repository_owner }}/provenly-api:${GITHUB_REF_NAME} and provenly-web:${GITHUB_REF_NAME}. Playwright reporter: npm i -D provenly-playwright-reporter@${GITHUB_REF_NAME#v}. Self-hosting: docs/self-hosting.md."

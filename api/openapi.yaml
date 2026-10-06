@@ -2628,18 +2628,27 @@ paths:
         - name: pipeline
           in: query
           required: false
+          description: |
+            Empty is the same as absent (a documented exception to "present but empty is a 400"): CI templates expand
+            unset variables to empty, e.g. `branch=${GITHUB_HEAD_REF}` on a push build.
           schema:
             type: string
             maxLength: 200
         - name: branch
           in: query
           required: false
+          description: |
+            Empty is the same as absent (a documented exception to "present but empty is a 400"): CI templates expand
+            unset variables to empty, e.g. `branch=${GITHUB_HEAD_REF}` on a push build.
           schema:
             type: string
             maxLength: 255
         - name: commit
           in: query
           required: false
+          description: |
+            Empty is the same as absent (a documented exception to "present but empty is a 400"): CI templates expand
+            unset variables to empty, e.g. `branch=${GITHUB_HEAD_REF}` on a push build.
           schema:
             type: string
             maxLength: 64

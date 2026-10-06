@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/edcrove/provenly/backend/internal/app"
+	"github.com/edcrove/provenly/backend/internal/ingestion/junit"
 	"github.com/edcrove/provenly/backend/internal/platform/postgres"
 	"github.com/edcrove/provenly/backend/internal/platform/telemetry"
 )
@@ -1197,6 +1199,14 @@ func TestQuality(t *testing.T) {
 	admin.GET("/api/v1/projects/TC/quality").WithQuery("staleDays", 7).WithQuery("window", 5).Expect().Status(http.StatusOK).
 		JSON().Object().Value("flaky").Object().HasValue("window", 5)
 	admin.GET("/api/v1/projects/TC/quality").WithQuery("staleDays", 366).Expect().Status(http.StatusBadRequest)
+
+	// A repeated name without an attempt signal is a variant: a failure among them fails the test case, which is then
+	// not flaky in that run (the ingestion says so).
+	same := `<testcase name="login"><properties><property name="tc-id" value="` + key + `"/></properties>`
+	ingest(admin, "94", 1, `<testsuite>`+same+`<failure message="x"/></testcase>`+same+`</testcase></testsuite>`).
+		Expect().Status(http.StatusCreated).JSON().Object().Value("warnings").Array().ContainsAny(fmt.Sprintf(junit.VariantsNotice, 1))
+	admin.GET("/api/v1/projects/TC/quality").Expect().Status(http.StatusOK).JSON().Object().
+		Value("flaky").Object().Value("testCases").Array().Value(0).Object().HasValue("testCaseKey", key).HasValue("runs", 1)
 	admin.GET("/api/v1/projects/TC/quality").WithQuery("window", "x").Expect().Status(http.StatusBadRequest)
 	admin.GET("/api/v1/projects/tc/quality").Expect().Status(http.StatusBadRequest)
 	admin.GET("/api/v1/projects/NOPE/quality").Expect().Status(http.StatusNotFound)

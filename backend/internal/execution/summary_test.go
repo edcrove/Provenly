@@ -113,17 +113,21 @@ func TestOutcomeVerdict(t *testing.T) {
 }
 
 // D1: the last attempt of each test is its logical result; a pass after failed attempts is passed and flaky;
-// variants (other tests of the TC-ID) still aggregate failed > error > skipped > passed.
+// variants (other tests of the TC-ID, or repeated names that share an attempt) still aggregate
+// failed > error > skipped > passed, and a TC-ID that failed or errored is never flaky.
 func TestRetriesAndFlaky(t *testing.T) {
 	r := func(tc int64, exec string, attempt int32, st ResultStatus) ValidResult {
 		return ValidResult{TestCaseID: tc, Execution: exec, Attempt: attempt, Status: st}
 	}
-	s := ComputeSummary(1, []int64{1, 2, 3, 4, 5}, []ValidResult{
+	s := ComputeSummary(1, []int64{1, 2, 3, 4, 5, 6, 7, 8}, []ValidResult{
 		r(1, "login", 1, Failed), r(1, "login", 2, Passed), // flaky pass
 		r(2, "pay", 2, Failed), r(2, "pay", 1, Passed), // attempts out of order: attempt 2 (failed) is last
-		r(3, "chrome", 1, Error), r(3, "chrome", 2, Passed), r(3, "firefox", 1, Failed), // flaky variant, failing variant
-		r(4, "x", 1, Skipped), r(4, "x", 1, Passed), // same attempt twice: the later one wins
+		r(3, "chrome", 1, Error), r(3, "chrome", 2, Passed), r(3, "firefox", 1, Failed), // flaky variant, failing variant: failed, not flaky
+		r(4, "x", 1, Skipped), r(4, "x", 1, Passed), // same attempt twice: two variants
 		r(5, "", 1, Passed), r(5, "", 1, Failed), // no execution identity: separate variants
+		r(6, "same", 1, Failed), r(6, "same", 1, Passed), // same name without an attempt signal: failed wins, not flaky
+		r(7, "dup", 1, Failed), r(7, "dup", 2, Passed), r(7, "dup", 2, Error), // last attempt has a variant that errored
+		r(8, "both", 1, Failed), r(8, "both", 2, Passed), r(8, "both", 2, Passed), // every variant of the last attempt passed
 	}, nil)
 	got := map[int64]TestCaseOutcome{}
 	for _, c := range s.TestCases {
@@ -131,10 +135,14 @@ func TestRetriesAndFlaky(t *testing.T) {
 	}
 	assert.Equal(t, TestCaseOutcome{TestCaseID: 1, Status: "passed", ResultCount: 2, Flaky: true}, got[1])
 	assert.Equal(t, TestCaseOutcome{TestCaseID: 2, Status: "failed", ResultCount: 2}, got[2])
-	assert.Equal(t, TestCaseOutcome{TestCaseID: 3, Status: "failed", ResultCount: 3, Flaky: true}, got[3])
-	assert.Equal(t, TestCaseOutcome{TestCaseID: 4, Status: "passed", ResultCount: 2}, got[4])
+	assert.Equal(t, TestCaseOutcome{TestCaseID: 3, Status: "failed", ResultCount: 3}, got[3])
+	assert.Equal(t, TestCaseOutcome{TestCaseID: 4, Status: "skipped", ResultCount: 2}, got[4])
 	assert.Equal(t, TestCaseOutcome{TestCaseID: 5, Status: "failed", ResultCount: 2}, got[5])
+	assert.Equal(t, TestCaseOutcome{TestCaseID: 6, Status: "failed", ResultCount: 2}, got[6])
+	assert.Equal(t, TestCaseOutcome{TestCaseID: 7, Status: "error", ResultCount: 3}, got[7])
+	assert.Equal(t, TestCaseOutcome{TestCaseID: 8, Status: "passed", ResultCount: 3, Flaky: true}, got[8])
 	assert.Equal(t, int32(2), s.Flaky)
 	assert.Equal(t, int32(2), s.Outcome().Flaky)
 	assert.Equal(t, int32(2), s.Counts.Passed)
+	assert.Equal(t, int32(4), s.Counts.Failed)
 }

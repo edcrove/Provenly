@@ -124,3 +124,5 @@ targets:
     description: concurrent link replacements - twenty concurrent replacements of a requirement's, an issue's and a static suite's test cases, ten rounds each, always end as exactly one caller's set (never a union)
   - id: BE-INT-060
     description: concurrent taxonomy creations - ten concurrent dimension creations at the 30-dimension limit leave exactly 30; twenty concurrent value creations get distinct, gapless positions
+  - id: BE-INT-061
+    description: repeated names without an attempt signal are variants - the ingestion warns how many, a failed variant fails the test case in the summary, the latest conclusive status and the flaky ranking, both are listed and neither is a retry; a test that passed on a retry is not flaky when another variant of its test case failed for good

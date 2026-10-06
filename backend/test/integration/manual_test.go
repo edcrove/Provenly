@@ -102,6 +102,20 @@ func TestManualRuns(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, execution.RunCancelled, cancelled.Status)
 
+		// A test case takes at most 100 attempts: the 101st record is a conflict (not a database error) and
+		// nothing is stored.
+		capped, err := s.Manual.Start(ctx, ingestion.ManualRunInput{ProjectKey: "TC", Name: "Re-test marathon"})
+		require.NoError(t, err)
+		for range execution.MaxAttempts {
+			_, err := s.Manual.Record(ctx, capped.ID, ingestion.ManualResultInput{TestCaseID: checkout.ID, Status: execution.Failed})
+			require.NoError(t, err)
+		}
+		_, err = s.Manual.Record(ctx, capped.ID, ingestion.ManualResultInput{TestCaseID: checkout.ID, Status: execution.Passed})
+		assert.Equal(t, apperr.KindConflict, kind(t, err))
+		var stored int
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM test_results WHERE test_run_id = $1`, capped.ID).Scan(&stored))
+		assert.Equal(t, execution.MaxAttempts, stored)
+
 		// CI runs never take manual results.
 		out, err := s.Ingestion.IngestJUnit(ctx, meta("1", 1), strings.NewReader(junitFor(tcProp("ci", ci.Key(), ""))))
 		require.NoError(t, err)

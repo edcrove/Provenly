@@ -12,7 +12,7 @@ import (
 )
 
 const claimDueDeliveries = `-- name: ClaimDueDeliveries :many
-UPDATE webhook_deliveries d SET next_attempt_at = now() + interval '1 minute'
+UPDATE webhook_deliveries d SET next_attempt_at = now() + interval '5 minutes'
 WHERE d.id IN (
     SELECT x.id FROM webhook_deliveries x
     WHERE x.status = 'pending' AND x.next_attempt_at <= now()
@@ -21,8 +21,9 @@ WHERE d.id IN (
 RETURNING d.id, d.webhook_id, d.event, d.payload, d.status, d.attempts, d.next_attempt_at, d.last_status_code, d.last_error, d.created_at, d.completed_at
 `
 
-// Leases up to max_items due deliveries for a minute: concurrent workers skip each other's rows, and a worker that
-// dies leaves its rows due again once the lease ends.
+// Leases up to max_items due deliveries for 5 minutes (longer than a worker pass can take: 20 deliveries of at most
+// 10 s each): concurrent workers skip each other's rows, and a worker that dies leaves its rows due again once the
+// lease ends.
 func (q *Queries) ClaimDueDeliveries(ctx context.Context, maxItems int32) ([]WebhookDelivery, error) {
 	rows, err := q.db.Query(ctx, claimDueDeliveries, maxItems)
 	if err != nil {
@@ -115,33 +116,40 @@ func (q *Queries) DeleteGitHubConnection(ctx context.Context, projectID int64) (
 	return result.RowsAffected(), nil
 }
 
-const finishAttempt = `-- name: FinishAttempt :exec
+const finishAttempt = `-- name: FinishAttempt :execrows
 UPDATE webhook_deliveries SET
     status = $1, attempts = $2, last_status_code = $3, last_error = $4,
     next_attempt_at = $5, completed_at = CASE WHEN $1::text = 'pending' THEN NULL ELSE now() END
-WHERE id = $6
+WHERE id = $6 AND status = 'pending' AND attempts = $7::int
 `
 
 type FinishAttemptParams struct {
-	Status         string
-	Attempts       int32
-	LastStatusCode pgtype.Int4
-	LastError      string
-	NextAttemptAt  pgtype.Timestamptz
-	ID             int64
+	Status          string
+	Attempts        int32
+	LastStatusCode  pgtype.Int4
+	LastError       string
+	NextAttemptAt   pgtype.Timestamptz
+	ID              int64
+	ClaimedAttempts int32
 }
 
-// Records one delivery attempt: still pending (retry at next_attempt_at), succeeded or failed for good.
-func (q *Queries) FinishAttempt(ctx context.Context, arg FinishAttemptParams) error {
-	_, err := q.db.Exec(ctx, finishAttempt,
+// Records one delivery attempt: still pending (retry at next_attempt_at), succeeded or failed for good. Only the
+// attempt that was claimed is recorded: a late worker whose lease expired (the row was claimed and finished again)
+// changes nothing.
+func (q *Queries) FinishAttempt(ctx context.Context, arg FinishAttemptParams) (int64, error) {
+	result, err := q.db.Exec(ctx, finishAttempt,
 		arg.Status,
 		arg.Attempts,
 		arg.LastStatusCode,
 		arg.LastError,
 		arg.NextAttemptAt,
 		arg.ID,
+		arg.ClaimedAttempts,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getGitHubConnection = `-- name: GetGitHubConnection :one

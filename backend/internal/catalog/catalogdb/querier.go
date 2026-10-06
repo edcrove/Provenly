@@ -73,6 +73,9 @@ type Querier interface {
 	// dimension, so two values of one dimension match nothing.
 	ListTestCases(ctx context.Context, arg ListTestCasesParams) ([]TestCase, error)
 	ListTestSteps(ctx context.Context, arg ListTestStepsParams) ([]TestStep, error)
+	// Serializes replacements of one requirement's, issue's or static suite's test case set: concurrent replacements run
+	// one after the other, so the set always ends as one caller's list (never a union of two).
+	LockLinkParent(ctx context.Context, arg LockLinkParentParams) error
 	// Locks the test case (and its steps' order) until the transaction ends; returns its current version.
 	LockTestCase(ctx context.Context, id int64) (int64, error)
 	// Takes the next I-<n> of a project's native issues from its counter (the row lock serializes concurrent creations).

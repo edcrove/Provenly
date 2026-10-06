@@ -170,6 +170,27 @@ func TestIntegrations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, second)
 
+		// The lease outlasts a worker pass (5 minutes); once it expires another worker reclaims the row. The late
+		// worker's attempt is then dropped: it never rewrites what the reclaiming worker recorded.
+		var lease time.Time
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT next_attempt_at FROM webhook_deliveries WHERE id = $1`, first[0].ID).Scan(&lease))
+		assert.WithinDuration(t, time.Now().Add(5*time.Minute), lease, time.Minute, "leased for 5 minutes")
+		_, err = db.Pool.Exec(ctx, `UPDATE webhook_deliveries SET next_attempt_at = now() - interval '1 second' WHERE id = $1`, first[0].ID)
+		require.NoError(t, err)
+		reclaimed, err := store.ClaimDueDeliveries(ctx, 10)
+		require.NoError(t, err)
+		require.Len(t, reclaimed, 1)
+		code := int32(204)
+		require.NoError(t, store.FinishAttempt(ctx, reclaimed[0].ID, integrations.Attempt{Status: integrations.DeliverySucceeded, Attempts: 1, StatusCode: &code, NextAttemptAt: time.Now()}))
+		late := int32(500)
+		require.NoError(t, store.FinishAttempt(ctx, first[0].ID, integrations.Attempt{Status: integrations.DeliveryPending, Attempts: 1, StatusCode: &late,
+			Error: "the endpoint answered 500", NextAttemptAt: time.Now().Add(time.Minute)}))
+		var status string
+		var got int32
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT status, last_status_code FROM webhook_deliveries WHERE id = $1`, first[0].ID).Scan(&status, &got))
+		assert.Equal(t, "succeeded", status, "a late attempt never turns a succeeded delivery back to pending")
+		assert.Equal(t, int32(204), got)
+
 		// Paused webhooks get nothing new; lookups of other projects' webhooks are not found.
 		_, err = s.Integrations.UpdateWebhook(ctx, "TC", hook.ID, integrations.UpdateWebhookInput{Active: ptr(false), URL: ptr(srv.URL + "/v2"), Events: []string{integrations.EventRunCompleted}})
 		require.NoError(t, err)

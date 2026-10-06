@@ -13,7 +13,7 @@ INSERT INTO test_results (test_run_id, test_case_id, requested_test_case_id, cor
 VALUES (@test_run_id, @test_case_id, @requested_test_case_id, @correlation, @test_name, @class_name, @suite_name, @status, @duration_ms, @error_message, @error_details, @attempt);
 
 -- name: GetTestRun :one
-SELECT r.*,
+SELECT sqlc.embed(r),
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
@@ -25,7 +25,7 @@ SELECT id FROM test_runs WHERE project_id = @project_id AND external_run_id = @e
 -- name: ListTestRuns :many
 -- The page is chosen first: the per-run counts are only computed for its rows,
 -- not for every row skipped by OFFSET.
-SELECT r.*,
+SELECT sqlc.embed(r),
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
@@ -154,6 +154,9 @@ INSERT INTO test_results (test_run_id, test_case_id, requested_test_case_id, cor
 SELECT @test_run_id, @test_case_id, @requested_test_case_id, 'valid', @test_name, @class_name, '', @status, sqlc.narg('duration_ms'), @error_message, '',
     coalesce(max(x.attempt), 0) + 1, sqlc.narg('recorded_by'), sqlc.narg('failed_step')
 FROM test_results x WHERE x.test_run_id = @test_run_id AND x.class_name = @class_name AND x.test_name = @test_name
+  AND x.suite_name = ''
+-- Nothing is inserted past the last allowed attempt (the column's CHECK would fail the transaction instead).
+HAVING coalesce(max(x.attempt), 0) < @max_attempts::int
 RETURNING *;
 
 -- name: FinishTestRun :exec
@@ -162,31 +165,43 @@ UPDATE test_runs SET status = @status, completed_at = now() WHERE id = @id AND s
 -- name: ListLatestResults :many
 -- The valid results of each given test case in the latest run that has one for it (status, test and attempt), to
 -- read its latest status (requirement coverage).
+-- The latest run is found first, once per test case (index test_results_case_run_valid_idx), then only its results
+-- are read.
+WITH latest AS (
+    SELECT c.id, (SELECT x.test_run_id FROM test_results x WHERE x.test_case_id = c.id AND x.correlation = 'valid'
+                  ORDER BY x.test_run_id DESC LIMIT 1) AS run_id
+    FROM unnest(@test_case_ids::bigint[]) AS c(id)
+)
 SELECT t.test_case_id::bigint AS test_case_id, t.status, (t.suite_name || chr(31) || t.class_name || chr(31) || t.test_name)::text AS execution, t.attempt
-FROM test_results t
-WHERE t.correlation = 'valid' AND t.test_case_id = ANY(@test_case_ids::bigint[])
-  AND t.test_run_id = (SELECT max(x.test_run_id) FROM test_results x WHERE x.test_case_id = t.test_case_id AND x.correlation = 'valid')
+FROM latest l
+JOIN test_results t ON t.test_run_id = l.run_id AND t.test_case_id = l.id AND t.correlation = 'valid'
 ORDER BY t.test_case_id, t.id;
 
 -- name: ListLatestConclusive :many
 -- For each given test case, its latest run with a conclusive logical status (passed, failed or error; skipped runs are
 -- inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test,
 -- aggregated failed > error > skipped > passed, as in summaries.
-WITH last_attempts AS (
-    SELECT DISTINCT ON (t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name)
-        t.test_case_id, t.test_run_id, t.status
-    FROM test_results t
-    WHERE t.correlation = 'valid' AND t.test_case_id = ANY(@test_case_ids::bigint[])
-    ORDER BY t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name, t.attempt DESC, t.id DESC
-), per_run AS (
-    SELECT a.test_case_id, a.test_run_id,
-        CASE WHEN bool_or(a.status = 'failed') THEN 'failed' WHEN bool_or(a.status = 'error') THEN 'error'
-             WHEN bool_or(a.status = 'skipped') THEN 'skipped' ELSE 'passed' END AS status
-    FROM last_attempts a GROUP BY a.test_case_id, a.test_run_id
-)
-SELECT DISTINCT ON (p.test_case_id) p.test_case_id::bigint AS test_case_id, p.test_run_id, p.status::text AS status
-FROM per_run p WHERE p.status <> 'skipped'
-ORDER BY p.test_case_id, p.test_run_id DESC;
+-- Runs are walked newest first per test case and the walk stops at the first conclusive one (index
+-- test_results_case_run_valid_idx), instead of aggregating every run of the test case's history.
+SELECT c.id::bigint AS test_case_id, p.test_run_id, p.status::text AS status
+FROM unnest(@test_case_ids::bigint[]) AS c(id)
+CROSS JOIN LATERAL (
+    SELECT r.test_run_id, s.status
+    FROM (SELECT DISTINCT x.test_run_id FROM test_results x
+          WHERE x.test_case_id = c.id AND x.correlation = 'valid' ORDER BY x.test_run_id DESC) r
+    CROSS JOIN LATERAL (
+        SELECT CASE WHEN bool_or(a.status = 'failed') THEN 'failed' WHEN bool_or(a.status = 'error') THEN 'error'
+                    WHEN bool_or(a.status = 'skipped') THEN 'skipped' ELSE 'passed' END AS status
+        FROM (SELECT DISTINCT ON (t.suite_name, t.class_name, t.test_name) t.status
+              FROM test_results t
+              WHERE t.test_run_id = r.test_run_id AND t.test_case_id = c.id AND t.correlation = 'valid'
+              ORDER BY t.suite_name, t.class_name, t.test_name, t.attempt DESC, t.id DESC) a
+    ) s
+    WHERE s.status <> 'skipped'
+    ORDER BY r.test_run_id DESC
+    LIMIT 1
+) p
+ORDER BY c.id;
 
 -- name: ListLastExecuted :many
 -- When each given test case last had a valid result (the creation time of its latest run with one).

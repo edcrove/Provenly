@@ -1,16 +1,15 @@
-import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 
 import type { Requirement } from '@/api/client'
-import { useRequirement, useRequirementMutations, useTestCases } from '@/api/queries'
+import { useRequirement, useRequirementMutations } from '@/api/queries'
 import { NotFoundPage } from '@/app/NotFoundPage'
 import { PageTitle } from '@/components/PageTitle'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
+import { TestCasePicker } from '@/components/TestCasePicker'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useProjectRole } from '@/features/projects/useProjectRole'
 import { formatDateTime } from '@/lib/format'
@@ -20,10 +19,6 @@ import { positiveInt } from '@/lib/status'
 
 function Coverage({ req, projectKey, edit }: { req: Requirement; projectKey: string; edit: boolean }) {
   const m = useRequirementMutations(projectKey)
-  const cases = useTestCases(1, { project: projectKey, pageSize: 100 })
-  const [picked, setPicked] = useState('')
-  const keyOf = (id: number) => cases.data?.items.find((tc) => tc.id === id)?.key ?? `#${id}`
-  const candidates = (cases.data?.items ?? []).filter((tc) => !req.testCaseIds.includes(tc.id))
   return (
     <div className="grid gap-3">
       <Table>
@@ -46,7 +41,7 @@ function Coverage({ req, projectKey, edit }: { req: Requirement; projectKey: str
             <TableRow key={c.testCaseId} data-testid={`covering-${c.testCaseId}`}>
               <TableCell className="font-mono">
                 <Link to={`/test-cases/${c.testCaseId}`} className="underline">
-                  {keyOf(c.testCaseId)}
+                  {c.testCaseKey ?? `#${c.testCaseId}`}
                 </Link>
               </TableCell>
               <TableCell>
@@ -78,32 +73,19 @@ function Coverage({ req, projectKey, edit }: { req: Requirement; projectKey: str
         </TableBody>
       </Table>
       {edit ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <NativeSelect
-            aria-label="Test case to link"
-            value={picked}
-            onChange={(e) => setPicked(e.target.value)}
-          >
-            <option value="">Choose a test case…</option>
-            {candidates.map((tc) => (
-              <option key={tc.id} value={tc.id}>
-                {tc.key} · {tc.title}
-              </option>
-            ))}
-          </NativeSelect>
-          <Button
-            size="sm"
-            disabled={!picked || m.link.isPending}
-            onClick={() =>
-              m.link.mutate(
-                { requirementId: req.id, testCaseIds: [...req.testCaseIds, Number(picked)] },
-                { onSuccess: () => setPicked('') },
-              )
-            }
-          >
-            Link test case
-          </Button>
-        </div>
+        <TestCasePicker
+          projectKey={projectKey}
+          label="Test case to link"
+          action="Link test case"
+          exclude={req.testCaseIds}
+          pending={m.link.isPending}
+          onPick={(id, done) =>
+            m.link.mutate(
+              { requirementId: req.id, testCaseIds: [...req.testCaseIds, id] },
+              { onSuccess: done },
+            )
+          }
+        />
       ) : null}
       {m.link.error ? <ErrorAlert error={m.link.error} title="Could not change the coverage" /> : null}
     </div>

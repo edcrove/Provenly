@@ -1692,7 +1692,8 @@ export interface components {
             /** Format: date-time */
             archivedAt: string | null;
         };
-        DimensionList: {
+        /** @description A page of the project's dimensions (DEC-78; the list used to be unpaginated). */
+        DimensionList: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["Dimension"][];
         };
         CreateDimensionRequest: {
@@ -1896,7 +1897,8 @@ export interface components {
             /** @description The test cases a static suite lists (when reading one suite). */
             testCaseIds?: number[];
         };
-        SuiteList: {
+        /** @description A page of the project's suites (DEC-78; the list used to be unpaginated). */
+        SuiteList: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["Suite"][];
         };
         CreateSuiteRequest: {
@@ -2000,12 +2002,26 @@ export interface components {
             testCases: {
                 /** Format: int64 */
                 testCaseId: number;
+                /** @description Its key (CHK-4), so a list never shows a bare id (DEC-78). */
+                testCaseKey: string | null;
                 /** @enum {string|null} */
                 status: "passed" | "failed" | "error" | "skipped" | null;
             }[];
         };
-        RequirementList: {
+        /** @description A page of the project's requirements (DEC-78; the list used to be unpaginated). */
+        RequirementList: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["Requirement"][];
+            /**
+             * @description How many active requirements that match the filters (all pages, not only this one) have each coverage status.
+             * @example {
+             *       "passing": 12,
+             *       "failing": 2,
+             *       "not_run": 3
+             *     }
+             */
+            coverageCounts: {
+                [key: string]: number;
+            };
         };
         CreateRequirementRequest: {
             provider?: components["schemas"]["RequirementProvider"];
@@ -2079,6 +2095,8 @@ export interface components {
             testCases: {
                 /** Format: int64 */
                 testCaseId: number;
+                /** @description Its key (CHK-4), so a list never shows a bare id (DEC-78). */
+                testCaseKey: string | null;
                 /** @enum {string} */
                 status: "unverified" | "known_issue" | "reopen" | "not_reproducible" | "validated_fixed";
                 /**
@@ -2095,8 +2113,19 @@ export interface components {
                 latestInconclusive: boolean;
             }[];
         };
-        IssueList: {
+        /** @description A page of the project's issues (DEC-78; the list used to be unpaginated). */
+        IssueList: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["Issue"][];
+            /**
+             * @description How many issues that match the filters (all pages, not only this one) have each verification status.
+             * @example {
+             *       "known_issue": 2,
+             *       "validated_fixed": 5
+             *     }
+             */
+            verificationCounts: {
+                [key: string]: number;
+            };
         };
         CreateIssueRequest: {
             provider?: components["schemas"]["RequirementProvider"];
@@ -2243,7 +2272,8 @@ export interface components {
             /** @description The latest delivery; absent before the first one. */
             lastDelivery?: components["schemas"]["WebhookDelivery"];
         };
-        WebhookList: {
+        /** @description A page of the project's webhooks (DEC-78; the list used to be unpaginated). */
+        WebhookList: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["Webhook"][];
         };
         CreateWebhookRequest: {
@@ -3515,7 +3545,10 @@ export interface operations {
     };
     listDimensions: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
+            };
             header?: never;
             path: {
                 /** @example CHK */
@@ -3684,7 +3717,10 @@ export interface operations {
     };
     listSuites: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
+            };
             header?: never;
             path: {
                 /** @example CHK */
@@ -3845,6 +3881,8 @@ export interface operations {
     listRequirements: {
         parameters: {
             query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
                 /** @description Only the requirements this test case covers. */
                 testCase?: number;
             };
@@ -4139,7 +4177,10 @@ export interface operations {
     };
     listWebhooks: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
+            };
             header?: never;
             path: {
                 /** @example CHK */
@@ -4413,6 +4454,8 @@ export interface operations {
     listIssues: {
         parameters: {
             query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
                 /** @description Only the issues linked to this test case. */
                 testCase?: number;
                 /** @description Only open or only closed issues. */
@@ -4625,6 +4668,8 @@ export interface operations {
                 classification?: string;
                 /** @description Only the test cases of this suite of `project` (needs `project`; not combined with tag or classification). */
                 suite?: string;
+                /** @description Text the title contains (any case), or a key or number (CHK-12, chk-12 or 12): what a test case picker searches with (DEC-78). At most 200 characters. */
+                q?: string;
                 /**
                  * @description The test case with this exact key (`<PROJECT>-<number>`, e.g. `CHK-12`): a page of zero or one item, for
                  *     callers that know the key but not the numeric id (MCP agents, scripts). Combinable with the other filters

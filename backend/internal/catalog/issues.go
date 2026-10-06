@@ -53,6 +53,8 @@ type Verification struct {
 type IssueView struct {
 	Issue
 	Verification Verification
+	// Keys names each linked test case (CHK-4), so lists never show a bare id (DEC-78).
+	Keys map[int64]string
 }
 
 func issueNotFound(id int64) error { return apperr.NotFound("issue %d not found", id) }
@@ -108,9 +110,13 @@ func (s *Service) withVerification(ctx context.Context, issues []Issue) ([]Issue
 			return nil, err
 		}
 	}
+	keys, err := s.Keys(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]IssueView, len(issues))
 	for i, is := range issues {
-		out[i] = IssueView{Issue: is, Verification: verify(is.State, is.TestCaseIDs, conclusive, runs, latest)}
+		out[i] = IssueView{Issue: is, Verification: verify(is.State, is.TestCaseIDs, conclusive, runs, latest), Keys: keys}
 	}
 	return out, nil
 }

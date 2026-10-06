@@ -69,7 +69,7 @@ func TestTaxonomyHandlers(t *testing.T) {
 		assert.Equal(t, c.want, lastDimensionCall, "%s %s", c.method, c.target)
 	}
 	rec := serve(&stubAPI{}, "GET", "/api/v1/projects/TC/dimensions", "")
-	assert.Contains(t, rec.Body.String(), `{"items":[{"key":"risk"`)
+	assert.Contains(t, rec.Body.String(), `"items":[{"key":"risk"`)
 
 	// Errors of the service, malformed keys and bodies.
 	failing := &stubAPI{err: apperr.NotFound("missing")}
@@ -78,6 +78,7 @@ func TestTaxonomyHandlers(t *testing.T) {
 	}
 	bad := []struct{ method, target, body, field string }{
 		{"GET", "/api/v1/projects/tc/dimensions", "", "projectKey"},
+		{"GET", "/api/v1/projects/TC/dimensions?pageSize=0", "", "pageSize"},
 		{"POST", "/api/v1/projects/TC/dimensions", `nope`, "body"},
 		{"PATCH", "/api/v1/projects/TC/dimensions/Risk", `{"name":"x"}`, "dimensionKey"},
 		{"PATCH", "/api/v1/projects/TC/dimensions/risk", `nope`, "body"},

@@ -49,7 +49,7 @@ test.describe('Suites and partial runs (MVP D2)', () => {
     await page.getByRole('button', { name: 'Create suite' }).click()
     await page.getByRole('link', { name: 'Release candidate' }).click()
     await expect(page.getByText('This suite lists no test cases yet.')).toBeVisible()
-    await page.getByLabel('Test case to add').selectOption({ label: `${login.key} · Sign in works` })
+    await page.getByLabel('Test case to add', { exact: true }).selectOption({ label: `${login.key} · Sign in works` })
     await page.getByRole('button', { name: 'Add to suite' }).click()
     await expect(page.getByTestId(`suite-case-${login.key}`)).toBeVisible()
     await expect(page.getByTestId('suite-ci-hint')).toContainText(`&project=${key}&suite=release`)

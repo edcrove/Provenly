@@ -321,30 +321,77 @@ export interface TestCaseFilter {
   suite?: string
   /** The test case with this key (`CHK-12`): zero or one item. */
   key?: string
+  /** Text the title contains, or a key or number: a picker's server-side search (DEC-78). */
+  q?: string
   pageSize?: number
 }
 
 export function useTestCases(page: number, filter: TestCaseFilter = {}) {
-  const { status, project, tag, classification, suite, key: tcKey, pageSize } = filter
-  const key = [...keys.testCases, 'list', project, status, tag, classification, suite, tcKey, pageSize, page]
+  const { status, project, tag, classification, suite, key: tcKey, q, pageSize } = filter
+  const key = [
+    ...keys.testCases,
+    'list',
+    project,
+    status,
+    tag,
+    classification,
+    suite,
+    tcKey,
+    q,
+    pageSize,
+    page,
+  ]
   return useQuery({
     queryKey: key,
     placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/test-cases', {
-          params: { query: { page, pageSize, status, project, tag, classification, suite, key: tcKey } },
+          params: { query: { page, pageSize, status, project, tag, classification, suite, key: tcKey, q } },
         }),
       ),
   })
 }
 
+/**
+ * Reads every page of a project list, 100 at a time, for the screens that need it whole (a select's options, a
+ * cross-check of a run's failures): the lists are paginated (DEC-78) and a first page would silently miss the rest.
+ */
+async function allPages<T>(read: (page: number) => Promise<{ items: T[]; totalPages: number }>) {
+  const first = await read(1)
+  const items = [...first.items]
+  for (let page = 2; page <= first.totalPages; page++) items.push(...(await read(page)).items)
+  return { items }
+}
+
+/** Every suite of a project (for selects); `useSuitesPage` reads one page. */
 export function useSuites(projectKey: string) {
   return useQuery({
-    queryKey: [...keys.projects, projectKey, 'suites'],
+    queryKey: [...keys.projects, projectKey, 'suites', 'all'],
     enabled: projectKey !== '',
+    queryFn: () =>
+      allPages(async (page) =>
+        unwrap(
+          await api.GET('/api/v1/projects/{projectKey}/suites', {
+            params: { path: { projectKey }, query: { page, pageSize: 100 } },
+          }),
+        ),
+      ),
+  })
+}
+
+export function useSuitesPage(projectKey: string, page: number) {
+  const key = [...keys.projects, projectKey, 'suites', 'page', page]
+  return useQuery({
+    queryKey: key,
+    enabled: projectKey !== '',
+    placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
-      unwrap(await api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } })),
+      unwrap(
+        await api.GET('/api/v1/projects/{projectKey}/suites', {
+          params: { path: { projectKey }, query: { page } },
+        }),
+      ),
   })
 }
 
@@ -397,14 +444,33 @@ export function useSuiteMutations(projectKey: string) {
   }
 }
 
+/** Every requirement of a project (or that a test case covers); `useRequirementsPage` reads one page. */
 export function useRequirements(projectKey: string, testCase?: number) {
   return useQuery({
-    queryKey: [...keys.projects, projectKey, 'requirements', testCase],
+    queryKey: [...keys.projects, projectKey, 'requirements', 'all', testCase],
     enabled: projectKey !== '',
+    queryFn: () =>
+      allPages(async (page) =>
+        unwrap(
+          await api.GET('/api/v1/projects/{projectKey}/requirements', {
+            params: { path: { projectKey }, query: { testCase, page, pageSize: 100 } },
+          }),
+        ),
+      ),
+  })
+}
+
+/** A page of requirements, with the coverage counts of all of them. */
+export function useRequirementsPage(projectKey: string, page: number, pageSize?: number) {
+  const key = [...keys.projects, projectKey, 'requirements', 'page', pageSize, page]
+  return useQuery({
+    queryKey: key,
+    enabled: projectKey !== '',
+    placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/projects/{projectKey}/requirements', {
-          params: { path: { projectKey }, query: { testCase } },
+          params: { path: { projectKey }, query: { page, pageSize } },
         }),
       ),
   })
@@ -460,14 +526,35 @@ export function useRequirementMutations(projectKey: string) {
   }
 }
 
-export function useIssues(projectKey: string, filter: { testCase?: number; state?: 'open' | 'closed' } = {}) {
+type IssueFilter = { testCase?: number; state?: 'open' | 'closed' }
+
+/** Every issue of a project that matches; `useIssuesPage` reads one page. */
+export function useIssues(projectKey: string, filter: IssueFilter = {}) {
   return useQuery({
-    queryKey: [...keys.projects, projectKey, 'issues', filter.testCase, filter.state],
+    queryKey: [...keys.projects, projectKey, 'issues', 'all', filter.testCase, filter.state],
     enabled: projectKey !== '',
+    queryFn: () =>
+      allPages(async (page) =>
+        unwrap(
+          await api.GET('/api/v1/projects/{projectKey}/issues', {
+            params: { path: { projectKey }, query: { ...filter, page, pageSize: 100 } },
+          }),
+        ),
+      ),
+  })
+}
+
+/** A page of issues, with the verification counts of all that match. */
+export function useIssuesPage(projectKey: string, filter: IssueFilter, page: number, pageSize?: number) {
+  const key = [...keys.projects, projectKey, 'issues', 'page', filter.testCase, filter.state, pageSize, page]
+  return useQuery({
+    queryKey: key,
+    enabled: projectKey !== '',
+    placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/projects/{projectKey}/issues', {
-          params: { path: { projectKey }, query: filter },
+          params: { path: { projectKey }, query: { ...filter, page, pageSize } },
         }),
       ),
   })
@@ -539,12 +626,19 @@ export function useQuality(projectKey: string, staleDays: number, window: number
   })
 }
 
+/** Every dimension of a project (with its values). */
 export function useDimensions(projectKey: string, enabled = true) {
   return useQuery({
     queryKey: [...keys.projects, projectKey, 'dimensions'],
     enabled: enabled && projectKey !== '',
-    queryFn: async () =>
-      unwrap(await api.GET('/api/v1/projects/{projectKey}/dimensions', { params: { path: { projectKey } } })),
+    queryFn: () =>
+      allPages(async (page) =>
+        unwrap(
+          await api.GET('/api/v1/projects/{projectKey}/dimensions', {
+            params: { path: { projectKey }, query: { page, pageSize: 100 } },
+          }),
+        ),
+      ),
   })
 }
 
@@ -895,11 +989,17 @@ export function useTestRunParseErrors(id: number, page: number) {
 
 const webhooksKey = (projectKey: string) => [...keys.projects, projectKey, 'webhooks'] as const
 
-export function useWebhooks(projectKey: string) {
+export function useWebhooks(projectKey: string, page = 1) {
+  const key = [...webhooksKey(projectKey), 'page', page]
   return useQuery({
-    queryKey: webhooksKey(projectKey),
+    queryKey: key,
+    placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
-      unwrap(await api.GET('/api/v1/projects/{projectKey}/webhooks', { params: { path: { projectKey } } })),
+      unwrap(
+        await api.GET('/api/v1/projects/{projectKey}/webhooks', {
+          params: { path: { projectKey }, query: { page } },
+        }),
+      ),
   })
 }
 

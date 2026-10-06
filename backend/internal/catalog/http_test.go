@@ -233,6 +233,7 @@ func TestHandlerErrors(t *testing.T) {
 
 	badRequests := []struct{ method, target, body string }{
 		{"GET", "/api/v1/test-cases?page=0", ""},
+		{"GET", "/api/v1/test-cases?q=%20", ""},
 		{"GET", "/api/v1/test-cases?status=gone", ""},
 		{"POST", "/api/v1/test-cases", `{"id":5,"title":"a"}`},
 		{"GET", "/api/v1/test-cases/abc", ""},

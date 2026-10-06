@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 
-import { useRequirementMutations, useRequirements } from '@/api/queries'
+import { useRequirementMutations, useRequirementsPage } from '@/api/queries'
 import { PageTitle } from '@/components/PageTitle'
+import { Pagination } from '@/components/Pagination'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,7 @@ import { useCurrentProject } from '@/features/projects/currentProject'
 import { useProjectRole } from '@/features/projects/useProjectRole'
 import { coverageLabel, coverageVariant, requirementRef } from '@/lib/requirements'
 import { can } from '@/lib/roles'
+import { usePage } from '@/lib/usePage'
 
 type Provider = 'provenly' | 'jira' | 'github' | 'azure_devops'
 
@@ -97,7 +99,8 @@ function NewRequirement({ projectKey }: { projectKey: string }) {
 /** The current project's requirements and how well their test cases cover them. */
 export function RequirementsPage() {
   const { project } = useCurrentProject()
-  const requirements = useRequirements(project)
+  const [page, setPage] = usePage(project)
+  const requirements = useRequirementsPage(project, page)
   const edit = can(useProjectRole(project), 'member')
   return (
     <Card>
@@ -121,50 +124,58 @@ export function RequirementsPage() {
           <>
             <QueryState query={requirements}>
               {(data) => (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Requirement</TableHead>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Coverage</TableHead>
-                      <TableHead>Test cases</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.items.length === 0 && (
+                <>
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={4} className="text-muted-foreground">
-                          No requirements in {project} yet.
-                        </TableCell>
+                        <TableHead>Requirement</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Coverage</TableHead>
+                        <TableHead>Test cases</TableHead>
                       </TableRow>
-                    )}
-                    {data.items.map((r) => (
-                      <TableRow key={r.id} data-testid={`requirement-${r.externalId}`}>
-                        <TableCell className="font-mono whitespace-nowrap">
-                          <Link to={`/requirements/${project}/${r.id}`} className="underline">
-                            {requirementRef(r)}
-                          </Link>
-                        </TableCell>
-                        <TableCell>
-                          {r.title}
-                          {r.archivedAt ? (
-                            <Badge variant="outline" className="ml-2">
-                              archived
+                    </TableHeader>
+                    <TableBody>
+                      {data.items.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-muted-foreground">
+                            No requirements in {project} yet.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {data.items.map((r) => (
+                        <TableRow key={r.id} data-testid={`requirement-${r.externalId}`}>
+                          <TableCell className="font-mono whitespace-nowrap">
+                            <Link to={`/requirements/${project}/${r.id}`} className="underline">
+                              {requirementRef(r)}
+                            </Link>
+                          </TableCell>
+                          <TableCell>
+                            {r.title}
+                            {r.archivedAt ? (
+                              <Badge variant="outline" className="ml-2">
+                                archived
+                              </Badge>
+                            ) : null}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={coverageVariant(r.coverage.status)}>
+                              {coverageLabel(r.coverage.status)}
                             </Badge>
-                          ) : null}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={coverageVariant(r.coverage.status)}>
-                            {coverageLabel(r.coverage.status)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="tabular-nums">
-                          {r.coverage.passed}/{r.coverage.linked} passing
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {r.coverage.passed}/{r.coverage.linked} passing
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <Pagination
+                    page={data.page}
+                    totalPages={data.totalPages}
+                    totalItems={data.totalItems}
+                    onPageChange={setPage}
+                  />
+                </>
               )}
             </QueryState>
             {edit ? <NewRequirement projectKey={project} /> : null}

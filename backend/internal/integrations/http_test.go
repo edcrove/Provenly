@@ -80,6 +80,7 @@ func TestWebhookRoutes(t *testing.T) {
 		{call{"GET", "/api/v1/projects/NOPE/webhooks", ""}, 404},
 		{call{"POST", "/api/v1/projects/SHOP/webhooks", ""}, 415},
 		{call{"POST", "/api/v1/projects/SHOP/webhooks", `{"url":"http://x","events":[]}`}, 400},
+		{call{"GET", "/api/v1/projects/SHOP/webhooks?page=0", ""}, 400},
 		{call{"PATCH", "/api/v1/projects/SHOP/webhooks/x", `{"active":true}`}, 400},
 		{call{"PATCH", "/api/v1/projects/SHOP/webhooks/1", ""}, 415},
 		{call{"PATCH", "/api/v1/projects/SHOP/webhooks/9", `{"active":true}`}, 404},

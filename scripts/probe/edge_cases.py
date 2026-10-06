@@ -107,8 +107,20 @@ def main():
     q = f"provider=github&runId=probe{int(time.time())}x{{}}&runAttempt=1"  # unique per sweep: re-runs are not replays
     run_id = call(base, "POST", "/ingestion/junit?" + q.format(1), raw=xml, ctype="application/xml")[1]["testRun"]["id"]
 
+    # ?q= (DEC-78): pickers search by key (any case) or title; blank, over 200 characters or not text is a 400.
+    st, body = call(base, "GET", "/test-cases?q=" + a_key.lower())
+    check("search by key in lower case", [st, a_key in [t["key"] for t in (body or {}).get("items", [])]], [200, True])
+    check("search by title", call(base, "GET", "/test-cases?q=PROBE-A")[0], 200)
+    check("search with LIKE wildcards", call(base, "GET", "/test-cases?q=%25_")[0], 200)
+    for bad in ["", "%20", "x" * 201, "%00", "%FF"]:
+        check(f"search q={bad[:12]!r}", call(base, "GET", "/test-cases?q=" + bad)[0], 400)
+
+    project = a_key.split("-")[0]
     lists = ["/projects", "/test-cases", "/test-runs", f"/test-cases/{a}/steps", f"/test-cases/{a}/results",
-             f"/test-runs/{run_id}/results", f"/test-runs/{run_id}/parse-errors"]
+             f"/test-runs/{run_id}/results", f"/test-runs/{run_id}/parse-errors",
+             # DEC-78: the project's catalog lists are paged too.
+             f"/projects/{project}/suites", f"/projects/{project}/requirements", f"/projects/{project}/issues",
+             f"/projects/{project}/dimensions", f"/projects/{project}/webhooks"]
     for path in lists:
         for qs, exp in [("page=21474838&pageSize=100", 400), ("page=0", 400), ("page=", 400), ("pageSize=101", 400),
                         ("page=1.5", 400), ("page=abc", 400), ("page=999", 200), ("page=2&page=x", 200),

@@ -7,6 +7,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
+	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
 // SuiteQueryDTO is the wire form of SuiteQuery.
@@ -47,10 +48,6 @@ func suiteDTO(su Suite, withCases bool) SuiteDTO {
 	return dto
 }
 
-type suiteList struct {
-	Items []SuiteDTO `json:"items"`
-}
-
 type createSuiteRequest struct {
 	Key         string         `json:"key"`
 	Name        string         `json:"name"`
@@ -79,6 +76,11 @@ func toQuery(q *SuiteQueryDTO) *SuiteQuery {
 }
 
 func (h *Handler) listSuites(w http.ResponseWriter, r *http.Request) {
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
 	p, _, ok := h.project(w, r, authz.RoleViewer)
 	if !ok {
 		return
@@ -88,11 +90,7 @@ func (h *Handler) listSuites(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	out := suiteList{Items: make([]SuiteDTO, len(suites))}
-	for i, su := range suites {
-		out.Items[i] = suiteDTO(su, false)
-	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(pagination.Slice(suites, page), func(su Suite) SuiteDTO { return suiteDTO(su, false) }))
 }
 
 func (h *Handler) createSuite(w http.ResponseWriter, r *http.Request) {

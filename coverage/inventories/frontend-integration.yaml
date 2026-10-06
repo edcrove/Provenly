@@ -180,3 +180,6 @@ targets:
   - id: FE-INT-055
     description: sign-in events in the audit log (card #49) - a failed sign-in by an unknown username reads "unknown" with the client address (the user agent on hover) and what happened in words
     surfaces: [src/features/audit/AuditPage.tsx]
+  - id: FE-INT-056
+    description: long lists (DEC-78) - the dashboard's coverage and verification counts come from the server over every page (45 requirements, the archived one left out; 30 issues); requirements, issues, suites and webhooks are listed by page; the test case pickers search the server by key or title, say "Showing 50 of N, type to search.", say when nothing matches, link what was found and show keys, never ids
+    surfaces: [src/components/TestCasePicker.tsx, src/features/dashboard/DashboardPage.tsx, src/features/requirements/RequirementsPage.tsx, src/features/requirements/RequirementDetailPage.tsx, src/features/issues/IssuesPage.tsx, src/features/issues/IssueDetailPage.tsx, src/features/suites/SuitesPage.tsx, src/features/suites/SuiteDetailPage.tsx, src/features/projects/WebhooksSection.tsx, src/lib/usePage.ts, src/api/queries.ts]

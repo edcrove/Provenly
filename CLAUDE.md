@@ -72,7 +72,12 @@ scripts/gallery/build.py --out DIR     # click-through gallery of docs/screensho
 
 Project skills (`.claude/skills/`): `implement-card`, `validate-card`, `record-decision`, `steward`,
 `project-status` (live status, never from memory), `ui-gallery`, `edge-case-probe`, `notion-safe-edit`,
-`parity-analysis`, `close-milestone`, `env-doctor`.
+`parity-analysis`, `close-milestone`, `env-doctor`, `review-panel`.
+
+Review agents (`.claude/agents/`, read-only, run through `review-panel`): technical experts `reviewer-api-contract`,
+`reviewer-database`, `reviewer-security`, `reviewer-tests`, `reviewer-frontend`, `reviewer-domain`; whole-project
+reviewers `architect` (codebase) and `product-owner` (vision fit, drift, future ideas for the Incubator); user personas
+`persona-qa-lead`, `persona-developer`, `persona-manual-tester`, `persona-devops`, `persona-engineering-manager`.
 
 Environment gotchas (web sessions; `.claude/hooks/session-start.sh` prepares most of this):
 

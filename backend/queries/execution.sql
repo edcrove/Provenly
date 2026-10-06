@@ -216,8 +216,9 @@ CROSS JOIN LATERAL (
 ORDER BY c.id;
 
 -- name: ListLastExecuted :many
--- When each given test case last had a valid result (the creation time of its latest run with one).
-SELECT t.test_case_id::bigint AS test_case_id, max(r.created_at)::timestamptz AS last_executed_at
+-- When each given test case last ran: the latest execution start of its runs with a valid result for it (the report's
+-- start; its upload time when the report gave none), so a late upload of an old run does not make it look fresh.
+SELECT t.test_case_id::bigint AS test_case_id, max(coalesce(r.started_at, r.created_at))::timestamptz AS last_executed_at
 FROM test_results t JOIN test_runs r ON r.id = t.test_run_id
 WHERE t.correlation = 'valid' AND t.test_case_id = ANY(@test_case_ids::bigint[])
 GROUP BY t.test_case_id;

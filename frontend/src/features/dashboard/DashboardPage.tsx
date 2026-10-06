@@ -234,7 +234,8 @@ function ProjectDashboard({ project }: { project: string }) {
             <Card>
               <CardHeader>
                 <CardTitle as="h2">Not executed recently</CardTitle>
-                <CardDescription className="flex items-center gap-2">
+                <CardDescription className="flex flex-wrap items-center gap-2">
+                  <span>By execution start date.</span>
                   <Label htmlFor="stale-days">Older than</Label>
                   <NativeSelect
                     id="stale-days"

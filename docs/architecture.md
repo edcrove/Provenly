@@ -48,7 +48,10 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
   stored; the link is shown once. Accepting locks the invitation row, so one link creates one account.
 - Sessions are HS256 JWTs (12 h) signed with `PROVENLY_JWT_SECRET` (required in prod, ≥ 32 bytes; random per start
   elsewhere), sent as `Authorization: Bearer` or the HttpOnly, SameSite=Strict `provenly_session` cookie (Secure behind
-  TLS). Every request re-reads the user; a password change invalidates older sessions (password-version claim).
+  TLS: the web container passes the TLS proxy's `X-Forwarded-Proto` through). Every request re-reads the user; a
+  password change invalidates older sessions (password-version claim). The web container adds a strict
+  Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff` and `Referrer-Policy: no-referrer`
+  (`frontend/security-headers.conf`).
 - `identity.Protect` wraps the routes of the other modules: every API route needs a session except health, readiness,
   sign-in, sign-out and accepting an invitation. Without a session the answer is `401 unauthorized`;
   administrator-only operations answer `403 forbidden`.

@@ -143,16 +143,12 @@ func (s *Service) Bootstrap(ctx context.Context, username, password string) erro
 // Login checks a username and password and issues a session.
 func (s *Service) Login(ctx context.Context, username, password string) (Session, error) {
 	username = normalizeUsername(username)
-	if err := s.throttle.check(username, s.now()); err != nil {
+	settle, err := s.throttle.attempt(username, s.now())
+	if err != nil {
 		return Session{}, err
 	}
 	session, err := s.login(ctx, username, password)
-	switch {
-	case err == nil:
-		s.throttle.succeed(username)
-	case errors.Is(err, errBadCredentials):
-		s.throttle.fail(username, s.now())
-	}
+	settle(err == nil, errors.Is(err, errBadCredentials))
 	return session, err
 }
 
@@ -358,16 +354,17 @@ func (s *Service) AcceptInvitation(ctx context.Context, in AcceptInput) (Session
 	if err := v.Err(); err != nil {
 		return Session{}, err
 	}
-	hash, err := s.hash(in.Password)
-	if err != nil {
-		return Session{}, err
-	}
 	var user User
-	err = s.repo.InTx(ctx, func(r Repository) error {
+	err := s.repo.InTx(ctx, func(r Repository) error {
 		inv, err := r.LockInvitationByToken(ctx, TokenDigest(in.Token))
 		if errors.Is(err, ErrNotFound) || (err == nil && inv.Status(s.now()) != InvitationPending) {
 			return apperr.NotFound("invitation not found, expired, revoked or already used")
 		}
+		if err != nil {
+			return err
+		}
+		// The password is hashed only for a valid invitation: a flood of made-up tokens costs no bcrypt work.
+		hash, err := s.hash(in.Password)
 		if err != nil {
 			return err
 		}

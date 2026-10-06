@@ -351,6 +351,30 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
 
+### 24. Review-panel audit (2026-10-06): fixes
+
+The full panel (`review-panel`: 6 technical experts, architect, product owner, 6 coverage audits, 6 personas) ran on
+the whole product. Confirmed defects are fixed in small PRs, each with tests that fail without the fix; product
+questions went to Ed.
+
+**Security**
+- The sign-in throttle reserves each attempt before the password check (parallel guesses no longer all pass) and,
+  when its map is full, drops the names with the fewest failures instead of starting over (a flood of made-up names
+  no longer unlocks a locked one). Infrastructure errors do not count as failures.
+- The session cookie is `Secure` behind the documented TLS proxy: nginx passes `X-Forwarded-Proto` through instead
+  of replacing it with its own `http`. The web container sends CSP, frame, `nosniff` and referrer headers.
+- `PROVENLY_ENV` accepts only known names (an unknown one silently got development defaults: random keys, SSRF guard
+  off, demo password accepted); prod blocking private targets by default is now tested.
+- The SSRF guard also refuses "this network", CGNAT (Alibaba metadata), benchmarking, documentation, reserved and
+  broadcast ranges, Azure WireServer, Teredo, and IPv4-mapped / NAT64 / 6to4 forms of blocked addresses.
+- GitHub connector: repository segments `.`/`..` are refused (service and database, migration 00030), and pointing
+  the stored token at another repository needs the token again.
+- Members and API-key routes answer an invisible project exactly like an unknown one (no internal id).
+- Accepting an invitation hashes the password only after the token is found (made-up tokens cost no bcrypt).
+- Invitation links carry the token in the URL fragment (never sent to a server or logged); older `?token=` links
+  still work.
+- The HTTP server cuts off clients that trickle a request (read and idle timeouts).
+
 ### 23. Review agents (technical experts and user personas)
 
 - **What**: fourteen read-only subagents in `.claude/agents/` — technical experts (`reviewer-api-contract`,

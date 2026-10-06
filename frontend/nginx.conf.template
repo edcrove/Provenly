@@ -1,4 +1,12 @@
 # Rendered by the nginx image (envsubst) at start: only ${API_UPSTREAM} is replaced.
+
+# The scheme the browser used: a TLS proxy in front of this container (docs/self-hosting.md) says so in
+# X-Forwarded-Proto; without one it is this server's own scheme. The API marks the session cookie Secure on https.
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ""      $scheme;
+}
+
 server {
     listen 80;
     root /usr/share/nginx/html;
@@ -20,7 +28,8 @@ server {
         proxy_pass $api_upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        include /etc/nginx/security-headers.conf;
     }
 
     location ~ ^/(healthz|readyz)$ {
@@ -29,12 +38,14 @@ server {
 
     location /assets/ {
         add_header Cache-Control "public, max-age=31536000, immutable";
+        include /etc/nginx/security-headers.conf;
         try_files $uri =404;
     }
 
     # Single-page app: every other route is rendered by the client router.
     location / {
         add_header Cache-Control "no-cache";
+        include /etc/nginx/security-headers.conf;
         try_files $uri /index.html;
     }
 }

@@ -78,6 +78,12 @@ ok "prod refuses without CONFIRM=prod"
 # prod starts empty on its own ports; a confirmed reset dumps it first.
 make --no-print-directory up ENV=prod >/dev/null 2>&1
 prod_api http://localhost:8280 http://localhost:8280/api/v1/test-runs | grep -q '"totalItems":0' || fail "prod must start empty"
+# The SSRF guard is on by default in prod: webhooks to plain http or to the deployment's own network are refused.
+for target in "https://10.0.0.1/hook" "https://169.254.169.254/latest" "http://hooks.example.com/x"; do
+  code=$(prod_api http://localhost:8280 -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -X POST \
+    http://localhost:8280/api/v1/projects/TC/webhooks -d "{\"url\":\"$target\",\"events\":[\"run.completed\"]}" || true)
+  [ "$code" = 400 ] || fail "prod accepted a webhook to $target ($code)"
+done
 prod_api http://localhost:8280 -o /dev/null -H 'Content-Type: application/json' -X POST http://localhost:8280/api/v1/test-cases \
   -d "{\"title\":\"env-checks prod data $run\",\"automated\":false}"
 before=$( (ls backups/prod-*.sql 2>/dev/null || true) | wc -l)

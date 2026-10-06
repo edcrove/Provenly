@@ -8,6 +8,8 @@ Provenly is one Go API, one static web app behind nginx and one PostgreSQL datab
 - Docker with Compose v2, 1 vCPU and 1 GB of RAM are enough for a team; PostgreSQL 16 (the compose file runs it).
 - A TLS-terminating reverse proxy (Caddy, nginx, Traefik…) in front of the web port. Provenly listens on
   `127.0.0.1` by default (`BIND_ADDR`) and must not be exposed without TLS: sessions are bearer tokens and cookies.
+  The proxy must send `X-Forwarded-Proto: https` (Caddy, Traefik and nginx's usual config do): the web container
+  passes it to the API, which then marks the session cookie `Secure`.
 
 ## 2. Configure
 
@@ -71,7 +73,11 @@ Back up `envs/prod.env` too (it holds `PROVENLY_SECRETS_KEY`), separately from t
 
 - **Health**: `GET /healthz` (process), `GET /readyz` (database). Logs are JSON on stdout with `trace_id`.
 - **Audit**: administrators see every change in **Audit** (who, what, when).
-- **Sign-in throttle**: five failed sign-ins of a username lock it for 15 minutes (429). It lives in the API's memory:
-  restarting the API clears it. Put rate limiting per client address in the reverse proxy as well.
+- **Sign-in throttle**: five failed sign-ins of a username lock it for 15 minutes (429), also under parallel attempts.
+  It lives in the API's memory: restarting the API clears it, and it does not span several API replicas. Put rate
+  limiting per client address in the reverse proxy as well.
+- **Environment**: `PROVENLY_ENV` must be one of `development`, `ci`, `demo`, `qa`, `prod` (anything else refuses to
+  start). Only `prod` gets the production guards (required secrets, no demo password, webhooks and connectors refused
+  on private, loopback, link-local and other non-global addresses).
 - **Agents**: MCP clients connect to `/api/v1/mcp` with a user's session token (Account page).
 - **Security reports**: see `SECURITY.md`.

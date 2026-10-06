@@ -13,6 +13,18 @@ curl_ "$web/readyz" | grep -q '"ok"' || fail "readiness (database) through the p
 curl_ -o /dev/null "$web/test-runs/1" || fail "SPA route not served"
 [ "$(curl -s --noproxy '*' -o /dev/null -w '%{http_code}' "$web/api/v1/test-cases")" = 401 ] || fail "the API answers without a session"
 jar=$(provenly_login "$web") || fail "sign-in through the proxy"
+# Security headers on the app and the API; the session cookie is Secure only when the browser used https (a TLS
+# proxy in front says so in X-Forwarded-Proto, which nginx passes through).
+for path in / /api/v1/auth/me; do
+  h=$(curl -s --noproxy '*' -o /dev/null -D - "$web$path")
+  for want in "content-security-policy: default-src 'self'" "x-frame-options: DENY" "x-content-type-options: nosniff" "referrer-policy: no-referrer"; do
+    grep -qi "^$want" <<<"$h" || fail "$path lacks the header: $want"
+  done
+done
+login_cookie() { curl -s --noproxy '*' -o /dev/null -D - -H 'Content-Type: application/json' "$@" -X POST "$web/api/v1/auth/login" \
+  -d "{\"username\":\"${PROVENLY_ADMIN_USERNAME:-admin}\",\"password\":\"${PROVENLY_ADMIN_PASSWORD:-provenly-demo}\"}" | grep -i '^set-cookie: provenly_session='; }
+login_cookie -H 'X-Forwarded-Proto: https' | grep -qi '; Secure' || fail "the session cookie is not Secure behind a TLS proxy"
+if login_cookie | grep -qi '; Secure'; then fail "the session cookie is Secure on plain http"; fi
 tc=$(curl_ -b "$jar" -H 'Content-Type: application/json' -X POST "$web/api/v1/test-cases" \
   -d '{"title":"Smoke test case","automated":true}' | sed -n 's/^{"id":\([0-9]*\).*/\1/p')
 [ -n "$tc" ] || fail "could not create a test case"

@@ -29,6 +29,7 @@ node_modules/
 
 # Environments: real credentials and local backups never go to git
 /envs/prod.env
+/.extra-ca.pem
 /backups/
 
 # Claude Code personal overrides

@@ -30,6 +30,10 @@ type Querier interface {
 	// The active webhooks of a project subscribed to an event.
 	ListSubscribedWebhooks(ctx context.Context, arg ListSubscribedWebhooksParams) ([]int64, error)
 	ListWebhooks(ctx context.Context, projectID int64) ([]Webhook, error)
+	// Deletes up to batch_limit finished deliveries completed before `before` (the retention, decision 2026-10-06).
+	// The advisory lock (held for this statement) keeps two servers from purging at once: the one that does not get it
+	// deletes nothing. Pending deliveries are never purged.
+	PurgeWebhookDeliveries(ctx context.Context, arg PurgeWebhookDeliveriesParams) (int64, error)
 	RecordGitHubSync(ctx context.Context, arg RecordGitHubSyncParams) error
 	UpdateWebhook(ctx context.Context, arg UpdateWebhookParams) (int64, error)
 	UpsertGitHubConnection(ctx context.Context, arg UpsertGitHubConnectionParams) error

@@ -182,7 +182,8 @@ export function WebhooksSection({ projectKey }: { projectKey: string }) {
         </CardTitle>
         <CardDescription>
           Every completed run (CI, live or manual) is sent to these endpoints as JSON, signed, and retried for
-          about 40 minutes until it gets a 2xx.
+          about 40 minutes until it gets a 2xx. Finished deliveries are kept 90 days by default (the server's
+          PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS).
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-6">

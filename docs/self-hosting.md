@@ -30,6 +30,7 @@ Set in `envs/prod.env`:
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | Optional, standard OpenTelemetry SDK settings (passed through) | e.g. `OTEL_EXPORTER_OTLP_HEADERS=x-api-key=…` for a hosted collector |
 | `PROVENLY_WEBHOOKS_ALLOW_PRIVATE` | Leave empty in prod: webhooks and connectors may not reach private addresses | `true` only for an internal-only deployment |
 | `PROVENLY_GITHUB_API_URL` | GitHub Enterprise Server API, if not github.com | `https://github.example.com/api/v3` |
+| `PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS` | Days finished webhook deliveries are kept (default 90; `0` keeps them). The API purges older ones hourly, in batches, and logs how many. Audit events and run results are never purged | `30` |
 
 The API refuses to start in `prod` without `PROVENLY_JWT_SECRET` and `PROVENLY_SECRETS_KEY`.
 

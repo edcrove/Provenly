@@ -217,6 +217,10 @@ refuses anything else. Secrets Provenly only verifies (passwords, API keys) stay
   signed (`X-Provenly-Signature: sha256=HMAC(ts.body)`) and records the attempt only if the row is still the one it
   claimed (a late worker whose lease expired changes nothing): succeeded on 2xx, else retried after 10 s, 1 min,
   5 min, 30 min, then failed.
+- **Retention** (card #51): the same worker purges, at start and hourly, finished deliveries completed more than
+  `PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS` ago (default 90; `0` keeps them) in batches of 1,000. Each batch is one
+  statement guarded by `pg_try_advisory_xact_lock`, so a second server purging at the same time deletes nothing.
+  Pending deliveries, audit events and run results are never purged.
 - **SSRF**: outbound requests (webhooks and GitHub) use a client that refuses private, loopback and link-local
   addresses after DNS resolution (dialer `Control`), follows no redirects and ignores proxies; `PROVENLY_WEBHOOKS_ALLOW_PRIVATE`
   (default: everywhere but prod) lifts it for local endpoints.

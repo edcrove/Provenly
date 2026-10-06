@@ -20,6 +20,10 @@ SELECT sqlc.embed(r),
     (SELECT coalesce(array_agg(s.shard ORDER BY s.shard), '{}') FROM test_run_shards s WHERE s.test_run_id = r.id)::int[] AS shards_received
 FROM test_runs r WHERE r.id = @id;
 
+-- name: GetRunProject :one
+-- The project of a run: what authorizing a request on it needs, without the run's counts and outcome.
+SELECT project_id FROM test_runs WHERE id = @id;
+
 -- name: GetTestRunIDByExternalID :one
 SELECT id FROM test_runs WHERE project_id = @project_id AND external_run_id = @external_run_id;
 

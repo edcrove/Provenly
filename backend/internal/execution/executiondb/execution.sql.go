@@ -146,6 +146,18 @@ func (q *Queries) FinishTestRun(ctx context.Context, arg FinishTestRunParams) er
 	return err
 }
 
+const getRunProject = `-- name: GetRunProject :one
+SELECT project_id FROM test_runs WHERE id = $1
+`
+
+// The project of a run: what authorizing a request on it needs, without the run's counts and outcome.
+func (q *Queries) GetRunProject(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, getRunProject, id)
+	var project_id int64
+	err := row.Scan(&project_id)
+	return project_id, err
+}
+
 const getTestRun = `-- name: GetTestRun :one
 SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,

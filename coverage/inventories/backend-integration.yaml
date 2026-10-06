@@ -132,3 +132,5 @@ targets:
     description: finalizing a sharded run - a run waiting for shards ends interrupted naming its missing shards, once; a late shard is a conflict; finalizing a run without shards is a conflict and an unknown run 404
   - id: BE-INT-064
     description: sharded runs under concurrency and in the database - eight shards sent at once build one run with every shard and result, completed by exactly one; shards are append-only, accepted only while a sharded run is running and within its shard count; a run's shard count and mode are immutable and a sharded run must declare its count
+  - id: BE-INT-066
+    description: a live poll (authorizing the run by its project, then its live state) costs at most five statements, the same for a run of 1 or 300 test cases (it read the run three times and its summary inputs twice)

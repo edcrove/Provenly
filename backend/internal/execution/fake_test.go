@@ -535,3 +535,14 @@ func (f *fakeRepo) FinishShardedRun(_ context.Context, runID int64, status RunSt
 	}
 	return nil
 }
+
+func (f *fakeRepo) GetRunProject(_ context.Context, id int64) (int64, error) {
+	if err := f.fail("GetRunProject"); err != nil {
+		return 0, err
+	}
+	r, ok := f.runs[id]
+	if !ok {
+		return 0, ErrNotFound
+	}
+	return r.ProjectID, nil
+}

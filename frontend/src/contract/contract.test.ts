@@ -923,6 +923,16 @@ const taxonomyScenarios: Scenario[] = [
     status: 400,
     call: (c) => c.GET('/api/v1/test-cases', { params: { query: { classification: 'risk' } } }),
   },
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 200,
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { key: 'TC-153' } } }),
+  },
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 400,
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { key: 'tc-153' } } }),
+  },
 ]
 
 const smoke = { projectKey: 'TC', suiteKey: 'smoke' }

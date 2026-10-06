@@ -113,6 +113,8 @@ curl -s -X POST -H "Authorization: Bearer $KEY" -H 'Content-Type: application/xm
 # 4. Summary (snapshot universe, aggregated failed > error > skipped > passed, 3 percentages) and history
 curl -s -b cookies.txt localhost:8080/api/v1/test-runs/6/summary
 curl -s -b cookies.txt localhost:8080/api/v1/test-cases/8/results
+# Know the key but not the id (scripts, MCP agents)? ?key= gives zero or one test case
+curl -s -b cookies.txt 'localhost:8080/api/v1/test-cases?key=TC-8'
 ```
 
 Then open http://localhost:3000 → *Test Runs* → run #6, or *Test Cases* → TC-8 for its history.

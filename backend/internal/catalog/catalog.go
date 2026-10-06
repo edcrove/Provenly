@@ -151,6 +151,8 @@ type ListFilter struct {
 	// SuiteID narrows to the test cases a static suite lists.
 	SuiteID   *int64
 	Automated *bool
+	// Number narrows to the test case with this number (with ProjectIDs: one key).
+	Number *int64
 }
 
 // Requirement providers: native requirements are written in Provenly; the others mirror an external tool.

@@ -132,6 +132,7 @@ WHERE ($1::text IS NULL OR status = $1::text)
   ) = cardinality($4::text[]))
   AND ($5::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = $5::bigint AND m.test_case_id = test_cases.id))
   AND ($6::boolean IS NULL OR automated = $6::boolean)
+  AND ($7::bigint IS NULL OR number = $7::bigint)
 `
 
 type CountTestCasesParams struct {
@@ -141,6 +142,7 @@ type CountTestCasesParams struct {
 	Classified []string
 	SuiteID    pgtype.Int8
 	Automated  pgtype.Bool
+	Number     pgtype.Int8
 }
 
 func (q *Queries) CountTestCases(ctx context.Context, arg CountTestCasesParams) (int64, error) {
@@ -151,6 +153,7 @@ func (q *Queries) CountTestCases(ctx context.Context, arg CountTestCasesParams) 
 		arg.Classified,
 		arg.SuiteID,
 		arg.Automated,
+		arg.Number,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -1271,8 +1274,9 @@ WHERE ($1::text IS NULL OR status = $1::text)
   ) = cardinality($4::text[]))
   AND ($5::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = $5::bigint AND m.test_case_id = test_cases.id))
   AND ($6::boolean IS NULL OR automated = $6::boolean)
+  AND ($7::bigint IS NULL OR number = $7::bigint)
 ORDER BY id DESC
-LIMIT $8 OFFSET $7
+LIMIT $9 OFFSET $8
 `
 
 type ListTestCasesParams struct {
@@ -1282,6 +1286,7 @@ type ListTestCasesParams struct {
 	Classified []string
 	SuiteID    pgtype.Int8
 	Automated  pgtype.Bool
+	Number     pgtype.Int8
 	PageOffset int32
 	PageLimit  int32
 }
@@ -1296,6 +1301,7 @@ func (q *Queries) ListTestCases(ctx context.Context, arg ListTestCasesParams) ([
 		arg.Classified,
 		arg.SuiteID,
 		arg.Automated,
+		arg.Number,
 		arg.PageOffset,
 		arg.PageLimit,
 	)

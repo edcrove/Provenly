@@ -4,8 +4,12 @@ import (
 	"cmp"
 	"context"
 	"net/http"
+	"regexp"
+	"slices"
+	"strconv"
 	"time"
 
+	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/etag"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
@@ -346,12 +350,47 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	var none bool
+	if f, none, err = h.keyQuery(r, f); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	if none {
+		httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(pagination.Result[TestCase]{Items: []TestCase{}, Page: page}, ToDTO))
+		return
+	}
 	res, err := h.api.List(r.Context(), f, page)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, ToDTO))
+}
+
+// testCaseKeyPattern is a test case key: <PROJECT>-<number>.
+var testCaseKeyPattern = regexp.MustCompile(`^([A-Z][A-Z0-9]{1,9})-([1-9][0-9]{0,17})$`)
+
+// keyQuery narrows the list to ?key=<PROJECT>-<number> (400 when malformed). none tells that no test case can match:
+// the key's project does not exist, the caller cannot see it, or ?project= names another one.
+func (h *Handler) keyQuery(r *http.Request, f ListFilter) (ListFilter, bool, error) {
+	raw, err := httpx.PatternQuery(r, "key", testCaseKeyPattern, "must be a test case key: <PROJECT>-<number> (e.g. CHK-12)")
+	if err != nil || raw == nil {
+		return f, false, err
+	}
+	m := testCaseKeyPattern.FindStringSubmatch(*raw)
+	n, _ := strconv.ParseInt(m[2], 10, 64) // at most 18 digits: always an int64
+	p, err := h.api.ProjectByKey(r.Context(), m[1])
+	if e, ok := apperr.As(err); ok && e.Kind == apperr.KindNotFound {
+		return f, true, nil
+	}
+	if err != nil {
+		return f, false, err
+	}
+	if f.ProjectIDs != nil && !slices.Contains(f.ProjectIDs, p.ID) {
+		return f, true, nil
+	}
+	f.ProjectIDs, f.Number = []int64{p.ID}, &n
+	return f, false, nil
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {

@@ -191,7 +191,7 @@ func (s *Store) LockTestCase(ctx context.Context, id int64) (int64, error) {
 func (s *Store) ListTestCases(ctx context.Context, f catalog.ListFilter, limit, offset int32) ([]catalog.TestCase, error) {
 	rows, err := s.q.ListTestCases(ctx, catalogdb.ListTestCasesParams{
 		Status: statusText(f.Status), ProjectIds: f.ProjectIDs, Tag: text(f.Tag), Classified: f.Classified,
-		SuiteID: int8Arg(f.SuiteID), Automated: boolArg(f.Automated), PageLimit: limit, PageOffset: offset,
+		SuiteID: int8Arg(f.SuiteID), Automated: boolArg(f.Automated), Number: int8Arg(f.Number), PageLimit: limit, PageOffset: offset,
 	})
 	if err != nil {
 		return nil, err
@@ -209,7 +209,7 @@ func (s *Store) ListTestCases(ctx context.Context, f catalog.ListFilter, limit, 
 func (s *Store) CountTestCases(ctx context.Context, f catalog.ListFilter) (int64, error) {
 	return s.q.CountTestCases(ctx, catalogdb.CountTestCasesParams{
 		Status: statusText(f.Status), ProjectIds: f.ProjectIDs, Tag: text(f.Tag), Classified: f.Classified,
-		SuiteID: int8Arg(f.SuiteID), Automated: boolArg(f.Automated),
+		SuiteID: int8Arg(f.SuiteID), Automated: boolArg(f.Automated), Number: int8Arg(f.Number),
 	})
 }
 

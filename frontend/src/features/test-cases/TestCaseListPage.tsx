@@ -38,6 +38,40 @@ function TagFilter({ value, onApply }: { value: string; onApply: (tag: string) =
   )
 }
 
+/** The format of a test case key, as the API takes it in ?key=. */
+const TEST_CASE_KEY = /^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,17}$/
+
+/** Finds a test case by its key (CHK-12) on submit; anything else is explained, not sent. */
+function KeyFilter({ value, onApply }: { value: string; onApply: (key: string) => void }) {
+  const [text, setText] = useState(value)
+  const [invalid, setInvalid] = useState(false)
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    const key = text.trim().toUpperCase()
+    const ok = key === '' || TEST_CASE_KEY.test(key)
+    setInvalid(!ok)
+    if (ok) onApply(key)
+  }
+  return (
+    <form onSubmit={submit} role="search" aria-label="Find by TC-ID">
+      <Input
+        aria-label="TC-ID"
+        placeholder="TC-ID (Enter)"
+        className="w-36"
+        value={text}
+        aria-invalid={invalid}
+        aria-describedby={invalid ? 'tc-key-error' : undefined}
+        onChange={(e) => setText(e.target.value)}
+      />
+      {invalid ? (
+        <p id="tc-key-error" role="alert" className="text-destructive mt-1 text-xs">
+          Enter a TC-ID like CHK-12
+        </p>
+      ) : null}
+    </form>
+  )
+}
+
 export function TestCaseListPage() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
@@ -50,6 +84,7 @@ export function TestCaseListPage() {
   )
   const tag = params.get('tag') ?? ''
   const classification = params.get('classification') ?? ''
+  const tcKey = params.get('key') ?? ''
   // Classification filters need a project: dimensions and their values are per project.
   const dimensions = useDimensions(project).data?.items ?? []
   const query = useTestCases(page, {
@@ -57,6 +92,7 @@ export function TestCaseListPage() {
     project: project || undefined,
     tag: tag || undefined,
     classification: (project && classification) || undefined,
+    key: TEST_CASE_KEY.test(tcKey) ? tcKey : undefined,
   })
 
   const update = (next: Record<string, string | undefined>, replace = false) => {
@@ -85,6 +121,11 @@ export function TestCaseListPage() {
             <option value="active">Active</option>
             <option value="deprecated">Deprecated</option>
           </NativeSelect>
+          <KeyFilter
+            key={`key-${tcKey}`}
+            value={tcKey}
+            onApply={(k) => update({ key: k || undefined, page: undefined })}
+          />
           <TagFilter
             key={tag}
             value={tag}
@@ -139,11 +180,13 @@ export function TestCaseListPage() {
                   {data.items.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="text-muted-foreground">
-                        {tag || classification
-                          ? 'No test cases match the filters'
-                          : status
-                            ? `No ${status} test cases`
-                            : 'No test cases yet'}
+                        {tcKey
+                          ? `No test case ${tcKey}`
+                          : tag || classification
+                            ? 'No test cases match the filters'
+                            : status
+                              ? `No ${status} test cases`
+                              : 'No test cases yet'}
                         {project ? ` in ${project}.` : '.'}
                       </TableCell>
                     </TableRow>

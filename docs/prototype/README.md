@@ -356,6 +356,8 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 The audit's open decisions and cards were refined by the product owner and the six personas and recorded in the
 Notion Decision Register; each one ships in its own PR.
 
+- **Find by key (card #53):** `GET /api/v1/test-cases?key=CHK-12` gives zero or one test case (MCP `search_test_cases`
+  takes `key` too); the test case list has a TC-ID search box.
 - **Variants and flaky (card #58):** repeated names without an attempt signal are variants of the test (a failure
   among them fails the test case; the ingestion warns how many), and a test case that failed or errored in a run is
   not flaky there, in the summary, the dashboard ranking and the latest status alike.

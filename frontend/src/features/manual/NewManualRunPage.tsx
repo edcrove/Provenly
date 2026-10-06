@@ -19,8 +19,9 @@ export function NewManualRunPage() {
   const projects = (useProjects().data?.items ?? []).filter((p) => can(p.myRole, 'member'))
   const { project: current } = useCurrentProject()
   const [chosen, setProject] = useState(current)
-  // The select shows only projects the user can write to: send the one it shows, never a hidden default.
-  const project = projects.some((p) => p.key === chosen) ? chosen : (projects[0]?.key ?? '')
+  // The select shows only projects the user can write to: send the one it shows (the current project, else the
+  // default TC, else the first one), never a hidden default the user cannot write to.
+  const project = [chosen, 'TC'].find((k) => projects.some((p) => p.key === k)) ?? projects[0]?.key ?? ''
   const suites = (useSuites(project).data?.items ?? []).filter((s) => s.archivedAt === null)
   const [name, setName] = useState('')
   const [suite, setSuite] = useState('')

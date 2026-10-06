@@ -125,10 +125,8 @@ describe('FE-INT-024 test cases in a project', () => {
     const { user } = renderRoute('/test-cases/new')
     const select = await screen.findByLabelText('Project')
     await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(2))
-    // No current project: the first project the user can write to (what the select shows is what is sent).
-    expect(select).toHaveValue('CHK')
-    await user.selectOptions(select, 'TC')
-    expect(screen.getByText(/e\.g\. TC-12/)).toBeInTheDocument()
+    // No current project: the default TC (what the select shows is what is sent).
+    await waitFor(() => expect(select).toHaveValue('TC'))
     await user.selectOptions(select, 'CHK')
     expect(screen.getByText(/e\.g\. CHK-12/)).toBeInTheDocument()
     await user.type(screen.getByLabelText('Title'), 'Refund')

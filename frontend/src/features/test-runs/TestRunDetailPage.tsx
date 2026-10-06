@@ -93,7 +93,7 @@ export function TestRunDetailPage() {
             <span className="text-muted-foreground text-sm" data-testid="run-pass-rate">
               {r.outcome.executed > 0
                 ? `${formatPercent(r.outcome.passRate)} of executed passed${running ? ' so far' : ''}`
-                : 'No test case executed'}
+                : `— (0 of ${r.outcome.executed + r.outcome.untested} executed)`}
             </span>
           </div>
           {r.shards ? <ShardsProgress shards={r.shards} running={running} /> : null}
@@ -123,7 +123,7 @@ export function TestRunDetailPage() {
                     <CardTitle as="h2">Summary</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <RunSummary summary={s} running={running} />
+                    <RunSummary summary={s} running={running} manual={r.mode === 'manual'} />
                     <RunKnownIssues
                       projectKey={projects.find((p) => p.id === r.projectId)?.key ?? ''}
                       summary={s}
@@ -158,7 +158,7 @@ export function TestRunDetailPage() {
               <CardDescription>Every individual result as ingested (e.g. one per browser).</CardDescription>
             </CardHeader>
             <CardContent>
-              <RunResults testRunId={r.id} shards={r.shards?.total} />
+              <RunResults testRunId={r.id} shards={r.shards?.total} manual={r.mode === 'manual'} />
             </CardContent>
           </Card>
         </div>

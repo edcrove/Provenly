@@ -181,7 +181,7 @@ describe('FE-INT-041 issues and verification', () => {
   it('FE-INT-041 a run splits its failures into known issues and new failures', async () => {
     const { unmount } = renderRoute('/test-runs/7')
     expect(await screen.findByTestId('run-new-failures')).toHaveTextContent(
-      'New failures (no open issue): TC-153',
+      'Failures without an open issue (1): TC-153',
     )
     unmount()
     db.issues.push(jiraIssue())

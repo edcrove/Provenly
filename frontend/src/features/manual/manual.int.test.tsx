@@ -77,7 +77,7 @@ describe('FE-INT-039 manual execution', () => {
     const panel = await screen.findByTestId('manual-execution')
     const row = within(panel).getByTestId('manual-TC-154')
     await u.click(within(row).getByRole('button', { name: 'Blocked' }))
-    await waitFor(() => expect(within(row).getByTestId('status-badge')).toHaveTextContent('error'))
+    await waitFor(() => expect(within(row).getByTestId('status-badge')).toHaveTextContent('Blocked'))
     await u.click(within(row).getByRole('button', { name: 'Skip' }))
     await waitFor(() => expect(within(row).getByTestId('status-badge')).toHaveTextContent('skipped'))
 

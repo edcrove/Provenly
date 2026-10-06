@@ -12,6 +12,11 @@ export function invitationLink(token: string, origin = globalThis.location.origi
   return `${origin}/accept-invite#token=${encodeURIComponent(token)}`
 }
 
+/** The link to set a new password; like invitations, the token travels in the fragment. */
+export function passwordResetLink(token: string, origin = globalThis.location.origin): string {
+  return `${origin}/reset-password#token=${encodeURIComponent(token)}`
+}
+
 /** The invitation token of the current location: the fragment (current links) or the query (older links). */
 export function invitationToken(hash: string, search: string): string {
   return (

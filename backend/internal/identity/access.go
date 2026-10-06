@@ -132,6 +132,9 @@ func (s *Service) SetMember(ctx context.Context, projectID int64, username, role
 	if err != nil {
 		return Member{}, err
 	}
+	if u.DeactivatedAt != nil {
+		return Member{}, apperr.Conflict("%s is deactivated: reactivate the account first", u.Username)
+	}
 	if err := s.repo.UpsertMember(ctx, projectID, u.ID, r); err != nil {
 		return Member{}, err
 	}

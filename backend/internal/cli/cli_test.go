@@ -9,12 +9,15 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
+	"github.com/edcrove/provenly/backend/internal/identity"
 )
 
 var errBoom = errors.New("boom")
@@ -40,6 +43,7 @@ func testDeps(t *testing.T, env map[string]string, r *recorder) (Deps, *bytes.Bu
 			r.served = h != nil
 			return l.Close()
 		},
+		BreakGlass: breakGlass,
 	}, &stderr
 }
 
@@ -105,6 +109,8 @@ func TestErrors(t *testing.T) {
 	}{
 		"usage":        {args: []string{"explode"}, env: baseEnv, want: "usage"},
 		"migrate args": {args: []string{"migrate"}, env: baseEnv, want: "usage"},
+		"reset args":   {args: []string{"reset-password"}, env: baseEnv, want: "usage"},
+		"reset db":     {args: []string{"reset-password", "admin"}, env: baseEnv, want: "127.0.0.1"},
 		"config":       {env: map[string]string{}, want: "PROVENLY_DATABASE_URL"},
 		"open db": {env: baseEnv, mutate: func(d *Deps) {
 			d.OpenDB = func(context.Context, string) (*pgxpool.Pool, error) { return nil, errBoom }
@@ -157,4 +163,17 @@ func TestOpenTelemetry(t *testing.T) {
 	d2.Exporter = d.Exporter
 	assert.Equal(t, 1, Run(context.Background(), nil, d2))
 	assert.Contains(t, stderr.String(), "opentelemetry: bad endpoint")
+}
+
+// reset-password prints a single-use link for the user (the break-glass way back in, card #61).
+func TestResetPassword(t *testing.T) {
+	d, stderr := testDeps(t, baseEnv, &recorder{})
+	var got string
+	d.BreakGlass = func(_ context.Context, _ *pgxpool.Pool, username string) (identity.PasswordReset, string, error) {
+		got = username
+		return identity.PasswordReset{ExpiresAt: time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)}, "tok", nil
+	}
+	assert.Equal(t, 0, Run(context.Background(), []string{"reset-password", "ana"}, d))
+	assert.Equal(t, "ana", got)
+	assert.Contains(t, stderr.String(), "password reset link for ana (single use, until 2026-10-07T12:00:00Z):\n  <web address>/reset-password?token=tok\n")
 }

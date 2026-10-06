@@ -33,6 +33,10 @@ type API interface {
 	ListAPIKeys(ctx context.Context, projectID int64, page pagination.Page) (pagination.Result[APIKey], error)
 	RevokeAPIKey(ctx context.Context, projectID, id int64) (APIKey, error)
 	AuthenticateKey(ctx context.Context, token string) (APIKey, error)
+	Deactivate(ctx context.Context, actor User, username string) (User, error)
+	Reactivate(ctx context.Context, actor User, username string) (User, error)
+	CreatePasswordReset(ctx context.Context, actor User, username string) (PasswordReset, string, error)
+	ResetPassword(ctx context.Context, token, password string) (Session, error)
 }
 
 // Projects resolves project keys (the catalog module's public interface).
@@ -93,11 +97,14 @@ type UserDTO struct {
 	Email       *string   `json:"email"`
 	IsAdmin     bool      `json:"isAdmin"`
 	CreatedAt   time.Time `json:"createdAt"`
+	// DeactivatedAt is when an administrator deactivated the user (null: active).
+	DeactivatedAt *time.Time `json:"deactivatedAt"`
 }
 
 // ToUserDTO converts a User to its wire form.
 func ToUserDTO(u User) UserDTO {
-	return UserDTO{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, IsAdmin: u.IsAdmin, CreatedAt: u.CreatedAt}
+	return UserDTO{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, IsAdmin: u.IsAdmin, CreatedAt: u.CreatedAt,
+		DeactivatedAt: u.DeactivatedAt}
 }
 
 type sessionDTO struct {
@@ -168,6 +175,7 @@ func (h *Handler) RegisterPublic(mux httpx.Router) {
 	mux.HandleFunc("POST /api/v1/auth/login", h.login)
 	mux.HandleFunc("POST /api/v1/auth/logout", h.logout)
 	mux.HandleFunc("POST /api/v1/invitations/accept", h.accept)
+	mux.HandleFunc("POST /api/v1/password-reset", h.resetPassword)
 }
 
 // RegisterProtected mounts the routes that need a session (wrap mux with Protect).
@@ -175,6 +183,9 @@ func (h *Handler) RegisterProtected(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/auth/me", h.me)
 	mux.HandleFunc("POST /api/v1/auth/password", h.changePassword)
 	mux.HandleFunc("GET /api/v1/users", h.listUsers)
+	mux.HandleFunc("POST /api/v1/users/{username}/deactivate", h.deactivate)
+	mux.HandleFunc("POST /api/v1/users/{username}/reactivate", h.reactivate)
+	mux.HandleFunc("POST /api/v1/users/{username}/password-reset", h.createPasswordReset)
 	mux.HandleFunc("GET /api/v1/invitations", h.listInvitations)
 	mux.HandleFunc("POST /api/v1/invitations", h.createInvitation)
 	mux.HandleFunc("POST /api/v1/invitations/{invitationId}/revoke", h.revokeInvitation)

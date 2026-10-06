@@ -40,6 +40,8 @@ export interface MockDb {
   invitations: Invitation[]
   /** Tokens of the invitations created in this mock, by invitation id. */
   invitationTokens: Record<string, number>
+  /** Password reset tokens: token -> username (used ones are deleted). */
+  resetTokens: Record<string, string>
   /** Project roles of non-admin users. */
   members: { projectId: number; userId: number; role: MemberRole; since: string }[]
   /** CI API keys by project id. */
@@ -92,6 +94,7 @@ export function seed(): MockDb {
     loginFailures: {},
     invitations: [],
     invitationTokens: {},
+    resetTokens: {},
     session: 1,
     members: [],
     apiKeys: [],
@@ -1250,6 +1253,8 @@ export const handlers = [
         if (!memberRoleOk(role)) return validation('role', 'must be one of maintainer, member, viewer')
         const u = db.users.find((x) => x.username === params.username)
         if (!u) return notFound(`user ${String(params.username)}`)
+        if (u.deactivatedAt)
+          return problem(409, 'conflict', `${u.username} is deactivated: reactivate the account first`)
         db.members = db.members.filter((m) => !(m.projectId === p.id && m.userId === u.id))
         db.members.push({ projectId: p.id, userId: u.id, role, since: now() })
         return respond({ user: u, role, since: now() })
@@ -1504,7 +1509,7 @@ export const handlers = [
             'too_many_requests',
             'too many failed sign-ins for this username; try again in 15 minutes',
           )
-        if (!u || db.passwords[username] !== body?.password) {
+        if (!u || db.passwords[username] !== body?.password || u.deactivatedAt) {
           db.loginFailures[username] = (db.loginFailures[username] ?? 0) + 1
           return problem(401, 'unauthorized', 'invalid username or password')
         }
@@ -1541,6 +1546,49 @@ export const handlers = [
         if (db.passwords[u.username] !== body?.currentPassword)
           return validation('currentPassword', 'is not your current password')
         db.passwords[u.username] = next
+        return respond(session(u))
+      }),
+    ),
+  ),
+  http.post(
+    `${BASE}/users/:username/:action`,
+    guard(({ params }) => {
+      if (!currentUser().isAdmin) return forbidden()
+      const u = db.users.find((x) => x.username === params.username)
+      if (!u) return notFound(`user ${String(params.username)}`)
+      if (params.action === 'deactivate') {
+        if (u.id === currentUser().id)
+          return problem(409, 'conflict', 'you cannot deactivate yourself: ask another administrator')
+        u.deactivatedAt = u.deactivatedAt ?? now()
+        for (const [t, name] of Object.entries(db.resetTokens))
+          if (name === u.username) delete db.resetTokens[t]
+        return respond(u)
+      }
+      if (params.action === 'reactivate') {
+        u.deactivatedAt = null
+        return respond(u)
+      }
+      if (u.deactivatedAt)
+        return problem(409, 'conflict', `${u.username} is deactivated: reactivate the account first`)
+      const token = `reset-${++db.nextId}`
+      db.resetTokens[token] = u.username
+      return respond({ username: u.username, token, expiresAt: now() }, 201)
+    }),
+  ),
+  http.post(
+    `${BASE}/password-reset`,
+    publicGuard(
+      jsonGuard(async ({ request }) => {
+        const body = await readBody(request)
+        const password = String(body?.password ?? '')
+        if ([...password].length < 10) return validation('password', 'must be at least 10 characters')
+        const username = db.resetTokens[String(body?.token ?? '')]
+        const u = db.users.find((x) => x.username === username)
+        if (!u || u.deactivatedAt)
+          return problem(404, 'not_found', 'password reset link not found, expired or already used')
+        delete db.resetTokens[String(body?.token)]
+        db.passwords[u.username] = password
+        db.session = u.id
         return respond(session(u))
       }),
     ),

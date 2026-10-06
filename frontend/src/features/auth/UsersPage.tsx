@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router'
 
-import type { Invitation } from '@/api/client'
+import type { Invitation, User } from '@/api/client'
 import {
   useCreateInvitation,
+  useCreatePasswordReset,
+  useUserActivation,
   useInvitations,
   useProjects,
   useRevokeInvitation,
@@ -24,7 +26,7 @@ import { memberRoles, type MemberRole } from '@/lib/roles'
 import { positiveInt } from '@/lib/status'
 
 import { useCurrentUser } from './currentUser'
-import { invitationLink } from './links'
+import { invitationLink, passwordResetLink } from './links'
 
 const statusVariant = {
   pending: 'default',
@@ -175,6 +177,86 @@ function InvitationRow({
   )
 }
 
+/**
+ * An administrator's actions on another user: deactivate (after an inline confirmation: their sessions end at once),
+ * reactivate, or make a single-use password reset link shown once.
+ */
+function UserActions({ user }: { user: User }) {
+  const activation = useUserActivation()
+  const reset = useCreatePasswordReset()
+  const [confirming, setConfirming] = useState(false)
+  const [link, setLink] = useState<string | null>(null)
+  const deactivated = user.deactivatedAt !== null
+  return (
+    <div className="grid gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {deactivated ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={activation.isPending}
+            onClick={() => activation.mutate({ username: user.username, active: true })}
+          >
+            Reactivate
+          </Button>
+        ) : confirming ? (
+          <span
+            role="group"
+            aria-label={`Confirm deactivating ${user.username}`}
+            className="flex flex-wrap items-center gap-2"
+          >
+            <span className="text-sm">Deactivate {user.displayName}? Their sessions end now.</span>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={activation.isPending}
+              onClick={() =>
+                activation.mutate(
+                  { username: user.username, active: false },
+                  { onSettled: () => setConfirming(false) },
+                )
+              }
+            >
+              Deactivate
+            </Button>
+            <Button size="sm" variant="outline" autoFocus onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </span>
+        ) : (
+          <>
+            <Button size="sm" variant="outline" onClick={() => setConfirming(true)}>
+              Deactivate…
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={reset.isPending}
+              onClick={() =>
+                reset.mutate(user.username, { onSuccess: (res) => setLink(passwordResetLink(res.token)) })
+              }
+            >
+              Password reset link
+            </Button>
+          </>
+        )}
+      </div>
+      {activation.error ? <ErrorAlert error={activation.error} title="Could not change the account" /> : null}
+      {reset.error ? <ErrorAlert error={reset.error} title="Could not make the link" /> : null}
+      {link && !deactivated ? (
+        <div role="status" className="grid gap-1">
+          <p className="text-muted-foreground text-xs">
+            Send this link to {user.displayName}. It works once, for 24 hours, and is not shown again.
+          </p>
+          <code className="bg-muted rounded px-2 py-1 text-xs break-all" data-testid="reset-link">
+            {link}
+          </code>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 /** Administrators: who has an account, and invitation links for new people. */
 export function UsersPage() {
   const me = useCurrentUser()
@@ -219,7 +301,8 @@ export function UsersPage() {
             Users
           </CardTitle>
           <CardDescription>
-            Accounts are never deleted. New people join with an invitation link.
+            Accounts are never deleted: deactivate the ones that leave (their sessions end at once). New
+            people join with an invitation link.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -234,16 +317,29 @@ export function UsersPage() {
                       <TableHead>Email</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Since</TableHead>
+                      <TableHead />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {data.items.map((u) => (
                       <TableRow key={u.id} data-testid={`user-${u.username}`}>
                         <TableCell className="font-mono">{u.username}</TableCell>
-                        <TableCell>{u.displayName}</TableCell>
+                        <TableCell>
+                          {u.displayName}
+                          {u.deactivatedAt ? (
+                            <Badge
+                              variant="outline"
+                              className="ml-2"
+                              title={`Since ${formatDateTime(u.deactivatedAt)}`}
+                            >
+                              deactivated
+                            </Badge>
+                          ) : null}
+                        </TableCell>
                         <TableCell>{u.email ?? '—'}</TableCell>
                         <TableCell>{u.isAdmin ? <Badge>admin</Badge> : 'member'}</TableCell>
                         <TableCell className="whitespace-nowrap">{formatDateTime(u.createdAt)}</TableCell>
+                        <TableCell>{u.username === me.username ? null : <UserActions user={u} />}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

@@ -85,5 +85,10 @@ Back up `envs/prod.env` too (it holds `PROVENLY_SECRETS_KEY`), separately from t
 - **Environment**: `PROVENLY_ENV` must be one of `development`, `ci`, `demo`, `qa`, `prod` (anything else refuses to
   start). Only `prod` gets the production guards (required secrets, no demo password, webhooks and connectors refused
   on private, loopback, link-local and other non-global addresses).
+- **People who leave**: an administrator deactivates them in **Users** (their sessions end at once; they cannot sign
+  in; project API keys belong to the project and keep working) and can reactivate them later. A forgotten password
+  gets a single-use reset link from **Users** (24 hours). If the only administrator is locked out, run on the server
+  `docker compose --env-file envs/prod.env exec api provenly reset-password <username>`: it prints a reset link token
+  (open `<web address>/reset-password?token=...`) and reactivates the account.
 - **Agents**: MCP clients connect to `/api/v1/mcp` with a user's session token (Account page).
 - **Security reports**: see `SECURITY.md`.

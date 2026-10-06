@@ -100,7 +100,7 @@ func TestTestCases(t *testing.T) {
 	// Implementation decision #10: a deprecated test case stays editable (content and steps), and stays deprecated.
 	e.PATCH(otherPath).WithJSON(map[string]any{"title": "Old, reworded", "automated": true}).Expect().Status(http.StatusOK).
 		JSON().Object().HasValue("title", "Old, reworded").HasValue("status", "deprecated").HasValue("automated", true)
-	e.POST(otherPath+"/steps").WithJSON(map[string]any{"action": "open the old page"}).Expect().Status(http.StatusCreated)
+	e.POST(otherPath + "/steps").WithJSON(map[string]any{"action": "open the old page"}).Expect().Status(http.StatusCreated)
 	e.POST("/api/v1/test-cases/0/deprecate").Expect().Status(http.StatusBadRequest)
 	e.POST("/api/v1/test-cases/987654/deprecate").Expect().Status(http.StatusNotFound)
 	e.POST(otherPath+"/reactivate").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "active")

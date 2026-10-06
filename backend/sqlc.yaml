@@ -72,6 +72,7 @@ sql:
   - engine: postgresql
     schema:
       - migrations/00029_audit.sql
+      - migrations/00034_audit_summary.sql
     queries: queries/audit.sql
     gen:
       go:

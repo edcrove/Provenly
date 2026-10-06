@@ -15,31 +15,35 @@ const countAuditEvents = `-- name: CountAuditEvents :one
 SELECT count(*) FROM audit_events
 WHERE ($1::text IS NULL OR project_key = $1)
   AND ($2::text IS NULL OR actor = $2)
+  AND ($3::text IS NULL OR test_case_key = $3)
 `
 
 type CountAuditEventsParams struct {
-	ProjectKey pgtype.Text
-	Actor      pgtype.Text
+	ProjectKey  pgtype.Text
+	Actor       pgtype.Text
+	TestCaseKey pgtype.Text
 }
 
 func (q *Queries) CountAuditEvents(ctx context.Context, arg CountAuditEventsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countAuditEvents, arg.ProjectKey, arg.Actor)
+	row := q.db.QueryRow(ctx, countAuditEvents, arg.ProjectKey, arg.Actor, arg.TestCaseKey)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const insertAuditEvent = `-- name: InsertAuditEvent :exec
-INSERT INTO audit_events (actor, action, path, project_key, status)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO audit_events (actor, action, path, project_key, status, summary, test_case_key)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type InsertAuditEventParams struct {
-	Actor      string
-	Action     string
-	Path       string
-	ProjectKey pgtype.Text
-	Status     int32
+	Actor       string
+	Action      string
+	Path        string
+	ProjectKey  pgtype.Text
+	Status      int32
+	Summary     pgtype.Text
+	TestCaseKey pgtype.Text
 }
 
 func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error {
@@ -49,29 +53,34 @@ func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventPara
 		arg.Path,
 		arg.ProjectKey,
 		arg.Status,
+		arg.Summary,
+		arg.TestCaseKey,
 	)
 	return err
 }
 
 const listAuditEvents = `-- name: ListAuditEvents :many
-SELECT id, occurred_at, actor, action, path, project_key, status FROM audit_events
+SELECT id, occurred_at, actor, action, path, project_key, status, summary, test_case_key FROM audit_events
 WHERE ($1::text IS NULL OR project_key = $1)
   AND ($2::text IS NULL OR actor = $2)
-ORDER BY id DESC LIMIT $4 OFFSET $3
+  AND ($3::text IS NULL OR test_case_key = $3)
+ORDER BY id DESC LIMIT $5 OFFSET $4
 `
 
 type ListAuditEventsParams struct {
-	ProjectKey pgtype.Text
-	Actor      pgtype.Text
-	PageOffset int32
-	PageLimit  int32
+	ProjectKey  pgtype.Text
+	Actor       pgtype.Text
+	TestCaseKey pgtype.Text
+	PageOffset  int32
+	PageLimit   int32
 }
 
-// Newest first, narrowed by project and/or actor.
+// Newest first, narrowed by project, actor and/or test case.
 func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error) {
 	rows, err := q.db.Query(ctx, listAuditEvents,
 		arg.ProjectKey,
 		arg.Actor,
+		arg.TestCaseKey,
 		arg.PageOffset,
 		arg.PageLimit,
 	)
@@ -90,6 +99,8 @@ func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams
 			&i.Path,
 			&i.ProjectKey,
 			&i.Status,
+			&i.Summary,
+			&i.TestCaseKey,
 		); err != nil {
 			return nil, err
 		}

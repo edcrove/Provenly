@@ -91,9 +91,16 @@ func NewServicesConfig(pool *pgxpool.Pool, now func() time.Time, cfg Config) Ser
 		Catalog: cat, Execution: exe, Ingestion: ing, Live: ingestion.NewLive(ing, exe, now), Manual: manual,
 		Insights:     insights.NewService(cat, exe, ids, now),
 		Integrations: integ,
-		Audit:        audit.NewService(auditpg.NewStore(pool), ids),
+		Audit:        auditLog(auditpg.NewStore(pool), ids, cat),
 		Identity:     ids, Now: now, Ready: pool.Ping,
 	}
+}
+
+// auditLog is the audit service, naming the projects, test cases and steps changes touched through the catalog.
+func auditLog(repo audit.Repository, access audit.Access, names audit.Resolver) *audit.Service {
+	svc := audit.NewService(repo, access)
+	svc.SetResolver(names)
+	return svc
 }
 
 // Version is the version of the Provenly server, set at build time by release images

@@ -174,3 +174,6 @@ targets:
   - id: FE-INT-053
     description: confirmations and recorded state (card #56) - completing a manual run with untested test cases, cancelling it, deleting a step and revoking an API key ask inline first with the safe option focused, and dismissing changes nothing; in a manual run only the recorded result's button is highlighted (aria-pressed) and saving says what was saved ("Saved · failed at step 3")
     surfaces: [src/components/InlineConfirm.tsx, src/features/manual/ManualExecution.tsx, src/features/test-cases/StepsEditor.tsx, src/features/projects/ApiKeysSection.tsx]
+  - id: FE-INT-054
+    description: readable audit entries (card #48) - each change reads in words with its path as the detail (older events show their route), and the log filters by test case key (typed in any case)
+    surfaces: [src/features/audit/AuditPage.tsx, src/api/queries.ts]

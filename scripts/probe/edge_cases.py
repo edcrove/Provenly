@@ -697,7 +697,8 @@ def main():
     # Audit (prototype feature 20): filters are validated, the sweep's own changes are listed, no body is recorded.
     for q, exp in [("project=", 400), ("project=pr1", 400), ("project=" + "P" * 11, 400), ("actor=", 400), ("actor=" + "a" * 201, 400),
                    ("page=0", 400), ("pageSize=101", 400), ("page=21474838&pageSize=100", 400), ("actor=a%00b", 400), ("actor=%ff", 400),
-                   ("actor=nobody&x=1", 200), (f"project={key}&pageSize=1&pageSize=5", 200)]:
+                   ("actor=nobody&x=1", 200), (f"project={key}&pageSize=1&pageSize=5", 200),
+                   ("testCase=", 400), ("testCase=pr1-1", 400), ("testCase=PR1-0", 400), ("testCase=PR1", 400), (f"testCase={a_key}", 200)]:
         check(f"audit ?{q}", call(base, "GET", f"/audit?{q}")[0], exp)
     st, aud = call(base, "GET", f"/audit?project={key}&pageSize=100")
     check("the sweep's project changes are audited", int(isinstance(aud, dict) and aud.get("totalItems", 0) > 0), 1)

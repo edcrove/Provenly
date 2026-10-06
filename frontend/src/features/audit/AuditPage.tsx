@@ -13,19 +13,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatDateTime } from '@/lib/format'
 import { positiveInt } from '@/lib/status'
 
-/** The audit log (administrators): who changed what through the API, newest first, by project and actor. */
+/** The audit log (administrators): who changed what through the API, newest first, by project, actor and test case. */
 export function AuditPage() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
   const project = params.get('project') ?? ''
   const actor = params.get('actor') ?? ''
-  const [draft, setDraft] = useState({ project, actor })
-  const events = useAuditEvents({ ...(project ? { project } : {}), ...(actor ? { actor } : {}) }, page)
+  const testCase = params.get('testCase') ?? ''
+  const [draft, setDraft] = useState({ project, actor, testCase })
+  const events = useAuditEvents(
+    { ...(project ? { project } : {}), ...(actor ? { actor } : {}), ...(testCase ? { testCase } : {}) },
+    page,
+  )
   const apply = (e: FormEvent) => {
     e.preventDefault()
     const next: Record<string, string> = {}
     if (draft.project.trim()) next.project = draft.project.trim().toUpperCase()
     if (draft.actor.trim()) next.actor = draft.actor.trim()
+    if (draft.testCase.trim()) next.testCase = draft.testCase.trim().toUpperCase()
     setParams(next)
   }
   return (
@@ -60,6 +65,15 @@ export function AuditPage() {
               onChange={(e) => setDraft({ ...draft, actor: e.target.value })}
             />
           </div>
+          <div className="grid gap-2">
+            <Label htmlFor="audit-test-case">Test case</Label>
+            <Input
+              id="audit-test-case"
+              value={draft.testCase}
+              placeholder="CHK-4"
+              onChange={(e) => setDraft({ ...draft, testCase: e.target.value })}
+            />
+          </div>
           <Button type="submit">Filter</Button>
         </form>
         <QueryState query={events} page>
@@ -70,16 +84,17 @@ export function AuditPage() {
                   <TableRow>
                     <TableHead>When</TableHead>
                     <TableHead>Actor</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Path</TableHead>
+                    <TableHead>Change</TableHead>
                     <TableHead>Project</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.items.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-muted-foreground">
-                        {project || actor ? 'No changes match these filters.' : 'No changes recorded.'}
+                      <TableCell colSpan={4} className="text-muted-foreground">
+                        {project || actor || testCase
+                          ? 'No changes match these filters.'
+                          : 'No changes recorded.'}
                       </TableCell>
                     </TableRow>
                   )}
@@ -87,8 +102,11 @@ export function AuditPage() {
                     <TableRow key={e.id} data-testid={`audit-${e.id}`}>
                       <TableCell className="whitespace-nowrap">{formatDateTime(e.occurredAt)}</TableCell>
                       <TableCell>{e.actor}</TableCell>
-                      <TableCell className="font-mono text-xs">{e.action}</TableCell>
-                      <TableCell className="font-mono text-xs break-all">{e.path}</TableCell>
+                      <TableCell>
+                        {/* What it did in words; older events have only the route. The path is the detail. */}
+                        <div>{e.summary ?? <span className="font-mono text-xs">{e.action}</span>}</div>
+                        <div className="text-muted-foreground font-mono text-xs break-all">{e.path}</div>
+                      </TableCell>
                       <TableCell>{e.project ?? '—'}</TableCell>
                     </TableRow>
                   ))}

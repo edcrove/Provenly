@@ -239,6 +239,14 @@ returns. A 2xx answer writes one `audit_events` row (actor, method + route patte
 the response; the write never fails the request. MCP and live events are skipped. A trigger makes the table
 append-only.
 
+Card #48 makes entries readable. The router opens an `auditnote` in the request context; `identity.Service.Require`
+writes the project it allowed (the first one), so a change whose path names no project (a test case, a step, a run,
+a body's `project`) is filed under it. Before the handler runs the router resolves, through `audit.Resolver`
+(catalog lookups that never check access, used only for changes already allowed), the test case key and step position
+the route names, then stores a `summary` ("deleted CHK-4 step 3", from the `summaries` table of route patterns) and the
+`test_case_key` (`GET /audit?testCase=CHK-4`). Events recorded before have neither and are not backfilled: the table is
+append-only.
+
 ## Releases and sign-in throttle (prototype feature 21)
 
 `identity.Service.Login` consults an in-memory throttle keyed by the normalized username before checking the

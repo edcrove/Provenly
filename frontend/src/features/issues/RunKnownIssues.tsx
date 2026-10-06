@@ -4,7 +4,7 @@ import type { TestRunSummary } from '@/api/client'
 import { useIssues } from '@/api/queries'
 import { requirementRef as issueRef } from '@/lib/requirements'
 
-/** Splits a run's failures into known issues (a linked open issue) and new failures, for triage. */
+/** Splits a run's failures into known issues (a linked open issue) and failures without one, for triage. */
 export function RunKnownIssues({ projectKey, summary }: { projectKey: string; summary: TestRunSummary }) {
   const issues = useIssues(projectKey, { state: 'open' })
   const failing = summary.testCases.filter((c) => c.status === 'failed' || c.status === 'error')
@@ -38,7 +38,7 @@ export function RunKnownIssues({ projectKey, summary }: { projectKey: string; su
         ))}
       {fresh.length > 0 ? (
         <div data-testid="run-new-failures">
-          <span className="font-medium">New failures (no open issue): </span>
+          Failures without an open issue ({fresh.length}):{' '}
           {fresh.map((k, n) => (
             <span key={k.c.testCaseId}>
               {n > 0 && ', '}

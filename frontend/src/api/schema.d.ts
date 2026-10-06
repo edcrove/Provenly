@@ -1794,7 +1794,7 @@ export interface components {
             untested: number;
             /**
              * Format: double
-             * @description Percentage of executed TC-IDs that passed (0 when none was executed)
+             * @description Percentage of executed TC-IDs that passed; 0 when executed=0 (the UI shows —).
              */
             passRate: number;
         };
@@ -2477,6 +2477,7 @@ export interface components {
             /** Format: int32 */
             skipped: number;
         };
+        /** @description Percentages of the expected test cases per status; all 0 when the run expects none (expectedTotal=0). */
         StatusPercentages: {
             untested: number;
             passed: number;
@@ -2484,6 +2485,7 @@ export interface components {
             error: number;
             skipped: number;
         };
+        /** @description Percentages of the executed test cases per status; all 0 when none was executed (executedTotal=0). */
         ExecutedPercentages: {
             passed: number;
             failed: number;
@@ -2573,6 +2575,7 @@ export interface components {
             counts: components["schemas"]["StatusCounts"];
             percentOfExpected: components["schemas"]["StatusPercentages"];
             percentOfExecuted: components["schemas"]["ExecutedPercentages"];
+            /** @description Executed test cases as a percentage of the expected ones; 0 when expectedTotal=0. */
             executionPercent: number;
             diagnostics: components["schemas"]["DiagnosticCounts"];
             /**

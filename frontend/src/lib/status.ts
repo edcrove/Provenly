@@ -26,6 +26,11 @@ const statusVariants: Record<SummaryStatus, BadgeVariant> = {
   untested: 'outline',
 }
 
+/** How a status reads: a manual run records Blocked as error, and shows it as Blocked (decision 4). */
+export function statusLabel(status: SummaryStatus, manual = false): string {
+  return manual && status === 'error' ? 'Blocked' : status
+}
+
 export function statusVariant(status: SummaryStatus): BadgeVariant {
   return statusVariants[status]
 }

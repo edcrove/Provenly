@@ -387,6 +387,10 @@ Notion Decision Register; each one ships in its own PR.
   npm packages and Docker images.
 - **Passwords (card #60):** the minimum counts characters, not bytes (`contraseña` is 10); the maximum stays 72 bytes and the
   forms and the error say non-ASCII letters count as 2 to 4. Same rule for `PROVENLY_ADMIN_PASSWORD`.
+- **Status labels (card #65):** a manual run shows its stored `error` as **Blocked** (summary, badge, results filter,
+  test case history; footnote "Blocked is stored as error"), CI runs keep `error`; a percentage of nothing reads "—"
+  with its counts ("0 of 0 executed", a grey trend bar), while the API keeps 0; "Failures without an open issue (N)"
+  replaces "New failures (no open issue)"; a manual run without results says "Nothing recorded yet."
 - **Confirmations (card #56):** completing a manual run with untested test cases, cancelling it, deleting a step and
   revoking an API key ask inline first, with the safe option focused (the deprecate pattern); in a manual run only
   the recorded result's button is highlighted and saving says what was saved ("Saved · failed at step 3").

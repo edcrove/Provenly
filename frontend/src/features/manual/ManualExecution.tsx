@@ -40,7 +40,7 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
         </Link>
       </TableCell>
       <TableCell>
-        <StatusBadge status={outcome.status} />
+        <StatusBadge status={outcome.status} manual />
       </TableCell>
       <TableCell>
         <div className="grid gap-1">

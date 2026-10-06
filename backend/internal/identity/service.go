@@ -108,6 +108,7 @@ type Service struct {
 	cfg      Config
 	dummy    []byte
 	throttle *throttle
+	authLog  AuthLog
 }
 
 // NewService builds the identity service.
@@ -147,32 +148,41 @@ func (s *Service) Login(ctx context.Context, username, password string) (Session
 	username = normalizeUsername(username)
 	settle, err := s.throttle.attempt(username, s.now())
 	if err != nil {
+		s.authEvent(ctx, AuthLockedOut, s.existing(ctx, username), 429)
 		return Session{}, err
 	}
-	session, err := s.login(ctx, username, password)
+	session, known, err := s.login(ctx, username, password)
 	settle(err == nil, errors.Is(err, errBadCredentials))
+	switch {
+	case err == nil:
+		s.authEvent(ctx, AuthLogin, session.User.Username, 200)
+	case errors.Is(err, errBadCredentials):
+		s.authEvent(ctx, AuthLoginFailed, known, 401)
+	}
 	return session, err
 }
 
-func (s *Service) login(ctx context.Context, username, password string) (Session, error) {
+// login checks the password; known is the username when its account exists (for the audit log).
+func (s *Service) login(ctx context.Context, username, password string) (session Session, known string, err error) {
 	var u User
-	err := ErrNotFound
+	err = ErrNotFound
 	// A username no account can have (NUL, invalid UTF-8, too long) is not looked up.
 	if UsernamePattern.MatchString(username) {
 		u, err = s.repo.GetUserByUsername(ctx, username)
 	}
 	if errors.Is(err, ErrNotFound) {
 		_ = bcrypt.CompareHashAndPassword(s.dummy, []byte(password))
-		return Session{}, errBadCredentials
+		return Session{}, "", errBadCredentials
 	}
 	if err != nil {
-		return Session{}, err
+		return Session{}, "", err
 	}
 	// A deactivated user gets the same answer as a wrong password, after the same bcrypt work.
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil || u.DeactivatedAt != nil {
-		return Session{}, errBadCredentials
+		return Session{}, u.Username, errBadCredentials
 	}
-	return s.issue(u)
+	session, err = s.issue(u)
+	return session, u.Username, err
 }
 
 type claims struct {
@@ -391,6 +401,7 @@ func (s *Service) AcceptInvitation(ctx context.Context, in AcceptInput) (Session
 	if err != nil {
 		return Session{}, err
 	}
+	s.authEvent(ctx, AuthInvitationAccepted, user.Username, 201)
 	return s.issue(user)
 }
 

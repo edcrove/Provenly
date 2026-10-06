@@ -37,6 +37,7 @@ type API interface {
 	Reactivate(ctx context.Context, actor User, username string) (User, error)
 	CreatePasswordReset(ctx context.Context, actor User, username string) (PasswordReset, string, error)
 	ResetPassword(ctx context.Context, token, password string) (Session, error)
+	Logout(ctx context.Context, token string)
 }
 
 // Projects resolves project keys (the catalog module's public interface).
@@ -404,6 +405,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
+	h.api.Logout(r.Context(), sessionToken(r))
 	http.SetCookie(w, &http.Cookie{
 		Name: CookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: secure(r), SameSite: http.SameSiteStrictMode,
 	})

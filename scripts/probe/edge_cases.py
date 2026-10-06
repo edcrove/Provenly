@@ -703,6 +703,11 @@ def main():
     st, aud = call(base, "GET", f"/audit?project={key}&pageSize=100")
     check("the sweep's project changes are audited", int(isinstance(aud, dict) and aud.get("totalItems", 0) > 0), 1)
     check("no secret in the audit log", int("ghp_probe_secret" not in json.dumps(aud)), 1)
+    # Sign-in events (card #49): failures by unknown usernames read "unknown", and nothing typed is kept.
+    st, signins = call(base, "GET", "/audit?actor=unknown&pageSize=100")
+    check("failed sign-ins are audited as unknown", int(isinstance(signins, dict) and signins.get("totalItems", 0) > 0), 1)
+    check("no typed username or password in the audit log",
+          int(not any(s in json.dumps(signins) for s in ("nobody-here", "x" * 20, "probe-lock-"))), 1)
 
     # Tracing (prototype feature 17): every response through the proxy names its trace; a caller's traceparent is
     # continued; malformed traceparents are ignored (a new trace), never an error.

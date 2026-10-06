@@ -19,7 +19,7 @@ func TestAuditLog(t *testing.T) {
 	ingest(admin, "audit", 1, report(1)).Expect().Status(http.StatusCreated)
 
 	page := admin.GET("/api/v1/audit").Expect().Status(http.StatusOK).JSON().Object()
-	page.HasValue("totalItems", 3)
+	page.HasValue("totalItems", 4) // the 3 changes and the administrator's sign-in (card #49)
 	first := page.Value("items").Array().Value(0).Object()
 	first.HasValue("actor", "admin").HasValue("action", "POST /api/v1/ingestion/junit").HasValue("project", "TC").HasValue("status", 201).
 		HasValue("summary", "uploaded a JUnit report").HasValue("testCase", nil)
@@ -29,6 +29,14 @@ func TestAuditLog(t *testing.T) {
 	for _, q := range []string{"page=0", "project=aud", "actor=", "actor=" + strings.Repeat("a", 201), "testCase=", "testCase=tc-1", "testCase=TC-0", "testCase=TC"} {
 		admin.GET("/api/v1/audit").WithQueryString(q).Expect().Status(http.StatusBadRequest)
 	}
+
+	// Sign-in events are audited with the client; an unknown username reads "unknown" (card #49).
+	e.POST("/api/v1/auth/login").WithHeader("User-Agent", "contract-agent").WithJSON(map[string]any{"username": "nobody", "password": "wrong password"}).
+		Expect().Status(http.StatusUnauthorized)
+	failed := admin.GET("/api/v1/audit").WithQuery("actor", "unknown").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1).
+		Value("items").Array().Value(0).Object()
+	failed.HasValue("status", 401).HasValue("summary", "failed to sign in").HasValue("action", "POST /api/v1/auth/login").HasValue("userAgent", "contract-agent")
+	failed.Value("ip").String().NotEmpty()
 
 	// A change without a project in its path is filed under the project it changed, in words, with its test case
 	// (card #48).

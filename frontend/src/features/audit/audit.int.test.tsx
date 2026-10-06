@@ -15,6 +15,8 @@ const event = (id: number, extra: Partial<(typeof db.audit)[number]> = {}) => ({
   status: 201,
   summary: 'created a test case',
   testCase: null,
+  ip: null,
+  userAgent: null,
   ...extra,
 })
 
@@ -90,5 +92,26 @@ describe('FE-INT-054 readable audit entries', () => {
     await waitFor(() => expect(screen.queryByTestId('audit-1')).not.toBeInTheDocument())
     expect(router.state.location.search).toBe('?testCase=CHK-4')
     expect(screen.getByTestId('audit-2')).toBeInTheDocument()
+  })
+})
+
+describe('FE-INT-055 sign-in events in the audit log (card #49)', () => {
+  it('FE-INT-055 a failed sign-in by an unknown username reads "unknown" with the client address and user agent', async () => {
+    db.audit.push(
+      event(1, {
+        actor: 'unknown',
+        action: 'POST /api/v1/auth/login',
+        path: '/api/v1/auth/login',
+        status: 401,
+        summary: 'failed to sign in',
+        ip: '198.51.100.7',
+        userAgent: 'Mozilla/5.0',
+      }),
+    )
+    renderRoute('/audit')
+    const row = await screen.findByTestId('audit-1')
+    expect(row).toHaveTextContent('unknown198.51.100.7')
+    expect(row).toHaveTextContent('failed to sign in/api/v1/auth/login')
+    expect(within(row).getByText('198.51.100.7')).toHaveAttribute('title', 'Mozilla/5.0')
   })
 })

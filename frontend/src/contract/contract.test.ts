@@ -2384,6 +2384,8 @@ const auditScenarios: Scenario[] = [
         status: 201,
         summary: 'edited TC-1',
         testCase: 'TC-1',
+        ip: '198.51.100.7',
+        userAgent: 'curl/8',
       })
     },
     call: (c) =>

@@ -14,6 +14,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/identity"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/auditnote"
+	"github.com/edcrove/provenly/backend/internal/platform/clientinfo"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
@@ -163,11 +164,12 @@ func TestHandler(t *testing.T) {
 		return rec
 	}
 	repo.events[0].Summary, repo.events[0].TestCaseKey = "deleted CHK-4 step 3", "CHK-4"
+	repo.events[0].IP, repo.events[0].UserAgent = "203.0.113.9", "curl/8"
 	rec := get("/api/v1/audit?project=CHK&actor=ana&testCase=CHK-4&pageSize=10")
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"page":1,"pageSize":10,"totalItems":2,"totalPages":1,"items":[
-		{"id":2,"occurredAt":"0001-01-01T00:00:00Z","actor":"ana","action":"DELETE /api/v1/x","path":"/api/v1/x","project":"CHK","status":204,"summary":"deleted CHK-4 step 3","testCase":"CHK-4"},
-		{"id":1,"occurredAt":"0001-01-01T00:00:00Z","actor":"bob","action":"POST /api/v1/y","path":"/api/v1/y","project":null,"status":201,"summary":null,"testCase":null}]}`, rec.Body.String())
+		{"id":2,"occurredAt":"0001-01-01T00:00:00Z","actor":"ana","action":"DELETE /api/v1/x","path":"/api/v1/x","project":"CHK","status":204,"summary":"deleted CHK-4 step 3","testCase":"CHK-4","ip":"203.0.113.9","userAgent":"curl/8"},
+		{"id":1,"occurredAt":"0001-01-01T00:00:00Z","actor":"bob","action":"POST /api/v1/y","path":"/api/v1/y","project":null,"status":201,"summary":null,"testCase":null,"ip":null,"userAgent":null}]}`, rec.Body.String())
 	assert.Equal(t, Filter{ProjectKey: "CHK", Actor: "ana", TestCaseKey: "CHK-4"}, repo.filter)
 	for _, target := range []string{"/api/v1/audit?page=0", "/api/v1/audit?project=chk", "/api/v1/audit?project=", "/api/v1/audit?actor=", "/api/v1/audit?actor=" + strings.Repeat("a", 201),
 		"/api/v1/audit?testCase=", "/api/v1/audit?testCase=chk-4", "/api/v1/audit?testCase=CHK-0", "/api/v1/audit?testCase=CHK"} {
@@ -251,4 +253,37 @@ func TestEverySummaryNamesItsPathValues(t *testing.T) {
 		}
 	}
 	assert.Equal(t, []string{"a", "b"}, placeholders("x {a} y {b}"))
+}
+
+// Sign-in events are recorded with the client and logged; an unknown account reads "unknown" (card #49).
+func TestAuthEvent(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := NewService(repo, fakeAccess{})
+	ctx := clientinfo.With(context.Background(), clientinfo.Info{IP: "203.0.113.9", UserAgent: "Mozilla\x00/5"})
+	svc.AuthEvent(ctx, identity.AuthEvent{Kind: identity.AuthLoginFailed, Status: 401})
+	svc.AuthEvent(ctx, identity.AuthEvent{Kind: identity.AuthLogin, Username: "ana", Status: 200})
+	svc.AuthEvent(ctx, identity.AuthEvent{Kind: "auth.nonsense", Status: 200})
+	require.Len(t, repo.events, 2, "an unknown kind is not recorded")
+	assert.Equal(t, Event{ID: 1, Actor: "unknown", Action: "POST /api/v1/auth/login", Path: "/api/v1/auth/login", Status: 401,
+		Summary: "failed to sign in", IP: "203.0.113.9", UserAgent: "Mozilla/5"}, repo.events[0])
+	assert.Equal(t, "ana", repo.events[1].Actor)
+	assert.Equal(t, "signed in", repo.events[1].Summary)
+	for kind := range signIns {
+		svc.AuthEvent(ctx, identity.AuthEvent{Kind: kind, Username: "ana", Status: 200})
+	}
+	assert.Len(t, repo.events, 2+len(signIns))
+	repo.insertErr = errBoom
+	svc.AuthEvent(ctx, identity.AuthEvent{Kind: identity.AuthLogout, Username: "ana", Status: 204}) // logged, not returned
+}
+
+// Changes through the router keep the client too.
+func TestRouterKeepsTheClient(t *testing.T) {
+	repo := &fakeRepo{}
+	h := mux(NewService(repo, fakeAccess{}), func(ctx context.Context) context.Context {
+		return clientinfo.With(asUser(ctx), clientinfo.Info{IP: "198.51.100.7", UserAgent: "provenly-cli"})
+	}, http.StatusNoContent)
+	serve(h, http.MethodDelete, "/api/v1/things/1")
+	require.Len(t, repo.events, 1)
+	assert.Equal(t, "198.51.100.7", repo.events[0].IP)
+	assert.Equal(t, "provenly-cli", repo.events[0].UserAgent)
 }

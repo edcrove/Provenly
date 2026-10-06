@@ -107,7 +107,7 @@ func run(ctx context.Context, args []string, d Deps) error {
 		slog.WarnContext(ctx, "PROVENLY_SECRETS_KEY is not set: using a random key, webhook secrets and connector tokens cannot be read after the API restarts")
 	}
 	services := app.NewServicesConfig(pool, time.Now, app.Config{
-		Identity: identity.DefaultConfig(secret), SecretsKey: cfg.SecretsKey,
+		Identity: identity.DefaultConfig(secret), SecretsKey: cfg.SecretsKey, TrustedProxies: cfg.TrustedProxies,
 		Integrations: integrations.Config{AllowPrivate: cfg.WebhooksAllowPrivate, GitHubAPIURL: cfg.GitHubAPIURL,
 			DeliveryRetention: time.Duration(cfg.WebhookDeliveryRetentionDays) * 24 * time.Hour},
 	})

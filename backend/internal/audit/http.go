@@ -44,6 +44,8 @@ type EventDTO struct {
 	Status     int32     `json:"status"`
 	Summary    *string   `json:"summary"`
 	TestCase   *string   `json:"testCase"`
+	IP         *string   `json:"ip"`
+	UserAgent  *string   `json:"userAgent"`
 }
 
 // optional is s, or nil when empty.
@@ -56,7 +58,8 @@ func optional(s string) *string {
 
 func eventDTO(e Event) EventDTO {
 	return EventDTO{ID: e.ID, OccurredAt: e.OccurredAt, Actor: e.Actor, Action: e.Action, Path: e.Path, Status: e.Status,
-		Project: optional(e.ProjectKey), Summary: optional(e.Summary), TestCase: optional(e.TestCaseKey)}
+		Project: optional(e.ProjectKey), Summary: optional(e.Summary), TestCase: optional(e.TestCaseKey),
+		IP: optional(e.IP), UserAgent: optional(e.UserAgent)}
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {

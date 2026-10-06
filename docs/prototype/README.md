@@ -405,6 +405,9 @@ Notion Decision Register; each one ships in its own PR.
   complete) at start and on `BACKUP_SCHEDULE`, rotates dumps older than `BACKUP_RETENTION_DAYS` only after a successful
   one, and is healthy while the last success is recent; `make db-restore` restores a `.dump`. Self-hosting documents
   the off-host copy and that `PROVENLY_SECRETS_KEY` is not in the dump.
+- **Sign-in audit (card #49):** sign-ins (succeeded, failed, locked out), sign-outs, accepted invitations and password
+  resets are audited with the client IP and user agent (`X-Forwarded-For` only through `PROVENLY_TRUSTED_PROXIES`)
+  and logged as `event=auth.*`; the actor is the account or `unknown`, never a typed secret.
 
 
 ### 24. Review-panel audit (2026-10-06): fixes

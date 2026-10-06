@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,6 +23,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/integrations"
 	integrationspg "github.com/edcrove/provenly/backend/internal/integrations/postgres"
 	"github.com/edcrove/provenly/backend/internal/mcp"
+	"github.com/edcrove/provenly/backend/internal/platform/clientinfo"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/secrets"
 	"github.com/edcrove/provenly/backend/internal/platform/telemetry"
@@ -46,6 +48,8 @@ type Services struct {
 	// Ready reports whether the dependencies needed to serve requests (the
 	// database) are reachable.
 	Ready func(context.Context) error
+	// TrustedProxies are the proxies believed about the client's address (X-Forwarded-For).
+	TrustedProxies []netip.Prefix
 }
 
 // NewServices wires the modules on a PostgreSQL pool with a random session secret
@@ -61,6 +65,9 @@ type Config struct {
 	// cannot be read after a restart).
 	SecretsKey   []byte
 	Integrations integrations.Config
+	// TrustedProxies are the proxies whose X-Forwarded-For names the client for the audit log
+	// (PROVENLY_TRUSTED_PROXIES); none by default.
+	TrustedProxies []netip.Prefix
 }
 
 // DefaultGitHubAPIURL is the public GitHub REST API.
@@ -92,14 +99,16 @@ func NewServicesConfig(pool *pgxpool.Pool, now func() time.Time, cfg Config) Ser
 		Insights:     insights.NewService(cat, exe, ids, now),
 		Integrations: integ,
 		Audit:        auditLog(auditpg.NewStore(pool), ids, cat),
-		Identity:     ids, Now: now, Ready: pool.Ping,
+		Identity:     ids, Now: now, Ready: pool.Ping, TrustedProxies: cfg.TrustedProxies,
 	}
 }
 
 // auditLog is the audit service, naming the projects, test cases and steps changes touched through the catalog.
-func auditLog(repo audit.Repository, access audit.Access, names audit.Resolver) *audit.Service {
-	svc := audit.NewService(repo, access)
+// It also records identity's sign-in events (card #49).
+func auditLog(repo audit.Repository, ids *identity.Service, names audit.Resolver) *audit.Service {
+	svc := audit.NewService(repo, ids)
 	svc.SetResolver(names)
+	ids.SetAuthLog(svc)
 	return svc
 }
 
@@ -117,7 +126,7 @@ func NewHandler(s Services, maxIngestBytes int64) http.Handler {
 	register(mux, s, maxIngestBytes, agents)
 	// MCP tools call the API in-process, as the caller (same routing, authorization and problem answers).
 	agents.Bind(httpx.Routes(mux))
-	return httpx.Recover(telemetry.Middleware(httpx.AccessLog(httpx.Routes(mux))))
+	return httpx.Recover(telemetry.Middleware(httpx.AccessLog(clientinfo.Middleware(s.TrustedProxies, httpx.Routes(mux)))))
 }
 
 // RoutePatterns lists every route the API registers ("METHOD /path"), so tests

@@ -1222,7 +1222,9 @@ paths:
       operationId: listAuditEvents
       summary: The audit log, newest first - every authenticated change made through the API (administrators)
       description: >-
-        One event per successful POST, PUT, PATCH or DELETE: who (a username, or an API key by prefix and name),
+        One event per successful POST, PUT, PATCH or DELETE, and one per sign-in event (a sign-in that succeeds,
+        fails with 401 or is refused with 429, a sign-out, an accepted invitation, a password reset; the actor is the
+        account, or `unknown` when the username matches none). Each keeps the client IP and user agent. Who (a username, or an API key by prefix and name),
         the operation (method and route) and in words ("edited CHK-4 step 3"), the request path, the project it
         changed and the test case it touched. Request bodies are never recorded. MCP calls (reads) and live run
         events are not audited. Events recorded before the summary existed have none, and only a project their path
@@ -4600,7 +4602,7 @@ components:
     AuditEvent:
       type: object
       additionalProperties: false
-      required: [id, occurredAt, actor, action, path, project, status, summary, testCase]
+      required: [id, occurredAt, actor, action, path, project, status, summary, testCase, ip, userAgent]
       properties:
         id:
           type: integer
@@ -4626,6 +4628,7 @@ components:
             (a test case, a step, a run). Null when none.
         status:
           type: integer
+          description: The HTTP status the request answered (2xx for changes; 401 or 429 for refused sign-ins).
         summary:
           type: string
           nullable: true
@@ -4636,6 +4639,17 @@ components:
           nullable: true
           description: The key of the test case the change touched, if any.
           example: CHK-4
+        ip:
+          type: string
+          nullable: true
+          description: >-
+            The client's address: the peer, or the nearest X-Forwarded-For hop added by a proxy listed in
+            PROVENLY_TRUSTED_PROXIES. Null for events recorded before it was kept.
+          example: 198.51.100.7
+        userAgent:
+          type: string
+          nullable: true
+          description: The client's User-Agent (at most 500 characters).
 
     AuditEventPage:
       allOf:

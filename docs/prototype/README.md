@@ -375,6 +375,19 @@ questions went to Ed.
   still work.
 - The HTTP server cuts off clients that trickle a request (read and idle timeouts).
 
+**Database: concurrency and performance**
+- Latest-results lookups (requirement coverage, issue verification) walk the test case's own runs through a new
+  partial index (migration 00031) instead of scanning results backwards or aggregating whole histories: a stale
+  test case went from minutes to milliseconds with long history (BE-INT-058).
+- Replacing a requirement's, issue's or static suite's test cases, and creating dimensions and values, are
+  serialized per scope (transaction advisory lock): no union of two concurrent lists, no limit overrun, no repeated
+  value positions (BE-INT-059, BE-INT-060).
+- Webhook deliveries are leased for 5 minutes (longer than a worker pass) and an attempt is recorded only if the row
+  is still the claimed one: a late worker can no longer turn a succeeded delivery back to pending (BE-INT-055).
+- The 101st manual record of a test case is a 409 conflict, not a database error (BE-INT-048).
+- Run list and detail read every run column through `sqlc.embed` (the list dropped the report digest; same class
+  as F12).
+
 ### 23. Review agents (technical experts and user personas)
 
 - **What**: fourteen read-only subagents in `.claude/agents/` — technical experts (`reviewer-api-contract`,

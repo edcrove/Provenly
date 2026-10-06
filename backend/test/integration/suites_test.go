@@ -120,6 +120,13 @@ func TestSuites(t *testing.T) {
 		// Runs filter by suite; archived suites take no runs; unknown suites are not found.
 		runs, err := s.Execution.ListRuns(ctx, execution.RunFilter{SuiteKey: ptr("smoke")}, pagination.Page{Number: 1, Size: 10})
 		require.NoError(t, err)
+		// A listed run is the run itself, every field (the list and the detail read the same columns).
+		got, err := s.Execution.GetRun(ctx, smokeRun.ID)
+		require.NoError(t, err)
+		require.NotEmpty(t, runs.Items)
+		assert.Equal(t, got, runs.Items[len(runs.Items)-1])
+		assert.NotEmpty(t, runs.Items[len(runs.Items)-1].ReportSHA256)
+		require.NoError(t, err)
 		assert.Equal(t, int64(1), runs.Total)
 		assert.Equal(t, smokeRun.ID, runs.Items[0].ID)
 		_, err = s.Catalog.UpdateSuite(ctx, catalog.DefaultProjectID, "release", catalog.UpdateSuiteInput{Archived: ptr(true)})

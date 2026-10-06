@@ -25,6 +25,7 @@ type Querier interface {
 	InsertAmendment(ctx context.Context, arg InsertAmendmentParams) (TestRunAmendment, error)
 	InsertExpectedCases(ctx context.Context, arg InsertExpectedCasesParams) error
 	// One recorded result of a running run; a re-test of the same test is its next attempt.
+	// Nothing is inserted past the last allowed attempt (the column's CHECK would fail the transaction instead).
 	InsertManualResult(ctx context.Context, arg InsertManualResultParams) (TestResult, error)
 	InsertParseErrors(ctx context.Context, arg []InsertParseErrorsParams) (int64, error)
 	// Appends one live event; an event id already received for the run is a duplicate delivery and is skipped (0 rows).

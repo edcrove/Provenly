@@ -13,7 +13,7 @@ INSERT INTO test_results (test_run_id, test_case_id, requested_test_case_id, cor
 VALUES (@test_run_id, @test_case_id, @requested_test_case_id, @correlation, @test_name, @class_name, @suite_name, @status, @duration_ms, @error_message, @error_details, @attempt);
 
 -- name: GetTestRun :one
-SELECT r.*,
+SELECT sqlc.embed(r),
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
@@ -25,7 +25,7 @@ SELECT id FROM test_runs WHERE project_id = @project_id AND external_run_id = @e
 -- name: ListTestRuns :many
 -- The page is chosen first: the per-run counts are only computed for its rows,
 -- not for every row skipped by OFFSET.
-SELECT r.*,
+SELECT sqlc.embed(r),
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count
@@ -154,6 +154,9 @@ INSERT INTO test_results (test_run_id, test_case_id, requested_test_case_id, cor
 SELECT @test_run_id, @test_case_id, @requested_test_case_id, 'valid', @test_name, @class_name, '', @status, sqlc.narg('duration_ms'), @error_message, '',
     coalesce(max(x.attempt), 0) + 1, sqlc.narg('recorded_by'), sqlc.narg('failed_step')
 FROM test_results x WHERE x.test_run_id = @test_run_id AND x.class_name = @class_name AND x.test_name = @test_name
+  AND x.suite_name = ''
+-- Nothing is inserted past the last allowed attempt (the column's CHECK would fail the transaction instead).
+HAVING coalesce(max(x.attempt), 0) < @max_attempts::int
 RETURNING *;
 
 -- name: FinishTestRun :exec

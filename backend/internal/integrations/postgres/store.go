@@ -136,13 +136,14 @@ func (s *Store) ClaimDueDeliveries(ctx context.Context, limit int32) ([]integrat
 // FinishAttempt implements integrations.Repository.
 func (s *Store) FinishAttempt(ctx context.Context, id int64, a integrations.Attempt) error {
 	p := integrationsdb.FinishAttemptParams{
-		ID: id, Status: a.Status, Attempts: a.Attempts, LastError: a.Error,
+		ID: id, Status: a.Status, Attempts: a.Attempts, LastError: a.Error, ClaimedAttempts: a.Attempts - 1,
 		NextAttemptAt: pgtype.Timestamptz{Time: a.NextAttemptAt, Valid: true},
 	}
 	if a.StatusCode != nil {
 		p.LastStatusCode = pgtype.Int4{Int32: *a.StatusCode, Valid: true}
 	}
-	return s.q.FinishAttempt(ctx, p)
+	_, err := s.q.FinishAttempt(ctx, p) // zero rows: a late worker's stale attempt, dropped
+	return err
 }
 
 // ListDeliveries implements integrations.Repository.

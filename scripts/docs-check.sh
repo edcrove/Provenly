@@ -2,7 +2,8 @@
 # Repository consistency checks that no compiler catches (run by `make lint` and CI):
 # - every screenshot is listed in docs/screenshots/README.md and every listed one exists;
 # - no doc tells users to install the reporter from the npm registry while the @provenly scope is not ours;
-# - workflows grant no write permission by default and never leave the checkout token on disk.
+# - workflows grant no write permission by default, never leave the checkout token on disk and pin every action to a
+#   commit SHA (a tag can be moved by whoever controls the action's repository).
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
@@ -28,6 +29,9 @@ for wf in .github/workflows/*.yml; do
   checkouts=$(grep -c 'uses: actions/checkout@' "$wf" || true)
   safe=$(grep -A2 'uses: actions/checkout@' "$wf" | grep -c 'persist-credentials: false' || true)
   [ "$checkouts" = "$safe" ] || err "$wf: $((checkouts - safe)) checkout(s) without persist-credentials: false"
+  if grep -nE '^\s*(- )?uses: ' "$wf" | grep -vE 'uses: [^@ ]+@[0-9a-f]{40} # v[0-9]'; then
+    err "$wf: every action must be pinned to a full commit SHA with a '# vX.Y.Z' comment"
+  fi
 done
 
 [ "$fail" = 0 ] && echo "docs-check: OK"

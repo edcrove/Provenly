@@ -358,6 +358,9 @@ Notion Decision Register; each one ships in its own PR.
 
 - **Broken gzip is an unreadable report:** a body sent as gzip that is not gzip, truncated or corrupt answers
   `400 invalid_junit` ("body is not valid gzip: …"), like broken XML (replaces P8-3, which said `validation_error`).
+- **Supply chain (card #50):** every GitHub Action is pinned to a commit SHA with its version as a comment
+  (`scripts/docs-check.sh` fails on an unpinned `uses:`), and Dependabot proposes updates for actions, Go modules,
+  npm packages and Docker images.
 
 ### 24. Review-panel audit (2026-10-06): fixes
 

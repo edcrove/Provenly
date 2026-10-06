@@ -97,6 +97,10 @@ func TestTestCases(t *testing.T) {
 	other := e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "Old"}).Expect().Status(http.StatusCreated).JSON().Object()
 	otherPath := "/api/v1/test-cases/" + strconv.FormatInt(int64(other.Value("id").Number().Raw()), 10)
 	e.POST(otherPath+"/deprecate").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "deprecated")
+	// Implementation decision #10: a deprecated test case stays editable (content and steps), and stays deprecated.
+	e.PATCH(otherPath).WithJSON(map[string]any{"title": "Old, reworded", "automated": true}).Expect().Status(http.StatusOK).
+		JSON().Object().HasValue("title", "Old, reworded").HasValue("status", "deprecated").HasValue("automated", true)
+	e.POST(otherPath+"/steps").WithJSON(map[string]any{"action": "open the old page"}).Expect().Status(http.StatusCreated)
 	e.POST("/api/v1/test-cases/0/deprecate").Expect().Status(http.StatusBadRequest)
 	e.POST("/api/v1/test-cases/987654/deprecate").Expect().Status(http.StatusNotFound)
 	e.POST(otherPath+"/reactivate").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "active")
@@ -763,6 +767,18 @@ func TestIngestionMediaTypes(t *testing.T) {
 	_ = zw.Close()
 	send("gzip", "application/xml", zipped.Bytes()).WithHeader("Content-Encoding", "gzip").Expect().
 		Status(http.StatusCreated).JSON().Object().HasValue("received", 1)
+	// A gzip report is replayed like any other: the same report (compressed or not) is a silent replay, a different
+	// one under the same run id is a replay with a warning (card #42).
+	send("gzip", "application/xml", zipped.Bytes()).WithHeader("Content-Encoding", "gzip").Expect().
+		Status(http.StatusOK).JSON().Object().HasValue("created", false).Value("warnings").Array().IsEmpty()
+	send("gzip", "application/xml", []byte(`<testsuite name="zipped"><testcase name="gz"/></testsuite>`)).Expect().
+		Status(http.StatusOK).JSON().Object().HasValue("created", false).Value("warnings").Array().IsEmpty()
+	var other bytes.Buffer
+	ow := gzip.NewWriter(&other)
+	_, _ = ow.Write([]byte(`<testsuite name="zipped"><testcase name="another"/></testsuite>`))
+	_ = ow.Close()
+	send("gzip", "application/xml", other.Bytes()).WithHeader("Content-Encoding", "gzip").Expect().
+		Status(http.StatusOK).JSON().Object().HasValue("created", false).Value("warnings").Array().Length().IsEqual(1)
 	send("gzip-broken", "application/xml", []byte{0x1f, 0x8b}).WithHeader("Content-Encoding", "gzip").Expect().
 		Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "validation_error")
 	send("br", "application/xml", []byte(`<testsuite/>`)).WithHeader("Content-Encoding", "br").Expect().
@@ -1030,6 +1046,13 @@ func TestManualExecution(t *testing.T) {
 	viewer.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "TC", "name": "x"}).Expect().Status(http.StatusForbidden)
 	viewer.POST(results).WithJSON(map[string]any{"testCaseId": id, "status": "passed"}).Expect().Status(http.StatusForbidden)
 	viewer.POST(finish).WithJSON(map[string]any{"status": "completed"}).Expect().Status(http.StatusForbidden)
+
+	// A CI API key reports runs; it never starts, records or finishes a manual run (401: not a session route).
+	key := as(e, admin.POST("/api/v1/projects/TC/api-keys").WithJSON(map[string]any{"name": "ci"}).Expect().
+		Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
+	key.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "TC", "name": "x"}).Expect().Status(http.StatusUnauthorized)
+	key.POST(results).WithJSON(map[string]any{"testCaseId": id, "status": "passed"}).Expect().Status(http.StatusUnauthorized)
+	key.POST(finish).WithJSON(map[string]any{"status": "completed"}).Expect().Status(http.StatusUnauthorized)
 }
 
 // TestRequirements: requirements per project (members write, maintainers import, anyone in the project reads) and

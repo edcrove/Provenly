@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -130,5 +131,22 @@ func TestGateSelection(t *testing.T) {
 	}
 	if !isSelected(map[string]bool{}, "backend-unit") || !knownGate("backend-e2e") || knownGate("nope") {
 		t.Fatal("selection helpers")
+	}
+}
+
+func TestUndeclaredTestIDs(t *testing.T) {
+	ids := newTestIDs()
+	ids.record("BE-INT-001_declared", true)
+	ids.record("BE-INT-020_forgotten", true)
+	ids.record("BE-INT-099 typo, failing", false)
+	ids.record("FE-INT-001 another layer", true)
+	inv := []InventoryTarget{{ID: "BE-INT-001"}}
+	if got := ids.unknown("BE-INT-", inv); !slices.Equal(got, []string{"BE-INT-020", "BE-INT-099"}) {
+		t.Fatalf("unknown = %v", got)
+	}
+	var r GateResult
+	undeclared(&r, ids, "BE-INT-", inv)
+	if len(r.Errors) != 2 || !strings.Contains(r.Errors[0], "BE-INT-020 is not in the inventory") {
+		t.Fatalf("errors = %v", r.Errors)
 	}
 }

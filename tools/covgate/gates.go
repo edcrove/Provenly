@@ -53,11 +53,11 @@ var gates = []gateDef{
 	{"backend-unit", "backend", "unit", "Go statements (go test -cover); branches: complementary inventory", backendUnit},
 	{"backend-integration", "backend", "integration", "integration surfaces: every sqlc query + reviewed behaviors", backendIntegration},
 	{"backend-contract", "backend", "contract", "every OpenAPI operation x declared response status", backendContract},
-	{"backend-e2e", "backend", "e2e", "reviewed API journeys (Playwright)", inventoryGate("backend-e2e.yaml", paths.E2EResults, playwrightJSON)},
+	{"backend-e2e", "backend", "e2e", "reviewed API journeys (Playwright)", inventoryGate("backend-e2e.yaml", "BE-E2E-", paths.E2EResults, playwrightJSON)},
 	{"frontend-unit", "frontend", "unit", "statements + branches (@vitest/coverage-v8)", frontendUnit},
 	{"frontend-integration", "frontend", "integration", "reviewed component behaviors + every UI surface inventoried", frontendIntegration},
 	{"frontend-contract", "frontend", "contract", "consumed OpenAPI operations x declared response status", frontendContract},
-	{"frontend-e2e", "frontend", "e2e", "reviewed UI journeys (Playwright)", inventoryGate("frontend-e2e.yaml", paths.E2EResults, playwrightJSON)},
+	{"frontend-e2e", "frontend", "e2e", "reviewed UI journeys (Playwright)", inventoryGate("frontend-e2e.yaml", "FE-E2E-", paths.E2EResults, playwrightJSON)},
 	{"backend-consolidated", "backend", "consolidated", "every statement, executed by any layer (unit + integration + contract + e2e merged)", backendConsolidated},
 	{"frontend-consolidated", "frontend", "consolidated", "every line, executed by any layer (unit + integration + e2e merged)", frontendConsolidatedGate},
 }
@@ -128,7 +128,15 @@ func backendIntegration(root string, r *GateResult) []Element {
 	for _, t := range inv {
 		out = append(out, Element{Metric: "targets", Key: t.ID, Label: t.ID + " " + t.Description, Covered: ids.covered(t.ID)})
 	}
+	undeclared(r, ids, "BE-INT-", inv)
 	return out
+}
+
+// undeclared reports test ids the inventory does not declare as gate errors.
+func undeclared(r *GateResult, ids testIDs, prefix string, inv []InventoryTarget) {
+	for _, id := range ids.unknown(prefix, inv) {
+		r.Errors = append(r.Errors, "test id "+id+" is not in the inventory (add it, or fix the test name)")
+	}
 }
 
 func contractElements(root string, r *GateResult, evidencePath string, include func(Variant) bool) []Element {
@@ -162,7 +170,7 @@ func frontendContract(root string, r *GateResult) []Element {
 	return contractElements(root, r, paths.FrontendContract, func(v Variant) bool { return consumed[v.Key] })
 }
 
-func inventoryGate(file, results string, read func(string) (testIDs, error)) gateFunc {
+func inventoryGate(file, prefix, results string, read func(string) (testIDs, error)) gateFunc {
 	return func(root string, r *GateResult) []Element {
 		inv, err := loadInventory(filepath.Join(root, paths.Inventories, file))
 		if err != nil {
@@ -176,6 +184,7 @@ func inventoryGate(file, results string, read func(string) (testIDs, error)) gat
 		for _, t := range inv {
 			out = append(out, Element{Metric: "journeys", Key: t.ID, Label: t.ID + " " + t.Description, Covered: ids.covered(t.ID)})
 		}
+		undeclared(r, ids, prefix, inv)
 		return out
 	}
 }
@@ -228,5 +237,6 @@ func frontendIntegration(root string, r *GateResult) []Element {
 			r.Errors = append(r.Errors, "inventory references a missing surface: "+s)
 		}
 	}
+	undeclared(r, ids, "FE-INT-", inv)
 	return out
 }

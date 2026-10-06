@@ -4,6 +4,7 @@ package integration
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -361,19 +362,25 @@ func TestExecutionPersistence(t *testing.T) {
 		}
 		_, err := s.Ingestion.IngestJUnit(ctx, meta("900", 1), strings.NewReader(junitFor(cases...)))
 		require.NoError(t, err)
+		// Median of 7 reads of both lists, so one slow read (GC, a busy CI runner) does not decide.
 		timed := func(page int32) time.Duration {
-			start := time.Now()
-			_, err := s.Execution.History(ctx, tc.ID, pagination.Page{Number: page, Size: 20})
-			require.NoError(t, err)
-			_, err = s.Execution.ListRuns(ctx, execution.RunFilter{}, pagination.Page{Number: page, Size: 20})
-			require.NoError(t, err)
-			return time.Since(start)
+			var times []time.Duration
+			for range 7 {
+				start := time.Now()
+				_, err := s.Execution.History(ctx, tc.ID, pagination.Page{Number: page, Size: 20})
+				require.NoError(t, err)
+				_, err = s.Execution.ListRuns(ctx, execution.RunFilter{}, pagination.Page{Number: page, Size: 20})
+				require.NoError(t, err)
+				times = append(times, time.Since(start))
+			}
+			slices.Sort(times)
+			return times[len(times)/2]
 		}
-		first := timed(1)
+		first := max(timed(1), 5*time.Millisecond) // below the timer's useful resolution on a busy runner
 		last := timed(1000)
 		// Before the fix the per-run counts ran for every row skipped by OFFSET, so the
 		// last page took orders of magnitude longer than the first.
-		assert.Less(t, last, 3*first+500*time.Millisecond, "first page %v, last page %v", first, last)
+		assert.Less(t, last, 5*first, "first page %v, last page %v", first, last)
 	})
 
 	t.Run("BE-INT-030_summary_of_a_mixed_run_matches_the_hand_computed_numbers", func(t *testing.T) {

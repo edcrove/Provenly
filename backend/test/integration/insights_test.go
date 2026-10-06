@@ -58,7 +58,10 @@ func TestInsights(t *testing.T) {
 		require.Len(t, q.StaleCases, 2)
 		assert.Equal(t, never.Key(), q.StaleCases[0].Key, "never executed first")
 		assert.Equal(t, old.Key(), q.StaleCases[1].Key)
-		assert.WithinDuration(t, time.Now().AddDate(0, 0, -30), *q.StaleCases[1].LastExecutedAt, time.Hour)
+		// The last execution is exactly the first (backdated) run's creation time.
+		var created time.Time
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT min(created_at) FROM test_runs`).Scan(&created))
+		assert.True(t, created.Equal(*q.StaleCases[1].LastExecutedAt), "last executed %v, run created %v", *q.StaleCases[1].LastExecutedAt, created)
 		assert.Equal(t, []insights.FlakyCase{{TestCaseID: login.ID, Key: login.Key(), Runs: 2}, {TestCaseID: pay.ID, Key: pay.Key(), Runs: 2}}, q.Flaky,
 			"pay failed for good in run 3: flaky in runs 1 and 2 only")
 

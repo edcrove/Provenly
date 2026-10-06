@@ -351,6 +351,17 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
 
+### 23. Review agents (technical experts and user personas)
+
+- **What**: eleven read-only subagents in `.claude/agents/` — technical experts (`reviewer-api-contract`,
+  `reviewer-database`, `reviewer-security`, `reviewer-tests`, `reviewer-frontend`, `reviewer-domain`) that review a
+  diff against the repo's rules and return findings with severity and `path:line`, and user personas
+  (`persona-qa-lead`, `persona-developer`, `persona-manual-tester`, `persona-devops`, `persona-engineering-manager`)
+  that walk their journeys over the screenshots or a running stack and report friction.
+- **How**: the `review-panel` skill picks the agents by what the diff touches, runs them in parallel, verifies every
+  blocker and major, fixes confirmed defects with regression tests and sends product questions to Ed. The checklists
+  encode lessons from earlier rounds (e.g. audit F12: hand-mapped query columns, mocks hiding backend gaps).
+
 ### 22. Full-product audit (screenshots of every flow, then code)
 
 Every screenshot of the flow was reviewed and the new modules re-read; each finding was fixed with a regression test

@@ -127,3 +127,12 @@ func TestGitHubRoutes(t *testing.T) {
 	assert.Equal(t, http.StatusUnsupportedMediaType, serve(t, f.svc, call{"PUT", "/api/v1/projects/SHOP/github", ""}).Code)
 	assert.Equal(t, http.StatusBadRequest, serve(t, f.svc, call{"PUT", "/api/v1/projects/SHOP/github", `{"repository":"x"}`}).Code)
 }
+
+func TestMalformedProjectKeysAreRejectedBeforeAnyLookup(t *testing.T) {
+	f := newFixture(t, Config{}, maintainer())
+	for _, target := range []string{"/api/v1/projects/%00/webhooks", "/api/v1/projects/%FF/github", "/api/v1/projects/shop/github"} {
+		rec := serve(t, f.svc, call{"GET", target, ""})
+		assert.Equal(t, http.StatusBadRequest, rec.Code, target)
+		assert.Contains(t, rec.Body.String(), `"field":"projectKey"`, target)
+	}
+}

@@ -38,7 +38,8 @@ def oversized(url, size):
     with tempfile.NamedTemporaryFile(suffix=".xml") as f:
         f.write(b"<testsuite>" + b" " * size + b"</testsuite>")
         f.flush()
-        out = subprocess.run(["curl", "-s", "-w", "\n%{http_code}", "-X", "POST", "-H", "Content-Type: application/xml",
+        auth = [a for k, v in session.items() for a in ("-H", f"{k}: {v}")]  # signed in: the API checks the size after the session
+        out = subprocess.run(["curl", "-s", "-w", "\n%{http_code}", "-X", "POST", "-H", "Content-Type: application/xml", *auth,
                               "--data-binary", "@" + f.name, url], capture_output=True, text=True).stdout
     text, _, code = out.rpartition("\n")
     try:
@@ -215,7 +216,8 @@ def main():
                                     ("GET", "/projects/NOPE99/members", None, 404), ("GET", "/users", None, 403), ("POST", "/invitations", {}, 403)]:
         check(f"viewer {method} {path}", call(base, method, path, body, headers=as_viewer)[0], exp)
     for user, body, exp in [(viewer_name, {"role": "owner"}, 400), (viewer_name, {"role": ""}, 400), (viewer_name, {}, 400),
-                            ("nobody-here", {"role": "member"}, 404), ("%00", {"role": "member"}, 400), ("a" * 300, {"role": "member"}, 404)]:
+                            ("nobody-here", {"role": "member"}, 404), ("%00", {"role": "member"}, 400), ("%ff", {"role": "member"}, 400),
+                            ("a" * 300, {"role": "member"}, 400), ("Admin", {"role": "member"}, 400)]:
         check(f"PUT member {user[:20]!r} {body}", call(base, "PUT", f"/projects/{key}/members/{user}", body)[0], exp)
     check("PUT member text/plain", call(base, "PUT", f"/projects/{key}/members/{viewer_name}", raw=b'{"role":"member"}', ctype="text/plain")[0], 415)
     check("PUT member bad key", call(base, "PUT", f"/projects/bad/members/{viewer_name}", {"role": "member"})[0], 400)
@@ -226,6 +228,12 @@ def main():
     check("remove member", call(base, "DELETE", f"/projects/{key}/members/{viewer_name}")[0], 204)
     check("removed member: project invisible", call(base, "GET", f"/test-cases/{mine}", headers=as_viewer)[0], 404)
     check("remove again", call(base, "DELETE", f"/projects/{key}/members/{viewer_name}")[0], 404)
+    check("remove member %00", call(base, "DELETE", f"/projects/{key}/members/%00")[0], 400)
+    # The administration lists page like every other list.
+    for path in ["/users", "/invitations", f"/projects/{key}/members", f"/projects/{key}/api-keys"]:
+        for qs, exp in [("page=21474838&pageSize=100", 400), ("page=0", 400), ("page=", 400), ("pageSize=101", 400),
+                        ("page=abc", 400), ("page=999", 200), ("page=2&page=x", 200), ("unknown=1", 200)]:
+            check(f"GET {path}?{qs}", call(base, "GET", f"{path}?{qs}")[0], exp)
 
     # API keys (prototype feature 4): malformed, unknown and revoked keys are 401s; a key reports into its project
     # only and opens no other route; names are validated; ids and keys never reach the database malformed.
@@ -601,6 +609,10 @@ def main():
     check("ping is queued", call(base, "POST", f"{hooks}/{hid}/ping")[0], 202)
     for q, exp in [("page=0", 400), ("pageSize=101", 400), ("page=21474838&pageSize=100", 400), ("page=", 400), ("pageSize=1&x=y", 200)]:
         check(f"deliveries ?{q}", call(base, "GET", f"{hooks}/{hid}/deliveries?{q}")[0], exp)
+    for bad in ["%00", "%ff", "tc", "T"]:
+        for method, path in [("GET", "/webhooks"), ("POST", "/webhooks"), ("GET", "/webhooks/1/deliveries"), ("GET", "/github"),
+                             ("PUT", "/github"), ("DELETE", "/github"), ("POST", "/github/sync")]:
+            check(f"{method} /projects/{bad}{path}", call(base, method, f"/projects/{bad}{path}", {} if method in ("POST", "PUT") else None)[0], 400)
     gh = f"/projects/{key}/github"
     check("no GitHub connection", call(base, "GET", gh)[0], 404)
     check("sync without a connection", call(base, "POST", gh + "/sync")[0], 404)

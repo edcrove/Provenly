@@ -22,6 +22,8 @@ type Querier interface {
 	// Every shard arrived (or CI finalized the run): its execution status and completion time.
 	FinishShardedRun(ctx context.Context, arg FinishShardedRunParams) error
 	FinishTestRun(ctx context.Context, arg FinishTestRunParams) error
+	// The project of a run: what authorizing a request on it needs, without the run's counts and outcome.
+	GetRunProject(ctx context.Context, id int64) (int64, error)
 	GetTestRun(ctx context.Context, id int64) (GetTestRunRow, error)
 	GetTestRunIDByExternalID(ctx context.Context, arg GetTestRunIDByExternalIDParams) (int64, error)
 	InsertAmendment(ctx context.Context, arg InsertAmendmentParams) (TestRunAmendment, error)

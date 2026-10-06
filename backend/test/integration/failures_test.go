@@ -111,6 +111,7 @@ func TestPersistenceFailures(t *testing.T) {
 			"execution.ListLatestConclusive":  func() error { _, err := exe.ListLatestConclusive(ctx, []int64{1}); return err },
 			"execution.CountRunEvents":        func() error { _, err := exe.CountRunEvents(ctx, 1); return err },
 			"execution.InsertRunEvent":        func() error { _, err := exe.InsertRunEvent(ctx, 1, execution.NewEvent{}); return err },
+			"execution.GetRunProject":         func() error { _, err := exe.GetRunProject(ctx, 1); return err },
 			"execution.ListRunEvents":         func() error { _, err := exe.ListRunEvents(ctx, 1); return err },
 			"execution.CompleteLiveRun":       func() error { return exe.CompleteLiveRun(ctx, 1, execution.RunCompleted, "x") },
 			"execution.InsertRunShard":        func() error { _, err := exe.InsertRunShard(ctx, 1, execution.RunShard{Shard: 1}); return err },

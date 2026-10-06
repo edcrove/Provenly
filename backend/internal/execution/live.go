@@ -284,7 +284,7 @@ func (s *Service) Live(ctx context.Context, runID int64) (Live, error) {
 	if run.Mode != ModeLive {
 		return Live{}, apperr.Conflict("run %d is not a live run", runID)
 	}
-	summary, err := s.Summary(ctx, runID)
+	summary, err := s.summarize(ctx, runID)
 	if err != nil {
 		return Live{}, err
 	}

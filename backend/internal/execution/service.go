@@ -234,7 +234,17 @@ func (s *Service) GetRun(ctx context.Context, id int64) (TestRun, error) {
 	return run, err
 }
 
-// getRun returns a run without its outcome (existence checks).
+// RunProject returns the project of a run (404 when it does not exist): the cheap read that authorizes a request on
+// a run and checks it exists, without loading its counts or computing its outcome (card #44).
+func (s *Service) RunProject(ctx context.Context, id int64) (int64, error) {
+	p, err := s.repo.GetRunProject(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return 0, runNotFound(id)
+	}
+	return p, err
+}
+
+// getRun returns a run without its outcome.
 func (s *Service) getRun(ctx context.Context, id int64) (TestRun, error) {
 	run, err := s.repo.GetTestRun(ctx, id)
 	if errors.Is(err, ErrNotFound) {
@@ -261,7 +271,7 @@ func (s *Service) ListRuns(ctx context.Context, f RunFilter, page pagination.Pag
 
 // ListRunResults returns a page of the individual results of a run.
 func (s *Service) ListRunResults(ctx context.Context, runID int64, f ResultFilter, page pagination.Page) (pagination.Result[TestResult], error) {
-	if _, err := s.getRun(ctx, runID); err != nil {
+	if _, err := s.RunProject(ctx, runID); err != nil {
 		return pagination.Result[TestResult]{}, err
 	}
 	items, err := s.repo.ListRunResults(ctx, runID, f, page.Limit(), page.Offset())
@@ -287,7 +297,7 @@ func (s *Service) ParseErrors(ctx context.Context, runID int64) ([]ParseError, e
 
 // ListParseErrors returns a page of the stored parse errors of a run.
 func (s *Service) ListParseErrors(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[ParseError], error) {
-	if _, err := s.getRun(ctx, runID); err != nil {
+	if _, err := s.RunProject(ctx, runID); err != nil {
 		return pagination.Result[ParseError]{}, err
 	}
 	items, err := s.repo.ListParseErrors(ctx, runID, page.Limit(), page.Offset())
@@ -303,9 +313,14 @@ func (s *Service) ListParseErrors(ctx context.Context, runID int64, page paginat
 
 // Summary computes the summary of a run against its immutable snapshot.
 func (s *Service) Summary(ctx context.Context, runID int64) (Summary, error) {
-	if _, err := s.getRun(ctx, runID); err != nil {
+	if _, err := s.RunProject(ctx, runID); err != nil {
 		return Summary{}, err
 	}
+	return s.summarize(ctx, runID)
+}
+
+// summarize computes the summary of a run known to exist.
+func (s *Service) summarize(ctx context.Context, runID int64) (Summary, error) {
 	inputs, err := s.repo.ListSummaryInputs(ctx, []int64{runID})
 	if err != nil {
 		return Summary{}, err
@@ -330,7 +345,7 @@ func (s *Service) Amend(ctx context.Context, runID, testCaseID int64, reason str
 	if err := v.Err(); err != nil {
 		return Amendment{}, err
 	}
-	if _, err := s.getRun(ctx, runID); err != nil {
+	if _, err := s.RunProject(ctx, runID); err != nil {
 		return Amendment{}, err
 	}
 	inputs, err := s.repo.ListSummaryInputs(ctx, []int64{runID})
@@ -356,7 +371,7 @@ func (s *Service) Amend(ctx context.Context, runID, testCaseID int64, reason str
 
 // ListAmendments returns a page of a run's amendments, oldest first.
 func (s *Service) ListAmendments(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[Amendment], error) {
-	if _, err := s.getRun(ctx, runID); err != nil {
+	if _, err := s.RunProject(ctx, runID); err != nil {
 		return pagination.Result[Amendment]{}, err
 	}
 	items, err := s.repo.ListAmendments(ctx, runID, page.Limit(), page.Offset())

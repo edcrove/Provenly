@@ -24,6 +24,9 @@ type stubAPI struct {
 	gotProjects []int64
 	gotSuite    *string
 	gotAmend    []any
+	// runErr fails GetRun alone (after the cheap RunProject authorized the request); runReads counts GetRun calls.
+	runErr   error
+	runReads int
 }
 
 var sampleRun = TestRun{ID: 3, ExternalRunID: "github:1:1", Provider: "github", ProviderRunID: "1", RunAttempt: 1,
@@ -32,7 +35,13 @@ var sampleRun = TestRun{ID: 3, ExternalRunID: "github:1:1", Provider: "github", 
 var sampleResult = TestResult{ID: 8, TestRunID: 3, TestCaseID: ptr(int64(153)), RequestedTestCaseID: ptr("153"),
 	Correlation: CorrelationValid, TestName: "login", Status: Passed, DurationMs: ptr(int64(12))}
 
-func (s *stubAPI) GetRun(context.Context, int64) (TestRun, error) { return sampleRun, s.getErr }
+func (s *stubAPI) GetRun(context.Context, int64) (TestRun, error) {
+	s.runReads++
+	return sampleRun, s.runErr
+}
+func (s *stubAPI) RunProject(context.Context, int64) (int64, error) {
+	return sampleRun.ProjectID, s.getErr
+}
 func (s *stubAPI) ListRuns(_ context.Context, f RunFilter, p pagination.Page) (pagination.Result[TestRun], error) {
 	s.gotProjects, s.gotSuite = f.ProjectIDs, f.SuiteKey
 	return pagination.Result[TestRun]{Items: []TestRun{sampleRun}, Page: p, Total: 1}, s.err
@@ -305,4 +314,18 @@ func TestShardDTOs(t *testing.T) {
 	res := sampleResult
 	res.Shard = ptr(int32(2))
 	assert.Equal(t, ptr(int32(2)), ResultDTO(res, nil).Shard)
+}
+
+// Routes on a run authorize it with its project alone: only GET /test-runs/{id} loads the run and its outcome (#44).
+func TestHandlerRunReads(t *testing.T) {
+	for _, target := range []string{"/api/v1/test-runs/3/results", "/api/v1/test-runs/3/summary", "/api/v1/test-runs/3/parse-errors",
+		"/api/v1/test-runs/3/live", "/api/v1/test-runs/3/amendments"} {
+		api := &stubAPI{}
+		assert.Equal(t, http.StatusOK, serve(api, stubCatalog{}, target).Code, target)
+		assert.Zero(t, api.runReads, "no full run read: %s", target)
+	}
+	api := &stubAPI{}
+	serve(api, stubCatalog{}, "/api/v1/test-runs/3")
+	assert.Equal(t, 1, api.runReads)
+	assert.Equal(t, http.StatusInternalServerError, serve(&stubAPI{runErr: errors.New("db down")}, stubCatalog{}, "/api/v1/test-runs/3").Code)
 }

@@ -1,23 +1,27 @@
-# Architecture (POC)
+# Architecture
 
 ## Modular monolith
 
-One Go process, three modules with their own internal interfaces. No queues, RPC or service clients in the POC.
+One Go process, eight modules with their own internal interfaces. No queues, RPC or service clients.
 
 | Module | Owns (tables) | Public interface | Depends on |
 |---|---|---|---|
-| `catalog` (Test Catalog) | `test_cases`, `test_steps` | `catalog.Service` | — |
-| `execution` (TestRun/Execution) | `test_runs`, `test_run_expected_cases`, `test_results` | `execution.Service` | `catalog` only through `TestCaseChecker` (404 on history) |
-| `ingestion` | none | `ingestion.Service` | `catalog` (`ExpectedUniverse`, `Statuses`), `execution` (`RecordRun`, `Diagnostics`) |
+| `catalog` (Test Catalog) | `projects`, `test_cases`, `test_steps`, `classification_dimensions`, `classification_values`, `test_case_classifications`, `test_case_tags`, `test_suites`, `test_suite_cases`, `requirements`, `requirement_test_cases`, `issues`, `issue_test_cases` | `catalog.Service` | `execution` only through `ResultReader` (latest results for coverage and verification) |
+| `execution` (TestRun/Execution) | `test_runs`, `test_run_expected_cases`, `test_results`, `test_run_parse_errors`, `test_run_amendments`, `test_run_events` | `execution.Service` | `catalog` only through `TestCaseChecker` (404 on history) |
+| `ingestion` | none | `ingestion.Service` (JUnit, manual and live runs) | `catalog` (`ExpectedUniverse`, `Statuses`), `execution` (`RecordRun`, `Diagnostics`) |
+| `identity` | `users`, `invitations`, `project_members`, `api_keys` | `identity.Service`, `identity.Protect` | `catalog` (project keys) |
+| `insights` | none | `insights.Service` (quality indicators) | `catalog`, `execution` |
 | `audit` | `audit_events` (append-only) | `audit.Service`, `audit.Wrap` (router) | `identity` (who called, admin check) |
 | `integrations` | `webhooks`, `webhook_deliveries`, `github_connections` | `integrations.Service` | `catalog` (`ProjectByKey`, `ProjectByID`, `ImportIssues`), `identity` (access); hears completed runs from `ingestion` through `RunNotifier` |
+| `mcp` | none | `POST /api/v1/mcp` | the REST API in-process, with the caller's credentials |
 
 - A module never reads another module's tables and there are **no cross-module foreign keys**: execution stores
-  TC-IDs by value, keeping a future extraction possible.
+  TC-IDs by value, keeping a future extraction possible. Known exception: identity's `project_members`, `api_keys`
+  and `invitations` reference `projects (id)`.
 - Each module has a `Repository` port and a `postgres` adapter over its own `sqlc` package generated from its own
   migration file only (no shared global schema).
-- `internal/app` composes modules; `app.Services` exposes the application layer so REST today and MCP later share
-  the same use cases.
+- `internal/app` composes modules; `app.Services` exposes the application layer so REST and MCP share the same use
+  cases.
 
 ## Key invariants and where they are enforced
 

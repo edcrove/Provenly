@@ -23,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
@@ -31,6 +33,8 @@ jobs:
             tools/covgate/go.sum
       - name: Workflows (actionlint)
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - name: Docs and workflow consistency (screenshot index, reporter install, workflow permissions)
+        run: scripts/docs-check.sh
       - name: Build
         working-directory: backend
         run: go build ./...
@@ -68,6 +72,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -101,6 +107,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -123,6 +131,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
@@ -146,6 +156,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
@@ -167,6 +179,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
@@ -192,6 +206,8 @@ jobs:
         layer: [unit, integration, contract]
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
@@ -230,6 +246,8 @@ jobs:
           --health-interval 2s --health-timeout 3s --health-retries 30
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
@@ -277,11 +295,13 @@ jobs:
       COMPOSE: docker compose --env-file envs/qa.env
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - name: Build images and start the demo environment (docker compose up)
         run: docker compose up -d --build --wait
       - name: Demo starts from the demo snapshot
         run: ./scripts/api-get.sh http://localhost:8080 /api/v1/test-runs | grep -q '"totalItems":5'
-      - name: README POC walkthrough runs verbatim on the fresh demo
+      - name: README core-flow walkthrough runs verbatim on the fresh demo
         run: ./scripts/readme-flow.sh http://localhost:8080
       - name: Smoke test through nginx
         run: ./scripts/smoke.sh http://localhost:3000
@@ -318,6 +338,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod

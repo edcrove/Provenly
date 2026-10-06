@@ -1334,11 +1334,19 @@ export const handlers = [
       const url = new URL(request.url)
       const project = url.searchParams.get('project')
       const actor = url.searchParams.get('actor')
+      const testCase = url.searchParams.get('testCase')
       if (project !== null && !KEY.test(project)) return validation('project', PROJECT_KEY_MESSAGE)
       if (actor === '') return validation('actor', 'must not be empty')
+      if (testCase !== null && !/^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,17}$/.test(testCase))
+        return validation('testCase', 'must be a test case key (e.g. CHK-4)')
       if (!currentUser().isAdmin) return forbidden()
       const items = db.audit
-        .filter((e) => (project === null || e.project === project) && (actor === null || e.actor === actor))
+        .filter(
+          (e) =>
+            (project === null || e.project === project) &&
+            (actor === null || e.actor === actor) &&
+            (testCase === null || e.testCase === testCase),
+        )
         .reverse()
       return respond(pageOf(url, items))
     }),

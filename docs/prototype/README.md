@@ -394,6 +394,10 @@ Notion Decision Register; each one ships in its own PR.
 - **Confirmations (card #56):** completing a manual run with untested test cases, cancelling it, deleting a step and
   revoking an API key ask inline first, with the safe option focused (the deprecate pattern); in a manual run only
   the recorded result's button is highlighted and saving says what was saved ("Saved · failed at step 3").
+- **Readable audit (card #48):** changes to a test case, a step, a suite, a run or anything else are filed under their
+  project (the one the request was allowed into), read in words ("edited CHK-4 step 3", the path as detail) and filter
+  by test case (`?testCase=CHK-4`); events recorded before keep only their route (not backfilled: the log is
+  append-only).
 - **Scheduled backups (card #63):** the compose `backup` profile dumps the database (`pg_dump -Fc`, renamed when
   complete) at start and on `BACKUP_SCHEDULE`, rotates dumps older than `BACKUP_RETENTION_DAYS` only after a successful
   one, and is healthy while the last success is recent; `make db-restore` restores a `.dump`. Self-hosting documents

@@ -13,6 +13,7 @@ import (
 
 	"github.com/edcrove/provenly/backend/internal/identity"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/auditnote"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
@@ -115,7 +116,8 @@ func TestRecordStoresOnlyStorableText(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/x", nil)
 	r.URL.Path = "/api/v1/a\x00b\xff/" + strings.Repeat("p", 3000)
 	r.SetPathValue("projectKey", "K\x00"+strings.Repeat("Q", 60))
-	svc.record(r.WithContext(identity.WithAPIKey(r.Context(), identity.APIKey{Prefix: "p", Name: strings.Repeat("n", 300)})), "POST /x", 204)
+	_, note := auditnote.Open(r.Context())
+	svc.record(r.WithContext(identity.WithAPIKey(r.Context(), identity.APIKey{Prefix: "p", Name: strings.Repeat("n", 300)})), "POST /x", 204, note, target{})
 	e := repo.events[0]
 	assert.True(t, strings.HasPrefix(e.Path, "/api/v1/ab?/"))
 	assert.Len(t, []rune(e.Path), 2000)
@@ -137,7 +139,7 @@ func TestEvents(t *testing.T) {
 	e, _ := apperr.As(err)
 	require.NotNil(t, e)
 	assert.Equal(t, apperr.KindForbidden, e.Kind)
-	for _, f := range []Filter{{Actor: strings.Repeat("a", 201)}, {Actor: "a\x00"}, {ProjectKey: strings.Repeat("P", 51)}, {ProjectKey: "\xff"}} {
+	for _, f := range []Filter{{Actor: strings.Repeat("a", 201)}, {Actor: "a\x00"}, {ProjectKey: strings.Repeat("P", 51)}, {ProjectKey: "\xff"}, {TestCaseKey: strings.Repeat("K", 41)}} {
 		_, err = NewService(repo, fakeAccess{}).Events(ctx, f, pagination.Default())
 		e, _ = apperr.As(err)
 		require.NotNil(t, e)
@@ -160,13 +162,93 @@ func TestHandler(t *testing.T) {
 		m.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 		return rec
 	}
-	rec := get("/api/v1/audit?project=CHK&actor=ana&pageSize=10")
+	repo.events[0].Summary, repo.events[0].TestCaseKey = "deleted CHK-4 step 3", "CHK-4"
+	rec := get("/api/v1/audit?project=CHK&actor=ana&testCase=CHK-4&pageSize=10")
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"page":1,"pageSize":10,"totalItems":2,"totalPages":1,"items":[
-		{"id":2,"occurredAt":"0001-01-01T00:00:00Z","actor":"ana","action":"DELETE /api/v1/x","path":"/api/v1/x","project":"CHK","status":204},
-		{"id":1,"occurredAt":"0001-01-01T00:00:00Z","actor":"bob","action":"POST /api/v1/y","path":"/api/v1/y","project":null,"status":201}]}`, rec.Body.String())
-	assert.Equal(t, Filter{ProjectKey: "CHK", Actor: "ana"}, repo.filter)
-	for _, target := range []string{"/api/v1/audit?page=0", "/api/v1/audit?project=chk", "/api/v1/audit?project=", "/api/v1/audit?actor=", "/api/v1/audit?actor=" + strings.Repeat("a", 201)} {
+		{"id":2,"occurredAt":"0001-01-01T00:00:00Z","actor":"ana","action":"DELETE /api/v1/x","path":"/api/v1/x","project":"CHK","status":204,"summary":"deleted CHK-4 step 3","testCase":"CHK-4"},
+		{"id":1,"occurredAt":"0001-01-01T00:00:00Z","actor":"bob","action":"POST /api/v1/y","path":"/api/v1/y","project":null,"status":201,"summary":null,"testCase":null}]}`, rec.Body.String())
+	assert.Equal(t, Filter{ProjectKey: "CHK", Actor: "ana", TestCaseKey: "CHK-4"}, repo.filter)
+	for _, target := range []string{"/api/v1/audit?page=0", "/api/v1/audit?project=chk", "/api/v1/audit?project=", "/api/v1/audit?actor=", "/api/v1/audit?actor=" + strings.Repeat("a", 201),
+		"/api/v1/audit?testCase=", "/api/v1/audit?testCase=chk-4", "/api/v1/audit?testCase=CHK-0", "/api/v1/audit?testCase=CHK"} {
 		assert.Equal(t, http.StatusBadRequest, get(target).Code, target)
 	}
+}
+
+type fakeNames struct{ err error }
+
+func (n fakeNames) ProjectKey(_ context.Context, id int64) (string, error) {
+	return map[int64]string{2: "CHK"}[id], n.err
+}
+
+func (n fakeNames) TestCaseKey(_ context.Context, id int64) (string, error) {
+	if id != 4 {
+		return "", errBoom
+	}
+	return "CHK-4", n.err
+}
+
+func (n fakeNames) StepPosition(_ context.Context, testCaseID, stepID int64) (int32, error) {
+	if testCaseID != 4 || stepID != 30 {
+		return 0, errBoom
+	}
+	return 3, n.err
+}
+
+// A change without a project in its path is attributed to the project its authorization allowed, and reads in
+// words with its test case (card #48).
+func TestRouterNamesWhatChanged(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := NewService(repo, fakeAccess{})
+	svc.SetResolver(fakeNames{})
+	m := http.NewServeMux()
+	a := Wrap(m, svc)
+	allow := func(w http.ResponseWriter, r *http.Request) {
+		auditnote.Project(r.Context(), 2)
+		auditnote.Project(r.Context(), 9) // the first project allowed wins
+		w.WriteHeader(http.StatusNoContent)
+	}
+	a.HandleFunc("DELETE /api/v1/test-cases/{testCaseId}/steps/{stepId}", allow)
+	a.HandleFunc("PATCH /api/v1/test-cases/{testCaseId}", allow)
+	a.HandleFunc("POST /api/v1/test-runs/{testRunId}/finish", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	a.HandleFunc("POST /api/v1/unknown", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { m.ServeHTTP(w, r.WithContext(asUser(r.Context()))) })
+	serve(h, http.MethodDelete, "/api/v1/test-cases/4/steps/30")
+	serve(h, http.MethodDelete, "/api/v1/test-cases/4/steps/31")
+	serve(h, http.MethodPatch, "/api/v1/test-cases/5")
+	serve(h, http.MethodPatch, "/api/v1/test-cases/x")
+	serve(h, http.MethodPost, "/api/v1/test-runs/12/finish")
+	serve(h, http.MethodPost, "/api/v1/unknown")
+	require.Len(t, repo.events, 6)
+	assert.Equal(t, Event{ID: 1, Actor: "ana", Action: "DELETE /api/v1/test-cases/{testCaseId}/steps/{stepId}", Path: "/api/v1/test-cases/4/steps/30",
+		ProjectKey: "CHK", Status: 204, Summary: "deleted CHK-4 step 3", TestCaseKey: "CHK-4"}, repo.events[0])
+	assert.Equal(t, "deleted CHK-4 a step", repo.events[1].Summary, "an unknown step")
+	assert.Equal(t, "edited #5", repo.events[2].Summary, "an unknown test case keeps its id")
+	assert.Empty(t, repo.events[2].TestCaseKey)
+	assert.Equal(t, "edited #x", repo.events[3].Summary)
+	assert.Equal(t, Event{ID: 5, Actor: "ana", Action: "POST /api/v1/test-runs/{testRunId}/finish", Path: "/api/v1/test-runs/12/finish",
+		Status: 200, Summary: "finished run #12"}, repo.events[4], "no project allowed: none recorded")
+	assert.Empty(t, repo.events[5].Summary, "an operation without a summary")
+
+	// Without a resolver, or when it fails, the ids stay.
+	repo.events = nil
+	svc.SetResolver(fakeNames{err: errBoom})
+	serve(h, http.MethodDelete, "/api/v1/test-cases/4/steps/30")
+	svc.SetResolver(nil)
+	serve(h, http.MethodDelete, "/api/v1/test-cases/4/steps/30")
+	for _, e := range repo.events {
+		assert.Equal(t, "deleted #4 a step", e.Summary)
+		assert.Empty(t, e.ProjectKey)
+	}
+}
+
+// Every audited route the API registers says in words what it did.
+func TestEverySummaryNamesItsPathValues(t *testing.T) {
+	for pattern, tmpl := range summaries {
+		_, path, _ := strings.Cut(pattern, " ")
+		for _, name := range placeholders(tmpl) {
+			assert.Contains(t, path, "{"+name+"}", pattern)
+		}
+	}
+	assert.Equal(t, []string{"a", "b"}, placeholders("x {a} y {b}"))
 }

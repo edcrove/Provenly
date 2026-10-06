@@ -140,3 +140,5 @@ targets:
     description: offboarding on a real database - a deactivated user's session stops at once and the last administrator stays; ten concurrent uses of one reset link set the password once; a newer link voids the older; reset links are never deleted, only marked used once, with a 32-byte digest and an expiry after creation
   - id: BE-INT-068
     description: a test case's last execution is its latest run's start (a report uploaded today for a run that started long ago leaves it stale), and the upload time when the report gave no start
+  - id: BE-INT-069
+    description: readable audit entries (card #48) on a real database - edits of a test case and its steps, a suite and a manual run (no project in their path, or the project in the body) are filed under their project through the authorization that allowed them, read in words ("deleted CHK-1 step 2", resolved before the step is gone) and are found by test case key

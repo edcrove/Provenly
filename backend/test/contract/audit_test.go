@@ -3,6 +3,7 @@
 package contract
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -20,13 +21,24 @@ func TestAuditLog(t *testing.T) {
 	page := admin.GET("/api/v1/audit").Expect().Status(http.StatusOK).JSON().Object()
 	page.HasValue("totalItems", 3)
 	first := page.Value("items").Array().Value(0).Object()
-	first.HasValue("actor", "admin").HasValue("action", "POST /api/v1/ingestion/junit").HasValue("project", nil).HasValue("status", 201)
+	first.HasValue("actor", "admin").HasValue("action", "POST /api/v1/ingestion/junit").HasValue("project", "TC").HasValue("status", 201).
+		HasValue("summary", "uploaded a JUnit report").HasValue("testCase", nil)
 	admin.GET("/api/v1/audit").WithQuery("project", "AUD").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1).
 		Value("items").Array().Value(0).Object().HasValue("action", "PATCH /api/v1/projects/{projectKey}").HasValue("path", "/api/v1/projects/AUD")
 	admin.GET("/api/v1/audit").WithQuery("actor", "nobody").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
-	for _, q := range []string{"page=0", "project=aud", "actor=", "actor=" + strings.Repeat("a", 201)} {
+	for _, q := range []string{"page=0", "project=aud", "actor=", "actor=" + strings.Repeat("a", 201), "testCase=", "testCase=tc-1", "testCase=TC-0", "testCase=TC"} {
 		admin.GET("/api/v1/audit").WithQueryString(q).Expect().Status(http.StatusBadRequest)
 	}
+
+	// A change without a project in its path is filed under the project it changed, in words, with its test case
+	// (card #48).
+	id := admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "pay", "project": "AUD"}).Expect().Status(http.StatusCreated).
+		JSON().Object().Value("id").Number().Raw()
+	admin.PATCH(fmt.Sprintf("/api/v1/test-cases/%d", int64(id))).WithJSON(map[string]any{"title": "pay by card"}).Expect().Status(http.StatusOK)
+	edit := admin.GET("/api/v1/audit").WithQuery("testCase", "AUD-1").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1).
+		Value("items").Array().Value(0).Object()
+	edit.HasValue("summary", "edited AUD-1").HasValue("testCase", "AUD-1").HasValue("project", "AUD").HasValue("action", "PATCH /api/v1/test-cases/{testCaseId}")
+	admin.GET("/api/v1/audit").WithQuery("project", "AUD").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 3)
 
 	inv := admin.POST("/api/v1/invitations").WithJSON(map[string]any{}).Expect().Status(http.StatusCreated).JSON().Object()
 	ana := as(e, e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "ana",

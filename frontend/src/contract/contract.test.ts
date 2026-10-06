@@ -2380,16 +2380,26 @@ const auditScenarios: Scenario[] = [
         actor: 'admin',
         action: 'POST /api/v1/projects',
         path: '/api/v1/projects',
-        project: null,
+        project: 'TC',
         status: 201,
+        summary: 'edited TC-1',
+        testCase: 'TC-1',
       })
     },
-    call: (c) => c.GET('/api/v1/audit', { params: { query: { project: 'TC', actor: 'admin', page: 1 } } }),
+    call: (c) =>
+      c.GET('/api/v1/audit', {
+        params: { query: { project: 'TC', actor: 'admin', testCase: 'TC-1', page: 1 } },
+      }),
   },
   {
     op: 'GET /api/v1/audit',
     status: 400,
     call: (c) => c.GET('/api/v1/audit', { params: { query: { project: 'tc' } } }),
+  },
+  {
+    op: 'GET /api/v1/audit',
+    status: 400,
+    call: (c) => c.GET('/api/v1/audit', { params: { query: { testCase: 'tc-1' } } }),
   },
   { op: 'GET /api/v1/audit', status: 403, setup: asMember, call: (c) => c.GET('/api/v1/audit') },
   { op: 'GET /api/v1/audit', status: 500, setup: fail, call: (c) => c.GET('/api/v1/audit') },

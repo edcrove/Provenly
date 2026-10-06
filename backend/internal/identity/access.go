@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/auditnote"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
@@ -43,7 +44,16 @@ func (s *Service) RoleIn(ctx context.Context, u User, projectID int64) (authz.Ro
 }
 
 // Require implements authz.Guard.
+// A request allowed into a project is attributed to it in the audit log.
 func (s *Service) Require(ctx context.Context, projectID int64, minRole authz.Role, notFound error) error {
+	err := s.require(ctx, projectID, minRole, notFound)
+	if err == nil {
+		auditnote.Project(ctx, projectID)
+	}
+	return err
+}
+
+func (s *Service) require(ctx context.Context, projectID int64, minRole authz.Role, notFound error) error {
 	if k, ok := APIKeyFrom(ctx); ok {
 		return keyRequire(k, projectID, minRole, notFound)
 	}

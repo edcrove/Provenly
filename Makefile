@@ -81,12 +81,17 @@ db-reset: check-env guard-prod ## Delete ENV's data and start again from its see
 	$(COMPOSE) down -v
 	$(COMPOSE) up -d --wait
 
-db-restore: check-env guard-prod ## Replace ENV's data with a dump: FILE=backups/<file>.sql (prod: CONFIRM=prod, dumps first)
-	@test -f "$(FILE)" || { echo "error: FILE=<dump.sql> is required" >&2; exit 1; }
+db-restore: check-env guard-prod ## Replace ENV's data with a dump: FILE=backups/<file>.sql or a scheduled .dump (prod: CONFIRM=prod, dumps first)
+	@test -f "$(FILE)" || { echo "error: FILE=<dump.sql or .dump> is required" >&2; exit 1; }
 	@if [ "$(ENV)" = prod ]; then $(MAKE) --no-print-directory db-dump ENV=prod; fi
 	$(COMPOSE) down -v
 	$(COMPOSE) up -d --wait postgres
-	$(COMPOSE) exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < "$(FILE)" >/dev/null
+	@# A scheduled backup (pg_dump -Fc, .dump) goes through pg_restore; a plain SQL dump through psql.
+	@if [ "$${FILE##*.}" = dump ]; then \
+		$(COMPOSE) exec -T postgres sh -c 'pg_restore --exit-on-error --no-owner --no-privileges -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < "$(FILE)"; \
+	else \
+		$(COMPOSE) exec -T postgres sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < "$(FILE)" >/dev/null; \
+	fi
 	$(COMPOSE) up -d --wait
 
 demo-reset: ## Bring the demo environment back to the demo snapshot

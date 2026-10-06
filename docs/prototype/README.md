@@ -401,6 +401,10 @@ Notion Decision Register; each one ships in its own PR.
 - **Retention (card #51):** finished webhook deliveries older than `PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS` (default
   90, `0` keeps them) are purged hourly by the delivery worker, in batches of 1,000 under an advisory lock, and the
   count is logged; pending deliveries, audit events and run results are never purged.
+- **Scheduled backups (card #63):** the compose `backup` profile dumps the database (`pg_dump -Fc`, renamed when
+  complete) at start and on `BACKUP_SCHEDULE`, rotates dumps older than `BACKUP_RETENTION_DAYS` only after a successful
+  one, and is healthy while the last success is recent; `make db-restore` restores a `.dump`. Self-hosting documents
+  the off-host copy and that `PROVENLY_SECRETS_KEY` is not in the dump.
 
 
 ### 24. Review-panel audit (2026-10-06): fixes

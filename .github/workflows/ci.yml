@@ -22,10 +22,10 @@ jobs:
     name: Backend · build, lint, vet, sqlc drift
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: |
@@ -71,10 +71,10 @@ jobs:
     name: Frontend · build, lint, typecheck, client drift
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -106,10 +106,10 @@ jobs:
     name: Playwright reporter · typecheck and unit tests (100%)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -130,10 +130,10 @@ jobs:
     name: Backend · Unit gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: |
@@ -144,7 +144,7 @@ jobs:
         run: make fuzz
       - name: Gate
         run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates backend-unit -evidence=false
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: always()
         with:
           name: evidence-backend-unit
@@ -155,10 +155,10 @@ jobs:
     name: Backend · Integration gate (testcontainers)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: |
@@ -167,7 +167,7 @@ jobs:
       - run: make test-backend-integration
       - name: Gate
         run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates backend-integration -evidence=false
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: always()
         with:
           name: evidence-backend-integration
@@ -178,10 +178,10 @@ jobs:
     name: Backend · Contract gate (httpexpect + kin-openapi)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: |
@@ -190,7 +190,7 @@ jobs:
       - run: make test-backend-contract
       - name: Gate
         run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates backend-contract -evidence=false
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: always()
         with:
           name: evidence-backend-contract
@@ -205,14 +205,14 @@ jobs:
       matrix:
         layer: [unit, integration, contract]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: tools/covgate/go.sum
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -223,7 +223,7 @@ jobs:
         working-directory: frontend
       - name: Gate
         run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates frontend-${{ matrix.layer }} -evidence=false
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: always()
         with:
           name: evidence-frontend-${{ matrix.layer }}
@@ -245,16 +245,16 @@ jobs:
           --health-cmd "pg_isready -U provenly"
           --health-interval 2s --health-timeout 3s --health-retries 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: |
             backend/go.sum
             tools/covgate/go.sum
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -276,13 +276,13 @@ jobs:
           PROVENLY_PROJECT: ${{ vars.PROVENLY_PROJECT }}
       - name: Gates
         run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE" -gates backend-e2e,frontend-e2e -evidence=false
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: always()
         with:
           name: evidence-e2e
           path: e2e/coverage/
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: failure()
         with:
           name: playwright-report
@@ -294,7 +294,7 @@ jobs:
     env:
       COMPOSE: docker compose --env-file envs/qa.env
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       - name: Build images and start the demo environment (docker compose up)
@@ -337,32 +337,32 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: |
             backend/go.sum
             tools/covgate/go.sum
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           pattern: evidence-backend-*
           path: coverage/out
           merge-multiple: true
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           pattern: evidence-frontend-*
           path: frontend/coverage
           merge-multiple: true
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: evidence-e2e
           path: e2e/coverage
       - name: Evaluate the 8 gates and the 2 consolidated gates (fails below 100%)
         run: cd tools/covgate && go run . -root "$GITHUB_WORKSPACE"
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         if: always()
         with:
           name: coverage-report

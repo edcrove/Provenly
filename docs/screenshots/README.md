@@ -71,4 +71,5 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 64 | The quality dashboard of a project: latest run, pass-rate trend, automation, stale and flaky test cases, requirement coverage and issue verification | `64-dashboard.png` |
 | 65 | A live run in progress: provisional states from the events CI streams, awaiting the final report | `65-live-run-in-progress.png` |
 | 66 | The same live run completed by its JUnit report, with the reconciliation of its live events | `66-live-run-reconciled.png` |
+| 67 | A project's integrations (maintainers): a webhook with a queued ping and a GitHub Issues connection (token hint, labels; never synced offline) | `67-project-integrations.png` |
 | 68 | The audit log of a project (administrators): who changed what, user or CI API key, with the route and path | `68-audit-log.png` |

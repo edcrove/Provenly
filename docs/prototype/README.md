@@ -397,6 +397,17 @@ questions went to Ed.
 - The Playwright reporter clips live event names to 1000 characters and drops an over-long TC-ID: one long title
   used to make the API reject the whole event batch.
 
+**Docs and release**
+- `release.yml` grants no permission by default (each job asks for its own) and `latest` follows the highest version
+  only; no workflow leaves the checkout token on disk (`persist-credentials: false`).
+- The reporter is not on npm yet (the `@provenly` scope is not registered to this project): the docs install it from a
+  checkout, say how to run it outside GitHub Actions and that a TC-ID must exist first.
+- `scripts/docs-check.sh` (in `make lint` and CI) keeps the screenshot index, the reporter install instructions and
+  the workflow permissions honest.
+- The README describes the full-product prototype; `docs/architecture.md` lists all eight modules and the one
+  cross-module foreign-key exception; compose passes the standard OpenTelemetry variables; self-hosting says no
+  image is published yet, to deploy from the release tag's checkout and requires Compose v2.24+.
+
 ### 23. Review agents (technical experts and user personas)
 
 - **What**: fourteen read-only subagents in `.claude/agents/` — technical experts (`reviewer-api-contract`,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs the README's "Try the POC flow with curl" block verbatim against a freshly started demo
+# Runs the README's "Try the core flow with curl" block verbatim against a freshly started demo
 # environment and checks what the README promises: TC-8 created, run 6 = github:42:1 created
 # once (a resend of the same attempt returns 200, no duplicate), the PASS+FAIL test case counted
 # as failed with both results kept, the missing TC-ID diagnostic, and the history of TC-8.
@@ -14,7 +14,7 @@ grep -q '^docker compose up -d --build ' "$root/README.md" || fail "README start
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-awk '/^### Try the POC flow with curl/{s=1; next} s && /^```bash/{b=1; next} b && /^```/{exit} b' "$root/README.md" \
+awk '/^### Try the core flow with curl/{s=1; next} s && /^```bash/{b=1; next} b && /^```/{exit} b' "$root/README.md" \
   | sed "s#localhost:8080#${api#http://}#g; s#curl -s #curl -s --noproxy '*' #g" >"$work/flow.sh"
 [ -s "$work/flow.sh" ] || fail "README curl block not found"
 (cd "$work" && bash -euo pipefail flow.sh >"$work/out.txt") || fail "README block failed: $(cat "$work/out.txt")"

@@ -7,10 +7,8 @@ on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
-permissions:
-  contents: write
-  packages: write
-  id-token: write # npm provenance
+# Nothing by default: each job asks only for what it uses.
+permissions: {}
 
 env:
   NODE_VERSION: "22"
@@ -19,6 +17,8 @@ jobs:
   ci-green:
     name: CI is green on the tagged commit
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
     steps:
       - name: Require a successful CI run for this commit
         env:
@@ -34,6 +34,9 @@ jobs:
     name: Images (GHCR)
     needs: ci-green
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         include:
@@ -43,6 +46,15 @@ jobs:
             context: frontend
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      # `latest` follows the highest version only: tagging a patch of an older line must not move it back.
+      - name: Is this the highest version?
+        id: latest
+        run: |
+          highest=$(git ls-remote --tags --refs "${{ github.server_url }}/${{ github.repository }}" 'v*' \
+            | sed 's|.*refs/tags/||' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          echo "tag=$([ "$highest" = "${GITHUB_REF_NAME}" ] && echo latest || echo none)" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -57,7 +69,7 @@ jobs:
           build-args: VERSION=${{ github.ref_name }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ github.ref_name }}
-            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:latest
+            ${{ steps.latest.outputs.tag == 'latest' && format('ghcr.io/{0}/{1}:latest', github.repository_owner, matrix.image) || '' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ github.ref_name }}
@@ -67,10 +79,15 @@ jobs:
     name: Playwright reporter (npm)
     needs: ci-green
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -89,6 +106,8 @@ jobs:
     name: GitHub release
     needs: [images, reporter]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Create the release with generated notes
         env:

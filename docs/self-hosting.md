@@ -5,7 +5,7 @@ Provenly is one Go API, one static web app behind nginx and one PostgreSQL datab
 
 ## 1. Requirements
 
-- Docker with Compose v2, 1 vCPU and 1 GB of RAM are enough for a team; PostgreSQL 16 (the compose file runs it).
+- Docker with Compose v2.24+, 1 vCPU and 1 GB of RAM are enough for a team; PostgreSQL 16 (the compose file runs it).
 - A TLS-terminating reverse proxy (Caddy, nginx, Traefik…) in front of the web port. Provenly listens on
   `127.0.0.1` by default (`BIND_ADDR`) and must not be exposed without TLS: sessions are bearer tokens and cookies.
   The proxy must send `X-Forwarded-Proto: https` (Caddy, Traefik and nginx's usual config do): the web container
@@ -27,6 +27,7 @@ Set in `envs/prod.env`:
 | `PROVENLY_ADMIN_USERNAME` / `PROVENLY_ADMIN_PASSWORD` | First administrator, created only while there are no users | A strong password (the demo one is refused in prod) |
 | `WEB_PORT`, `API_PORT`, `BIND_ADDR` | Where the proxy reaches the web app (it proxies `/api` to the API) | Defaults: 3200, 8280, 127.0.0.1 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Optional: export traces over OTLP/HTTP | e.g. `http://otel-collector:4318` |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | Optional, standard OpenTelemetry SDK settings (passed through) | e.g. `OTEL_EXPORTER_OTLP_HEADERS=x-api-key=…` for a hosted collector |
 | `PROVENLY_WEBHOOKS_ALLOW_PRIVATE` | Leave empty in prod: webhooks and connectors may not reach private addresses | `true` only for an internal-only deployment |
 | `PROVENLY_GITHUB_API_URL` | GitHub Enterprise Server API, if not github.com | `https://github.example.com/api/v3` |
 
@@ -34,7 +35,9 @@ The API refuses to start in `prod` without `PROVENLY_JWT_SECRET` and `PROVENLY_S
 
 ## 3. Run
 
-Released images (recommended; tags are listed in the repository's releases):
+Run from a checkout of the release tag you deploy (`git checkout v0.2.0`): the compose file, the env example and the
+`make` targets must match the images. Released images (recommended; tags are listed in the repository's releases —
+**none is published yet**: until the first release, build from source as below):
 
 ```bash
 IMAGE_PREFIX=ghcr.io/edcrove/ IMAGE_TAG=v0.2.0 \
@@ -50,8 +53,11 @@ Point CI at Provenly with a project API key (project page → API keys) and eith
 Playwright reporter:
 
 ```bash
-npm i -D @provenly/playwright-reporter   # then see reporters/playwright/README.md
+# Not on npm yet (the @provenly scope is not registered to this project): install from a checkout.
+(cd Provenly/reporters/playwright && npm ci && npm run build) && npm i -D ./Provenly/reporters/playwright
 ```
+
+See [`reporters/playwright/README.md`](../reporters/playwright/README.md) for the configuration.
 
 ## 4. Back up and restore
 

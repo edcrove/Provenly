@@ -1,6 +1,6 @@
 ---
 name: review-panel
-description: Run Provenly's review panel — technical expert subagents (API contract, database, security, tests, frontend, domain) on a diff or PR, the architect and product owner on the whole project, and/or user persona subagents (QA lead, developer, manual tester, DevOps, engineering manager) on the UI flows — then consolidate, verify and report their findings. Use before opening or merging a PR, when validating a card, after UI changes, or when Ed asks for a review "con los agentes", "con los expertos" or "con las personas".
+description: Run Provenly's review panel — technical expert subagents (API contract, database, security, tests, frontend, domain) on a diff or PR, the architect and product owner on the whole project, and/or user persona subagents (QA lead, developer, SDET, manual tester, DevOps, engineering manager) on the UI flows — then consolidate, verify and report their findings. Use before opening or merging a PR, when validating a card, after UI changes, or when Ed asks for a review "con los agentes", "con los expertos" or "con las personas".
 ---
 
 # Review panel
@@ -29,7 +29,7 @@ The agents live in `.claude/agents/` and are read-only: they report, Claude veri
   `architect` for the codebase (or a module) and `product-owner` for vision fit, drift and future ideas. They do
   not need a diff; give them the scope.
 - Personas, for UI or flow changes and before closing a milestone: regenerate `make screenshots` first, then run
-  the personas whose journeys the change touches (all five for a milestone).
+  the personas whose journeys the change touches (all six for a milestone).
 
 ## 2. Brief each agent
 Give each one the target (PR number or base), the card or goal in one sentence, and any decision it must respect

@@ -77,7 +77,7 @@ Project skills (`.claude/skills/`): `implement-card`, `validate-card`, `record-d
 Review agents (`.claude/agents/`, read-only, run through `review-panel`): technical experts `reviewer-api-contract`,
 `reviewer-database`, `reviewer-security`, `reviewer-tests`, `reviewer-frontend`, `reviewer-domain`; whole-project
 reviewers `architect` (codebase) and `product-owner` (vision fit, drift, future ideas for the Incubator); user personas
-`persona-qa-lead`, `persona-developer`, `persona-manual-tester`, `persona-devops`, `persona-engineering-manager`.
+`persona-qa-lead`, `persona-developer`, `persona-sdet`, `persona-manual-tester`, `persona-devops`, `persona-engineering-manager`.
 
 Environment gotchas (web sessions; `.claude/hooks/session-start.sh` prepares most of this):
 

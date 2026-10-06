@@ -24,10 +24,12 @@ type fakeRepo struct {
 	afterLock func()
 	resets    map[int64]PasswordReset
 	nextReset int64
+	tokens    map[int64]PersonalAccessToken
+	nextToken int64
 }
 
 func newFakeRepo(now func() time.Time) *fakeRepo {
-	return &fakeRepo{keys: map[int64]APIKey{}, members: map[[2]int64]Member{}, users: map[int64]User{}, invitations: map[int64]Invitation{}, errs: map[string]error{}, now: now}
+	return &fakeRepo{tokens: map[int64]PersonalAccessToken{}, keys: map[int64]APIKey{}, members: map[[2]int64]Member{}, users: map[int64]User{}, invitations: map[int64]Invitation{}, errs: map[string]error{}, now: now}
 }
 
 func (f *fakeRepo) fail(method string) error { return f.errs[method] }
@@ -426,5 +428,100 @@ func (f *fakeRepo) MarkPasswordResetUsed(_ context.Context, id int64) error {
 	now := f.now()
 	r.UsedAt = &now
 	f.resets[id] = r
+	return nil
+}
+
+func (f *fakeRepo) CreateToken(_ context.Context, t NewPersonalAccessToken) (PersonalAccessToken, error) {
+	if err := f.fail("CreateToken"); err != nil {
+		return PersonalAccessToken{}, err
+	}
+	f.nextToken++
+	out := PersonalAccessToken{ID: f.nextToken, UserID: t.UserID, Name: t.Name, Prefix: t.Prefix, TokenSHA256: t.TokenSHA256,
+		ProjectIDs: t.ProjectIDs, CreatedAt: f.now(), ExpiresAt: t.ExpiresAt}
+	f.tokens[out.ID] = out
+	return out, nil
+}
+
+func (f *fakeRepo) ListTokens(_ context.Context, userID int64, limit, offset int32) ([]PersonalAccessToken, error) {
+	if err := f.fail("ListTokens"); err != nil {
+		return nil, err
+	}
+	var out []PersonalAccessToken
+	for _, t := range f.tokens {
+		if t.UserID == userID {
+			out = append(out, t)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
+	return window(out, limit, offset), nil
+}
+
+func (f *fakeRepo) CountTokens(ctx context.Context, userID int64) (int64, error) {
+	if err := f.fail("CountTokens"); err != nil {
+		return 0, err
+	}
+	all, _ := f.ListTokens(ctx, userID, 1<<30, 0)
+	return int64(len(all)), nil
+}
+
+func (f *fakeRepo) GetToken(_ context.Context, userID, id int64) (PersonalAccessToken, error) {
+	if err := f.fail("GetToken"); err != nil {
+		return PersonalAccessToken{}, err
+	}
+	t, ok := f.tokens[id]
+	if !ok || t.UserID != userID {
+		return PersonalAccessToken{}, ErrNotFound
+	}
+	return t, nil
+}
+
+func (f *fakeRepo) GetTokenByDigest(_ context.Context, digest []byte) (PersonalAccessToken, error) {
+	if err := f.fail("GetTokenByDigest"); err != nil {
+		return PersonalAccessToken{}, err
+	}
+	for _, t := range f.tokens {
+		if bytes.Equal(t.TokenSHA256, digest) {
+			return t, nil
+		}
+	}
+	return PersonalAccessToken{}, ErrNotFound
+}
+
+func (f *fakeRepo) RevokeToken(ctx context.Context, userID, id int64) (PersonalAccessToken, error) {
+	if err := f.fail("RevokeToken"); err != nil {
+		return PersonalAccessToken{}, err
+	}
+	t, err := f.GetToken(ctx, userID, id)
+	if err != nil || t.RevokedAt != nil {
+		return PersonalAccessToken{}, ErrNotFound
+	}
+	now := f.now()
+	t.RevokedAt = &now
+	f.tokens[id] = t
+	return t, nil
+}
+
+func (f *fakeRepo) RevokeUserTokens(_ context.Context, userID int64) error {
+	if err := f.fail("RevokeUserTokens"); err != nil {
+		return err
+	}
+	now := f.now()
+	for id, t := range f.tokens {
+		if t.UserID == userID && t.RevokedAt == nil {
+			t.RevokedAt = &now
+			f.tokens[id] = t
+		}
+	}
+	return nil
+}
+
+func (f *fakeRepo) TouchToken(_ context.Context, id int64) error {
+	if err := f.fail("TouchToken"); err != nil {
+		return err
+	}
+	t := f.tokens[id]
+	now := f.now()
+	t.LastUsedAt = &now
+	f.tokens[id] = t
 	return nil
 }

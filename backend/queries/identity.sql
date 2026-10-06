@@ -121,3 +121,44 @@ SELECT * FROM password_resets WHERE token_sha256 = @token_sha256 FOR UPDATE;
 
 -- name: MarkPasswordResetUsed :exec
 UPDATE password_resets SET used_at = now() WHERE id = @id AND used_at IS NULL;
+
+-- name: CreatePersonalAccessToken :one
+INSERT INTO personal_access_tokens (user_id, name, prefix, token_sha256, expires_at)
+VALUES (@user_id, @name, @prefix, @token_sha256, @expires_at)
+RETURNING *;
+
+-- name: AddPersonalAccessTokenProjects :exec
+INSERT INTO personal_access_token_projects (token_id, project_id)
+SELECT @token_id, unnest(@project_ids::bigint[]);
+
+-- name: ListPersonalAccessTokens :many
+SELECT * FROM personal_access_tokens WHERE user_id = @user_id ORDER BY id DESC LIMIT @page_limit OFFSET @page_offset;
+
+-- name: CountPersonalAccessTokens :one
+SELECT count(*) FROM personal_access_tokens WHERE user_id = @user_id;
+
+-- name: ListPersonalAccessTokenProjects :many
+-- The projects of some tokens, in id order.
+SELECT token_id, project_id FROM personal_access_token_projects
+WHERE token_id = ANY(@token_ids::bigint[]) ORDER BY token_id, project_id;
+
+-- name: GetPersonalAccessToken :one
+SELECT * FROM personal_access_tokens WHERE id = @id AND user_id = @user_id;
+
+-- name: GetPersonalAccessTokenByToken :one
+SELECT * FROM personal_access_tokens WHERE token_sha256 = @token_sha256;
+
+-- name: RevokePersonalAccessToken :one
+-- No row when the token is not the user's or is already revoked.
+UPDATE personal_access_tokens SET revoked_at = now()
+WHERE id = @id AND user_id = @user_id AND revoked_at IS NULL
+RETURNING *;
+
+-- name: RevokeUserPersonalAccessTokens :exec
+-- Deactivating a user revokes every token they still have.
+UPDATE personal_access_tokens SET revoked_at = now() WHERE user_id = @user_id AND revoked_at IS NULL;
+
+-- name: TouchPersonalAccessToken :exec
+-- Records a use at most once a minute: a busy script does not write on every request.
+UPDATE personal_access_tokens SET last_used_at = now()
+WHERE id = @id AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute');

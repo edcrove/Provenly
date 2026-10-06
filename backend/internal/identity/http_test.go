@@ -19,7 +19,20 @@ import (
 // stubProjects knows TC (1) and CHK (2).
 type stubProjects struct{}
 
+func (stubProjects) ProjectKey(_ context.Context, id int64) (string, error) {
+	if id == 66 {
+		return "", errBoom
+	}
+	if key, ok := map[int64]string{1: "TC", 2: "CHK"}[id]; ok {
+		return key, nil
+	}
+	return "", apperr.NotFound("project %d not found", id)
+}
+
 func (stubProjects) ProjectIDByKey(_ context.Context, key string) (int64, error) {
+	if key == "BOOM" {
+		return 0, errBoom
+	}
 	if id, ok := map[string]int64{"TC": 1, "CHK": 2}[key]; ok {
 		return id, nil
 	}

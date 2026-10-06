@@ -38,11 +38,16 @@ type API interface {
 	CreatePasswordReset(ctx context.Context, actor User, username string) (PasswordReset, string, error)
 	ResetPassword(ctx context.Context, token, password string) (Session, error)
 	Logout(ctx context.Context, token string)
+	CreateToken(ctx context.Context, actor User, in CreateTokenInput) (PersonalAccessToken, string, error)
+	ListTokens(ctx context.Context, actor User, page pagination.Page) (pagination.Result[PersonalAccessToken], error)
+	RevokeToken(ctx context.Context, actor User, id int64) (PersonalAccessToken, error)
+	AuthenticateToken(ctx context.Context, token string) (User, PersonalAccessToken, error)
 }
 
 // Projects resolves project keys (the catalog module's public interface).
 type Projects interface {
 	ProjectIDByKey(ctx context.Context, key string) (int64, error)
+	ProjectKey(ctx context.Context, id int64) (string, error)
 }
 
 type memberDTO struct {
@@ -183,6 +188,9 @@ func (h *Handler) RegisterPublic(mux httpx.Router) {
 func (h *Handler) RegisterProtected(mux httpx.Router) {
 	mux.HandleFunc("GET /api/v1/auth/me", h.me)
 	mux.HandleFunc("POST /api/v1/auth/password", h.changePassword)
+	mux.HandleFunc("GET /api/v1/auth/tokens", h.listTokens)
+	mux.HandleFunc("POST /api/v1/auth/tokens", h.createToken)
+	mux.HandleFunc("POST /api/v1/auth/tokens/{tokenId}/revoke", h.revokeToken)
 	mux.HandleFunc("GET /api/v1/users", h.listUsers)
 	mux.HandleFunc("POST /api/v1/users/{username}/deactivate", h.deactivate)
 	mux.HandleFunc("POST /api/v1/users/{username}/reactivate", h.reactivate)
@@ -261,9 +269,27 @@ func sessionToken(r *http.Request) string {
 	return ""
 }
 
-// RequireUser answers 401 unless the request carries a valid session; the user is put in the context.
+// tokenReads are the requests a personal access token may make: reads, and MCP, whose tools only read.
+func tokenReads(r *http.Request) bool {
+	return r.Method == http.MethodGet || r.Method == http.MethodHead || (r.Method == http.MethodPost && r.URL.Path == "/api/v1/mcp")
+}
+
+// RequireUser answers 401 unless the request carries a valid session or personal access token (Authorization:
+// Bearer pvly_pat_...); the user is put in the context. A token only reads: anything else is a 403.
 func RequireUser(api API, next func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if token := bearerToken(r); IsToken(token) {
+			u, t, err := api.AuthenticateToken(r.Context(), token)
+			if err == nil && !tokenReads(r) {
+				err = ErrTokenReadOnly
+			}
+			if err != nil {
+				httpx.WriteError(w, r, err)
+				return
+			}
+			next(w, r.WithContext(WithToken(WithUser(r.Context(), u), t)))
+			return
+		}
 		u, err := api.Authenticate(r.Context(), sessionToken(r))
 		if err != nil {
 			httpx.WriteError(w, r, err)
@@ -470,7 +496,7 @@ func (h *Handler) createInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, _ := UserFrom(r.Context())
-	if err := requireAdmin(u); err != nil {
+	if err := requireAdmin(r.Context(), u); err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
@@ -577,4 +603,140 @@ func (h *Handler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toAPIKeyDTO(k))
+}
+
+type tokenDTO struct {
+	ID         int64      `json:"id"`
+	Name       string     `json:"name"`
+	Prefix     string     `json:"prefix"`
+	Projects   []string   `json:"projects"`
+	Status     string     `json:"status"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	ExpiresAt  time.Time  `json:"expiresAt"`
+	LastUsedAt *time.Time `json:"lastUsedAt"`
+	RevokedAt  *time.Time `json:"revokedAt"`
+}
+
+type createdTokenDTO struct {
+	PersonalAccessToken tokenDTO `json:"personalAccessToken"`
+	Token               string   `json:"token"`
+}
+
+type tokenRequest struct {
+	Name          string   `json:"name"`
+	Projects      []string `json:"projects"`
+	ExpiresInDays *int     `json:"expiresInDays"`
+}
+
+// projectKeys names the projects of some tokens by key.
+func (h *Handler) projectKeys(ctx context.Context, tokens ...PersonalAccessToken) (map[int64]string, error) {
+	keys := map[int64]string{}
+	for _, t := range tokens {
+		for _, id := range t.ProjectIDs {
+			if _, ok := keys[id]; ok {
+				continue
+			}
+			key, err := h.projects.ProjectKey(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			keys[id] = key
+		}
+	}
+	return keys, nil
+}
+
+func (h *Handler) toTokenDTO(t PersonalAccessToken, keys map[int64]string) tokenDTO {
+	projects := make([]string, len(t.ProjectIDs))
+	for i, id := range t.ProjectIDs {
+		projects[i] = keys[id]
+	}
+	return tokenDTO{
+		ID: t.ID, Name: t.Name, Prefix: t.Prefix, Projects: projects, Status: string(t.Status(h.now())),
+		CreatedAt: t.CreatedAt, ExpiresAt: t.ExpiresAt, LastUsedAt: t.LastUsedAt, RevokedAt: t.RevokedAt,
+	}
+}
+
+// writeToken answers one token, its projects by key.
+func (h *Handler) writeToken(w http.ResponseWriter, r *http.Request, status int, t PersonalAccessToken, secret string) {
+	keys, err := h.projectKeys(r.Context(), t)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	if secret == "" {
+		httpx.WriteJSON(w, status, h.toTokenDTO(t, keys))
+		return
+	}
+	httpx.WriteJSON(w, status, createdTokenDTO{PersonalAccessToken: h.toTokenDTO(t, keys), Token: secret})
+}
+
+func (h *Handler) listTokens(w http.ResponseWriter, r *http.Request) {
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	u, _ := UserFrom(r.Context())
+	res, err := h.api.ListTokens(r.Context(), u, page)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	keys, err := h.projectKeys(r.Context(), res.Items...)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, func(t PersonalAccessToken) tokenDTO { return h.toTokenDTO(t, keys) }))
+}
+
+func (h *Handler) createToken(w http.ResponseWriter, r *http.Request) {
+	var req tokenRequest
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	// Unknown, invisible and malformed keys are all "not one of your projects" (id 0).
+	ids := make([]int64, 0, len(req.Projects))
+	for _, key := range req.Projects {
+		var id int64
+		if projectkey.Valid(key) {
+			found, err := h.projects.ProjectIDByKey(r.Context(), key)
+			if err != nil && !isNotFound(err) {
+				httpx.WriteError(w, r, err)
+				return
+			}
+			id = found
+		}
+		ids = append(ids, id)
+	}
+	u, _ := UserFrom(r.Context())
+	t, token, err := h.api.CreateToken(r.Context(), u, CreateTokenInput{Name: req.Name, ProjectIDs: ids, ExpiresInDays: req.ExpiresInDays})
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	h.writeToken(w, r, http.StatusCreated, t, token)
+}
+
+func (h *Handler) revokeToken(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.PathID(r, "tokenId")
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	u, _ := UserFrom(r.Context())
+	t, err := h.api.RevokeToken(r.Context(), u, id)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	h.writeToken(w, r, http.StatusOK, t, "")
+}
+
+// isNotFound tells whether err is an application "not found".
+func isNotFound(err error) bool {
+	e, ok := apperr.As(err)
+	return ok && e.Kind == apperr.KindNotFound
 }

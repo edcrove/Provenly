@@ -109,6 +109,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the signed-in person's personal access tokens, newest first */
+        get: operations["listPersonalAccessTokens"];
+        put?: never;
+        /**
+         * Create a read-only personal access token over some of your projects (card
+         * @description For scripts and MCP clients: send it as `Authorization: Bearer <token>`. It reads (GET and MCP) the projects it names, with the person's role there, and nothing else: a change, an administration route or another project answers 403; an expired or revoked token, or one of a deactivated person, 401. It always expires (default 90 days, at most 365) and is returned once; only its digest is kept. Creating one needs a session.
+         */
+        post: operations["createPersonalAccessToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/tokens/{tokenId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tokenId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke one of your personal access tokens at once */
+        post: operations["revokePersonalAccessToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -1536,6 +1576,52 @@ export interface components {
         SetMemberRequest: {
             role: components["schemas"]["ProjectRole"];
         };
+        PersonalAccessToken: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @description First characters of the token, to tell tokens apart (the token itself is never shown again). */
+            prefix: string;
+            /** @description Keys of the projects the token reads. */
+            projects: string[];
+            /** @enum {string} */
+            status: "active" | "expired" | "revoked";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /**
+             * Format: date-time
+             * @description Last request made with the token (recorded at most once a minute).
+             */
+            lastUsedAt: string | null;
+            /** Format: date-time */
+            revokedAt: string | null;
+        };
+        PersonalAccessTokenPage: components["schemas"]["PageMeta"] & {
+            items: components["schemas"]["PersonalAccessToken"][];
+        };
+        CreatePersonalAccessTokenRequest: {
+            /**
+             * @description What the token is for (e.g. a script or an MCP client); 1 to 100 characters.
+             * @example Claude Desktop
+             */
+            name: string;
+            /**
+             * @description Keys of 1 to 50 projects you belong to.
+             * @example [
+             *       "CHK"
+             *     ]
+             */
+            projects: string[];
+            /** @default 90 */
+            expiresInDays?: number;
+        };
+        CreatedPersonalAccessToken: {
+            personalAccessToken: components["schemas"]["PersonalAccessToken"];
+            /** @description The token: send it as `Authorization: Bearer <token>`. Shown only once. */
+            token: string;
+        };
         ApiKey: {
             /** Format: int64 */
             id: number;
@@ -2954,6 +3040,89 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listPersonalAccessTokens: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["Page"];
+                pageSize?: components["parameters"]["PageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of tokens (never the tokens themselves) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalAccessTokenPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createPersonalAccessToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePersonalAccessTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description The token and its secret (shown only now) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedPersonalAccessToken"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    revokePersonalAccessToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tokenId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The revoked token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalAccessToken"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };

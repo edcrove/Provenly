@@ -112,7 +112,8 @@ services:
 volumes:
   pgdata:
 
-# Optional CA for builds behind a TLS-intercepting proxy (EXTRA_CA_CERT=<pem path>).
+# Optional CA for builds behind a TLS-intercepting proxy (EXTRA_CA_CERT=<pem path>). Without one, an empty file in
+# the repo: newer Docker Compose releases ask for an extra entitlement to read a secret outside the project (/dev/null).
 secrets:
   extra_ca:
-    file: ${EXTRA_CA_CERT:-/dev/null}
+    file: ${EXTRA_CA_CERT:-./envs/no-extra-ca.pem}

@@ -281,19 +281,21 @@ export interface TestCaseFilter {
   classification?: string
   /** A suite of `project`. */
   suite?: string
+  /** The test case with this key (`CHK-12`): zero or one item. */
+  key?: string
   pageSize?: number
 }
 
 export function useTestCases(page: number, filter: TestCaseFilter = {}) {
-  const { status, project, tag, classification, suite, pageSize } = filter
-  const key = [...keys.testCases, 'list', project, status, tag, classification, suite, pageSize, page]
+  const { status, project, tag, classification, suite, key: tcKey, pageSize } = filter
+  const key = [...keys.testCases, 'list', project, status, tag, classification, suite, tcKey, pageSize, page]
   return useQuery({
     queryKey: key,
     placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/test-cases', {
-          params: { query: { page, pageSize, status, project, tag, classification, suite } },
+          params: { query: { page, pageSize, status, project, tag, classification, suite, key: tcKey } },
         }),
       ),
   })

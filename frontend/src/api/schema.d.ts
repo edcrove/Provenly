@@ -4384,6 +4384,13 @@ export interface operations {
                 classification?: string;
                 /** @description Only the test cases of this suite of `project` (needs `project`; not combined with tag or classification). */
                 suite?: string;
+                /**
+                 * @description The test case with this exact key (`<PROJECT>-<number>`, e.g. `CHK-12`): a page of zero or one item, for
+                 *     callers that know the key but not the numeric id (MCP agents, scripts). Combinable with the other filters
+                 *     (`project` naming another project gives no item); a key of a project you cannot see gives no item.
+                 * @example CHK-12
+                 */
+                key?: string;
             };
             header?: never;
             path?: never;

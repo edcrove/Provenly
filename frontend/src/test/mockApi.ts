@@ -1735,9 +1735,13 @@ export const handlers = [
               (pair) => t.classification[pair.split(':')[0]] === pair.split(':')[1],
             ))
       const pairs = (classified ?? '').split(',').filter(Boolean)
+      const tcKey = url.searchParams.get('key')
+      if (tcKey !== null && !/^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,17}$/.test(tcKey))
+        return validation('key', 'must be a test case key: <PROJECT>-<number> (e.g. CHK-12)')
       const items = db.testCases
         .filter(
           (t) =>
+            (tcKey === null || t.key === tcKey) &&
             (!status || t.status === status) &&
             (!p || t.projectId === p.id) &&
             (tag === null || t.tags.includes(tag)) &&

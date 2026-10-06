@@ -152,6 +152,8 @@ func TestToolsCall(t *testing.T) {
 	call(t, h, "search_test_cases", `{"project":"CHK","tag":"smoke & fast","page":2}`)
 	assert.Equal(t, "/api/v1/test-cases?page=2&project=CHK&tag=smoke+%26+fast", api.got.URL.String())
 	assert.Empty(t, api.got.Header.Get("Authorization"))
+	call(t, h, "search_test_cases", `{"key":"CHK-12"}`)
+	assert.Equal(t, "/api/v1/test-cases?key=CHK-12", api.got.URL.String(), "an agent finds a test case by its key")
 	call(t, h, "get_project_quality", `{"projectKey":"CHK","window":5}`)
 	assert.Equal(t, "/api/v1/projects/CHK/quality?window=5", api.got.URL.RequestURI())
 	call(t, h, "list_projects", `{}`)

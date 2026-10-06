@@ -44,6 +44,30 @@ func TestCatalogPersistence(t *testing.T) {
 		require.Error(t, err, "clients cannot choose a TC-ID")
 	})
 
+	t.Run("BE-INT-065_a_test_case_is_found_by_its_project_and_number", func(t *testing.T) {
+		s, ctx := fresh(t)
+		chk, err := s.Catalog.CreateProject(ctx, catalog.CreateProjectInput{Key: "CHK", Name: "Checkout"})
+		require.NoError(t, err)
+		for _, in := range []catalog.CreateInput{{ProjectID: catalog.DefaultProjectID, Title: "tc"}, {ProjectID: chk.ID, Title: "pay"}, {ProjectID: chk.ID, Title: "refund"}} {
+			_, err := s.Catalog.Create(ctx, in)
+			require.NoError(t, err)
+		}
+		find := func(projects []int64, number int64) []string {
+			res, err := s.Catalog.List(ctx, catalog.ListFilter{ProjectIDs: projects, Number: &number}, pagination.Default())
+			require.NoError(t, err)
+			keys := []string{}
+			for _, tc := range res.Items {
+				keys = append(keys, tc.Key())
+			}
+			assert.Equal(t, int64(len(keys)), res.Total)
+			return keys
+		}
+		assert.Equal(t, []string{"CHK-2"}, find([]int64{chk.ID}, 2))
+		assert.Equal(t, []string{"TC-1"}, find([]int64{catalog.DefaultProjectID}, 1))
+		assert.ElementsMatch(t, []string{"TC-1", "CHK-1"}, find(nil, 1), "a number alone is not a key")
+		assert.Empty(t, find([]int64{chk.ID}, 3))
+	})
+
 	t.Run("BE-INT-003_tc_ids_are_immutable_and_rows_cannot_be_deleted", func(t *testing.T) {
 		s, ctx := fresh(t)
 		tc, err := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a"})

@@ -126,6 +126,44 @@ export function useAcceptInvitation() {
   })
 }
 
+/** Sets a new password with a reset link and signs in (public). */
+export function useResetPassword() {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async (body: { token: string; password: string }) =>
+      unwrap(await api.POST('/api/v1/password-reset', { body })),
+    onSuccess: (session) => {
+      qc.clear()
+      qc.setQueryData(keys.me, session.user)
+    },
+  })
+}
+
+/** Administrators: deactivate or reactivate a user (their sessions stop at once / they can sign in again). */
+export function useUserActivation() {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async ({ username, active }: { username: string; active: boolean }) =>
+      unwrap(
+        await api.POST(
+          active ? '/api/v1/users/{username}/reactivate' : '/api/v1/users/{username}/deactivate',
+          {
+            params: { path: { username } },
+          },
+        ),
+      ),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.users }),
+  })
+}
+
+/** Administrators: a single-use password reset link for a user (its token is shown once). */
+export function useCreatePasswordReset() {
+  return useExclusiveMutation({
+    mutationFn: async (username: string) =>
+      unwrap(await api.POST('/api/v1/users/{username}/password-reset', { params: { path: { username } } })),
+  })
+}
+
 export function useUsers(page: number, enabled = true) {
   return useQuery({
     queryKey: [...keys.users, page],

@@ -32,13 +32,15 @@ type Deps struct {
 	Serve   func(ctx context.Context, l net.Listener, h http.Handler) error
 	// Exporter builds the OpenTelemetry span exporter when an OTLP endpoint is configured.
 	Exporter telemetry.Exporter
+	// BreakGlass makes a password reset link for a user without an administrator (reset-password).
+	BreakGlass func(ctx context.Context, pool *pgxpool.Pool, username string) (identity.PasswordReset, string, error)
 }
 
 // DefaultDeps are the production dependencies.
 func DefaultDeps(getenv func(string) string, stderr io.Writer) Deps {
 	return Deps{
 		Getenv: getenv, Stderr: stderr,
-		OpenDB: postgres.Open, Migrate: postgres.Migrate, Exporter: telemetry.OTLP,
+		OpenDB: postgres.Open, Migrate: postgres.Migrate, Exporter: telemetry.OTLP, BreakGlass: breakGlass,
 		Listen: func(addr string) (net.Listener, error) { return net.Listen("tcp", addr) },
 		Serve: func(ctx context.Context, l net.Listener, h http.Handler) error {
 			return server.Run(ctx, l, h, server.ShutdownTimeout)
@@ -46,7 +48,7 @@ func DefaultDeps(getenv func(string) string, stderr io.Writer) Deps {
 	}
 }
 
-const usage = "usage: provenly [serve | migrate <up|down|status|reset|version>]"
+const usage = "usage: provenly [serve | migrate <up|down|status|reset|version> | reset-password <username>]"
 
 // Run executes the command in args and returns the process exit code.
 func Run(ctx context.Context, args []string, d Deps) int {
@@ -62,7 +64,7 @@ func run(ctx context.Context, args []string, d Deps) error {
 	if len(args) > 0 {
 		cmd = args[0]
 	}
-	if cmd != "serve" && (cmd != "migrate" || len(args) != 2) {
+	if cmd != "serve" && ((cmd != "migrate" && cmd != "reset-password") || len(args) != 2) {
 		return fmt.Errorf("%s", usage)
 	}
 	cfg, err := config.Load(d.Getenv)
@@ -82,6 +84,9 @@ func run(ctx context.Context, args []string, d Deps) error {
 	defer pool.Close()
 	if cmd == "migrate" {
 		return d.Migrate(ctx, pool, args[1])
+	}
+	if cmd == "reset-password" {
+		return resetPassword(ctx, pool, args[1], d)
 	}
 	if cfg.AutoMigrate {
 		if err := d.Migrate(ctx, pool, "up"); err != nil {
@@ -126,3 +131,21 @@ func run(ctx context.Context, args []string, d Deps) error {
 
 // deliveryInterval is how often due webhook deliveries are sent.
 const deliveryInterval = 2 * time.Second
+
+// breakGlass makes the reset link through the identity service on the given database.
+func breakGlass(ctx context.Context, pool *pgxpool.Pool, username string) (identity.PasswordReset, string, error) {
+	services := app.NewServicesConfig(pool, time.Now, app.Config{Identity: identity.DefaultConfig(identity.RandomSecret())})
+	return services.Identity.BreakGlassReset(ctx, username)
+}
+
+// resetPassword is the break-glass way back in (card #61): run on the server, it prints a single-use link token to set
+// a new password for the user (reactivating them), without an administrator session.
+func resetPassword(ctx context.Context, pool *pgxpool.Pool, username string, d Deps) error {
+	reset, token, err := d.BreakGlass(ctx, pool, username)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(d.Stderr, "password reset link for %s (single use, until %s):\n  <web address>/reset-password?token=%s\n",
+		username, reset.ExpiresAt.UTC().Format(time.RFC3339), token)
+	return nil
+}

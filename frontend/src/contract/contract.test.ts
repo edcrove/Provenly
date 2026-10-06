@@ -489,6 +489,15 @@ const roleScenarios: Scenario[] = [
       [400, addAna, ana, { role: 'owner' }],
       [403, asViewer, ana, { role: 'maintainer' }],
       [404, undefined, ana, { role: 'member' }],
+      [
+        409,
+        () => {
+          addAna()
+          db.users[db.users.length - 1].deactivatedAt = '2026-10-06T10:00:00Z'
+        },
+        ana,
+        { role: 'member' },
+      ],
       [500, fail, ana, { role: 'member' }],
     ] as const
   ).map(([status, setup, path, body]): Scenario => ({
@@ -663,6 +672,91 @@ const authScenarios: Scenario[] = [
     setup,
     call: (c) => c.POST('/api/v1/invitations/{invitationId}/revoke', { params: { path } }),
   })),
+  ...(
+    [
+      [200, () => db.users.push({ ...db.users[0], id: 2, username: 'ana', isAdmin: false }), 'ana'],
+      [401, signedOut, 'ana'],
+      [403, asMember, 'admin'],
+      [404, undefined, 'nobody'],
+      [409, undefined, 'admin'],
+      [500, fail, 'ana'],
+    ] as const
+  ).map(([status, setup, username]): Scenario => ({
+    op: 'POST /api/v1/users/{username}/deactivate',
+    status,
+    setup,
+    call: (c) => c.POST('/api/v1/users/{username}/deactivate', { params: { path: { username } } }),
+  })),
+  ...(
+    [
+      [200, undefined, 'admin'],
+      [401, signedOut, 'admin'],
+      [403, asMember, 'admin'],
+      [404, undefined, 'nobody'],
+      [500, fail, 'admin'],
+    ] as const
+  ).map(([status, setup, username]): Scenario => ({
+    op: 'POST /api/v1/users/{username}/reactivate',
+    status,
+    setup,
+    call: (c) => c.POST('/api/v1/users/{username}/reactivate', { params: { path: { username } } }),
+  })),
+  ...(
+    [
+      [201, undefined, 'admin'],
+      [401, signedOut, 'admin'],
+      [403, asMember, 'admin'],
+      [404, undefined, 'nobody'],
+      [
+        409,
+        () =>
+          db.users.push({
+            ...db.users[0],
+            id: 2,
+            username: 'ana',
+            isAdmin: false,
+            deactivatedAt: '2026-10-06T10:00:00Z',
+          }),
+        'ana',
+      ],
+      [500, fail, 'admin'],
+    ] as const
+  ).map(([status, setup, username]): Scenario => ({
+    op: 'POST /api/v1/users/{username}/password-reset',
+    status,
+    setup,
+    call: (c) => c.POST('/api/v1/users/{username}/password-reset', { params: { path: { username } } }),
+  })),
+  {
+    op: 'POST /api/v1/password-reset',
+    status: 200,
+    setup: () => {
+      db.resetTokens.tok = 'admin'
+    },
+    call: (c) => c.POST('/api/v1/password-reset', { body: { token: 'tok', password: 'a long password' } }),
+  },
+  {
+    op: 'POST /api/v1/password-reset',
+    status: 400,
+    call: (c) => c.POST('/api/v1/password-reset', { body: { token: 'tok', password: 'short' } }),
+  },
+  {
+    op: 'POST /api/v1/password-reset',
+    status: 404,
+    call: (c) => c.POST('/api/v1/password-reset', { body: { token: 'nope', password: 'a long password' } }),
+  },
+  {
+    op: 'POST /api/v1/password-reset',
+    status: 500,
+    setup: fail,
+    call: (c) => c.POST('/api/v1/password-reset', { body: { token: 'tok', password: 'a long password' } }),
+  },
+  {
+    op: 'POST /api/v1/password-reset',
+    status: 415,
+    call: (c) =>
+      c.POST('/api/v1/password-reset', { body: { token: 'nope', password: 'x' }, headers: textPlain }),
+  },
   {
     op: 'POST /api/v1/invitations/accept',
     status: 201,

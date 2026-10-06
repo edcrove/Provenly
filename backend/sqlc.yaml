@@ -49,6 +49,7 @@ sql:
       - migrations/00014_identity.sql
       - migrations/00015_project_members.sql
       - migrations/00016_api_keys.sql
+      - migrations/00033_user_offboarding.sql
     queries: queries/identity.sql
     gen:
       go:

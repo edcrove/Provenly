@@ -188,6 +188,54 @@ func TestKeyFilter(t *testing.T) {
 	list(outsider.GET("/api/v1/test-cases").WithQuery("key", "CHK-2")).HasValue("totalItems", 0)
 }
 
+// TestOffboarding: administrators deactivate and reactivate users and give them single-use password reset links;
+// a deactivated user's session stops at once (card #61).
+func TestOffboarding(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	e := anon(t, s, 1<<20)
+	join := func(username string) string {
+		tok := admin.POST("/api/v1/invitations").WithJSON(map[string]any{}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw()
+		return e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": tok, "username": username, "displayName": username, "password": username + " password"}).
+			Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw()
+	}
+	anaToken := join("ana")
+	ana := as(e, anaToken)
+
+	ana.POST("/api/v1/users/admin/deactivate").Expect().Status(http.StatusForbidden)
+	ana.POST("/api/v1/users/admin/reactivate").Expect().Status(http.StatusForbidden)
+	ana.POST("/api/v1/users/admin/password-reset").Expect().Status(http.StatusForbidden)
+	admin.POST("/api/v1/users/admin/deactivate").Expect().Status(http.StatusConflict).JSON(problemOpts).Object().HasValue("code", "conflict")
+	admin.POST("/api/v1/users/nobody/deactivate").Expect().Status(http.StatusNotFound)
+	admin.POST("/api/v1/users/nobody/reactivate").Expect().Status(http.StatusNotFound)
+	admin.POST("/api/v1/users/nobody/password-reset").Expect().Status(http.StatusNotFound)
+
+	admin.POST("/api/v1/users/ana/deactivate").Expect().Status(http.StatusOK).JSON().Object().HasValue("username", "ana").
+		Value("deactivatedAt").String().NotEmpty()
+	ana.GET("/api/v1/auth/me").Expect().Status(http.StatusUnauthorized)
+	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": "ana", "password": "ana password"}).Expect().
+		Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("detail", "invalid username or password")
+	admin.POST("/api/v1/users/ana/password-reset").Expect().Status(http.StatusConflict)
+	admin.PUT("/api/v1/projects/TC/members/ana").WithJSON(map[string]any{"role": "member"}).Expect().Status(http.StatusConflict)
+	admin.GET("/api/v1/users").Expect().Status(http.StatusOK).JSON().Object().Value("items").Array().Value(1).Object().
+		HasValue("username", "ana").Value("deactivatedAt").String().NotEmpty()
+	admin.POST("/api/v1/users/ana/reactivate").Expect().Status(http.StatusOK).JSON().Object().HasValue("deactivatedAt", nil)
+
+	link := admin.POST("/api/v1/users/ana/password-reset").Expect().Status(http.StatusCreated).JSON().Object().HasValue("username", "ana")
+	token := link.Value("token").String().Raw()
+	reset := func(body map[string]any) *httpexpect.Response {
+		return e.POST("/api/v1/password-reset").WithJSON(body).Expect()
+	}
+	reset(map[string]any{"token": token, "password": "short"}).Status(http.StatusBadRequest)
+	reset(map[string]any{"token": "made-up", "password": "a new password"}).Status(http.StatusNotFound)
+	e.POST("/api/v1/password-reset").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
+	reset(map[string]any{"token": token, "password": "ana's new password"}).Status(http.StatusOK).JSON().Object().
+		Value("user").Object().HasValue("username", "ana")
+	reset(map[string]any{"token": token, "password": "another password"}).Status(http.StatusNotFound)
+	ana.GET("/api/v1/auth/me").Expect().Status(http.StatusUnauthorized)
+	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": "ana", "password": "ana's new password"}).Expect().Status(http.StatusOK)
+}
+
 // TestEmptyRunMetadata: an empty pipeline, branch or commit on the ingestion is the same as absent, the documented
 // exception to "present but empty is a 400" (card #55).
 func TestEmptyRunMetadata(t *testing.T) {
@@ -274,7 +322,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 77, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 80, protected, "every operation except health, readiness, sign-in, sign-out, accept and password reset")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -627,6 +675,10 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.POST("/api/v1/projects/TC/api-keys/1/revoke").Expect())
 	problem(e.POST("/api/v1/auth/password").WithJSON(map[string]any{"currentPassword": "x", "newPassword": "a long password"}).Expect())
 	problem(e.GET("/api/v1/users").Expect())
+	problem(e.POST("/api/v1/users/ana/deactivate").Expect())
+	problem(e.POST("/api/v1/users/ana/reactivate").Expect())
+	problem(e.POST("/api/v1/users/ana/password-reset").Expect())
+	problem(e.POST("/api/v1/password-reset").WithJSON(map[string]any{"token": "t", "password": "a long password"}).Expect())
 	problem(e.GET("/api/v1/invitations").Expect())
 	problem(e.POST("/api/v1/invitations").WithJSON(map[string]any{}).Expect())
 	problem(e.POST("/api/v1/invitations/1/revoke").Expect())

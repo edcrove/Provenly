@@ -296,6 +296,8 @@ jobs:
           ./scripts/smoke.sh http://localhost:3100
       - name: Edge-case probe against the qa environment (through nginx)
         run: python3 scripts/probe/edge_cases.py --base http://localhost:3100
+      - name: Edge-case probe against the qa API directly (no nginx limits in front)
+        run: python3 scripts/probe/edge_cases.py --base http://localhost:8180
       - name: Environments - images, isolation, seeds, dump/restore, prod guards, CA cache key, hot reload
         run: ./scripts/env-checks.sh
       - name: demo-reset brings demo back to its snapshot

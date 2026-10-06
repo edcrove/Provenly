@@ -1186,6 +1186,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WebhookList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1332,6 +1334,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GitHubConnection"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1376,6 +1380,8 @@ paths:
       responses:
         "204":
           description: Disconnected
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1399,6 +1405,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ImportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":

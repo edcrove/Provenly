@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/edcrove/provenly/backend/internal/catalog"
+	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
@@ -32,15 +33,15 @@ func NewHandler(api API) *Handler { return &Handler{api: api} }
 
 // Register mounts the integrations routes.
 func (h *Handler) Register(mux httpx.Router) {
-	mux.HandleFunc("GET /api/v1/projects/{projectKey}/webhooks", h.listWebhooks)
-	mux.HandleFunc("POST /api/v1/projects/{projectKey}/webhooks", h.createWebhook)
-	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/webhooks/{webhookId}", h.updateWebhook)
-	mux.HandleFunc("POST /api/v1/projects/{projectKey}/webhooks/{webhookId}/ping", h.ping)
-	mux.HandleFunc("GET /api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries", h.deliveries)
-	mux.HandleFunc("GET /api/v1/projects/{projectKey}/github", h.getGitHub)
-	mux.HandleFunc("PUT /api/v1/projects/{projectKey}/github", h.connectGitHub)
-	mux.HandleFunc("DELETE /api/v1/projects/{projectKey}/github", h.disconnectGitHub)
-	mux.HandleFunc("POST /api/v1/projects/{projectKey}/github/sync", h.syncGitHub)
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/webhooks", keyed(h.listWebhooks))
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/webhooks", keyed(h.createWebhook))
+	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/webhooks/{webhookId}", keyed(h.updateWebhook))
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/webhooks/{webhookId}/ping", keyed(h.ping))
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/webhooks/{webhookId}/deliveries", keyed(h.deliveries))
+	mux.HandleFunc("GET /api/v1/projects/{projectKey}/github", keyed(h.getGitHub))
+	mux.HandleFunc("PUT /api/v1/projects/{projectKey}/github", keyed(h.connectGitHub))
+	mux.HandleFunc("DELETE /api/v1/projects/{projectKey}/github", keyed(h.disconnectGitHub))
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/github/sync", keyed(h.syncGitHub))
 }
 
 // DeliveryDTO is the wire form of Delivery.
@@ -139,13 +140,26 @@ type githubRequest struct {
 	Labels     string  `json:"labels"`
 }
 
+// keyed validates the {projectKey} path segment before the handler runs: a malformed key is a 400 and never
+// reaches the database.
+func keyed(handle func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		key := r.PathValue("projectKey")
+		if !catalog.ProjectKeyPattern.MatchString(key) {
+			httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "projectKey", Message: catalog.ProjectKeyMessage}))
+			return
+		}
+		handle(w, r, key)
+	}
+}
+
 type syncResponse struct {
 	Created int `json:"created"`
 	Updated int `json:"updated"`
 }
 
-func (h *Handler) listWebhooks(w http.ResponseWriter, r *http.Request) {
-	hooks, err := h.api.Webhooks(r.Context(), r.PathValue("projectKey"))
+func (h *Handler) listWebhooks(w http.ResponseWriter, r *http.Request, projectKey string) {
+	hooks, err := h.api.Webhooks(r.Context(), projectKey)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -157,13 +171,13 @@ func (h *Handler) listWebhooks(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, out)
 }
 
-func (h *Handler) createWebhook(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) createWebhook(w http.ResponseWriter, r *http.Request, projectKey string) {
 	var req webhookRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	hook, secret, err := h.api.CreateWebhook(r.Context(), r.PathValue("projectKey"), req.URL, req.Events)
+	hook, secret, err := h.api.CreateWebhook(r.Context(), projectKey, req.URL, req.Events)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -171,7 +185,7 @@ func (h *Handler) createWebhook(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, createdWebhook{Webhook: webhookDTO(hook), Secret: secret})
 }
 
-func (h *Handler) updateWebhook(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) updateWebhook(w http.ResponseWriter, r *http.Request, projectKey string) {
 	id, err := httpx.PathID(r, "webhookId")
 	if err != nil {
 		httpx.WriteError(w, r, err)
@@ -182,7 +196,7 @@ func (h *Handler) updateWebhook(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	hook, err := h.api.UpdateWebhook(r.Context(), r.PathValue("projectKey"), id, UpdateWebhookInput(req))
+	hook, err := h.api.UpdateWebhook(r.Context(), projectKey, id, UpdateWebhookInput(req))
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -190,13 +204,13 @@ func (h *Handler) updateWebhook(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, webhookDTO(hook))
 }
 
-func (h *Handler) ping(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ping(w http.ResponseWriter, r *http.Request, projectKey string) {
 	id, err := httpx.PathID(r, "webhookId")
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	d, err := h.api.Ping(r.Context(), r.PathValue("projectKey"), id)
+	d, err := h.api.Ping(r.Context(), projectKey, id)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -204,7 +218,7 @@ func (h *Handler) ping(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusAccepted, deliveryDTO(d))
 }
 
-func (h *Handler) deliveries(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) deliveries(w http.ResponseWriter, r *http.Request, projectKey string) {
 	id, err := httpx.PathID(r, "webhookId")
 	if err != nil {
 		httpx.WriteError(w, r, err)
@@ -215,7 +229,7 @@ func (h *Handler) deliveries(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	res, err := h.api.Deliveries(r.Context(), r.PathValue("projectKey"), id, page)
+	res, err := h.api.Deliveries(r.Context(), projectKey, id, page)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -223,8 +237,8 @@ func (h *Handler) deliveries(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, deliveryDTO))
 }
 
-func (h *Handler) getGitHub(w http.ResponseWriter, r *http.Request) {
-	v, err := h.api.GitHub(r.Context(), r.PathValue("projectKey"))
+func (h *Handler) getGitHub(w http.ResponseWriter, r *http.Request, projectKey string) {
+	v, err := h.api.GitHub(r.Context(), projectKey)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -232,13 +246,13 @@ func (h *Handler) getGitHub(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, githubDTO(v))
 }
 
-func (h *Handler) connectGitHub(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) connectGitHub(w http.ResponseWriter, r *http.Request, projectKey string) {
 	var req githubRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	v, err := h.api.ConnectGitHub(r.Context(), r.PathValue("projectKey"), GitHubInput(req))
+	v, err := h.api.ConnectGitHub(r.Context(), projectKey, GitHubInput(req))
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -246,16 +260,16 @@ func (h *Handler) connectGitHub(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, githubDTO(v))
 }
 
-func (h *Handler) disconnectGitHub(w http.ResponseWriter, r *http.Request) {
-	if err := h.api.DisconnectGitHub(r.Context(), r.PathValue("projectKey")); err != nil {
+func (h *Handler) disconnectGitHub(w http.ResponseWriter, r *http.Request, projectKey string) {
+	if err := h.api.DisconnectGitHub(r.Context(), projectKey); err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) syncGitHub(w http.ResponseWriter, r *http.Request) {
-	res, err := h.api.SyncGitHub(r.Context(), r.PathValue("projectKey"))
+func (h *Handler) syncGitHub(w http.ResponseWriter, r *http.Request, projectKey string) {
+	res, err := h.api.SyncGitHub(r.Context(), projectKey)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

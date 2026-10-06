@@ -332,6 +332,16 @@ func (h *Handler) listMembers(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, toMemberDTO))
 }
 
+// pathUsername validates the {username} path segment (400 when it cannot be a username, before any lookup).
+func pathUsername(w http.ResponseWriter, r *http.Request) (string, bool) {
+	username := r.PathValue("username")
+	if !UsernamePattern.MatchString(username) {
+		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "username", Message: UsernameMessage}))
+		return "", false
+	}
+	return username, true
+}
+
 func (h *Handler) setMember(w http.ResponseWriter, r *http.Request) {
 	var req memberRequest
 	if err := httpx.DecodeJSON(w, r, &req); err != nil {
@@ -342,7 +352,11 @@ func (h *Handler) setMember(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	m, err := h.api.SetMember(r.Context(), id, r.PathValue("username"), req.Role)
+	username, ok := pathUsername(w, r)
+	if !ok {
+		return
+	}
+	m, err := h.api.SetMember(r.Context(), id, username, req.Role)
 	if err != nil {
 		writeProjectError(w, r, err)
 		return
@@ -355,7 +369,11 @@ func (h *Handler) removeMember(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.api.RemoveMember(r.Context(), id, r.PathValue("username")); err != nil {
+	username, ok := pathUsername(w, r)
+	if !ok {
+		return
+	}
+	if err := h.api.RemoveMember(r.Context(), id, username); err != nil {
 		writeProjectError(w, r, err)
 		return
 	}

@@ -78,6 +78,8 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 - Query parameters: unknown ones are ignored; every known parameter is applied and validated (an invalid value of a
   known parameter is a `400` even when unknown ones are present). A known parameter present but empty (`status=`) is
   invalid; a repeated one uses its first value. A page whose offset does not fit the database is a `400`.
+- Path segments: ids, `{projectKey}` and `{username}` are checked against their format before any lookup, so a
+  malformed one (NUL, invalid UTF-8, wrong case or length) is a `400 validation_error` on every route, never a `500`.
 - Request bodies: JSON operations require `Content-Type: application/json` (`415 unsupported_media_type` otherwise);
   duplicate keys keep the last value. Text fields (JSON or query) must be valid UTF-8 without NUL characters (`400`
   otherwise), since PostgreSQL cannot store them. Every validation error has the detail `request validation failed` and lists

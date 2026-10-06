@@ -426,6 +426,17 @@ questions went to Ed.
   cross-module foreign-key exception; compose passes the standard OpenTelemetry variables; self-hosting says no
   image is published yet, to deploy from the release tag's checkout and requires Compose v2.24+.
 
+**Test fidelity**
+- The frontend mock behaves like the server where tests relied on it: a manual run's and an amended run's outcome
+  are recomputed from their results, a skipped latest result keeps the previous conclusive evidence of an issue, the
+  quality endpoint lists stale test cases with their last execution, and ids are never handed out twice.
+- BE-INT-001 compares the whole schema (columns, constraints, indexes, functions, triggers, sequences, types)
+  before a reset and after migrating up again, and asserts the reset leaves nothing behind.
+- New contract checks: a deprecated test case stays editable (implementation decision #10), gzip reports replay like
+  plain ones, CI API keys get 401 on manual-run routes, scoped lists return the visible items and page over them.
+- No wall-clock tolerances: the deep-page check uses medians and a relative bound; backoff and stale dates are exact.
+- covgate fails a gate when a test carries an id its inventory does not declare (BE-INT-020 was missing).
+
 **Domain**
 - Manual and live runs record when they started (the run page and history said "Started —").
 - A live run's reconciliation counts final results outside the run's universe (a manual or deprecated test case CI

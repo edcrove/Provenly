@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { user } from '@/test/fixtures'
+import { testResult, user } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { renderRoute } from '@/test/render'
 
@@ -44,6 +44,23 @@ describe('FE-INT-035 snapshot amendment (DEC-42)', () => {
     await router.navigate('/test-runs')
     await screen.findByRole('heading', { name: 'Test Runs' })
     expect(await screen.findByTestId('edited-badge')).toBeInTheDocument()
+  })
+
+  it('FE-INT-035 including a test case that failed fails the run, like the server recomputes it', async () => {
+    outsideRun()
+    db.runs[0] = { ...db.runs[0], outcome: { ...db.runs[0].outcome, verdict: 'passed', failed: 0, error: 0 } }
+    db.summaries[7].testCases = db.summaries[7].testCases.map((c) => ({ ...c, status: 'passed' as const }))
+    db.results.push(
+      testResult({ id: 70, testRunId: 7, testCaseId: 154, testCaseKey: 'TC-154', status: 'failed' }),
+    )
+    const { user: u } = renderRoute('/test-runs/7')
+    expect(await screen.findByTestId('verdict-badge')).toHaveTextContent('passed')
+    const item = await screen.findByTestId('outside-154')
+    await u.type(await within(item).findByLabelText('Why it belongs in this run'), 'Marked manual by mistake')
+    await u.click(within(item).getByRole('button', { name: 'Include in this run' }))
+    await waitFor(() => expect(screen.getByTestId('verdict-badge')).toHaveTextContent('failed'))
+    expect(db.summaries[7].testCases.find((c) => c.testCaseId === 154)?.status).toBe('failed')
+    expect(db.summaries[7].counts.failed).toBe(1)
   })
 
   it('FE-INT-035 a refused amendment is reported; members cannot include test cases', async () => {

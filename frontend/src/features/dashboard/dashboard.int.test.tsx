@@ -114,6 +114,17 @@ describe('FE-INT-042 quality dashboard', () => {
     expect(screen.getByTestId('automation-rate')).toHaveTextContent('0%')
   })
 
+  it('FE-INT-042 a test case last executed before the window is listed as stale with its date', async () => {
+    const old = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString()
+    db.runs = db.runs.map((r) => ({ ...r, createdAt: old }))
+    localStorage.setItem('provenly.project', 'TC')
+    renderRoute('/dashboard')
+    const stale = await screen.findByTestId('stale-cases')
+    expect(within(stale).getByRole('link', { name: 'TC-153' })).toBeInTheDocument()
+    expect(stale).toHaveTextContent(/TC-153\s*last /)
+    expect(screen.getByTestId('stale-count').nextSibling).toHaveTextContent(/, [1-9]\d* not in 14 days/)
+  })
+
   it('FE-INT-042 a running run reads as provisional in the trend', async () => {
     db.runs.push(testRun({ id: 8, executionStatus: 'running' }))
     localStorage.setItem('provenly.project', 'TC')

@@ -126,14 +126,18 @@ func TestIntegrations(t *testing.T) {
 		ep.code = http.StatusServiceUnavailable
 		_, err = s.Integrations.Ping(ctx, "TC", hook.ID)
 		require.NoError(t, err)
+		sent := time.Now()
 		_, err = s.Integrations.DeliverDue(ctx)
 		require.NoError(t, err)
+		done := time.Now()
 		page, _ = s.Integrations.Deliveries(ctx, "TC", hook.ID, pagination.Page{Number: 1, Size: 1})
 		d := page.Items[0]
 		assert.Equal(t, integrations.DeliveryPending, d.Status)
 		assert.Equal(t, int32(1), d.Attempts)
 		assert.Equal(t, int32(503), *d.LastStatusCode)
-		assert.WithinDuration(t, time.Now().Add(10*time.Second), d.NextAttemptAt, 5*time.Second)
+		// Exactly the first backoff (10 s) after the attempt, which happened between sent and done.
+		assert.False(t, d.NextAttemptAt.Before(sent.Add(10*time.Second).Truncate(time.Microsecond)), "next attempt %v", d.NextAttemptAt)
+		assert.False(t, d.NextAttemptAt.After(done.Add(10*time.Second)), "next attempt %v", d.NextAttemptAt)
 		assert.Nil(t, d.CompletedAt)
 
 		// Concurrent workers send each due delivery exactly once (FOR UPDATE SKIP LOCKED + lease).

@@ -49,6 +49,12 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   limit, never truncated; the forms say so).
   Users are never deleted (trigger). The first administrator is created on start when there are no users, from
   `PROVENLY_ADMIN_USERNAME` / `PROVENLY_ADMIN_PASSWORD`; prod refuses the public demo password.
+- Offboarding (card #61): administrators deactivate a user (`users.deactivated_at`): every request re-reads the user,
+  so their sessions are refused at once, and sign-in answers like a wrong password after the same bcrypt work.
+  Nobody deactivates themselves and the last active administrator stays. Project API keys belong to their project and
+  keep working. Forgotten passwords get single-use reset links (`password_resets`: SHA-256 of the token only, 24 h,
+  locked on use, a newer or used link voids the others; rows are only ever marked used, by trigger). The
+  `provenly reset-password <username>` command is the break-glass way back in.
 - New people join through single-use invitation links (7 days; email optional). Only the SHA-256 of the token is
   stored; the link is shown once. Accepting locks the invitation row, so one link creates one account.
 - Sessions are HS256 JWTs (12 h) signed with `PROVENLY_JWT_SECRET` (required in prod, ≥ 32 bytes; random per start

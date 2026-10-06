@@ -74,3 +74,4 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 67 | A project's integrations (maintainers): a webhook with a queued ping and a GitHub Issues connection (token hint, labels; never synced offline) | `67-project-integrations.png` |
 | 68 | The audit log of a project (administrators): who changed what, user or CI API key, with the route and path | `68-audit-log.png` |
 | 69 | A sharded run (one CI matrix, one report per shard): two of three shards arrived, results marked with their shard and filterable by it | `69-test-run-sharded.png` |
+| 70 | Users (admin): deactivate (after a confirmation) or reactivate an account, and a single-use password reset link shown once | `70-users-offboarding.png` |

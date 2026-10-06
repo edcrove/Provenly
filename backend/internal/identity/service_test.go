@@ -23,7 +23,7 @@ type clock struct{ t time.Time }
 func (c *clock) now() time.Time { return c.t }
 
 func testConfig() Config {
-	return Config{Secret: []byte(strings.Repeat("s", 32)), SessionTTL: time.Hour, InvitationTTL: 24 * time.Hour, BcryptCost: bcrypt.MinCost}
+	return Config{Secret: []byte(strings.Repeat("s", 32)), SessionTTL: time.Hour, InvitationTTL: 24 * time.Hour, PasswordResetTTL: 24 * time.Hour, BcryptCost: bcrypt.MinCost}
 }
 
 func setup(t *testing.T) (*Service, *fakeRepo, *clock, context.Context) {

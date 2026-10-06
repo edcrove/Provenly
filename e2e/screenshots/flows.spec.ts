@@ -532,5 +532,11 @@ test('UI flows', async ({ page }) => {
   await page.goto(`/test-runs/${shardedRun}`)
   await expect(page.getByTestId('run-shards')).toContainText('2 of 3 shards received')
   await shot(page, 'test-run-sharded')
+  // Offboarding (card #61): an administrator makes a password reset link for Carla and deactivates another account.
+  await page.goto('/users')
+  const carlaRow = page.getByTestId('user-carla')
+  await carlaRow.getByRole('button', { name: 'Password reset link' }).click()
+  await expect(carlaRow.getByTestId('reset-link')).toBeVisible()
+  await shot(page, 'users-offboarding')
   await page.getByLabel('Current project').selectOption('')
 })

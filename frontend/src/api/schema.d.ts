@@ -126,6 +126,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{username}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate a user (administrators)
+         * @description The user's sessions are refused from their next request and they cannot sign in (the same answer as a wrong
+         *     password); their pending password reset links stop working. Project API keys belong to their project and keep
+         *     working. Nobody deactivates themselves (409) and the last active administrator stays (409). Deactivating a
+         *     deactivated user changes nothing.
+         */
+        post: operations["deactivateUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{username}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate a deactivated user (administrators)
+         * @description The user can sign in again with their password (or a new reset link). Reactivating an active user changes
+         *     nothing.
+         */
+        post: operations["reactivateUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{username}/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make a single-use password reset link for a user (administrators)
+         * @description The token is shown once (only its digest is stored) and works for 24 hours, once; a new link voids the user's
+         *     earlier ones. A deactivated user gets none (409). The person opens `/reset-password?token=...` and chooses a
+         *     new password, which signs every older session of theirs out.
+         */
+        post: operations["createPasswordReset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a new password with a reset link and sign in
+         * @description A link that is unknown, expired, already used or of a deactivated user is the same 404. Older sessions end.
+         */
+        post: operations["resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations": {
         parameters: {
             query?: never;
@@ -1350,6 +1436,11 @@ export interface components {
             deprecatedAt?: string | null;
         };
         User: {
+            /**
+             * Format: date-time
+             * @description When an administrator deactivated the user (null - active). A deactivated user cannot sign in.
+             */
+            deactivatedAt: string | null;
             /** Format: int64 */
             id: number;
             /** @example ana */
@@ -1360,6 +1451,18 @@ export interface components {
             isAdmin: boolean;
             /** Format: date-time */
             createdAt: string;
+        };
+        PasswordResetLink: {
+            username: string;
+            /** @description Shown once; the link is `/reset-password?token=<token>`. */
+            token: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ResetPasswordRequest: {
+            token: string;
+            /** @description At least 10 characters, at most 72 bytes. */
+            password: string;
         };
         UserPage: components["schemas"]["PageMeta"] & {
             items: components["schemas"]["User"][];
@@ -2857,6 +2960,117 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deactivateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example ana */
+                username: components["parameters"]["Username"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    reactivateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example ana */
+                username: components["parameters"]["Username"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createPasswordReset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example ana */
+                username: components["parameters"]["Username"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The link's token, shown once */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordResetLink"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password set and signed in (session cookie set) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
     };

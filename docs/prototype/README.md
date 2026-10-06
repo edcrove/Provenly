@@ -356,6 +356,10 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 The audit's open decisions and cards were refined by the product owner and the six personas and recorded in the
 Notion Decision Register; each one ships in its own PR.
 
+- **Offboarding (card #61):** administrators deactivate (sessions end at once, sign-in refused like a wrong password,
+  project API keys keep working) and reactivate users, and give single-use password reset links (24 h); the
+  `provenly reset-password <username>` command is the break-glass way back in. Nobody deactivates themselves and the
+  last active administrator stays.
 - **Find by key (card #53):** `GET /api/v1/test-cases?key=CHK-12` gives zero or one test case (MCP `search_test_cases`
   takes `key` too); the test case list has a TC-ID search box.
 - **Variants and flaky (card #58):** repeated names without an attempt signal are variants of the test (a failure

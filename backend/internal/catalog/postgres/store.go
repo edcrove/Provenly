@@ -438,6 +438,11 @@ func (s *Store) ListDimensions(ctx context.Context, projectID int64) ([]catalog.
 	return out, nil
 }
 
+// LockScope implements catalog.Repository.
+func (s *Store) LockScope(ctx context.Context, scope string, id int64) error {
+	return s.q.LockLinkParent(ctx, catalogdb.LockLinkParentParams{Kind: scope, ID: id})
+}
+
 // CreateDimension implements catalog.Repository.
 func (s *Store) CreateDimension(ctx context.Context, projectID int64, in catalog.DimensionInput) (catalog.Dimension, error) {
 	r, err := s.q.CreateDimension(ctx, catalogdb.CreateDimensionParams{ProjectID: projectID, Key: in.Key, Name: in.Name})
@@ -574,6 +579,9 @@ func (s *Store) UpdateSuite(ctx context.Context, projectID int64, key string, in
 
 // SetSuiteCases implements catalog.Repository.
 func (s *Store) SetSuiteCases(ctx context.Context, suiteID, projectID int64, ids []int64) error {
+	if err := s.q.LockLinkParent(ctx, catalogdb.LockLinkParentParams{Kind: "suite", ID: suiteID}); err != nil {
+		return err
+	}
 	if err := s.q.DeleteSuiteCases(ctx, catalogdb.DeleteSuiteCasesParams{SuiteID: suiteID, Keep: ids}); err != nil {
 		return err
 	}
@@ -641,6 +649,9 @@ func (s *Store) UpdateRequirement(ctx context.Context, projectID, id int64, in c
 
 // SetRequirementTestCases implements catalog.Repository.
 func (s *Store) SetRequirementTestCases(ctx context.Context, requirementID, projectID int64, ids []int64) error {
+	if err := s.q.LockLinkParent(ctx, catalogdb.LockLinkParentParams{Kind: "requirement", ID: requirementID}); err != nil {
+		return err
+	}
 	if err := s.q.DeleteRequirementLinks(ctx, catalogdb.DeleteRequirementLinksParams{RequirementID: requirementID, Keep: ids}); err != nil {
 		return err
 	}
@@ -709,6 +720,9 @@ func (s *Store) UpdateIssue(ctx context.Context, projectID, id int64, in catalog
 
 // SetIssueTestCases implements catalog.Repository.
 func (s *Store) SetIssueTestCases(ctx context.Context, issueID, projectID int64, ids []int64) error {
+	if err := s.q.LockLinkParent(ctx, catalogdb.LockLinkParentParams{Kind: "issue", ID: issueID}); err != nil {
+		return err
+	}
 	if err := s.q.DeleteIssueLinks(ctx, catalogdb.DeleteIssueLinksParams{IssueID: issueID, Keep: ids}); err != nil {
 		return err
 	}

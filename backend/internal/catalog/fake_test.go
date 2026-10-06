@@ -415,6 +415,8 @@ func (f *fakeRepo) SetTestStepPosition(_ context.Context, tcID, stepID int64, po
 	return nil
 }
 
+func (f *fakeRepo) LockScope(context.Context, string, int64) error { return f.fail("LockScope") }
+
 func (f *fakeRepo) InTx(_ context.Context, fn func(Repository) error) error {
 	if err := f.fail("InTx"); err != nil {
 		return err

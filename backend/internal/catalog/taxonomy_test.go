@@ -224,13 +224,13 @@ func TestDimensionsLifecycle(t *testing.T) {
 	assert.Equal(t, apperr.KindValidation, kindOf(t, err))
 
 	// Repository failures surface.
-	for _, method := range []string{"ListDimensions", "CreateDimension", "InTx"} {
+	for _, method := range []string{"ListDimensions", "CreateDimension", "InTx", "LockScope"} {
 		repo.errs[method] = errBoom
 		_, err := svc.CreateDimension(ctx, 2, DimensionInput{Key: "x", Name: "X"})
 		assert.ErrorIs(t, err, errBoom, method)
 		delete(repo.errs, method)
 	}
-	for _, method := range []string{"ListDimensions", "CreateDimensionValue"} {
+	for _, method := range []string{"ListDimensions", "CreateDimensionValue", "LockScope"} {
 		repo.errs[method] = errBoom
 		_, err := svc.CreateDimensionValue(ctx, DefaultProjectID, "risk", DimensionInput{Key: "x", Name: "X"})
 		assert.ErrorIs(t, err, errBoom, method)

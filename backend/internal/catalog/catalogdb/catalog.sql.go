@@ -1371,6 +1371,22 @@ func (q *Queries) ListTestSteps(ctx context.Context, arg ListTestStepsParams) ([
 	return items, nil
 }
 
+const lockLinkParent = `-- name: LockLinkParent :exec
+SELECT pg_advisory_xact_lock(hashtextextended($1::text, $2::bigint))
+`
+
+type LockLinkParentParams struct {
+	Kind string
+	ID   int64
+}
+
+// Serializes replacements of one requirement's, issue's or static suite's test case set: concurrent replacements run
+// one after the other, so the set always ends as one caller's list (never a union of two).
+func (q *Queries) LockLinkParent(ctx context.Context, arg LockLinkParentParams) error {
+	_, err := q.db.Exec(ctx, lockLinkParent, arg.Kind, arg.ID)
+	return err
+}
+
 const lockTestCase = `-- name: LockTestCase :one
 SELECT version FROM test_cases WHERE id = $1 FOR UPDATE
 `

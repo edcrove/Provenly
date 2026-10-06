@@ -80,7 +80,11 @@ export function TestRunListPage() {
                   {data.items.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={11} className="text-muted-foreground">
-                        No test runs yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.
+                        {suite
+                          ? `No runs of suite ${suite} yet.`
+                          : project
+                            ? `No test runs in ${project} yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.`
+                            : 'No test runs yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.'}
                       </TableCell>
                     </TableRow>
                   )}

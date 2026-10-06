@@ -46,7 +46,7 @@ describe('FE-INT-046 audit log', () => {
     await u.clear(screen.getByLabelText('Actor'))
     await u.type(screen.getByLabelText('Actor'), 'nobody')
     await u.click(screen.getByRole('button', { name: 'Filter' }))
-    expect(await screen.findByText('No changes recorded.')).toBeInTheDocument()
+    expect(await screen.findByText('No changes match these filters.')).toBeInTheDocument()
   })
 
   it('FE-INT-046 other users have no Audit link and are refused', async () => {

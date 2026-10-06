@@ -79,7 +79,7 @@ export function AuditPage() {
                   {data.items.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="text-muted-foreground">
-                        No changes recorded.
+                        {project || actor ? 'No changes match these filters.' : 'No changes recorded.'}
                       </TableCell>
                     </TableRow>
                   )}

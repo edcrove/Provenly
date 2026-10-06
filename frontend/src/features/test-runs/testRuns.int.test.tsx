@@ -76,8 +76,17 @@ describe('FE-INT-008 test run list', () => {
   it('FE-INT-008 shows the empty state and paginates', async () => {
     db.runs = []
     const first = renderRoute('/test-runs')
-    expect(await screen.findByText(/No test runs yet/)).toBeInTheDocument()
+    expect(await screen.findByText(/^No test runs yet/)).toBeInTheDocument()
     first.unmount()
+    // The empty state names the filter that emptied the list.
+    localStorage.setItem('provenly.project', 'TC')
+    const inProject = renderRoute('/test-runs')
+    expect(await screen.findByText(/^No test runs in TC yet/)).toBeInTheDocument()
+    inProject.unmount()
+    const ofSuite = renderRoute('/test-runs?project=TC&suite=nightly')
+    expect(await screen.findByText('No runs of suite nightly yet.')).toBeInTheDocument()
+    ofSuite.unmount()
+    localStorage.removeItem('provenly.project')
 
     db.runs = Array.from({ length: 21 }, (_, i) => testRun({ id: i + 1, externalRunId: `github:${i + 1}:1` }))
     const { user, router } = renderRoute('/test-runs')

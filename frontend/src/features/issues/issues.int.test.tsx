@@ -45,7 +45,7 @@ describe('FE-INT-041 issues and verification', () => {
     expect(row).toHaveTextContent('Known issue')
 
     await u.selectOptions(screen.getByLabelText('State'), 'closed')
-    expect(await screen.findByText('No issues here.')).toBeInTheDocument()
+    expect(await screen.findByText('No closed issues.')).toBeInTheDocument()
     await u.selectOptions(screen.getByLabelText('State'), 'open')
     expect(await screen.findByTestId('issue-PAY-7')).toBeInTheDocument()
     await u.selectOptions(screen.getByLabelText('State'), '')

@@ -733,10 +733,11 @@ export function useTestRun(id: number) {
   })
 }
 
-export function useTestRunSummary(id: number) {
+export function useTestRunSummary(id: number, running = false) {
   return useQuery({
     queryKey: [...keys.testRun(id), 'summary'],
     enabled: id > 0,
+    refetchInterval: running ? 2000 : false,
     queryFn: async () =>
       unwrap(await api.GET('/api/v1/test-runs/{testRunId}/summary', { params: { path: { testRunId: id } } })),
   })

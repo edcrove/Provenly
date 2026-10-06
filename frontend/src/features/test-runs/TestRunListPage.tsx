@@ -107,6 +107,7 @@ export function TestRunListPage() {
                       </TableCell>
                       <TableCell className="tabular-nums" data-testid="pass-rate">
                         {run.outcome.executed > 0 ? formatPercent(run.outcome.passRate) : '—'}
+                        {run.executionStatus === 'running' && run.outcome.executed > 0 ? ' so far' : ''}
                       </TableCell>
                       <TableCell data-testid="outcome-breakdown">
                         {outcomeBreakdown(run.outcome)

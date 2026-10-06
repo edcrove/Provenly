@@ -36,9 +36,24 @@ test.describe('Audit log (prototype feature 20)', () => {
     await page.getByRole('link', { name: 'Audit' }).click()
     await page.getByLabel('Project', { exact: true }).fill(key)
     await page.getByRole('button', { name: 'Filter' }).click()
-    // The project fixture may itself patch the project: any PATCH row of this project will do.
-    const row = page.locator('[data-testid^="audit-"]').filter({ hasText: 'PATCH /api/v1/projects/{projectKey}' }).first()
+    // The project fixture may itself patch the project: any edit row of this project will do.
+    const row = page.locator('[data-testid^="audit-"]').filter({ hasText: 'edited the project' }).first()
     await expect(row).toContainText(`/api/v1/projects/${key}`)
     await expect(page.locator('[data-testid^="audit-"]').filter({ hasNotText: key })).toHaveCount(0)
+  })
+
+  test('[FE-E2E-026] a test case edit reads in words, under its project, and the log filters by test case (card #48)', async ({ page, request, provenly }) => {
+    const key = uniqueProjectKey()
+    await provenly.createProject(key, 'Audit words')
+    const tc = await provenly.createTestCase({ title: 'Refund', project: key })
+    expect((await request.patch(`${apiURL}/api/v1/test-cases/${tc.id}`, { data: { title: 'Refund by card' } })).status()).toBe(200)
+    await page.goto('/audit')
+    await page.getByLabel('Test case').fill(tc.key.toLowerCase())
+    await page.getByRole('button', { name: 'Filter' }).click()
+    const rows = page.locator('[data-testid^="audit-"]')
+    await expect(rows).toHaveCount(1)
+    await expect(rows.first()).toContainText(`edited ${tc.key}`)
+    await expect(rows.first()).toContainText(`/api/v1/test-cases/${tc.id}`)
+    await expect(rows.first()).toContainText(key)
   })
 })

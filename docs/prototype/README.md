@@ -391,6 +391,13 @@ Notion Decision Register; each one ships in its own PR.
   test case history; footnote "Blocked is stored as error"), CI runs keep `error`; a percentage of nothing reads "—"
   with its counts ("0 of 0 executed", a grey trend bar), while the API keeps 0; "Failures without an open issue (N)"
   replaces "New failures (no open issue)"; a manual run without results says "Nothing recorded yet."
+- **Confirmations (card #56):** completing a manual run with untested test cases, cancelling it, deleting a step and
+  revoking an API key ask inline first, with the safe option focused (the deprecate pattern); in a manual run only
+  the recorded result's button is highlighted and saving says what was saved ("Saved · failed at step 3").
+- **Readable audit (card #48):** changes to a test case, a step, a suite, a run or anything else are filed under their
+  project (the one the request was allowed into), read in words ("edited CHK-4 step 3", the path as detail) and filter
+  by test case (`?testCase=CHK-4`); events recorded before keep only their route (not backfilled: the log is
+  append-only).
 - **Retention (card #51):** finished webhook deliveries older than `PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS` (default
   90, `0` keeps them) are purged hourly by the delivery worker, in batches of 1,000 under an advisory lock, and the
   count is logged; pending deliveries, audit events and run results are never purged.

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 
 import type { ApiKey } from '@/api/client'
 import { useApiKeyMutations, useApiKeys } from '@/api/queries'
+import { InlineConfirm } from '@/components/InlineConfirm'
 import { Pagination } from '@/components/Pagination'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
 import { Badge } from '@/components/ui/badge'
@@ -29,14 +30,18 @@ function KeyRow({ apiKey, projectKey }: { apiKey: ApiKey; projectKey: string }) 
       </TableCell>
       <TableCell>
         {active ? (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={m.revoke.isPending}
-            onClick={() => m.revoke.mutate(apiKey.id)}
-          >
-            Revoke
-          </Button>
+          <InlineConfirm
+            label={`Confirm revoking ${apiKey.name}`}
+            question={`Revoke key ${apiKey.name}? CI using it will get 401.`}
+            confirmLabel="Revoke"
+            pending={m.revoke.isPending}
+            onConfirm={(close) => m.revoke.mutate(apiKey.id, { onSettled: close })}
+            trigger={(open) => (
+              <Button size="sm" variant="outline" disabled={m.revoke.isPending} onClick={open}>
+                Revoke…
+              </Button>
+            )}
+          />
         ) : null}
         {m.revoke.error ? <ErrorAlert error={m.revoke.error} title="Could not revoke the key" /> : null}
       </TableCell>

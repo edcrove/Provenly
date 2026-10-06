@@ -51,4 +51,4 @@ targets:
   - id: FE-E2E-025
     description: the account page shows the command that connects an MCP client to the instance's endpoint as the signed-in user
   - id: FE-E2E-026
-    description: an administrator opens the audit log from the header and filters it by project to find a change made through the API
+    description: an administrator opens the audit log from the header and filters it by project to find a change made through the API; a test case edit reads in words under its project and the log filters by test case key (card #48)

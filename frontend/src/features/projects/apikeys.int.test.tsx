@@ -40,9 +40,17 @@ describe('FE-INT-033 project API keys', () => {
     const row = await screen.findByTestId(`api-key-${created.id}`)
     expect(row).toHaveTextContent('Never')
 
+    // Revoking asks first: CI using the key will be refused.
+    await u.click(within(row).getByRole('button', { name: 'Revoke…' }))
+    const confirm = within(row).getByRole('group', { name: 'Confirm revoking GitHub Actions' })
+    expect(confirm).toHaveTextContent('Revoke key GitHub Actions? CI using it will get 401.')
+    expect(within(confirm).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+    await u.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    expect(created.status).toBe('active')
+    await u.click(within(row).getByRole('button', { name: 'Revoke…' }))
     await u.click(within(row).getByRole('button', { name: 'Revoke' }))
     await waitFor(() => expect(within(row).getByText('revoked')).toBeInTheDocument())
-    expect(within(row).queryByRole('button', { name: 'Revoke' })).not.toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: /^Revoke/ })).not.toBeInTheDocument()
   })
 
   it('FE-INT-033 errors are reported where they happen; viewers and members do not see keys', async () => {
@@ -50,6 +58,7 @@ describe('FE-INT-033 project API keys', () => {
     const { user: u, unmount } = renderRoute('/projects/TC')
     const row = await screen.findByTestId('api-key-5')
     db.apiKeys[1] = { ...db.apiKeys[1], status: 'revoked', revokedAt: at }
+    await u.click(within(row).getByRole('button', { name: 'Revoke…' }))
     await u.click(within(row).getByRole('button', { name: 'Revoke' }))
     expect(await within(row).findByText('Could not revoke the key')).toBeInTheDocument()
 

@@ -42,7 +42,19 @@ describe('FE-INT-006 steps management', () => {
     await user.click(within(form).getByRole('button', { name: 'Save step' }))
     await waitFor(() => expect(stepTexts()).toContain('2. Submit valid credentials'))
 
+    // Deleting asks first, with Cancel focused; cancelling keeps the step.
     await user.click(screen.getByRole('button', { name: 'Delete step 1' }))
+    const confirm = screen.getByRole('group', { name: 'Confirm deleting step 1' })
+    expect(confirm).toHaveTextContent('Delete step 1?')
+    expect(within(confirm).getByRole('button', { name: 'Cancel' })).toHaveFocus()
+    await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    expect(stepTexts()).toHaveLength(2)
+    await user.click(screen.getByRole('button', { name: 'Delete step 1' }))
+    await user.click(
+      within(screen.getByRole('group', { name: 'Confirm deleting step 1' })).getByRole('button', {
+        name: 'Delete',
+      }),
+    )
     await waitFor(() => expect(stepTexts()).toEqual(['1. Submit valid credentials']))
   })
 
@@ -135,5 +147,6 @@ describe('FE-INT-020 step editor at the limits', () => {
     await user.click(within(form).getByRole('button', { name: 'Save step' }))
     await waitFor(() => expect(screen.queryByText('Expected: shown')).not.toBeInTheDocument())
     expect(db.steps.find((st) => st.id === 1)?.expectedResult).toBe('')
-  })
+    // 100 rows of controls under coverage on a loaded CI runner take several seconds: the default 5 s is too tight.
+  }, 20_000)
 })

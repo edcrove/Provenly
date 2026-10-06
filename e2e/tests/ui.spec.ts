@@ -30,6 +30,7 @@ test.describe('Frontend UI journeys', () => {
     await page.getByRole('button', { name: 'Move step 2 up' }).click()
     await expect(page.getByRole('list', { name: 'Steps' }).getByRole('listitem').first()).toContainText('1. Pay')
     await page.getByRole('button', { name: 'Delete step 2' }).click()
+    await page.getByRole('group', { name: 'Confirm deleting step 2' }).getByRole('button', { name: 'Delete' }).click()
     await expect(page.getByText('Add item to cart')).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Deprecate' }).click()

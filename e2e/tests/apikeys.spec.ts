@@ -69,7 +69,9 @@ test.describe('CI API keys', () => {
     await page.reload()
     const row = page.getByRole('row', { name: /Nightly pipeline/ })
     await expect(row).not.toContainText('Never')
-    await row.getByRole('button', { name: 'Revoke' }).click()
+    await row.getByRole('button', { name: 'Revoke…' }).click()
+    await expect(row.getByRole('group', { name: 'Confirm revoking Nightly pipeline' })).toContainText('CI using it will get 401.')
+    await row.getByRole('button', { name: 'Revoke', exact: true }).click()
     await expect(row).toContainText('revoked')
 
     await page.goto(`/test-cases/${tc.id}`)

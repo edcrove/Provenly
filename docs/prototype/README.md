@@ -391,6 +391,9 @@ Notion Decision Register; each one ships in its own PR.
   test case history; footnote "Blocked is stored as error"), CI runs keep `error`; a percentage of nothing reads "—"
   with its counts ("0 of 0 executed", a grey trend bar), while the API keeps 0; "Failures without an open issue (N)"
   replaces "New failures (no open issue)"; a manual run without results says "Nothing recorded yet."
+- **Confirmations (card #56):** completing a manual run with untested test cases, cancelling it, deleting a step and
+  revoking an API key ask inline first, with the safe option focused (the deprecate pattern); in a manual run only
+  the recorded result's button is highlighted and saving says what was saved ("Saved · failed at step 3").
 
 
 ### 24. Review-panel audit (2026-10-06): fixes

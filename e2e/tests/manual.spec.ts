@@ -39,6 +39,8 @@ test.describe('Manual execution (MVP D3)', () => {
     await row.getByLabel(`Failed step of ${tc.key}`).fill('3')
     await row.getByRole('button', { name: 'Fail' }).click()
     await expect(row.getByTestId('status-badge')).toHaveText('failed')
+    await expect(row.getByRole('status')).toHaveText('Saved · failed at step 3')
+    await expect(row.getByRole('button', { name: 'Fail' })).toHaveAttribute('aria-pressed', 'true')
     await row.getByRole('button', { name: 'Pass' }).click()
     await expect(row.getByTestId('status-badge')).toHaveText('passed')
     await page.getByRole('button', { name: 'Complete run' }).click()

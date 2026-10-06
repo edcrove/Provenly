@@ -300,6 +300,11 @@ func (s *Service) Live(ctx context.Context, runID int64) (Live, error) {
 			final[c.TestCaseID] = string(c.Status)
 		}
 	}
+	// A test the final report has outside the universe (a manual or deprecated test case CI ran) is still a final
+	// result: without it, its live events read as live_only.
+	for id, st := range summary.OutsideStatuses {
+		final[id] = string(st)
+	}
 	live, byCase := liveState(expected, events)
 	live.Mismatches, live.Reconciliation = []Mismatch{}, ReconciliationPending
 	if run.Status != RunRunning {

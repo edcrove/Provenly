@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,6 +34,8 @@ func TestManualRuns(t *testing.T) {
 		assert.Equal(t, execution.RunRunning, run.Status)
 		assert.Equal(t, execution.ModeManual, run.Mode)
 		assert.Equal(t, "integration", run.StartedBy)
+		require.NotNil(t, run.StartedAt, "a manual run starts when it is created")
+		assert.WithinRange(t, *run.StartedAt, run.CreatedAt.Add(-time.Second), run.CreatedAt.Add(time.Second))
 		assert.Equal(t, int32(2), run.ExpectedCount, "the manual test cases; CI runs the automated one")
 		assert.Nil(t, run.CompletedAt)
 		all, err := s.Manual.Start(ctx, ingestion.ManualRunInput{ProjectKey: "TC", Name: "Everything", Scope: ingestion.ScopeAll})

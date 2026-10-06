@@ -293,6 +293,9 @@ func (s *Service) StartRun(ctx context.Context, run NewRun, expected []int64) (T
 	if run.Mode != ModeLive {
 		run.Mode = ModeManual
 	}
+	// A manual or live run starts when it is created (a batch run's start comes from its report).
+	started := s.now()
+	run.StartedAt = &started
 	var out TestRun
 	err := s.repo.InTx(ctx, func(r Repository) error {
 		id, ok, err := r.InsertTestRun(ctx, InsertRunParams{

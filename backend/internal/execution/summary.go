@@ -123,6 +123,9 @@ type Summary struct {
 	SnapshotTotal int32
 	// AmendedIDs are the TC-IDs added to the universe after creation (DEC-42), ascending.
 	AmendedIDs []int64
+	// OutsideStatuses is the aggregated status of each TC-ID outside the universe (not in the summary's counts; the
+	// live reconciliation compares them with the events).
+	OutsideStatuses map[int64]SummaryStatus `json:"-"`
 }
 
 // percentPrecision keeps 6 decimals: clients sum the precise values and round
@@ -145,17 +148,22 @@ func ComputeSummary(runID int64, expected []int64, valid []ValidResult, diagnost
 		byCase[id] = nil
 	}
 	s := Summary{TestRunID: runID, ExpectedTotal: int32(len(expected)), SnapshotTotal: int32(len(expected)), OutsideUniverseIDs: []int64{}, AmendedIDs: []int64{}}
-	outside := map[int64]bool{}
+	outside := map[int64][]ValidResult{}
 	for _, r := range valid {
 		if _, ok := byCase[r.TestCaseID]; !ok {
 			s.OutsideUniverse++
-			if !outside[r.TestCaseID] {
-				outside[r.TestCaseID] = true
+			if _, seen := outside[r.TestCaseID]; !seen {
 				s.OutsideUniverseIDs = append(s.OutsideUniverseIDs, r.TestCaseID)
 			}
+			outside[r.TestCaseID] = append(outside[r.TestCaseID], r)
 			continue
 		}
 		byCase[r.TestCaseID] = append(byCase[r.TestCaseID], r)
+	}
+	s.OutsideStatuses = make(map[int64]SummaryStatus, len(outside))
+	for id, results := range outside {
+		statuses, _ := logical(results)
+		s.OutsideStatuses[id] = Aggregate(statuses)
 	}
 	sort.Slice(s.OutsideUniverseIDs, func(i, j int) bool { return s.OutsideUniverseIDs[i] < s.OutsideUniverseIDs[j] })
 	ids := append([]int64(nil), expected...)

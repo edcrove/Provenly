@@ -234,11 +234,12 @@ func Summarize(runID int64, in SummaryInputs, diagnostics []Diagnostic) Summary 
 
 // logical reduces the results of one TC-ID to the logical result of each of its tests (D1): the last attempt
 // wins, and a test that passed after a failed or errored attempt is flaky. Variants (other tests of the TC-ID,
-// e.g. one per browser) stay separate and are aggregated by the caller.
+// e.g. one per browser, or repeated names without an attempt signal, which share their attempt) stay separate and
+// are aggregated by the caller. A TC-ID whose aggregate failed or errored is never flaky: a variant failed for good.
 func logical(results []ValidResult) ([]ResultStatus, bool) {
 	type test struct {
-		last   ValidResult
-		failed bool // an attempt other than the last failed or errored
+		last   []ValidResult // the results of the highest attempt (more than one: variants with the same name)
+		failed bool          // an attempt before the last failed or errored
 	}
 	var order []string
 	tests := map[string]*test{}
@@ -250,22 +251,32 @@ func logical(results []ValidResult) ([]ResultStatus, bool) {
 		t, ok := tests[key]
 		switch {
 		case !ok:
-			tests[key] = &test{last: r}
+			tests[key] = &test{last: []ValidResult{r}}
 			order = append(order, key)
-			continue
-		case r.Attempt >= t.last.Attempt:
-			t.failed = t.failed || bad(t.last.Status)
-			t.last = r
+		case r.Attempt > t.last[0].Attempt:
+			for _, l := range t.last {
+				t.failed = t.failed || bad(l.Status)
+			}
+			t.last = []ValidResult{r}
+		case r.Attempt == t.last[0].Attempt:
+			t.last = append(t.last, r)
 		default:
 			t.failed = t.failed || bad(r.Status)
 		}
 	}
-	statuses := make([]ResultStatus, len(order))
+	statuses := make([]ResultStatus, 0, len(order))
 	flaky := false
-	for i, key := range order {
+	for _, key := range order {
 		t := tests[key]
-		statuses[i] = t.last.Status
-		flaky = flaky || (t.last.Status == Passed && t.failed && !strings.Contains(key, "\x1f"+ManualClass+"\x1f"))
+		passed := true
+		for _, l := range t.last {
+			statuses = append(statuses, l.Status)
+			passed = passed && l.Status == Passed
+		}
+		flaky = flaky || (passed && t.failed && !strings.Contains(key, "\x1f"+ManualClass+"\x1f"))
+	}
+	if agg := Aggregate(statuses); agg == SummaryStatus(Failed) || agg == SummaryStatus(Error) {
+		flaky = false
 	}
 	return statuses, flaky
 }

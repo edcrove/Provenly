@@ -179,8 +179,9 @@ ORDER BY t.test_case_id, t.id;
 
 -- name: ListLatestConclusive :many
 -- For each given test case, its latest run with a conclusive logical status (passed, failed or error; skipped runs are
--- inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test,
--- aggregated failed > error > skipped > passed, as in summaries.
+-- inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test
+-- (every result of it: repeated names without an attempt signal are variants), aggregated failed > error > skipped >
+-- passed, as in summaries.
 -- Runs are walked newest first per test case and the walk stops at the first conclusive one (index
 -- test_results_case_run_valid_idx), instead of aggregating every run of the test case's history.
 SELECT c.id::bigint AS test_case_id, p.test_run_id, p.status::text AS status
@@ -192,10 +193,11 @@ CROSS JOIN LATERAL (
     CROSS JOIN LATERAL (
         SELECT CASE WHEN bool_or(a.status = 'failed') THEN 'failed' WHEN bool_or(a.status = 'error') THEN 'error'
                     WHEN bool_or(a.status = 'skipped') THEN 'skipped' ELSE 'passed' END AS status
-        FROM (SELECT DISTINCT ON (t.suite_name, t.class_name, t.test_name) t.status
+        FROM (SELECT t.status, t.attempt,
+                     max(t.attempt) OVER (PARTITION BY t.suite_name, t.class_name, t.test_name) AS last_attempt
               FROM test_results t
-              WHERE t.test_run_id = r.test_run_id AND t.test_case_id = c.id AND t.correlation = 'valid'
-              ORDER BY t.suite_name, t.class_name, t.test_name, t.attempt DESC, t.id DESC) a
+              WHERE t.test_run_id = r.test_run_id AND t.test_case_id = c.id AND t.correlation = 'valid') a
+        WHERE a.attempt = a.last_attempt
     ) s
     WHERE s.status <> 'skipped'
     ORDER BY r.test_run_id DESC
@@ -211,22 +213,32 @@ WHERE t.correlation = 'valid' AND t.test_case_id = ANY(@test_case_ids::bigint[])
 GROUP BY t.test_case_id;
 
 -- name: ListFlakyCounts :many
--- In a project's latest runs, how many runs each test case was flaky in: one of its tests passed on its last attempt
--- after a failed or errored one. Manual re-tests are never flaky.
+-- In a project's latest runs, how many runs each test case was flaky in: every result of one of its tests' last
+-- attempt passed after a failed or errored earlier attempt, and the test case did not fail or error in that run (a
+-- variant that failed for good is a failure, not flakiness). Manual re-tests are never flaky.
 WITH runs AS (
     SELECT id FROM test_runs WHERE project_id = @project_id ORDER BY id DESC LIMIT @window_runs
-), tests AS (
-    SELECT t.test_case_id, t.test_run_id,
-        (array_agg(t.status ORDER BY t.attempt DESC, t.id DESC))[1] AS last_status,
-        bool_or(t.status IN ('failed', 'error')) AS any_failure
+), attempts AS (
+    SELECT t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name, t.status, t.attempt,
+        max(t.attempt) OVER (PARTITION BY t.test_run_id, t.test_case_id, t.suite_name, t.class_name, t.test_name) AS last_attempt
     FROM test_results t
-    WHERE t.test_run_id IN (SELECT id FROM runs) AND t.correlation = 'valid' AND t.class_name <> 'provenly-manual'
-    GROUP BY t.test_case_id, t.test_run_id, t.suite_name, t.class_name, t.test_name
+    WHERE t.test_run_id IN (SELECT id FROM runs) AND t.correlation = 'valid'
+), tests AS (
+    SELECT a.test_case_id, a.test_run_id, a.class_name,
+        bool_and(a.status = 'passed') FILTER (WHERE a.attempt = a.last_attempt) AS last_passed,
+        coalesce(bool_or(a.status IN ('failed', 'error')) FILTER (WHERE a.attempt < a.last_attempt), false) AS earlier_failure,
+        coalesce(bool_or(a.status IN ('failed', 'error')) FILTER (WHERE a.attempt = a.last_attempt), false) AS last_failure
+    FROM attempts a
+    GROUP BY a.test_case_id, a.test_run_id, a.suite_name, a.class_name, a.test_name
+), flaky AS (
+    SELECT x.test_case_id, x.test_run_id FROM tests x
+    GROUP BY x.test_case_id, x.test_run_id
+    HAVING bool_or(x.last_passed AND x.earlier_failure AND x.class_name <> 'provenly-manual') AND NOT bool_or(x.last_failure)
 )
-SELECT x.test_case_id::bigint AS test_case_id, count(DISTINCT x.test_run_id)::int AS flaky_runs
-FROM tests x WHERE x.last_status = 'passed' AND x.any_failure
-GROUP BY x.test_case_id
-ORDER BY flaky_runs DESC, x.test_case_id
+SELECT f.test_case_id::bigint AS test_case_id, count(*)::int AS flaky_runs
+FROM flaky f
+GROUP BY f.test_case_id
+ORDER BY flaky_runs DESC, f.test_case_id
 LIMIT @max_items;
 
 -- name: CountRunEvents :one

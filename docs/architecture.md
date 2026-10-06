@@ -225,8 +225,11 @@ password (so a locked account costs no bcrypt), counts `invalid username or pass
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its
-suite + class + name in the run; its highest attempt is its logical result (flaky when it passed after a failed or
-errored attempt). The summary aggregates logical results per TC-ID with failed > error > skipped > passed.
+suite + class + name in the run; its highest attempt is its logical result (flaky when every result of it passed after a
+failed or errored attempt). Repeated names without an attempt signal share their attempt and stay variants (the
+ingestion warns how many). The summary aggregates logical results per TC-ID with failed > error > skipped > passed, and
+a TC-ID whose aggregate is failed or error is never flaky (a variant failed for good); `ListFlakyCounts` and
+`ListLatestConclusive` apply the same rules in SQL.
 
 ## JUnit → TC-ID extraction
 

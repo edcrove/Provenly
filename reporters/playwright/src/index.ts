@@ -27,6 +27,11 @@ export interface PwTestResult {
   errors: { message?: string; stack?: string }[]
 }
 
+/** The parts of a Playwright FullConfig the reporter reads: the shard of a sharded run (`--shard=i/N`). */
+export interface PwFullConfig {
+  shard?: { current: number; total: number } | null
+}
+
 /** The parts of a Playwright FullResult the reporter reads. */
 export interface PwFullResult {
   status: 'passed' | 'failed' | 'timedout' | 'interrupted'
@@ -47,8 +52,13 @@ export interface ProvenlyReporterOptions {
   pipeline?: string
   branch?: string
   commit?: string
-  /** Stream live events while tests run (default true). */
+  /** Stream live events while tests run (default true; off for a sharded run). */
   live?: boolean
+  /**
+   * This run's shard as `i/N` (default PROVENLY_SHARD, else Playwright's `--shard`): each shard sends its own report
+   * and Provenly merges the N reports into one run.
+   */
+  shard?: string
   /** Events are sent in batches of this size (default 50) and when the run ends. */
   flushEvery?: number
   /** For tests: the fetch implementation, environment, clock and log. */
@@ -161,6 +171,7 @@ export default class ProvenlyReporter {
   private readonly apiKey: string
   private readonly opts: Required<Pick<ProvenlyReporterOptions, 'provider' | 'runId' | 'runAttempt' | 'live' | 'flushEvery'>> &
     ProvenlyReporterOptions
+  private readonly env: Record<string, string | undefined>
   private readonly fetch: typeof fetch
   private readonly now: () => Date
   private readonly log: (message: string) => void
@@ -170,10 +181,12 @@ export default class ProvenlyReporter {
   private readonly attempts: Attempt[] = []
   private startedAt = new Date(0)
   private liveStart: Promise<void> = Promise.resolve()
+  private shard = ''
   private sending: Promise<void> = Promise.resolve()
 
   constructor(options: ProvenlyReporterOptions = {}) {
     const env = options.env ?? process.env
+    this.env = env
     this.url = (options.url ?? env.PROVENLY_URL ?? '').replace(/\/+$/, '')
     this.apiKey = options.apiKey ?? env.PROVENLY_API_KEY ?? ''
     this.fetch = options.fetch ?? fetch
@@ -208,9 +221,16 @@ export default class ProvenlyReporter {
     return this.fetch(`${this.url}${path}`, { method, headers, body })
   }
 
-  onBegin(): void {
+  onBegin(config?: PwFullConfig): void {
     this.startedAt = this.now()
-    if (!this.enabled || !this.opts.live) return
+    const fromConfig = config?.shard && config.shard.total > 1 ? `${config.shard.current}/${config.shard.total}` : ''
+    this.shard = this.opts.shard ?? this.env.PROVENLY_SHARD ?? fromConfig
+    if (!this.enabled) return
+    if (this.shard && this.opts.live) {
+      this.log(`shard ${this.shard}: live streaming is off for sharded runs; the report is sent when this shard ends`)
+      this.opts.live = false
+    }
+    if (!this.opts.live) return
     const body = JSON.stringify({
       project: this.opts.project,
       suite: this.opts.suite,
@@ -299,6 +319,7 @@ export default class ProvenlyReporter {
     })) {
       if (v) query.set(k, v)
     }
+    if (this.shard) query.set('shard', this.shard)
     if (result.status === 'interrupted' || result.status === 'timedout') query.set('status', 'interrupted')
     const xml = junitXml(this.attempts, this.startedAt)
     for (let attempt = 1; attempt <= 3; attempt++) {

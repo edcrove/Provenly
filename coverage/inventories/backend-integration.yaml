@@ -124,3 +124,9 @@ targets:
     description: concurrent link replacements - twenty concurrent replacements of a requirement's, an issue's and a static suite's test cases, ten rounds each, always end as exactly one caller's set (never a union)
   - id: BE-INT-060
     description: concurrent taxonomy creations - ten concurrent dimension creations at the 30-dimension limit leave exactly 30; twenty concurrent value creations get distinct, gapless positions
+  - id: BE-INT-062
+    description: sharded runs - the first shard creates a running sharded run with its snapshot and waits for the others; a shard is taken once (a replay with another report warns), a different shard count or a report without shards is a conflict; the last shard completes the run with the worst shard status; each shard answers for its own results, diagnostics and parse errors; results carry and filter by shard; after the end a known shard is a replay
+  - id: BE-INT-063
+    description: finalizing a sharded run - a run waiting for shards ends interrupted naming its missing shards, once; a late shard is a conflict; finalizing a run without shards is a conflict and an unknown run 404
+  - id: BE-INT-064
+    description: sharded runs under concurrency and in the database - eight shards sent at once build one run with every shard and result, completed by exactly one; shards are append-only, accepted only while a sharded run is running and within its shard count; a run's shard count and mode are immutable and a sharded run must declare its count

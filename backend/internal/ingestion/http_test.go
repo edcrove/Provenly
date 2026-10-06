@@ -35,6 +35,11 @@ func (s *stubAPI) IngestJUnit(_ context.Context, m RunMeta, body io.Reader) (Out
 	return s.out, s.err
 }
 
+func (s *stubAPI) FinalizeShards(_ context.Context, m RunMeta) (Outcome, error) {
+	s.gotMeta = m
+	return s.out, s.err
+}
+
 func post(api API, maxBytes int64, query, contentType, body string) *httptest.ResponseRecorder {
 	mux := http.NewServeMux()
 	NewHandler(api, maxBytes).Register(mux)
@@ -63,7 +68,7 @@ func TestIngestHandlerCreatedAndReplay(t *testing.T) {
 	body := rec.Body.String()
 	assert.Contains(t, body, `"created":true`)
 	assert.Contains(t, body, `"diagnostics":[{"testName":"x","correlation":"missing","requestedTestCaseId":null,"message":"m"}]`)
-	assert.Contains(t, body, `"parseErrors":[{"index":1,"testName":"","message":"bad","persisted":true,"severity":"error"}]`)
+	assert.Contains(t, body, `"parseErrors":[{"index":1,"testName":"","message":"bad","persisted":true,"severity":"error","shard":null}]`)
 	assert.Contains(t, body, `"warnings":["w"]`)
 
 	api.out.Created = false

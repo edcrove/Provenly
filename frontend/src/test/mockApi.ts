@@ -1973,13 +1973,15 @@ export const handlers = [
       const url = new URL(request.url)
       const status = url.searchParams.get('status')
       const correlation = url.searchParams.get('correlation')
+      const shard = url.searchParams.get('shard')
       if (status && !['passed', 'failed', 'error', 'skipped'].includes(status))
         return validation('status', 'invalid')
       const items = db.results.filter(
         (r) =>
           r.testRunId === run.id &&
           (!status || r.status === status) &&
-          (!correlation || r.correlation === correlation),
+          (!correlation || r.correlation === correlation) &&
+          (!shard || r.shard === Number(shard)),
       )
       return respond(pageOf(url, items))
     }),

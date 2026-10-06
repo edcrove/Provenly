@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -181,7 +182,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 76, protected, "every operation except health, readiness, sign-in, sign-out and accept")
+	assert.Equal(t, 77, protected, "every operation except health, readiness, sign-in, sign-out and accept")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -283,6 +284,8 @@ func TestAPIKeys(t *testing.T) {
 	viewer.POST("/api/v1/projects/CHK/api-keys").WithJSON(map[string]any{"name": "x"}).Expect().Status(http.StatusForbidden)
 	viewer.POST("/api/v1/projects/CHK/api-keys/1/revoke").Expect().Status(http.StatusForbidden)
 	ingest(viewer, "4", 1, `<testsuite/>`).WithQuery("project", "CHK").Expect().Status(http.StatusForbidden)
+	viewer.POST("/api/v1/ingestion/finalize").WithQuery("project", "CHK").WithQuery("provider", "github").WithQuery("runId", "4").
+		WithQuery("runAttempt", 1).Expect().Status(http.StatusForbidden)
 }
 
 // TestRoles: a member sees only their projects (others are 404) and each role unlocks its operations (else 403).
@@ -552,6 +555,7 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.GET("/api/v1/test-runs/1/results").Expect())
 	problem(e.GET("/api/v1/test-runs/1/summary").Expect())
 	problem(e.GET("/api/v1/test-runs/1/parse-errors").Expect())
+	problem(e.POST("/api/v1/ingestion/finalize").WithQuery("provider", "github").WithQuery("runId", "1").WithQuery("runAttempt", 1).Expect())
 	problem(e.GET("/api/v1/test-runs/1/amendments").Expect())
 	problem(e.POST("/api/v1/test-runs/1/amendments").WithJSON(map[string]any{"testCaseId": 1, "reason": "x"}).Expect())
 	problem(e.GET("/api/v1/projects/TC/dimensions").Expect())
@@ -1177,6 +1181,57 @@ func TestIssues(t *testing.T) {
 	viewer.POST(issues + "/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "1", "title": "x", "state": "open"}}}).Expect().Status(http.StatusForbidden)
 	viewer.PATCH(issues + "/" + jiraID).WithJSON(map[string]any{"title": "x"}).Expect().Status(http.StatusForbidden)
 	viewer.PUT(issues + "/" + jiraID + "/test-cases").WithJSON(map[string]any{"testCaseIds": []int64{}}).Expect().Status(http.StatusForbidden)
+}
+
+func TestShardedRuns(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	login := admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "login", "automated": true}).Expect().Status(http.StatusCreated).JSON().Object()
+	key := login.Value("key").String().Raw()
+	report := `<testsuite><testcase name="login"><properties><property name="tc-id" value="` + key + `"/></properties></testcase><testcase name=""/></testsuite>`
+
+	first := ingest(admin, "s1", 1, report).WithQuery("shard", "1/2").Expect().Status(http.StatusCreated).JSON().Object()
+	run := first.Value("testRun").Object().HasValue("mode", "sharded").HasValue("executionStatus", "running").HasValue("completedAt", nil)
+	run.Value("shards").Object().IsEqual(map[string]any{"total": 2, "received": []int{1}, "missing": []int{2}})
+	first.Value("parseErrors").Array().Value(0).Object().HasValue("shard", 1)
+	first.Value("warnings").Array().ContainsAny("shard 1/2 recorded; the run completes when shards 2 arrive (or when CI finalizes it)")
+	id := int(run.Value("id").Number().Raw())
+	ingest(admin, "s1", 1, report).WithQuery("shard", "1/2").Expect().Status(http.StatusOK).JSON().Object().HasValue("created", false)
+
+	for _, bad := range []string{"3/2", "1/1", "x", ""} {
+		ingest(admin, "s1", 1, report).WithQuery("shard", bad).Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().
+			HasValue("code", "validation_error").Value("errors").Array().Value(0).Object().HasValue("field", "shard")
+	}
+	ingest(admin, "s1", 1, report).WithQuery("shard", "2/3").Expect().Status(http.StatusConflict).JSON(problemOpts).Object().HasValue("code", "conflict")
+	ingest(admin, "s1", 1, report).Expect().Status(http.StatusConflict)
+
+	last := ingest(admin, "s1", 1, `<testsuite><testcase name="pay"/></testsuite>`).WithQuery("shard", "2/2").WithQuery("status", "interrupted").
+		Expect().Status(http.StatusCreated).JSON().Object()
+	last.Value("testRun").Object().HasValue("executionStatus", "interrupted").Value("shards").Object().Value("missing").Array().IsEmpty()
+	last.Value("persisted").IsEqual(1)
+
+	results := admin.GET(fmt.Sprintf("/api/v1/test-runs/%d/results", id)).WithQuery("shard", 2).Expect().Status(http.StatusOK).JSON().Object()
+	results.HasValue("totalItems", 1).Value("items").Array().Value(0).Object().HasValue("shard", 2).HasValue("testName", "pay")
+	admin.GET(fmt.Sprintf("/api/v1/test-runs/%d/results", id)).WithQuery("shard", 0).Expect().Status(http.StatusBadRequest)
+	admin.GET(fmt.Sprintf("/api/v1/test-runs/%d/parse-errors", id)).Expect().Status(http.StatusOK).JSON().Object().
+		Value("items").Array().Value(0).Object().HasValue("shard", 1)
+
+	// Finalizing ends a run whose shards will not all arrive.
+	ingest(admin, "s2", 1, report).WithQuery("shard", "2/3").Expect().Status(http.StatusCreated)
+	finalize := func(runID string) *httpexpect.Request {
+		return admin.POST("/api/v1/ingestion/finalize").WithQuery("provider", "github").WithQuery("runId", runID).WithQuery("runAttempt", 1)
+	}
+	done := finalize("s2").Expect().Status(http.StatusCreated).JSON().Object()
+	done.Value("testRun").Object().HasValue("executionStatus", "interrupted").Value("shards").Object().Value("missing").Array().IsEqual([]int{1, 3})
+	done.Value("warnings").Array().IsEqual([]string{"shards 1, 3 of 3 never arrived: the run ended as interrupted"})
+	finalize("s2").Expect().Status(http.StatusOK).JSON().Object().HasValue("created", false)
+	ingest(admin, "s2", 1, report).WithQuery("shard", "1/3").Expect().Status(http.StatusConflict)
+	finalize("nope").Expect().Status(http.StatusNotFound)
+	ingest(admin, "plain", 1, report).Expect().Status(http.StatusCreated)
+	finalize("plain").Expect().Status(http.StatusConflict)
+	finalize("s2").WithQuery("shard", "1/2").Expect().Status(http.StatusBadRequest)
+	admin.POST("/api/v1/ingestion/finalize").Expect().Status(http.StatusBadRequest)
+	anon(t, s, 1<<20).POST("/api/v1/ingestion/finalize").Expect().Status(http.StatusUnauthorized)
 }
 
 func TestQuality(t *testing.T) {

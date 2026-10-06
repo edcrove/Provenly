@@ -432,6 +432,7 @@ describe('FE-INT-015 report parse errors', () => {
           : 'invalid time attribute; result kept without duration',
       persisted: i !== 0,
       severity: i === 1 ? ('warning' as const) : ('error' as const),
+      shard: null,
     }))
     const { user } = renderRoute('/test-runs/7')
     const table = await screen.findByRole('table', { name: 'Parse errors' })

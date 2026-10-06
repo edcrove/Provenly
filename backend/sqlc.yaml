@@ -34,6 +34,7 @@ sql:
       - migrations/00023_manual_runs.sql
       - migrations/00026_live_runs.sql
       - migrations/00027_live_event_attempts.sql
+      - migrations/00032_sharded_runs.sql
     queries: queries/execution.sql
     gen:
       go:

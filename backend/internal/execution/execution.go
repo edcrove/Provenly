@@ -7,6 +7,7 @@ package execution
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -37,6 +38,9 @@ const (
 	ModeManual RunMode = "manual"
 	// ModeLive runs receive results while CI executes them (reserved for streamed runs).
 	ModeLive RunMode = "live"
+	// ModeSharded runs are one logical CI run split into N reports (?shard=i/N): created by the first shard, completed
+	// when every shard arrived, or finalized by CI as interrupted.
+	ModeSharded RunMode = "sharded"
 )
 
 // MaxAttempts bounds the attempts of one test in a run (the JUnit parser's bound; a manual test re-tested more is
@@ -119,6 +123,32 @@ type TestRun struct {
 	Mode      RunMode
 	// StartedBy is who started a manual run (empty otherwise).
 	StartedBy string
+	// ShardTotal is how many reports a sharded run is split into (0: not sharded); ShardsReceived the shards that
+	// arrived, ascending.
+	ShardTotal     int32
+	ShardsReceived []int32
+	// Shards are the received shards in detail (only when the run was just recorded).
+	Shards []RunShard
+}
+
+// RunShard is one received report of a sharded run.
+type RunShard struct {
+	Shard        int32
+	ReportSHA256 string
+	Status       RunStatus
+	// ResultCount is how many results the shard stored.
+	ResultCount int32
+}
+
+// MissingShards returns the shards of a sharded run that have not arrived, ascending.
+func (r TestRun) MissingShards() []int32 {
+	var out []int32
+	for i := int32(1); i <= r.ShardTotal; i++ {
+		if !slices.Contains(r.ShardsReceived, i) {
+			out = append(out, i)
+		}
+	}
+	return out
 }
 
 // TestResult is one persisted result. TestCaseID is set when the correlation
@@ -145,6 +175,8 @@ type TestResult struct {
 	// RecordedBy is who recorded a manual result; FailedStep the step where it failed, if any.
 	RecordedBy string
 	FailedStep *int32
+	// Shard is the shard of a sharded run that reported the result (nil otherwise).
+	Shard *int32
 }
 
 // NewRun is the metadata of a run to record.
@@ -167,6 +199,9 @@ type NewRun struct {
 	// Mode is how the results arrive (empty: batch); StartedBy is who started a manual run.
 	Mode      RunMode
 	StartedBy string
+	// Shard and ShardTotal identify one report of a sharded run (?shard=i/N; 0: not sharded).
+	Shard      int32
+	ShardTotal int32
 }
 
 // RunFilter narrows a run list; nil fields do not filter.
@@ -196,6 +231,8 @@ type NewResult struct {
 	// RecordedBy is who recorded a manual result; FailedStep the step where it failed, if any.
 	RecordedBy string
 	FailedStep *int32
+	// Shard is the shard of a sharded run that reported it (0: not sharded).
+	Shard int32
 }
 
 // ParseError is a testcase of the ingested report that could not be fully
@@ -207,6 +244,8 @@ type ParseError struct {
 	Message   string
 	Persisted bool
 	Severity  string
+	// Shard is the shard of a sharded run whose report it belongs to (0: not sharded).
+	Shard int32
 }
 
 // Diagnostic is a stored result whose TC-ID is not valid.
@@ -214,12 +253,15 @@ type Diagnostic struct {
 	TestName            string
 	Correlation         Correlation
 	RequestedTestCaseID *string
+	// Shard is the shard of a sharded run that reported it (0: not sharded).
+	Shard int32
 }
 
 // ResultFilter narrows the results of a run.
 type ResultFilter struct {
 	Status      *ResultStatus
 	Correlation *Correlation
+	Shard       *int32
 }
 
 // ValidResult is the (TC-ID, status) pair of a result with a valid correlation.
@@ -323,6 +365,12 @@ type Repository interface {
 	ListFlakyCounts(ctx context.Context, projectID int64, window, limit int32) ([]FlakyCount, error)
 	// FinishTestRun ends a running run with a final status.
 	FinishTestRun(ctx context.Context, id int64, status RunStatus) error
+	// InsertRunShard records a shard of a running sharded run; false when it was already received.
+	InsertRunShard(ctx context.Context, runID int64, shard RunShard) (bool, error)
+	// ListRunShards returns the received shards of a run, ascending.
+	ListRunShards(ctx context.Context, runID int64) ([]RunShard, error)
+	// FinishShardedRun ends a running sharded run with its execution status.
+	FinishShardedRun(ctx context.Context, runID int64, status RunStatus) error
 	GetTestRunIDByExternalID(ctx context.Context, projectID int64, externalRunID string) (int64, error)
 	InsertExpectedCases(ctx context.Context, runID int64, testCaseIDs []int64) error
 	InsertTestResults(ctx context.Context, runID int64, results []NewResult) error

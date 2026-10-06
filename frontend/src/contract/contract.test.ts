@@ -2688,7 +2688,7 @@ const scenarios: Scenario[] = [
     status: 200,
     setup: () => {
       db.parseErrors[7] = [
-        { index: 0, testName: '', message: 'no name', persisted: false, severity: 'error' },
+        { index: 0, testName: '', message: 'no name', persisted: false, severity: 'error', shard: null },
       ]
     },
     call: (c) =>
@@ -2751,6 +2751,16 @@ const scenarios: Scenario[] = [
       c.GET('/api/v1/test-runs/{testRunId}/results', {
         params: { path: run, query: { status: 'failed', correlation: 'valid' } },
       }),
+  },
+  {
+    op: 'GET /api/v1/test-runs/{testRunId}/results',
+    status: 200,
+    setup: () => {
+      db.runs[0] = { ...db.runs[0], mode: 'sharded', shards: { total: 2, received: [1, 2], missing: [] } }
+      db.results = db.results.map((r, i) => ({ ...r, shard: (i % 2) + 1 }))
+    },
+    call: (c) =>
+      c.GET('/api/v1/test-runs/{testRunId}/results', { params: { path: run, query: { shard: 2 } } }),
   },
   {
     op: 'GET /api/v1/test-runs/{testRunId}/results',

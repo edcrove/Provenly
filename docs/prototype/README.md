@@ -356,6 +356,11 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 The audit's open decisions and cards were refined by the product owner and the six personas and recorded in the
 Notion Decision Register; each one ships in its own PR.
 
+- **Sharded runs (card #57):** one logical CI run may arrive as N reports (`?shard=i/N`; the Playwright reporter reads
+  `--shard`): the first creates a running run, each shard is taken once, the last completes it (webhook once) and
+  `POST /api/v1/ingestion/finalize` ends one whose shards will not all arrive as interrupted, naming the missing ones.
+  Results carry their shard (filter `?shard=`); the run page shows "2 of 3 shards received" (screenshot 69). A GitHub
+  re-run of only the failed shard jobs (attempt N inheriting the shards of N-1) goes to the Incubator.
 - **Supply chain (card #50):** every GitHub Action is pinned to a commit SHA with its version as a comment
   (`scripts/docs-check.sh` fails on an unpinned `uses:`), and Dependabot proposes updates for actions, Go modules,
   npm packages and Docker images.

@@ -163,6 +163,21 @@ def main():
     check("ingest gzip bomb (64 MB of spaces)", call(base, "POST", "/ingestion/junit?" + q.format(52), raw=gz(b" " * (64 << 20)), ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 413)
     check("ingest truncated gzip", call(base, "POST", "/ingestion/junit?" + q.format(53), raw=gz(b'<testsuite/>')[:15], ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 400)
     check("ingest br body", call(base, "POST", "/ingestion/junit?" + q.format(9), raw=b"<testsuite/>", ctype="application/xml", headers={"Content-Encoding": "br"})[0], 415)
+    # Shards (card #57): ?shard=i/N with 2 <= N <= 100; malformed is 400, a mismatching N or no shard on a sharded run 409,
+    # finalization ends a waiting run once.
+    for bad in ["", "x", "1/1", "0/2", "3/2", "1/101", "1/2/3", "%201/2"]:
+        check(f"ingest shard={bad!r}", call(base, "POST", "/ingestion/junit?" + q.format(60) + f"&shard={bad}", raw=b"<testsuite/>", ctype="application/xml")[0], 400)
+    st, body = call(base, "POST", "/ingestion/junit?" + q.format(60) + "&shard=1/2", raw=b"<testsuite/>", ctype="application/xml")
+    check("ingest first shard", (st, (body or {}).get("testRun", {}).get("executionStatus")), (201, "running"))
+    check("ingest same shard again", call(base, "POST", "/ingestion/junit?" + q.format(60) + "&shard=1/2", raw=b"<testsuite/>", ctype="application/xml")[0], 200)
+    check("ingest shard with another total", call(base, "POST", "/ingestion/junit?" + q.format(60) + "&shard=2/3", raw=b"<testsuite/>", ctype="application/xml")[0], 409)
+    check("ingest sharded run without shard", call(base, "POST", "/ingestion/junit?" + q.format(60), raw=b"<testsuite/>", ctype="application/xml")[0], 409)
+    check("finalize sharded run", call(base, "POST", "/ingestion/finalize?" + q.format(60))[0], 201)
+    check("finalize it again", call(base, "POST", "/ingestion/finalize?" + q.format(60))[0], 200)
+    check("late shard after finalize", call(base, "POST", "/ingestion/junit?" + q.format(60) + "&shard=2/2", raw=b"<testsuite/>", ctype="application/xml")[0], 409)
+    check("finalize unknown run", call(base, "POST", "/ingestion/finalize?" + q.format(61))[0], 404)
+    check("finalize with a shard", call(base, "POST", "/ingestion/finalize?" + q.format(60) + "&shard=1/2")[0], 400)
+    check("finalize without parameters", call(base, "POST", "/ingestion/finalize")[0], 400)
     st, body = call(base, "POST", "/ingestion/junit", raw=b"<testsuite/>", ctype="application/xml")
     check("ingest without parameters lists every error", len(body.get("errors", [])) if isinstance(body, dict) else -1, 3)
     st, body = oversized(base + "/ingestion/junit?" + q.format(10), 12 * 1024 * 1024)

@@ -32,6 +32,22 @@ CI pass them as options from its own variables (for example GitLab:
 commit: process.env.CI_COMMIT_SHA }`): otherwise the run id is a timestamp, so a re-sent report is a new run instead of
 a replay. Without `PROVENLY_URL` the reporter does nothing.
 
+Sharded runs (`npx playwright test --shard=2/4`, e.g. a CI matrix): each shard sends its own report with
+`?shard=2/4` (from Playwright's `--shard`, or `PROVENLY_SHARD`/the `shard` option) and Provenly merges the reports into
+one run, completed when every shard reported; live streaming is off for sharded runs. If a shard job may die before
+reporting, end the run from a job that runs after the matrix (`if: always()`):
+
+```yaml
+- run: >-
+    curl -fsS -X POST -H "Authorization: Bearer $PROVENLY_API_KEY"
+    "$PROVENLY_URL/api/v1/ingestion/finalize?provider=github&runId=$GITHUB_RUN_ID&runAttempt=$GITHUB_RUN_ATTEMPT"
+```
+
+It ends a run still waiting for shards as `interrupted`, naming the missing ones (a run already complete is unchanged).
+
+Alternatively merge the shards first (`npx playwright merge-reports` with the `junit` reporter) and send the merged
+report once, without `shard`: Provenly then sees one ordinary run.
+
 ## Declaring the TC-ID of a test
 
 The test case must exist in Provenly first (create it in the UI or through the API): a TC-ID that does not exist is
@@ -45,8 +61,8 @@ test('pays by card CHK-12', async () => {})
 
 ## Options
 
-`url`, `apiKey`, `project`, `suite`, `provider`, `runId`, `runAttempt`, `pipeline`, `branch`, `commit` override the
-environment; `live: false` only sends the final report; `flushEvery` (default 50) sets the event batch size.
+`url`, `apiKey`, `project`, `suite`, `provider`, `runId`, `runAttempt`, `pipeline`, `branch`, `commit`, `shard` override
+the environment; `live: false` only sends the final report; `flushEvery` (default 50) sets the event batch size.
 
 ## Develop
 

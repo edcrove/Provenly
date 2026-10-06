@@ -7,6 +7,8 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -20,6 +22,7 @@ import (
 // API is the set of ingestion use cases exposed over REST.
 type API interface {
 	IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader) (Outcome, error)
+	FinalizeShards(ctx context.Context, meta RunMeta) (Outcome, error)
 }
 
 type diagnosticDTO struct {
@@ -51,6 +54,73 @@ func NewHandler(api API, maxBytes int64) *Handler { return &Handler{api: api, ma
 // Register mounts the ingestion routes.
 func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("POST /api/v1/ingestion/junit", h.ingestJUnit)
+	mux.HandleFunc("POST /api/v1/ingestion/finalize", h.finalize)
+}
+
+// shardParam is ?shard=i/N.
+var shardParam = regexp.MustCompile(`^([0-9]{1,3})/([0-9]{1,3})$`)
+
+// parseShard reads ?shard=i/N into meta; a malformed value is reported by ValidateMeta.
+func parseShard(q url.Values, meta *RunMeta) {
+	if !q.Has("shard") {
+		return
+	}
+	meta.Shard, meta.ShardTotal = -1, -1
+	if m := shardParam.FindStringSubmatch(q.Get("shard")); m != nil {
+		i, _ := strconv.Atoi(m[1])
+		n, _ := strconv.Atoi(m[2])
+		meta.Shard, meta.ShardTotal = int32(i), int32(n)
+	}
+}
+
+// runMeta reads the run identity shared by the ingestion routes and reports every parameter error at once.
+func runMeta(q url.Values, charset string) (RunMeta, error) {
+	meta := RunMeta{
+		ProjectKey: q.Get("project"), Provider: q.Get("provider"), ProviderRunID: q.Get("runId"),
+		Pipeline: q.Get("pipeline"), Branch: q.Get("branch"), Commit: q.Get("commit"), SuiteKey: q.Get("suite"),
+		Status: execution.RunStatus(q.Get("status")), Charset: charset,
+	}
+	var fields []apperr.FieldError
+	if q.Has("status") && meta.Status == "" {
+		fields = append(fields, apperr.FieldError{Field: "status", Message: "must be one of completed, interrupted, cancelled"})
+	}
+	if q.Has("project") && meta.ProjectKey == "" {
+		fields = append(fields, apperr.FieldError{Field: "project", Message: catalog.ProjectKeyMessage})
+	}
+	if q.Has("suite") && meta.SuiteKey == "" {
+		fields = append(fields, apperr.FieldError{Field: "suite", Message: catalog.SuiteKeyMessage})
+	}
+	attempt, err := strconv.ParseInt(q.Get("runAttempt"), 10, 32)
+	if err != nil {
+		attempt = 0 // reported by ValidateMeta as "must be an integer >= 1"
+	}
+	meta.RunAttempt = int32(attempt)
+	parseShard(q, &meta)
+	if e, ok := apperr.As(ValidateMeta(meta)); ok {
+		fields = append(fields, e.Fields...)
+	}
+	if len(fields) > 0 {
+		return meta, apperr.Validation(apperr.ValidationFailed, fields...)
+	}
+	return meta, nil
+}
+
+// finalize ends a sharded run whose missing shards will not arrive (POST, no body, the run's identity in the query).
+func (h *Handler) finalize(w http.ResponseWriter, r *http.Request) {
+	meta, err := runMeta(r.URL.Query(), "")
+	if err == nil && meta.ShardTotal != 0 {
+		err = apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "shard", Message: "is not taken here: the run's shards are known"})
+	}
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	out, err := h.api.FinalizeShards(r.Context(), meta)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	writeOutcome(w, out)
 }
 
 // contentEncoding accepts an uncompressed body (no encoding or identity) or gzip (MVP D6).
@@ -126,33 +196,9 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 			"Content-Encoding "+r.Header.Get("Content-Encoding")+" is not supported; send the report uncompressed or gzip")
 		return
 	}
-	q := r.URL.Query()
-	meta := RunMeta{
-		ProjectKey: q.Get("project"), Provider: q.Get("provider"), ProviderRunID: q.Get("runId"),
-		Pipeline: q.Get("pipeline"), Branch: q.Get("branch"), Commit: q.Get("commit"), SuiteKey: q.Get("suite"),
-		Status: execution.RunStatus(q.Get("status")), Charset: charset,
-	}
-	// Every parameter error is reported at once.
-	var fields []apperr.FieldError
-	if q.Has("status") && meta.Status == "" {
-		fields = append(fields, apperr.FieldError{Field: "status", Message: "must be one of completed, interrupted, cancelled"})
-	}
-	if q.Has("project") && meta.ProjectKey == "" {
-		fields = append(fields, apperr.FieldError{Field: "project", Message: catalog.ProjectKeyMessage})
-	}
-	if q.Has("suite") && meta.SuiteKey == "" {
-		fields = append(fields, apperr.FieldError{Field: "suite", Message: catalog.SuiteKeyMessage})
-	}
-	attempt, err := strconv.ParseInt(q.Get("runAttempt"), 10, 32)
+	meta, err := runMeta(r.URL.Query(), charset)
 	if err != nil {
-		attempt = 0 // reported by ValidateMeta as "must be an integer >= 1"
-	}
-	meta.RunAttempt = int32(attempt)
-	if e, ok := apperr.As(ValidateMeta(meta)); ok {
-		fields = append(fields, e.Fields...)
-	}
-	if len(fields) > 0 {
-		httpx.WriteError(w, r, apperr.Validation(apperr.ValidationFailed, fields...))
+		httpx.WriteError(w, r, err)
 		return
 	}
 	body := io.Reader(http.MaxBytesReader(w, r.Body, h.maxBytes))
@@ -170,13 +216,17 @@ func (h *Handler) ingestJUnit(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	writeOutcome(w, out)
+}
+
+func writeOutcome(w http.ResponseWriter, out Outcome) {
 	resp := ingestionResponse{
 		Created: out.Created, TestRun: execution.RunDTO(out.Run), Received: out.Received, Persisted: out.Persisted,
 		Diagnostics: make([]diagnosticDTO, len(out.Diagnostics)), ParseErrors: make([]execution.ParseErrorDTO, len(out.ParseErrors)),
 		Warnings: out.Warnings,
 	}
 	for i, d := range out.Diagnostics {
-		resp.Diagnostics[i] = diagnosticDTO(d)
+		resp.Diagnostics[i] = diagnosticDTO{TestName: d.TestName, Correlation: d.Correlation, RequestedTestCaseID: d.RequestedTestCaseID, Message: d.Message}
 	}
 	for i, e := range out.ParseErrors {
 		resp.ParseErrors[i] = execution.ToParseErrorDTO(e)

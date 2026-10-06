@@ -107,7 +107,7 @@ func TestHandlerHappyPaths(t *testing.T) {
 		"/api/v1/test-runs/3/results?status=failed&correlation=valid": `"testCaseId":153,"testCaseKey":"TC-153"`,
 		"/api/v1/test-runs/3/summary":                                 `"executionPercent":50`,
 		"/api/v1/test-cases/153/results":                              `"testCaseKey":"TC-153"`,
-		"/api/v1/test-runs/3/parse-errors":                            `"items":[{"index":2,"testName":"t","message":"m","persisted":true,"severity":"warning"}]`,
+		"/api/v1/test-runs/3/parse-errors":                            `"items":[{"index":2,"testName":"t","message":"m","persisted":true,"severity":"warning","shard":null}]`,
 		"/api/v1/test-runs/3/live": `{"reconciliation":"mismatch","events":2,"lastSequence":4,"runFinished":false,"waiting":1,"running":0,"finished":1,` +
 			`"testCases":[{"testCaseId":153,"testCaseKey":"TC-153","state":"passed"},{"testCaseId":154,"testCaseKey":"CHK-4","state":"waiting"}],` +
 			`"mismatches":[{"kind":"status_mismatch","testCaseId":153,"testCaseKey":"TC-153","requestedTestCaseId":null,"liveStatus":"passed","finalStatus":"failed"},` +
@@ -147,6 +147,10 @@ func TestHandlerFilter(t *testing.T) {
 	serve(api, stubCatalog{}, "/api/v1/test-runs/3/results")
 	assert.Nil(t, api.gotFilter.Status)
 	assert.Nil(t, api.gotFilter.Correlation)
+	assert.Nil(t, api.gotFilter.Shard)
+
+	serve(api, stubCatalog{}, "/api/v1/test-runs/3/results?shard=100")
+	assert.Equal(t, ptr(int32(100)), api.gotFilter.Shard)
 }
 
 func TestHandlerErrors(t *testing.T) {
@@ -167,6 +171,8 @@ func TestHandlerErrors(t *testing.T) {
 		"/api/v1/test-runs?page=x", "/api/v1/test-runs/x", "/api/v1/test-runs/x/results",
 		"/api/v1/test-runs/3/results?page=0", "/api/v1/test-runs/3/results?status=untested",
 		"/api/v1/test-runs/3/results?correlation=nope", "/api/v1/test-runs/x/summary", "/api/v1/test-runs/x/live",
+		"/api/v1/test-runs/3/results?shard=0", "/api/v1/test-runs/3/results?shard=101", "/api/v1/test-runs/3/results?shard=",
+		"/api/v1/test-runs/3/results?shard=01",
 		"/api/v1/test-cases/x/results", "/api/v1/test-cases/1/results?pageSize=0",
 		"/api/v1/test-runs/x/parse-errors", "/api/v1/test-runs/3/parse-errors?page=0",
 	} {
@@ -284,4 +290,19 @@ func TestManualDTOs(t *testing.T) {
 	assert.Equal(t, ptr("ana"), dto.RecordedBy)
 	assert.Equal(t, ptr(int32(2)), dto.FailedStep)
 	assert.Equal(t, ptr("TC-153"), dto.TestCaseKey)
+}
+
+func TestShardDTOs(t *testing.T) {
+	assert.Nil(t, RunDTO(sampleRun).Shards)
+	run := sampleRun
+	run.Mode, run.ShardTotal = ModeSharded, 3
+	assert.Equal(t, &ShardsDTO{Total: 3, Received: []int32{}, Missing: []int32{1, 2, 3}}, RunDTO(run).Shards)
+	run.ShardsReceived = []int32{1, 2, 3}
+	assert.Equal(t, &ShardsDTO{Total: 3, Received: []int32{1, 2, 3}, Missing: []int32{}}, RunDTO(run).Shards)
+
+	assert.Nil(t, ToParseErrorDTO(ParseError{Index: 1}).Shard)
+	assert.Equal(t, ptr(int32(2)), ToParseErrorDTO(ParseError{Index: 1, Shard: 2}).Shard)
+	res := sampleResult
+	res.Shard = ptr(int32(2))
+	assert.Equal(t, ptr(int32(2)), ResultDTO(res, nil).Shard)
 }

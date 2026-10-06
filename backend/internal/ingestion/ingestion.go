@@ -14,6 +14,8 @@ import (
 	"io"
 	"regexp"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -41,6 +43,7 @@ type Catalog interface {
 // Recorder is what ingestion needs from the execution module.
 type Recorder interface {
 	RecordRun(ctx context.Context, run execution.NewRun, expected []int64, results []execution.NewResult, parseErrors []execution.ParseError) (execution.TestRun, bool, error)
+	FinalizeShardedRun(ctx context.Context, projectID int64, provider, providerRunID string, attempt int32) (execution.TestRun, bool, error)
 	Diagnostics(ctx context.Context, runID int64) ([]execution.Diagnostic, error)
 	ParseErrors(ctx context.Context, runID int64) ([]execution.ParseError, error)
 }
@@ -79,6 +82,27 @@ type RunMeta struct {
 	// SuiteKey is the suite the run executed (MVP D2): its selection is the expected universe. Empty: the project's
 	// active automated test cases.
 	SuiteKey string
+	// Shard and ShardTotal identify one of the N reports of a sharded run (?shard=i/N); 0 when not sharded.
+	Shard      int32
+	ShardTotal int32
+}
+
+// MaxShards bounds how many reports one run may be split into.
+const MaxShards = 100
+
+// ShardsPendingWarning tells which shards a sharded run still waits for.
+const ShardsPendingWarning = "shard %d/%d recorded; the run completes when shards %s arrive (or when CI finalizes it)"
+
+// ShardsMissingWarning is the answer of a finalization that left shards missing.
+const ShardsMissingWarning = "shards %s of %d never arrived: the run ended as interrupted"
+
+// shardList renders shard numbers as "2, 4".
+func shardList(shards []int32) string {
+	parts := make([]string, len(shards))
+	for i, n := range shards {
+		parts[i] = strconv.Itoa(int(n))
+	}
+	return strings.Join(parts, ", ")
 }
 
 // Diagnostic explains why a result has no valid TC-ID.
@@ -87,6 +111,7 @@ type Diagnostic struct {
 	Correlation         execution.Correlation
 	RequestedTestCaseID *string
 	Message             string
+	shard               int32
 }
 
 // Outcome is the result of one ingestion.
@@ -168,6 +193,8 @@ func ValidateMeta(m RunMeta) error {
 	v.CheckText("commit", m.Commit)
 	v.Check(m.Status == "" || slices.Contains(execution.ExecutionStatuses, m.Status), "status", "must be one of completed, interrupted, cancelled")
 	v.Check(m.ProjectKey == "" || catalog.ProjectKeyPattern.MatchString(m.ProjectKey), "project", catalog.ProjectKeyMessage)
+	v.Check((m.Shard == 0 && m.ShardTotal == 0) || (m.ShardTotal >= 2 && m.ShardTotal <= MaxShards && m.Shard >= 1 && m.Shard <= m.ShardTotal),
+		"shard", fmt.Sprintf("must be i/N with 2 <= N <= %d and 1 <= i <= N", MaxShards))
 	v.Check(m.SuiteKey == "" || catalog.SuiteKeyPattern.MatchString(m.SuiteKey), "suite", catalog.SuiteKeyMessage)
 	return v.Err()
 }
@@ -242,12 +269,13 @@ func (s *Service) ingestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 		ProjectID: project.ID, Provider: meta.Provider, ProviderRunID: meta.ProviderRunID, RunAttempt: meta.RunAttempt,
 		Pipeline: meta.Pipeline, Branch: meta.Branch, Commit: meta.Commit, StartedAt: report.StartedAt,
 		ReportSHA256: reportSHA, Status: meta.Status, SuiteKey: suite.Key, SuiteName: suite.Name,
+		Shard: meta.Shard, ShardTotal: meta.ShardTotal,
 	}, expected, results, parseErrors)
 	if err != nil {
 		return Outcome{}, err
 	}
-	if created {
-		s.notify.RunCompleted(ctx, run)
+	if created && run.Status != execution.RunRunning {
+		s.notify.RunCompleted(ctx, run) // a sharded run: once, when its last shard arrives
 	}
 	stored, err := s.recorder.Diagnostics(ctx, run.ID)
 	if err != nil {
@@ -262,17 +290,28 @@ func (s *Service) ingestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 		Diagnostics: make([]Diagnostic, len(stored)), ParseErrors: storedParseErrors,
 	}
 	for i, d := range stored {
-		out.Diagnostics[i] = Diagnostic{TestName: d.TestName, Correlation: d.Correlation, RequestedTestCaseID: d.RequestedTestCaseID, Message: diagnosticMessage(d)}
+		out.Diagnostics[i] = Diagnostic{TestName: d.TestName, Correlation: d.Correlation, RequestedTestCaseID: d.RequestedTestCaseID, Message: diagnosticMessage(d), shard: d.Shard}
 	}
 	if out.ParseErrors == nil {
 		out.ParseErrors = []execution.ParseError{}
 	}
 	out.Warnings = []string{}
-	if !created && run.ReportSHA256 != reportSHA {
+	recordedSHA, recordedStatus := run.ReportSHA256, run.Status
+	if meta.ShardTotal > 0 {
+		// A shard answers for its own report: its results, diagnostics, parse errors, digest and status.
+		for _, sh := range run.Shards {
+			if sh.Shard == meta.Shard {
+				recordedSHA, recordedStatus, out.Persisted = sh.ReportSHA256, sh.Status, int(sh.ResultCount)
+			}
+		}
+		out.Diagnostics = slices.DeleteFunc(out.Diagnostics, func(d Diagnostic) bool { return d.shard != meta.Shard })
+		out.ParseErrors = slices.DeleteFunc(out.ParseErrors, func(e execution.ParseError) bool { return e.Shard != meta.Shard })
+	}
+	if !created && recordedSHA != reportSHA {
 		out.Warnings = append(out.Warnings, ReportDiffersWarning)
 	}
-	if requested := cmp.Or(meta.Status, execution.RunCompleted); !created && run.Status != requested {
-		out.Warnings = append(out.Warnings, fmt.Sprintf(StatusDiffersWarning, requested, run.Status))
+	if requested := cmp.Or(meta.Status, execution.RunCompleted); !created && recordedStatus != requested {
+		out.Warnings = append(out.Warnings, fmt.Sprintf(StatusDiffersWarning, requested, recordedStatus))
 	}
 	if !created {
 		for _, f := range [][3]string{{"pipeline", meta.Pipeline, run.Pipeline}, {"branch", meta.Branch, run.Branch}, {"commit", meta.Commit, run.Commit}, {"suite", meta.SuiteKey, run.SuiteKey}} {
@@ -284,8 +323,36 @@ func (s *Service) ingestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	if created {
 		out.Warnings = append(out.Warnings, report.Notices...)
 	}
+	if missing := run.MissingShards(); meta.ShardTotal > 0 && run.Status == execution.RunRunning {
+		out.Warnings = append(out.Warnings, fmt.Sprintf(ShardsPendingWarning, meta.Shard, meta.ShardTotal, shardList(missing)))
+	}
 	if created && report.StartedAt != nil && run.StartedAt == nil {
 		out.Warnings = append(out.Warnings, fmt.Sprintf(FutureStartWarning, report.StartedAt.Format(time.RFC3339)))
+	}
+	return out, nil
+}
+
+// FinalizeShards ends a sharded run whose shards will not all arrive (a CI job failed before reporting): it becomes
+// interrupted with its missing shards named. Finalizing a run that already ended changes nothing.
+func (s *Service) FinalizeShards(ctx context.Context, meta RunMeta) (Outcome, error) {
+	if err := ValidateMeta(meta); err != nil {
+		return Outcome{}, err
+	}
+	project, err := s.project(ctx, meta.ProjectKey)
+	if err != nil {
+		return Outcome{}, err
+	}
+	run, finished, err := s.recorder.FinalizeShardedRun(ctx, project.ID, meta.Provider, meta.ProviderRunID, meta.RunAttempt)
+	if err != nil {
+		return Outcome{}, err
+	}
+	out := Outcome{Created: finished, Run: run, Persisted: int(run.ResultCount), Diagnostics: []Diagnostic{},
+		ParseErrors: []execution.ParseError{}, Warnings: []string{}}
+	if finished {
+		s.notify.RunCompleted(ctx, run)
+	}
+	if missing := run.MissingShards(); len(missing) > 0 && run.Status == execution.RunInterrupted {
+		out.Warnings = append(out.Warnings, fmt.Sprintf(ShardsMissingWarning, shardList(missing), run.ShardTotal))
 	}
 	return out, nil
 }

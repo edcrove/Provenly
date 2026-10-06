@@ -384,6 +384,10 @@ Notion Decision Register; each one ships in its own PR.
   npm packages and Docker images.
 - **Passwords (card #60):** the minimum counts characters, not bytes (`contraseña` is 10); the maximum stays 72 bytes and the
   forms and the error say non-ASCII letters count as 2 to 4. Same rule for `PROVENLY_ADMIN_PASSWORD`.
+- **Confirmations (card #56):** completing a manual run with untested test cases, cancelling it, deleting a step and
+  revoking an API key ask inline first, with the safe option focused (the deprecate pattern); in a manual run only
+  the recorded result's button is highlighted and saving says what was saved ("Saved · failed at step 3").
+
 
 ### 24. Review-panel audit (2026-10-06): fixes
 

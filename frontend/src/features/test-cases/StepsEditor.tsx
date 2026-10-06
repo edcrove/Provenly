@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 
 import type { TestStep } from '@/api/client'
 import { useStepMutations, useTestSteps } from '@/api/queries'
+import { InlineConfirm } from '@/components/InlineConfirm'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -142,17 +143,26 @@ export function StepsEditor({ testCaseId, readOnly = false }: { testCaseId: numb
                           >
                             <Pencil />
                           </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`Delete step ${step.position}`}
-                            onClick={() => {
+                          <InlineConfirm
+                            label={`Confirm deleting step ${step.position}`}
+                            question={`Delete step ${step.position}?`}
+                            confirmLabel="Delete"
+                            pending={m.remove.isPending}
+                            onConfirm={(close) => {
                               track('remove')
-                              m.remove.mutate(step.id)
+                              m.remove.mutate(step.id, { onSettled: close })
                             }}
-                          >
-                            <Trash2 />
-                          </Button>
+                            trigger={(open) => (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                aria-label={`Delete step ${step.position}`}
+                                onClick={open}
+                              >
+                                <Trash2 />
+                              </Button>
+                            )}
+                          />
                         </div>
                       )}
                     </div>

@@ -43,6 +43,11 @@ describe('FE-INT-034 concurrent edits (optimistic locking)', () => {
 
     savedElsewhere()
     await user.click(screen.getByRole('button', { name: 'Delete step 1' }))
+    await user.click(
+      within(screen.getByRole('group', { name: 'Confirm deleting step 1' })).getByRole('button', {
+        name: 'Delete',
+      }),
+    )
     expect(await screen.findByTestId('conflict')).toBeInTheDocument()
     expect(db.steps.filter((s) => s.testCaseId === 153)).toHaveLength(4)
   })

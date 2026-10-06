@@ -637,7 +637,7 @@ func (q *Queries) ListFlakyCounts(ctx context.Context, arg ListFlakyCountsParams
 }
 
 const listLastExecuted = `-- name: ListLastExecuted :many
-SELECT t.test_case_id::bigint AS test_case_id, max(r.created_at)::timestamptz AS last_executed_at
+SELECT t.test_case_id::bigint AS test_case_id, max(coalesce(r.started_at, r.created_at))::timestamptz AS last_executed_at
 FROM test_results t JOIN test_runs r ON r.id = t.test_run_id
 WHERE t.correlation = 'valid' AND t.test_case_id = ANY($1::bigint[])
 GROUP BY t.test_case_id
@@ -648,7 +648,8 @@ type ListLastExecutedRow struct {
 	LastExecutedAt pgtype.Timestamptz
 }
 
-// When each given test case last had a valid result (the creation time of its latest run with one).
+// When each given test case last ran: the latest execution start of its runs with a valid result for it (the report's
+// start; its upload time when the report gave none), so a late upload of an old run does not make it look fresh.
 func (q *Queries) ListLastExecuted(ctx context.Context, testCaseIds []int64) ([]ListLastExecutedRow, error) {
 	rows, err := q.db.Query(ctx, listLastExecuted, testCaseIds)
 	if err != nil {

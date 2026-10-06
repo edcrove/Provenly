@@ -46,7 +46,8 @@ type Querier interface {
 	// attempt passed after a failed or errored earlier attempt, and the test case did not fail or error in that run (a
 	// variant that failed for good is a failure, not flakiness). Manual re-tests are never flaky.
 	ListFlakyCounts(ctx context.Context, arg ListFlakyCountsParams) ([]ListFlakyCountsRow, error)
-	// When each given test case last had a valid result (the creation time of its latest run with one).
+	// When each given test case last ran: the latest execution start of its runs with a valid result for it (the report's
+	// start; its upload time when the report gave none), so a late upload of an old run does not make it look fresh.
 	ListLastExecuted(ctx context.Context, testCaseIds []int64) ([]ListLastExecutedRow, error)
 	// For each given test case, its latest run with a conclusive logical status (passed, failed or error; skipped runs are
 	// inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test

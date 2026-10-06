@@ -1185,7 +1185,9 @@ paths:
         - name: staleDays
           in: query
           required: false
-          description: An active test case not executed for more days than this is stale (default 14).
+          description: |
+            An active test case not executed for more days than this is stale (default 14). Its last execution is the
+            start of its latest run (`startedAt`; the upload time when the report gave none), not when the report arrived.
           schema:
             type: integer
             minimum: 1

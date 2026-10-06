@@ -398,6 +398,9 @@ Notion Decision Register; each one ships in its own PR.
   project (the one the request was allowed into), read in words ("edited CHK-4 step 3", the path as detail) and filter
   by test case (`?testCase=CHK-4`); events recorded before keep only their route (not backfilled: the log is
   append-only).
+- **Retention (card #51):** finished webhook deliveries older than `PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS` (default
+  90, `0` keeps them) are purged hourly by the delivery worker, in batches of 1,000 under an advisory lock, and the
+  count is logged; pending deliveries, audit events and run results are never purged.
 
 
 ### 24. Review-panel audit (2026-10-06): fixes

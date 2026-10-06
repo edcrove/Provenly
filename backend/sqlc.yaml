@@ -61,6 +61,7 @@ sql:
   - engine: postgresql
     schema:
       - migrations/00028_integrations.sql
+      - migrations/00035_webhook_delivery_retention.sql
     queries: queries/integrations.sql
     gen:
       go:

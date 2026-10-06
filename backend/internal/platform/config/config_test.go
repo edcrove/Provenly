@@ -19,23 +19,25 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Equal(t, Config{
 		Env: "development", HTTPAddr: ":8080", DatabaseURL: "postgres://db",
 		LogLevel: slog.LevelInfo, MaxIngestBytes: 10 << 20, WebhooksAllowPrivate: true, GitHubAPIURL: "https://api.github.com",
+		WebhookDeliveryRetentionDays: 90,
 	}, cfg)
 }
 
 func TestLoadOverrides(t *testing.T) {
 	cfg, err := Load(env(map[string]string{
-		"PROVENLY_DATABASE_URL":           "postgres://db",
-		"PROVENLY_ENV":                    "ci",
-		"PROVENLY_HTTP_ADDR":              ":9999",
-		"PROVENLY_LOG_LEVEL":              "debug",
-		"PROVENLY_MAX_INGEST_BYTES":       "1024",
-		"PROVENLY_AUTO_MIGRATE":           "true",
-		"PROVENLY_JWT_SECRET":             strings.Repeat("k", 32),
-		"PROVENLY_ADMIN_USERNAME":         "admin",
-		"PROVENLY_ADMIN_PASSWORD":         "correct horse",
-		"PROVENLY_SECRETS_KEY":            "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
-		"PROVENLY_WEBHOOKS_ALLOW_PRIVATE": "false",
-		"PROVENLY_GITHUB_API_URL":         "https://github.example.com/api/v3/",
+		"PROVENLY_DATABASE_URL":                    "postgres://db",
+		"PROVENLY_ENV":                             "ci",
+		"PROVENLY_HTTP_ADDR":                       ":9999",
+		"PROVENLY_LOG_LEVEL":                       "debug",
+		"PROVENLY_MAX_INGEST_BYTES":                "1024",
+		"PROVENLY_AUTO_MIGRATE":                    "true",
+		"PROVENLY_JWT_SECRET":                      strings.Repeat("k", 32),
+		"PROVENLY_ADMIN_USERNAME":                  "admin",
+		"PROVENLY_ADMIN_PASSWORD":                  "correct horse",
+		"PROVENLY_SECRETS_KEY":                     "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=",
+		"PROVENLY_WEBHOOKS_ALLOW_PRIVATE":          "false",
+		"PROVENLY_GITHUB_API_URL":                  "https://github.example.com/api/v3/",
+		"PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS": "0",
 	}))
 	require.NoError(t, err)
 	assert.Equal(t, Config{
@@ -43,6 +45,7 @@ func TestLoadOverrides(t *testing.T) {
 		LogLevel: slog.LevelDebug, MaxIngestBytes: 1024, AutoMigrate: true,
 		JWTSecret: []byte(strings.Repeat("k", 32)), AdminUsername: "admin", AdminPassword: "correct horse",
 		SecretsKey: []byte(strings.Repeat("k", 32)), GitHubAPIURL: "https://github.example.com/api/v3",
+		WebhookDeliveryRetentionDays: 0,
 	}, cfg)
 }
 
@@ -89,6 +92,9 @@ func TestLoadErrors(t *testing.T) {
 		"PROVENLY_SECRETS_KEY must be 32 bytes":         {"PROVENLY_DATABASE_URL": "x", "PROVENLY_SECRETS_KEY": "c2hvcnQ="},
 		"PROVENLY_WEBHOOKS_ALLOW_PRIVATE":               {"PROVENLY_DATABASE_URL": "x", "PROVENLY_WEBHOOKS_ALLOW_PRIVATE": "sometimes"},
 		"must be set together":                          {"PROVENLY_DATABASE_URL": "x", "PROVENLY_ADMIN_USERNAME": "admin"},
+		`RETENTION_DAYS must be a whole number of days from 0 (keep) to 36500, got "-1"`: {"PROVENLY_DATABASE_URL": "x", "PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS": "-1"},
+		`got "90d"`:   {"PROVENLY_DATABASE_URL": "x", "PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS": "90d"},
+		`got "36501"`: {"PROVENLY_DATABASE_URL": "x", "PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS": "36501"},
 		"public demo password": {"PROVENLY_DATABASE_URL": "x", "PROVENLY_ENV": "prod", "PROVENLY_JWT_SECRET": strings.Repeat("k", 32),
 			"PROVENLY_SECRETS_KEY": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=", "PROVENLY_ADMIN_USERNAME": "admin", "PROVENLY_ADMIN_PASSWORD": "provenly-demo"},
 	}

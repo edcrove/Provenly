@@ -28,6 +28,9 @@ type fakeRepo struct {
 	onClaim    func(n int)
 	synced     *time.Time
 	syncError  string
+	// purges records each purge call's cutoff; purgeable is how many old deliveries are left to purge.
+	purges    []time.Time
+	purgeable int64
 }
 
 func newRepo() *fakeRepo {
@@ -111,6 +114,13 @@ func (r *fakeRepo) InsertDelivery(_ context.Context, webhookID int64, event stri
 	d := Delivery{ID: int64(len(r.deliveries) + 1), WebhookID: webhookID, Event: event, Payload: payload, Status: DeliveryPending, NextAttemptAt: now, CreatedAt: now}
 	r.deliveries = append(r.deliveries, d)
 	return d.ID, nil
+}
+
+func (r *fakeRepo) PurgeDeliveries(_ context.Context, before time.Time, limit int32) (int64, error) {
+	r.purges = append(r.purges, before)
+	n := min(r.purgeable, int64(limit))
+	r.purgeable -= n
+	return n, r.errs["PurgeDeliveries"]
 }
 
 func (r *fakeRepo) ClaimDueDeliveries(_ context.Context, limit int32) ([]Delivery, error) {

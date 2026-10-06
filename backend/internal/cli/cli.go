@@ -108,7 +108,8 @@ func run(ctx context.Context, args []string, d Deps) error {
 	}
 	services := app.NewServicesConfig(pool, time.Now, app.Config{
 		Identity: identity.DefaultConfig(secret), SecretsKey: cfg.SecretsKey,
-		Integrations: integrations.Config{AllowPrivate: cfg.WebhooksAllowPrivate, GitHubAPIURL: cfg.GitHubAPIURL},
+		Integrations: integrations.Config{AllowPrivate: cfg.WebhooksAllowPrivate, GitHubAPIURL: cfg.GitHubAPIURL,
+			DeliveryRetention: time.Duration(cfg.WebhookDeliveryRetentionDays) * 24 * time.Hour},
 	})
 	if cfg.AdminUsername != "" {
 		if err := services.Identity.Bootstrap(ctx, cfg.AdminUsername, cfg.AdminPassword); err != nil {

@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 
-import { useIssueMutations, useIssues } from '@/api/queries'
+import { useIssueMutations, useIssuesPage } from '@/api/queries'
 import { PageTitle } from '@/components/PageTitle'
+import { Pagination } from '@/components/Pagination'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,6 +17,7 @@ import { useProjectRole } from '@/features/projects/useProjectRole'
 import { verificationLabel, verificationVariant } from '@/lib/issues'
 import { requirementRef as issueRef } from '@/lib/requirements'
 import { can } from '@/lib/roles'
+import { usePage } from '@/lib/usePage'
 
 type Provider = 'provenly' | 'jira' | 'github' | 'azure_devops'
 
@@ -99,7 +101,8 @@ function NewIssue({ projectKey }: { projectKey: string }) {
 export function IssuesPage() {
   const { project } = useCurrentProject()
   const [state, setState] = useState<'' | 'open' | 'closed'>('')
-  const issues = useIssues(project, state ? { state } : {})
+  const [page, setPage] = usePage(`${project}:${state}`)
+  const issues = useIssuesPage(project, state ? { state } : {}, page)
   const edit = can(useProjectRole(project), 'member')
   return (
     <Card>
@@ -133,43 +136,51 @@ export function IssuesPage() {
             </div>
             <QueryState query={issues}>
               {(data) => (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Issue</TableHead>
-                      <TableHead>Title</TableHead>
-                      <TableHead>State</TableHead>
-                      <TableHead>Verification</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.items.length === 0 && (
+                <>
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={4} className="text-muted-foreground">
-                          {state ? `No ${state} issues.` : 'No issues here.'}
-                        </TableCell>
+                        <TableHead>Issue</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>State</TableHead>
+                        <TableHead>Verification</TableHead>
                       </TableRow>
-                    )}
-                    {data.items.map((i) => (
-                      <TableRow key={i.id} data-testid={`issue-${i.externalId}`}>
-                        <TableCell className="font-mono whitespace-nowrap">
-                          <Link to={`/issues/${project}/${i.id}`} className="underline">
-                            {issueRef(i)}
-                          </Link>
-                        </TableCell>
-                        <TableCell>{i.title}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{i.state}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={verificationVariant(i.verification.status)}>
-                            {verificationLabel(i.verification.status)}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {data.items.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-muted-foreground">
+                            {state ? `No ${state} issues.` : 'No issues here.'}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {data.items.map((i) => (
+                        <TableRow key={i.id} data-testid={`issue-${i.externalId}`}>
+                          <TableCell className="font-mono whitespace-nowrap">
+                            <Link to={`/issues/${project}/${i.id}`} className="underline">
+                              {issueRef(i)}
+                            </Link>
+                          </TableCell>
+                          <TableCell>{i.title}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{i.state}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={verificationVariant(i.verification.status)}>
+                              {verificationLabel(i.verification.status)}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <Pagination
+                    page={data.page}
+                    totalPages={data.totalPages}
+                    totalItems={data.totalItems}
+                    onPageChange={setPage}
+                  />
+                </>
               )}
             </QueryState>
             {edit ? <NewIssue projectKey={project} /> : null}

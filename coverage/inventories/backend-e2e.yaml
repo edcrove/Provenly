@@ -57,3 +57,5 @@ targets:
     description: sign-in throttle through the public API - five failed sign-ins of a username answer 401, the sixth (and the same username in other case) 429 with how long; another username still gets 401
   - id: BE-E2E-028
     description: sharded runs through the public API - two Playwright reporters with --shard 1/2 and 2/2 and a project API key send one report each (no live streaming); the first creates a running sharded run (incomplete, shard 2 missing), the second completes it with both shards' results, each marked and filterable by shard
+  - id: BE-E2E-029
+    description: long lists through the public API (DEC-78) - requirements answer a page with coverageCounts over every page and reject pageSize 101; test cases are found by key in lower case and by title in any case among 105; a blank q is 400

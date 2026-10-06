@@ -30,3 +30,20 @@ func TestResultTotalPagesAndMap(t *testing.T) {
 	assert.Equal(t, r.Page, m.Page)
 	assert.Equal(t, r.Total, m.Total)
 }
+
+func TestSlice(t *testing.T) {
+	all := []int{1, 2, 3, 4, 5}
+	r := Slice(all, Page{Number: 2, Size: 2})
+	if len(r.Items) != 2 || r.Items[0] != 3 || r.Total != 5 || r.TotalPages() != 3 {
+		t.Fatalf("page 2: %+v", r)
+	}
+	if r = Slice(all, Page{Number: 3, Size: 2}); len(r.Items) != 1 || r.Items[0] != 5 {
+		t.Fatalf("last page: %+v", r)
+	}
+	if r = Slice(all, Page{Number: 1 << 30, Size: 100}); len(r.Items) != 0 || r.Total != 5 {
+		t.Fatalf("past the end: %+v", r)
+	}
+	if r = Slice([]int(nil), Default()); len(r.Items) != 0 || r.TotalPages() != 0 {
+		t.Fatalf("empty: %+v", r)
+	}
+}

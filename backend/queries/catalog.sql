@@ -34,6 +34,8 @@ WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
   AND (sqlc.narg('suite_id')::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = sqlc.narg('suite_id')::bigint AND m.test_case_id = test_cases.id))
   AND (sqlc.narg('automated')::boolean IS NULL OR automated = sqlc.narg('automated')::boolean)
   AND (sqlc.narg('number')::bigint IS NULL OR number = sqlc.narg('number')::bigint)
+  AND (sqlc.narg('search')::text IS NULL OR title ILIKE '%' || sqlc.narg('search')::text || '%' ESCAPE '\'
+       OR number = sqlc.narg('search_number')::bigint)
 ORDER BY id DESC
 LIMIT @page_limit OFFSET @page_offset;
 
@@ -50,7 +52,9 @@ WHERE (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
   ) = cardinality(@classified::text[]))
   AND (sqlc.narg('suite_id')::bigint IS NULL OR EXISTS (SELECT 1 FROM test_suite_cases m WHERE m.suite_id = sqlc.narg('suite_id')::bigint AND m.test_case_id = test_cases.id))
   AND (sqlc.narg('automated')::boolean IS NULL OR automated = sqlc.narg('automated')::boolean)
-  AND (sqlc.narg('number')::bigint IS NULL OR number = sqlc.narg('number')::bigint);
+  AND (sqlc.narg('number')::bigint IS NULL OR number = sqlc.narg('number')::bigint)
+  AND (sqlc.narg('search')::text IS NULL OR title ILIKE '%' || sqlc.narg('search')::text || '%' ESCAPE '\'
+       OR number = sqlc.narg('search_number')::bigint);
 
 -- name: ListTestCaseIDs :many
 -- The ids of every test case the filters select (a suite's selection for a run), ascending.

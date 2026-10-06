@@ -51,6 +51,8 @@ type Coverage struct {
 type RequirementView struct {
 	Requirement
 	Coverage Coverage
+	// Keys names each linked test case (CHK-4), so lists never show a bare id (DEC-78).
+	Keys map[int64]string
 }
 
 // ResultReader reads the latest result of test cases (the execution module, injected to keep the catalog
@@ -141,9 +143,13 @@ func (s *Service) withCoverage(ctx context.Context, reqs []Requirement) ([]Requi
 			return nil, err
 		}
 	}
+	keys, err := s.Keys(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]RequirementView, len(reqs))
 	for i, r := range reqs {
-		out[i] = RequirementView{Requirement: r, Coverage: coverage(r.TestCaseIDs, latest)}
+		out[i] = RequirementView{Requirement: r, Coverage: coverage(r.TestCaseIDs, latest), Keys: keys}
 	}
 	return out, nil
 }

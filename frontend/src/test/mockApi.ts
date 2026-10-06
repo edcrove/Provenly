@@ -548,12 +548,28 @@ function manualSummary(runId: number, cases: Outcome[]): TestRunSummary {
 }
 
 const RESULT_STATUSES = ['passed', 'failed', 'error', 'skipped']
+
+/** The key of a test case, like the server's (null for an id no test case has). */
+const keyOfCase = (id: number) => db.testCases.find((t) => t.id === id)?.key ?? null
+
+/** pageOf plus the counts of a status over every item (not only the page's), like the server (DEC-78). */
+function pageWithCounts<T>(url: URL, items: T[], field: string, statusOf: (item: T) => string) {
+  const page = pageOf(url, items)
+  if (page instanceof Response) return page
+  const counts: Record<string, number> = {}
+  for (const item of items) counts[statusOf(item)] = (counts[statusOf(item)] ?? 0) + 1
+  return { ...(page as object), [field]: counts } as JsonBodyType
+}
 const PROVIDERS = ['provenly', 'jira', 'github', 'azure_devops']
 
 /** A requirement with its coverage recomputed from db.latest, like the server. */
 function requirementDto({ projectId, ...r }: MockDb['requirements'][number]): Requirement {
   void projectId
-  const cases = r.testCaseIds.map((id) => ({ testCaseId: id, status: db.latest[id] ?? null }))
+  const cases = r.testCaseIds.map((id) => ({
+    testCaseId: id,
+    testCaseKey: keyOfCase(id),
+    status: db.latest[id] ?? null,
+  }))
   const passed = cases.filter((c) => c.status === 'passed').length
   const failed = cases.filter((c) => c.status === 'failed' || c.status === 'error').length
   const status: Requirement['coverage']['status'] =
@@ -613,6 +629,7 @@ function issueDto({ projectId, ...i }: MockDb['issues'][number]): Issue {
             : 'reopen'
     return {
       testCaseId: id,
+      testCaseKey: keyOfCase(id),
       status,
       evidence,
       evidenceRunId: evidence ? (latest === 'skipped' || latest === undefined ? kept!.runId : 1) : null,
@@ -731,7 +748,9 @@ export const handlers = [
         )
         .sort((a, b) => b.id - a.id)
         .map(issueDto)
-      return respond({ items })
+      return respond(
+        pageWithCounts(new URL(request.url), items, 'verificationCounts', (i) => i.verification.status),
+      )
     }),
   ),
   http.post(
@@ -835,7 +854,14 @@ export const handlers = [
         .filter((r) => r.projectId === p.id && (testCase === undefined || r.testCaseIds.includes(testCase)))
         .sort((a, b) => b.id - a.id)
         .map(requirementDto)
-      return respond({ items })
+      const url = new URL(request.url)
+      const page = pageWithCounts(url, items, 'coverageCounts', (r) => r.coverage.status)
+      if (page instanceof Response) return page
+      // Archived requirements are not counted.
+      const counts: Record<string, number> = {}
+      for (const r of items.filter((x) => !x.archivedAt))
+        counts[r.coverage.status] = (counts[r.coverage.status] ?? 0) + 1
+      return respond({ ...(page as object), coverageCounts: counts } as JsonBodyType)
     }),
   ),
   http.post(
@@ -1075,14 +1101,14 @@ export const handlers = [
   ),
   http.get(
     `${BASE}/projects/:projectKey/suites`,
-    guard(({ params }) => {
+    guard(({ params, request }) => {
       const p = visibleProject(params.projectKey)
       if (p instanceof Response) return p
       const items = db.suites
         .filter((x) => x.projectId === p.id)
         .sort((a, b) => a.key.localeCompare(b.key))
         .map((x) => suiteDto(x, false))
-      return respond({ items })
+      return respond(pageOf(new URL(request.url), items))
     }),
   ),
   http.post(
@@ -1167,10 +1193,12 @@ export const handlers = [
   ),
   http.get(
     `${BASE}/projects/:projectKey/dimensions`,
-    guard(({ params }) => {
+    guard(({ params, request }) => {
       const p = visibleProject(params.projectKey)
       if (p instanceof Response) return p
-      return respond({ items: db.dimensions.filter((d) => d.projectId === p.id).map(dimensionDto) })
+      return respond(
+        pageOf(new URL(request.url), db.dimensions.filter((d) => d.projectId === p.id).map(dimensionDto)),
+      )
     }),
   ),
   http.post(
@@ -1353,10 +1381,12 @@ export const handlers = [
   ),
   http.get(
     `${BASE}/projects/:projectKey/webhooks`,
-    guard(({ params }) => {
+    guard(({ params, request }) => {
       const p = integrationProject(params.projectKey)
       if (p instanceof Response) return p
-      return respond({ items: db.webhooks.filter((w) => w.projectId === p.id).map(webhookView) })
+      return respond(
+        pageOf(new URL(request.url), db.webhooks.filter((w) => w.projectId === p.id).map(webhookView)),
+      )
     }),
   ),
   http.post(
@@ -1794,9 +1824,18 @@ export const handlers = [
       const tcKey = url.searchParams.get('key')
       if (tcKey !== null && !/^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,17}$/.test(tcKey))
         return validation('key', 'must be a test case key: <PROJECT>-<number> (e.g. CHK-12)')
+      // ?q=: a title containing the text (any case), or a key or number, like the server (DEC-78).
+      const search = url.searchParams.get('q')?.trim()
+      if (search === '') return validation('q', 'must not be empty')
+      const searchNumber = search?.match(/^(?:[A-Za-z][A-Za-z0-9]{1,9}-)?([1-9][0-9]{0,17})$/)?.[1]
+      const found = (t: TestCase) =>
+        search === undefined ||
+        t.title.toLowerCase().includes(search.toLowerCase()) ||
+        (searchNumber !== undefined && t.key.endsWith(`-${searchNumber}`))
       const items = db.testCases
         .filter(
           (t) =>
+            found(t) &&
             (tcKey === null || t.key === tcKey) &&
             (!status || t.status === status) &&
             (!p || t.projectId === p.id) &&

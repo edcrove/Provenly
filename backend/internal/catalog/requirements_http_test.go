@@ -16,6 +16,7 @@ var sampleRequirement = RequirementView{
 	Requirement: Requirement{ID: 4, ProjectID: 1, Provider: ProviderJira, ExternalID: "PAY-12", Title: "Refunds", TestCaseIDs: []int64{153, 154},
 		CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
 	Coverage: Coverage{Status: CoveragePartial, Linked: 2, Passed: 1, NotRun: 1, Latest: map[int64]string{153: "passed", 154: ""}},
+	Keys:     map[int64]string{153: "TC-153"},
 }
 
 // requirementCall records the last requirement call of the stub.
@@ -65,8 +66,8 @@ func TestRequirementHandlers(t *testing.T) {
 		contains             string
 		want                 requirementCall
 	}{
-		{"GET", base, "", 200, `{"items":[{"id":4,"provider":"jira","externalId":"PAY-12"`, requirementCall{projectID: 1}},
-		{"GET", base + "?testCase=153", "", 200, `"coverage":{"status":"partial","linked":2,"passed":1,"failed":0,"notRun":1,"testCases":[{"testCaseId":153,"status":"passed"},{"testCaseId":154,"status":null}]}`,
+		{"GET", base, "", 200, `"items":[{"id":4,"provider":"jira","externalId":"PAY-12"`, requirementCall{projectID: 1}},
+		{"GET", base + "?testCase=153", "", 200, `"coverage":{"status":"partial","linked":2,"passed":1,"failed":0,"notRun":1,"testCases":[{"testCaseId":153,"testCaseKey":"TC-153","status":"passed"},{"testCaseId":154,"testCaseKey":null,"status":null}]}`,
 			requirementCall{projectID: 1, testCase: ptr(int64(153))}},
 		{"POST", base, `{"title":"Pay","provider":"github","externalId":"4","url":"https://x","description":"d","providerStatus":"open"}`, 201, `"lastSyncedAt":null`,
 			requirementCall{projectID: 1, in: RequirementInput{Title: "Pay", Provider: "github", ExternalID: "4", URL: "https://x", Description: "d", ProviderStatus: "open"}}},
@@ -86,6 +87,7 @@ func TestRequirementHandlers(t *testing.T) {
 	for _, b := range []struct{ method, target, body, field string }{
 		{"GET", base + "?testCase=x", "", "testCase"},
 		{"GET", base + "?testCase=0", "", "testCase"},
+		{"GET", base + "?page=0", "", "page"},
 		{"GET", "/api/v1/projects/tc/requirements", "", "projectKey"},
 		{"GET", base + "/x", "", "requirementId"},
 		{"PATCH", base + "/0", `{"title":"x"}`, "requirementId"},

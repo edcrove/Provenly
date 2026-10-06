@@ -103,8 +103,9 @@ describe('FE-INT-033 project API keys', () => {
     for (let i = 1; i <= 21; i++) db.apiKeys.push(key(100 + i))
     const { user: u } = renderRoute('/projects/TC')
     expect(await screen.findByTestId('api-key-121')).toBeInTheDocument()
-    // The keys' pager is the last one (after the members').
-    await u.click(screen.getAllByRole('button', { name: /next/i }).at(-1)!)
+    // The keys' pager is the one in the keys' card (members and webhooks have their own).
+    const card = screen.getByRole('heading', { name: 'API keys' }).closest<HTMLElement>('[data-slot="card"]')!
+    await u.click(within(card).getByRole('button', { name: /next/i }))
     expect(await screen.findByTestId('api-key-101')).toBeInTheDocument()
   })
 })

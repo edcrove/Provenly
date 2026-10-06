@@ -7,7 +7,9 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
@@ -350,6 +352,10 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	if f, err = searchQuery(r, f); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
 	var none bool
 	if f, none, err = h.keyQuery(r, f); err != nil {
 		httpx.WriteError(w, r, err)
@@ -365,6 +371,36 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(res, ToDTO))
+}
+
+// searchNumber reads a key or number typed in a picker: CHK-12, chk-12 or 12.
+var searchNumber = regexp.MustCompile(`^(?:[A-Za-z][A-Za-z0-9]{1,9}-)?([1-9][0-9]{0,17})$`)
+
+// likeEscaper escapes LIKE's wildcards, so ?q=50% looks for "50%".
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// searchQuery narrows the list to ?q=: a title containing the text (any case), or the test case whose number (or key)
+// it is (DEC-78: the pickers search on the server).
+func searchQuery(r *http.Request, f ListFilter) (ListFilter, error) {
+	q := r.URL.Query()
+	if !q.Has("q") {
+		return f, nil
+	}
+	raw := strings.TrimSpace(q.Get("q"))
+	var v apperr.Validator
+	v.Check(raw != "", "q", "must not be empty")
+	v.Check(utf8.RuneCountInString(raw) <= 200, "q", "must be at most 200 characters")
+	v.CheckText("q", raw)
+	if err := v.Err(); err != nil {
+		return f, err
+	}
+	pattern := likeEscaper.Replace(raw)
+	f.Search = &pattern
+	if m := searchNumber.FindStringSubmatch(raw); m != nil {
+		n, _ := strconv.ParseInt(m[1], 10, 64) // at most 18 digits: always an int64
+		f.SearchNumber = &n
+	}
+	return f, nil
 }
 
 // testCaseKeyPattern is a test case key: <PROJECT>-<number>.

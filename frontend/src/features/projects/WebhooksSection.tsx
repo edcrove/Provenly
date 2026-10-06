@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDateTime } from '@/lib/format'
+import { usePage } from '@/lib/usePage'
 
 const deliveryVariant = { succeeded: 'secondary', failed: 'destructive', pending: 'outline' } as const
 
@@ -173,7 +174,8 @@ function NewWebhook({ projectKey }: { projectKey: string }) {
 
 /** A project's webhooks (maintainers and administrators): completed runs are POSTed, signed and retried. */
 export function WebhooksSection({ projectKey }: { projectKey: string }) {
-  const hooks = useWebhooks(projectKey)
+  const [page, setPage] = usePage(projectKey)
+  const hooks = useWebhooks(projectKey, page)
   return (
     <Card>
       <CardHeader>
@@ -189,28 +191,36 @@ export function WebhooksSection({ projectKey }: { projectKey: string }) {
       <CardContent className="grid gap-6">
         <QueryState query={hooks}>
           {(data) => (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Endpoint</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Last delivery</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.items.length === 0 && (
+            <div className="grid gap-2">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground">
-                      No webhooks yet.
-                    </TableCell>
+                    <TableHead>Endpoint</TableHead>
+                    <TableHead>State</TableHead>
+                    <TableHead>Last delivery</TableHead>
+                    <TableHead />
                   </TableRow>
-                )}
-                {data.items.map((w) => (
-                  <WebhookRow key={w.id} webhook={w} projectKey={projectKey} />
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {data.items.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-muted-foreground">
+                        No webhooks yet.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {data.items.map((w) => (
+                    <WebhookRow key={w.id} webhook={w} projectKey={projectKey} />
+                  ))}
+                </TableBody>
+              </Table>
+              <Pagination
+                page={data.page}
+                totalPages={data.totalPages}
+                totalItems={data.totalItems}
+                onPageChange={setPage}
+              />
+            </div>
           )}
         </QueryState>
         <NewWebhook projectKey={projectKey} />

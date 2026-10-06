@@ -100,10 +100,6 @@ func webhookDTO(w WebhookView) WebhookDTO {
 	return dto
 }
 
-type webhookList struct {
-	Items []WebhookDTO `json:"items"`
-}
-
 type createdWebhook struct {
 	Webhook WebhookDTO `json:"webhook"`
 	Secret  string     `json:"secret"`
@@ -159,16 +155,17 @@ type syncResponse struct {
 }
 
 func (h *Handler) listWebhooks(w http.ResponseWriter, r *http.Request, projectKey string) {
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
 	hooks, err := h.api.Webhooks(r.Context(), projectKey)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	out := webhookList{Items: make([]WebhookDTO, len(hooks))}
-	for i, hk := range hooks {
-		out.Items[i] = webhookDTO(hk)
-	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(pagination.Slice(hooks, page), webhookDTO))
 }
 
 func (h *Handler) createWebhook(w http.ResponseWriter, r *http.Request, projectKey string) {

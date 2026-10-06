@@ -786,6 +786,9 @@ paths:
       tags: [projects]
       operationId: listDimensions
       summary: List the project's classification dimensions and their values (anyone who can see the project)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
           description: The project's dimensions
@@ -945,6 +948,9 @@ paths:
       tags: [projects]
       operationId: listSuites
       summary: List the project's suites by key (anyone who can see the project)
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
           description: The suites
@@ -1087,6 +1093,8 @@ paths:
       operationId: listRequirements
       summary: The project's requirements with their coverage, newest first (anyone who can see the project)
       parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
         - name: testCase
           in: query
           required: false
@@ -1398,6 +1406,9 @@ paths:
       tags: [integrations]
       operationId: listWebhooks
       summary: The project's webhooks with their latest delivery (maintainers); signing secrets are never returned
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
           description: The webhooks
@@ -1647,6 +1658,8 @@ paths:
       operationId: listIssues
       summary: The project's issues with their QA verification, newest first (anyone who can see the project)
       parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
         - name: testCase
           in: query
           required: false
@@ -1863,6 +1876,16 @@ paths:
           schema:
             type: string
             pattern: "^[a-z][a-z0-9-]{0,29}$"
+        - name: q
+          in: query
+          required: false
+          description: >-
+            Text the title contains (any case), or a key or number (CHK-12, chk-12 or 12): what a test case picker
+            searches with (DEC-78). At most 200 characters.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
         - name: key
           in: query
           required: false
@@ -3874,14 +3897,16 @@ components:
           nullable: true
 
     DimensionList:
-      type: object
-      additionalProperties: false
-      required: [items]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Dimension"
+      description: A page of the project's dimensions (DEC-78; the list used to be unpaginated).
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Dimension"
 
     CreateDimensionRequest:
       type: object
@@ -4267,14 +4292,16 @@ components:
             format: int64
 
     SuiteList:
-      type: object
-      additionalProperties: false
-      required: [items]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Suite"
+      description: A page of the project's suites (DEC-78; the list used to be unpaginated).
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Suite"
 
     CreateSuiteRequest:
       type: object
@@ -4472,25 +4499,37 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [testCaseId, status]
+            required: [testCaseId, testCaseKey, status]
             properties:
               testCaseId:
                 type: integer
                 format: int64
+              testCaseKey:
+                type: string
+                nullable: true
+                description: Its key (CHK-4), so a list never shows a bare id (DEC-78).
               status:
                 type: string
                 nullable: true
                 enum: [passed, failed, error, skipped, null]
 
     RequirementList:
-      type: object
-      additionalProperties: false
-      required: [items]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Requirement"
+      description: A page of the project's requirements (DEC-78; the list used to be unpaginated).
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items, coverageCounts]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Requirement"
+            coverageCounts:
+              type: object
+              description: How many active requirements that match the filters (all pages, not only this one) have each coverage status.
+              additionalProperties:
+                type: integer
+              example: { passing: 12, failing: 2, not_run: 3 }
 
     CreateRequirementRequest:
       type: object
@@ -4656,11 +4695,15 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [testCaseId, status, evidence, evidenceRunId, latestInconclusive]
+            required: [testCaseId, testCaseKey, status, evidence, evidenceRunId, latestInconclusive]
             properties:
               testCaseId:
                 type: integer
                 format: int64
+              testCaseKey:
+                type: string
+                nullable: true
+                description: Its key (CHK-4), so a list never shows a bare id (DEC-78).
               status:
                 type: string
                 enum: [unverified, known_issue, reopen, not_reproducible, validated_fixed]
@@ -4679,14 +4722,22 @@ components:
                 description: The latest result was skipped; the verification kept the previous evidence.
 
     IssueList:
-      type: object
-      additionalProperties: false
-      required: [items]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Issue"
+      description: A page of the project's issues (DEC-78; the list used to be unpaginated).
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items, verificationCounts]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Issue"
+            verificationCounts:
+              type: object
+              description: How many issues that match the filters (all pages, not only this one) have each verification status.
+              additionalProperties:
+                type: integer
+              example: { known_issue: 2, validated_fixed: 5 }
 
     CreateIssueRequest:
       type: object
@@ -4974,14 +5025,16 @@ components:
             - $ref: "#/components/schemas/WebhookDelivery"
 
     WebhookList:
-      type: object
-      additionalProperties: false
-      required: [items]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/Webhook"
+      description: A page of the project's webhooks (DEC-78; the list used to be unpaginated).
+      allOf:
+        - $ref: "#/components/schemas/PageMeta"
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/Webhook"
 
     CreateWebhookRequest:
       type: object

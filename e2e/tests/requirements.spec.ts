@@ -67,7 +67,7 @@ test.describe('Requirements and traceability', () => {
     await expect(page.getByTestId('requirement-R-1')).toContainText('Not covered')
     await page.getByRole('link', { name: 'R-1' }).click()
     await expect(page.getByText('No test case covers this requirement yet.')).toBeVisible()
-    await page.getByLabel('Test case to link').selectOption({ label: `${login.key} · Sign in works` })
+    await page.getByLabel('Test case to link', { exact: true }).selectOption({ label: `${login.key} · Sign in works` })
     await page.getByRole('button', { name: 'Link test case' }).click()
     await expect(page.getByTestId(`covering-${login.id}`)).toContainText('not run')
     await expect(page.getByTestId('coverage-badge')).toHaveText('Not run')

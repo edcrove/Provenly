@@ -10,6 +10,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
+	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
 
 // MaxClassifiedFilters bounds the dimension:value pairs of ?classification=.
@@ -56,10 +57,6 @@ func dimensionDTO(d Dimension) DimensionDTO {
 	return DimensionDTO{Key: d.Key, Name: d.Name, BuiltIn: d.BuiltIn, ArchivedAt: d.ArchivedAt, Values: values}
 }
 
-type dimensionList struct {
-	Items []DimensionDTO `json:"items"`
-}
-
 type dimensionRequest struct {
 	Key  string `json:"key"`
 	Name string `json:"name"`
@@ -81,6 +78,11 @@ func pathKey(w http.ResponseWriter, r *http.Request, name string, re *regexp.Reg
 }
 
 func (h *Handler) listDimensions(w http.ResponseWriter, r *http.Request) {
+	page, err := httpx.ParsePage(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
 	p, _, ok := h.project(w, r, authz.RoleViewer)
 	if !ok {
 		return
@@ -90,11 +92,7 @@ func (h *Handler) listDimensions(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	out := dimensionList{Items: make([]DimensionDTO, len(dims))}
-	for i, d := range dims {
-		out.Items[i] = dimensionDTO(d)
-	}
-	httpx.WriteJSON(w, http.StatusOK, out)
+	httpx.WriteJSON(w, http.StatusOK, httpx.NewPage(pagination.Slice(dims, page), dimensionDTO))
 }
 
 func (h *Handler) createDimension(w http.ResponseWriter, r *http.Request) {

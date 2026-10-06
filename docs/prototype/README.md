@@ -351,6 +351,15 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
 
+### 25. Refined follow-ups (2026-10-06)
+
+The audit's open decisions and cards were refined by the product owner and the six personas and recorded in the
+Notion Decision Register; each one ships in its own PR.
+
+- **Supply chain (card #50):** every GitHub Action is pinned to a commit SHA with its version as a comment
+  (`scripts/docs-check.sh` fails on an unpinned `uses:`), and Dependabot proposes updates for actions, Go modules,
+  npm packages and Docker images.
+
 ### 24. Review-panel audit (2026-10-06): fixes
 
 The full panel (`review-panel`: 6 technical experts, architect, product owner, 6 coverage audits, 6 personas) ran on

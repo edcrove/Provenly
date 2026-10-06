@@ -360,6 +360,8 @@ Notion Decision Register; each one ships in its own PR.
   project API keys keep working) and reactivate users, and give single-use password reset links (24 h); the
   `provenly reset-password <username>` command is the break-glass way back in. Nobody deactivates themselves and the
   last active administrator stays.
+- **Empty CI metadata (card #55):** `pipeline=`, `branch=` and `commit=` on the ingestion are the same as absent (a
+  documented exception to "present but empty is a 400"), stored as not set; replays compare them the same way.
 - **Find by key (card #53):** `GET /api/v1/test-cases?key=CHK-12` gives zero or one test case (MCP `search_test_cases`
   takes `key` too); the test case list has a TC-ID search box.
 - **Cheaper run reads (card #44, S):** routes on a run authorize it with its project alone (`GetRunProject`); only

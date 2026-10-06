@@ -142,6 +142,9 @@ def main():
     check("reorder with foreign step", call(base, "PUT", f"/test-cases/{a}/steps/order", {"stepIds": [sa, sb]})[0], 400)
     check("reorder with duplicates", call(base, "PUT", f"/test-cases/{a}/steps/order", {"stepIds": [sa, sa]})[0], 400)
 
+    # Empty CI metadata is absent (card #55): CI templates expand unset variables to empty.
+    st, body = call(base, "POST", "/ingestion/junit?" + q.format(70) + "&pipeline=&branch=&commit=", raw=b"<testsuite/>", ctype="application/xml")
+    check("ingest with empty pipeline, branch and commit", [st] + [(body or {}).get("testRun", {}).get(k) for k in ("pipeline", "branch", "commit")], [201, "", "", ""])
     for k, v, exp in [("branch", "ma%00in", 400), ("pipeline", "%FF", 400), ("commit", "c%00", 400),
                       ("status", "", 400), ("status", "failed", 400), ("status", "running", 400), ("runAttempt", "0", 400)]:
         # A repeated param keeps its first value, so override runAttempt in place instead of appending it.

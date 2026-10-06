@@ -161,6 +161,8 @@ describe('FE-INT-014 manual test case receiving automated results', () => {
     const { user } = renderRoute('/test-cases/153')
     const alert = await screen.findByTestId('manual-with-results')
     expect(alert).toHaveTextContent('Receives automated results but is marked manual')
+    // A notice is announced politely; only errors are alerts.
+    expect(alert).toHaveAttribute('role', 'status')
     await user.click(within(alert).getByRole('button', { name: 'Mark as automated' }))
     await waitFor(() => expect(screen.queryByTestId('manual-with-results')).not.toBeInTheDocument())
     expect(db.testCases[0].automated).toBe(true)

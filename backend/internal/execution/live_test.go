@@ -72,6 +72,8 @@ func TestLiveRuns(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ModeLive, run.Mode)
 	assert.Equal(t, RunRunning, run.Status)
+	require.NotNil(t, run.StartedAt, "a live run starts when it is created")
+	assert.Equal(t, fixedNow, *run.StartedAt)
 	again, err := svc.StartRun(ctx, start, []int64{1, 2})
 	require.NoError(t, err)
 	assert.Equal(t, run.ID, again.ID, "a runner retrying the start gets the same run")
@@ -84,11 +86,16 @@ func TestLiveRuns(t *testing.T) {
 	assert.Equal(t, ReconciliationPending, live.Reconciliation)
 	assert.Equal(t, []LiveCase{{1, "passed"}, {2, LiveWaiting}}, live.Cases)
 
-	// The final report completes the run; the live events are reconciled with it.
-	tc1, tc2 := int64(1), int64(2)
+	// A test case outside the universe (e.g. marked manual) also runs and streams its events.
+	_, err = svc.RecordEvents(ctx, run.ID, []NewEvent{ev("c", 4, EventTestStarted, 3, ""), ev("d", 5, EventTestFinished, 3, Passed)})
+	require.NoError(t, err)
+
+	// The final report completes the run; the live events are reconciled with it, outside the universe too.
+	tc1, tc2, tc3 := int64(1), int64(2), int64(3)
 	done, created, err := svc.RecordRun(ctx, NewRun{ProjectID: 1, Provider: "github", ProviderRunID: "77", RunAttempt: 1, ReportSHA256: "abc"}, []int64{9},
 		[]NewResult{{TestCaseID: &tc1, Correlation: CorrelationValid, TestName: "a", Status: Passed, Attempt: 1},
-			{TestCaseID: &tc2, Correlation: CorrelationValid, TestName: "b", Status: Failed, Attempt: 1}}, nil)
+			{TestCaseID: &tc2, Correlation: CorrelationValid, TestName: "b", Status: Failed, Attempt: 1},
+			{TestCaseID: &tc3, Correlation: CorrelationValid, TestName: "c", Status: Passed, Attempt: 1}}, nil)
 	require.NoError(t, err)
 	assert.True(t, created, "the report's results were recorded")
 	assert.Equal(t, RunCompleted, done.Status)
@@ -96,7 +103,8 @@ func TestLiveRuns(t *testing.T) {
 	live, err = svc.Live(ctx, run.ID)
 	require.NoError(t, err)
 	assert.Equal(t, ReconciliationMismatch, live.Reconciliation)
-	assert.Equal(t, []Mismatch{{Kind: MismatchFinalOnly, TestCaseID: &tc2, FinalStatus: "failed"}}, live.Mismatches)
+	assert.Equal(t, []Mismatch{{Kind: MismatchFinalOnly, TestCaseID: &tc2, FinalStatus: "failed"}}, live.Mismatches,
+		"TC 3 ran outside the universe and agrees: not live_only")
 	_, created, err = svc.RecordRun(ctx, NewRun{ProjectID: 1, Provider: "github", ProviderRunID: "77", RunAttempt: 1}, nil, nil, nil)
 	require.NoError(t, err)
 	assert.False(t, created, "a completed live run is replayed like any run")

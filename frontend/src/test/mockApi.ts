@@ -971,6 +971,7 @@ export const handlers = [
           suite: suite ? { key: suite.key, name: suite.name } : null,
           expectedCount: expected.length,
           resultCount: 0,
+          startedAt: now(),
           completedAt: null,
           createdAt: now(),
           outcome: {

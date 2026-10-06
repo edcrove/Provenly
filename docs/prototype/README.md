@@ -437,6 +437,13 @@ questions went to Ed.
 - No wall-clock tolerances: the deep-page check uses medians and a relative bound; backoff and stale dates are exact.
 - covgate fails a gate when a test carries an id its inventory does not declare (BE-INT-020 was missing).
 
+**Domain**
+- Manual and live runs record when they started (the run page and history said "Started —").
+- A live run's reconciliation counts final results outside the run's universe (a manual or deprecated test case CI
+  ran): their live events no longer read as `live_only` mismatches.
+- A suite run explains results outside its universe by the suite ("outside suite Release, or not automated"), not
+  only by automation.
+
 ### 23. Review agents (technical experts and user personas)
 
 - **What**: fourteen read-only subagents in `.claude/agents/` — technical experts (`reviewer-api-contract`,

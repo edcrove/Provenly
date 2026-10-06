@@ -287,6 +287,15 @@ describe('FE-INT-010 TC-ID diagnostics', () => {
     ).toBeEmptyDOMElement()
   })
 
+  it('FE-INT-010 a suite run explains results outside its universe by the suite', async () => {
+    db.runs[0] = { ...db.runs[0], suite: { key: 'release', name: 'Release' } }
+    db.summaries[7] = { ...db.summaries[7], outsideUniverse: 1, outsideUniverseTestCaseIds: [] }
+    renderRoute('/test-runs/7')
+    expect(await screen.findByTestId('outside-universe')).toHaveTextContent(
+      '1 result points to a test case outside suite Release (or not automated) when this run was created, so it is not counted in this summary. If it belongs to the suite, add it to it',
+    )
+  })
+
   it('FE-INT-010 warns about manual test cases outside the universe and marks them automated', async () => {
     db.testCases[1] = { ...db.testCases[1], automated: false }
     db.summaries[7] = summary({ outsideUniverse: 2, outsideUniverseTestCaseIds: [154] })

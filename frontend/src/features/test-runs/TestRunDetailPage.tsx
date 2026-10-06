@@ -116,7 +116,7 @@ export function TestRunDetailPage() {
                     <CardDescription>Excluded from the universe and the percentages.</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <RunDiagnostics summary={s} testRunId={r.id} />
+                    <RunDiagnostics summary={s} testRunId={r.id} suite={r.suite?.name} />
                   </CardContent>
                 </Card>
                 {r.mode === 'live' ? <LivePanel run={r} /> : null}

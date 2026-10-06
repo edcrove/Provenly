@@ -1,9 +1,11 @@
 import { screen, waitFor, within } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
 import { user } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { renderRoute } from '@/test/render'
+import { server } from '@/test/server'
 
 const at = '2026-10-05T10:00:00Z'
 const key = (id: number, extra: Partial<(typeof db.apiKeys)[number]> = {}) => ({
@@ -64,6 +66,28 @@ describe('FE-INT-033 project API keys', () => {
     renderRoute('/projects/TC')
     expect(await screen.findByTestId('member-ana')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'API keys' })).not.toBeInTheDocument()
+  })
+
+  it('FE-INT-033 a failed key list stays in its section: the tab keeps the project title', async () => {
+    server.use(
+      http.get('*/api/v1/projects/:projectKey/api-keys', () =>
+        HttpResponse.json(
+          {
+            type: 'about:blank',
+            title: 'Internal Server Error',
+            status: 500,
+            code: 'internal_error',
+            detail: 'x',
+          },
+          { status: 500, headers: { 'Content-Type': 'application/problem+json' } },
+        ),
+      ),
+    )
+    renderRoute('/projects/TC')
+    await screen.findByRole('heading', { name: 'API keys' })
+    expect(await screen.findByText('Something went wrong')).toBeInTheDocument()
+    expect(document.title).toBe('Project TC · Provenly')
+    expect(document.querySelectorAll('title')).toHaveLength(1)
   })
 
   it('FE-INT-033 lists many keys by page', async () => {

@@ -148,7 +148,7 @@ export function SuiteDetailPage() {
                   {projectKey}/{s.key}
                 </span>{' '}
                 · selects {selectionLabel(s)} · <Link to="/suites">All suites</Link> ·{' '}
-                <Link to={`/test-runs?suite=${s.key}`} className="underline">
+                <Link to={`/test-runs?project=${projectKey}&suite=${s.key}`} className="underline">
                   Runs of this suite
                 </Link>
               </span>

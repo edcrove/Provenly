@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 
 import type { Issue } from '@/api/client'
 import { useIssue, useIssueMutations, useTestCases } from '@/api/queries'
+import { NotFoundPage } from '@/app/NotFoundPage'
 import { PageTitle } from '@/components/PageTitle'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -50,20 +51,22 @@ function LinkedTests({ issue, projectKey, edit }: { issue: Issue; projectKey: st
                   {keyOf(c.testCaseId)}
                 </Link>
               </TableCell>
-              <TableCell className="flex flex-wrap items-center gap-2">
-                {c.evidence ? (
-                  <>
-                    <StatusBadge status={c.evidence} />
-                    <Link to={`/test-runs/${c.evidenceRunId}`} className="text-sm underline">
-                      run #{c.evidenceRunId}
-                    </Link>
-                  </>
-                ) : (
-                  <span className="text-muted-foreground">no conclusive result</span>
-                )}
-                {c.latestInconclusive ? (
-                  <span className="text-muted-foreground text-xs">latest run skipped it</span>
-                ) : null}
+              <TableCell>
+                <div className="flex flex-wrap items-center gap-2">
+                  {c.evidence ? (
+                    <>
+                      <StatusBadge status={c.evidence} />
+                      <Link to={`/test-runs/${c.evidenceRunId}`} className="text-sm underline">
+                        run #{c.evidenceRunId}
+                      </Link>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">no conclusive result</span>
+                  )}
+                  {c.latestInconclusive ? (
+                    <span className="text-muted-foreground text-xs">latest run skipped it</span>
+                  ) : null}
+                </div>
               </TableCell>
               <TableCell>
                 <Badge variant={verificationVariant(c.status)}>{verificationLabel(c.status)}</Badge>
@@ -129,6 +132,7 @@ export function IssueDetailPage() {
   const issue = useIssue(projectKey, id)
   const m = useIssueMutations(projectKey)
   const edit = can(useProjectRole(projectKey), 'member')
+  if (!id) return <NotFoundPage />
   return (
     <QueryState page query={issue}>
       {(i) => (

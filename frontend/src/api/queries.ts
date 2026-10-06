@@ -487,6 +487,9 @@ export function useQuality(projectKey: string, staleDays: number, window: number
   return useQuery({
     queryKey: [...keys.projects, projectKey, 'quality', staleDays, window],
     enabled: projectKey !== '',
+    // Changing the stale days or the flaky window keeps the current figures on screen (and the selects mounted,
+    // with their focus) until the new ones arrive; another project starts from loading.
+    placeholderData: (prev, q) => (q?.queryKey[keys.projects.length] === projectKey ? prev : undefined),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/projects/{projectKey}/quality', {
@@ -730,10 +733,11 @@ export function useTestRun(id: number) {
   })
 }
 
-export function useTestRunSummary(id: number) {
+export function useTestRunSummary(id: number, running = false) {
   return useQuery({
     queryKey: [...keys.testRun(id), 'summary'],
     enabled: id > 0,
+    refetchInterval: running ? 2000 : false,
     queryFn: async () =>
       unwrap(await api.GET('/api/v1/test-runs/{testRunId}/summary', { params: { path: { testRunId: id } } })),
   })

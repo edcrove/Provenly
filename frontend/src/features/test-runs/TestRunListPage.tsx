@@ -18,9 +18,11 @@ import { positiveInt } from '@/lib/status'
 export function TestRunListPage() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
-  const { project } = useCurrentProject()
-  // ?suite=<key>: the runs of one suite (linked from the suite page).
+  const { project: current } = useCurrentProject()
+  // ?project=<key>&suite=<key>: the runs of one suite (linked from the suite page). Suite keys are per project, so
+  // the link's project wins over the one chosen in the header.
   const suite = params.get('suite') ?? ''
+  const project = (suite && params.get('project')) || current
   const query = useTestRuns(page, project || undefined, suite || undefined)
   const projects = useProjects()
   const projectKey = (id: number) => projects.data?.items.find((p) => p.id === id)?.key ?? '—'
@@ -42,7 +44,12 @@ export function TestRunListPage() {
         </div>
         {suite ? (
           <p className="text-muted-foreground text-sm" data-testid="suite-filter">
-            Runs of suite <span className="font-mono">{suite}</span> ·{' '}
+            Runs of suite{' '}
+            <span className="font-mono">
+              {project ? `${project}/` : ''}
+              {suite}
+            </span>{' '}
+            ·{' '}
             <Link to="/test-runs" className="underline">
               All runs
             </Link>
@@ -73,7 +80,11 @@ export function TestRunListPage() {
                   {data.items.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={11} className="text-muted-foreground">
-                        No test runs yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.
+                        {suite
+                          ? `No runs of suite ${suite} yet.`
+                          : project
+                            ? `No test runs in ${project} yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.`
+                            : 'No test runs yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.'}
                       </TableCell>
                     </TableRow>
                   )}
@@ -100,6 +111,7 @@ export function TestRunListPage() {
                       </TableCell>
                       <TableCell className="tabular-nums" data-testid="pass-rate">
                         {run.outcome.executed > 0 ? formatPercent(run.outcome.passRate) : '—'}
+                        {run.executionStatus === 'running' && run.outcome.executed > 0 ? ' so far' : ''}
                       </TableCell>
                       <TableCell data-testid="outcome-breakdown">
                         {outcomeBreakdown(run.outcome)

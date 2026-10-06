@@ -25,6 +25,15 @@ export function AcceptInvitePage() {
   const set = (field: keyof typeof empty) => (e: { target: { value: string } }) =>
     setValues((v) => ({ ...v, [field]: e.target.value }))
   const fieldErrors = accept.error instanceof ApiError ? accept.error.fieldErrors : {}
+  // Each refused field is marked and says why, next to the field (not only in the summary above the form).
+  const invalid = (field: string) =>
+    fieldErrors[field] ? { 'aria-invalid': true, 'aria-describedby': `invite-${field}-error` } : {}
+  const fieldError = (field: string, label: string) =>
+    fieldErrors[field] ? (
+      <p id={`invite-${field}-error`} className="text-destructive text-sm">
+        {label} {fieldErrors[field]}
+      </p>
+    ) : null
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -72,8 +81,9 @@ export function AcceptInvitePage() {
                   value={values.username}
                   onChange={set('username')}
                   required
-                  aria-invalid={fieldErrors.username ? true : undefined}
+                  {...invalid('username')}
                 />
+                {fieldError('username', 'Username')}
                 <p className="text-muted-foreground text-xs">
                   3 to 32 lower-case letters, digits, &apos;.&apos;, &apos;-&apos; or &apos;_&apos;. It never
                   changes.
@@ -86,11 +96,20 @@ export function AcceptInvitePage() {
                   value={values.displayName}
                   onChange={set('displayName')}
                   required
+                  {...invalid('displayName')}
                 />
+                {fieldError('displayName', 'Display name')}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="invite-email">Email (optional)</Label>
-                <Input id="invite-email" type="email" value={values.email} onChange={set('email')} />
+                <Input
+                  id="invite-email"
+                  type="email"
+                  value={values.email}
+                  onChange={set('email')}
+                  {...invalid('email')}
+                />
+                {fieldError('email', 'Email')}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="invite-password">Password</Label>
@@ -102,7 +121,9 @@ export function AcceptInvitePage() {
                   onChange={set('password')}
                   required
                   minLength={10}
+                  {...invalid('password')}
                 />
+                {fieldError('password', 'Password')}
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="invite-confirm">Repeat password</Label>

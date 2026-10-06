@@ -146,7 +146,7 @@ export function IssuesPage() {
                     {data.items.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={4} className="text-muted-foreground">
-                          No issues here.
+                          {state ? `No ${state} issues.` : 'No issues here.'}
                         </TableCell>
                       </TableRow>
                     )}

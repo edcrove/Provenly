@@ -99,3 +99,29 @@ func TestIntegrations(t *testing.T) {
 	member.DELETE(github).Expect().Status(http.StatusForbidden)
 	member.POST(github + "/sync").Expect().Status(http.StatusForbidden)
 }
+
+// TestMalformedPathSegments: a {projectKey} or {username} that cannot be one is a 400 on every route, before any
+// lookup (a NUL or invalid UTF-8 byte used to reach the database as a 500).
+func TestMalformedPathSegments(t *testing.T) {
+	s := fresh(t)
+	admin := api(t, s, 1<<20)
+	for _, key := range []string{"\x00", "\xff", "tc", "T", "TOOLONGKEY1"} {
+		base := "/api/v1/projects/" + key
+		for _, req := range []struct{ method, path string }{
+			{http.MethodGet, "/webhooks"}, {http.MethodPost, "/webhooks"}, {http.MethodPatch, "/webhooks/1"},
+			{http.MethodPost, "/webhooks/1/ping"}, {http.MethodGet, "/webhooks/1/deliveries"}, {http.MethodGet, "/github"},
+			{http.MethodPut, "/github"}, {http.MethodDelete, "/github"}, {http.MethodPost, "/github/sync"},
+		} {
+			admin.Request(req.method, base+req.path).WithJSON(map[string]any{}).Expect().Status(http.StatusBadRequest).
+				JSON(problemOpts).Object().HasValue("code", "validation_error").
+				Value("errors").Array().Value(0).Object().HasValue("field", "projectKey")
+		}
+	}
+	for _, username := range []string{"\x00", "\xff", "ab", "Admin", strings.Repeat("a", 33)} {
+		member := "/api/v1/projects/TC/members/" + username
+		admin.PUT(member).WithJSON(map[string]any{"role": "viewer"}).Expect().Status(http.StatusBadRequest).
+			JSON(problemOpts).Object().HasValue("code", "validation_error").
+			Value("errors").Array().Value(0).Object().HasValue("field", "username")
+		admin.DELETE(member).Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "validation_error")
+	}
+}

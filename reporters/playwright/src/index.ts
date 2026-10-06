@@ -82,6 +82,16 @@ interface Attempt {
   details: string
 }
 
+/** The live events API's limits: a longer field fails the whole batch (400), so names are clipped. */
+export const MAX_TEST_NAME = 1000
+const MAX_TEST_CASE = 100
+
+/** The first max characters (code points, as the API counts them) of s. */
+export function clip(s: string, max: number): string {
+  const chars = Array.from(s)
+  return chars.length > max ? chars.slice(0, max).join('') : s
+}
+
 const TC_ID = /\b([A-Z][A-Z0-9]{1,9}-\d+)\b/g
 
 /** The TC-ID a test declares: a `tc-id` annotation, a `@KEY-n` tag, or the last KEY-n in its title. */
@@ -94,6 +104,11 @@ export function tcIdOf(test: PwTestCase): string {
   }
   const matches = [...test.title.matchAll(TC_ID)]
   return matches.length ? matches[matches.length - 1][1] : ''
+}
+
+/** A TC-ID for a live event: none when empty or too long to be one (the final report still carries it). */
+function liveTestCase(id: string): string | undefined {
+  return id && Array.from(id).length <= MAX_TEST_CASE ? id : undefined
 }
 
 /** Playwright's outcome as a Provenly result status. */
@@ -220,8 +235,8 @@ export default class ProvenlyReporter {
       eventId: key,
       sequence: ++this.sequence,
       type,
-      testName: test?.titlePath().join(' › '),
-      testCase: test ? tcIdOf(test) || undefined : undefined,
+      testName: test ? clip(test.titlePath().join(' › '), MAX_TEST_NAME) : undefined,
+      testCase: test ? liveTestCase(tcIdOf(test)) : undefined,
       status,
       occurredAt: this.now().toISOString(),
       attempt,

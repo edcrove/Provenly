@@ -25,6 +25,7 @@ type Querier interface {
 	InsertAmendment(ctx context.Context, arg InsertAmendmentParams) (TestRunAmendment, error)
 	InsertExpectedCases(ctx context.Context, arg InsertExpectedCasesParams) error
 	// One recorded result of a running run; a re-test of the same test is its next attempt.
+	// Nothing is inserted past the last allowed attempt (the column's CHECK would fail the transaction instead).
 	InsertManualResult(ctx context.Context, arg InsertManualResultParams) (TestResult, error)
 	InsertParseErrors(ctx context.Context, arg []InsertParseErrorsParams) (int64, error)
 	// Appends one live event; an event id already received for the run is a duplicate delivery and is skipped (0 rows).
@@ -43,9 +44,13 @@ type Querier interface {
 	// For each given test case, its latest run with a conclusive logical status (passed, failed or error; skipped runs are
 	// inconclusive) and that status. The logical status of a test case in a run is the highest attempt of each test,
 	// aggregated failed > error > skipped > passed, as in summaries.
+	// Runs are walked newest first per test case and the walk stops at the first conclusive one (index
+	// test_results_case_run_valid_idx), instead of aggregating every run of the test case's history.
 	ListLatestConclusive(ctx context.Context, testCaseIds []int64) ([]ListLatestConclusiveRow, error)
 	// The valid results of each given test case in the latest run that has one for it (status, test and attempt), to
 	// read its latest status (requirement coverage).
+	// The latest run is found first, once per test case (index test_results_case_run_valid_idx), then only its results
+	// are read.
 	ListLatestResults(ctx context.Context, testCaseIds []int64) ([]ListLatestResultsRow, error)
 	ListParseErrors(ctx context.Context, arg ListParseErrorsParams) ([]ListParseErrorsRow, error)
 	// The page is chosen first (index on test_case_id, id DESC) and each run's counts

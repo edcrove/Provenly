@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import ProvenlyReporter, { junitXml, statusOf, tcIdOf, type PwTestCase, type PwTestResult } from './index.ts'
+import ProvenlyReporter, { MAX_TEST_NAME, clip, junitXml, statusOf, tcIdOf, type PwTestCase, type PwTestResult } from './index.ts'
 
 const now = new Date('2026-10-05T12:00:00Z')
 
@@ -49,6 +49,11 @@ describe('helpers', () => {
     expect(tcIdOf(test({ annotations: [{ type: 'tc-id' }], tags: ['@smoke', '@CHK-9'] }))).toBe('CHK-9')
     expect(tcIdOf(test())).toBe('CHK-12')
     expect(tcIdOf(test({ title: 'no id here', tags: ['@smoke'] }))).toBe('')
+  })
+
+  it('clips by characters, not UTF-16 units', () => {
+    expect(clip('abc', 5)).toBe('abc')
+    expect(clip('😀😀😀', 2)).toBe('😀😀')
   })
 
   it('maps Playwright outcomes', () => {
@@ -199,5 +204,26 @@ describe('ProvenlyReporter', () => {
       globalThis.fetch = original
       warn.mockRestore()
     }
+  })
+})
+
+describe('live event limits', () => {
+  it('clips a long test name and drops an over-long TC-ID instead of losing the whole batch', async () => {
+    const f = fakeFetch([json({ id: 42 })])
+    const r = new ProvenlyReporter({
+      fetch: f.fn,
+      log: vi.fn(),
+      now: () => now,
+      flushEvery: 1,
+      env: { PROVENLY_URL: 'https://provenly.test', PROVENLY_API_KEY: 'pk_1', GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '1', GITHUB_RUN_ATTEMPT: '1' },
+    })
+    r.onBegin()
+    const long = test({ titlePath: () => ['', 'x.spec.ts', '😀'.repeat(1500)], annotations: [{ type: 'tc-id', description: 'C'.repeat(101) }] })
+    r.onTestBegin(long, result())
+    await r.onEnd({ status: 'passed' })
+    const event = JSON.parse(f.calls[1].body).events[0]
+    expect(Array.from(event.testName)).toHaveLength(MAX_TEST_NAME)
+    expect(event.testName.startsWith(' › x.spec.ts › 😀')).toBe(true)
+    expect(event.testCase).toBeUndefined()
   })
 })

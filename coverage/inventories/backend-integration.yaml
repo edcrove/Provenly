@@ -116,3 +116,9 @@ targets:
     description: GitHub connector on a real database - the token is stored encrypted and shown as a hint; a sync mirrors issues (not pull requests) by number with their state, a second sync updates them; a failed sync is recorded and keeps the last successful time; disconnecting keeps the mirrored issues; another secrets key cannot read the token (no hint, sync asks to connect again)
   - id: BE-INT-057
     description: audit log on a real database through the API - every successful authenticated change (projects, test cases, webhooks; ten concurrent creations) is one event with actor, route, path, project and status, refused changes and reads are not; events filter by project and actor; the database refuses updates, deletes and malformed events (empty actor, reads, failures, empty path)
+  - id: BE-INT-058
+    description: latest results cost - the latest statuses and the latest conclusive result of a test case whose only result is deep in history cost no more than those of a test case in the newest run (relative bound over 100,000 later results); the stale test case keeps its old result
+  - id: BE-INT-059
+    description: concurrent link replacements - twenty concurrent replacements of a requirement's, an issue's and a static suite's test cases, ten rounds each, always end as exactly one caller's set (never a union)
+  - id: BE-INT-060
+    description: concurrent taxonomy creations - ten concurrent dimension creations at the 30-dimension limit leave exactly 30; twenty concurrent value creations get distinct, gapless positions

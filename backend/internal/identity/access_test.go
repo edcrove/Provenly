@@ -172,6 +172,9 @@ func TestMemberRoutes(t *testing.T) {
 		{"PUT", "/api/v1/projects/CHK/members/ana", `{"role":"owner"}`, 400},
 		{"PUT", "/api/v1/projects/CHK/members/ana", "", 415},
 		{"DELETE", "/api/v1/projects/NOPE/members/ana", "", 404},
+		{"PUT", "/api/v1/projects/CHK/members/%00", `{"role":"member"}`, 400},
+		{"PUT", "/api/v1/projects/CHK/members/Ana", `{"role":"member"}`, 400},
+		{"DELETE", "/api/v1/projects/CHK/members/%FF", "", 400},
 	} {
 		assert.Equal(t, c.want, h.do(c.method, c.target, c.body, auth).Code, c.method+" "+c.target)
 	}

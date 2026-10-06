@@ -83,7 +83,11 @@ export function AccountPage() {
                 onChange={set('newPassword')}
                 required
                 minLength={10}
+                aria-describedby="new-password-hint"
               />
+              <p className="text-muted-foreground text-xs" id="new-password-hint">
+                At least 10 characters, at most 72 bytes (letters outside ASCII count as 2 to 4).
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="confirm-password">Repeat new password</Label>

@@ -60,7 +60,7 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P2-1 | Bootstrap | The first administrator comes from `PROVENLY_ADMIN_USERNAME` / `PROVENLY_ADMIN_PASSWORD` when there are no users; demo and qa ship a published demo password, prod refuses it | Self-hosting needs a first account without a setup wizard race; config is how the other settings already arrive |
 | P2-2 | Session transport | HS256 JWT (12 h) returned by sign-in and also set as an HttpOnly, SameSite=Strict cookie; the API accepts `Authorization: Bearer` or the cookie | The browser never sees the token (no XSS theft), scripts and CI tools use the bearer form; SameSite=Strict plus JSON-only bodies covers CSRF |
 | P2-3 | Revocation | Stateless sessions, but each request re-reads the user and a password-version claim signs every other session out on a password change | Real revocation without a session table; per-request user read is needed for roles anyway (feature 3) |
-| P2-4 | Passwords | bcrypt cost 12, 10 characters to 72 bytes (bcrypt's limit, never truncated silently); one answer for unknown user and wrong password, with equal timing | NIST-style minimum length, no composition rules; no account enumeration |
+| P2-4 | Passwords | bcrypt cost 12, at least 10 characters (counted as characters, 2026-10-06) to 72 bytes (bcrypt's limit, never truncated silently); one answer for unknown user and wrong password, with equal timing | NIST-style minimum length, no composition rules; no account enumeration |
 | P2-5 | Invitations | Single-use link, 7 days, optional email (prefills the account's email), revocable while pending; only the SHA-256 of the token is stored; shown once | MVP D13 (invitation link, email optional); a leaked database does not leak usable links |
 | P2-6 | Who may invite | Only administrators manage users and invitations in this feature; feature 3 replaces this with roles | Smallest rule until roles exist |
 | P2-7 | Ingestion | Stays public until CI API keys exist (feature 4) | CI cannot sign in with a person's account; keys are the MVP answer (D4, D11) |
@@ -361,6 +361,8 @@ Notion Decision Register; each one ships in its own PR.
 - **Supply chain (card #50):** every GitHub Action is pinned to a commit SHA with its version as a comment
   (`scripts/docs-check.sh` fails on an unpinned `uses:`), and Dependabot proposes updates for actions, Go modules,
   npm packages and Docker images.
+- **Passwords (card #60):** the minimum counts characters, not bytes (`contraseña` is 10); the maximum stays 72 bytes and the
+  forms and the error say non-ASCII letters count as 2 to 4. Same rule for `PROVENLY_ADMIN_PASSWORD`.
 
 ### 24. Review-panel audit (2026-10-06): fixes
 

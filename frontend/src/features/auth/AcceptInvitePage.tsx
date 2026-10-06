@@ -123,6 +123,9 @@ export function AcceptInvitePage() {
                   minLength={10}
                   {...invalid('password')}
                 />
+                <p className="text-muted-foreground text-xs" id="invite-password-hint">
+                  At least 10 characters, at most 72 bytes (letters outside ASCII count as 2 to 4).
+                </p>
                 {fieldError('password', 'Password')}
               </div>
               <div className="grid gap-2">

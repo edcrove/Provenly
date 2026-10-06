@@ -160,10 +160,14 @@ func TestChangePasswordSignsOtherSessionsOut(t *testing.T) {
 
 func TestPasswordRules(t *testing.T) {
 	var v apperr.Validator
-	validatePassword(&v, "password", strings.Repeat("x", MinPasswordBytes))
+	validatePassword(&v, "password", strings.Repeat("x", MinPasswordChars))
 	validatePassword(&v, "password", strings.Repeat("x", MaxPasswordBytes))
+	validatePassword(&v, "password", "contraseña")            // 10 characters, 11 bytes
+	validatePassword(&v, "password", strings.Repeat("ñ", 36)) // 36 characters, exactly 72 bytes
 	assert.NoError(t, v.Err())
-	for _, p := range []string{"", strings.Repeat("x", MinPasswordBytes-1), strings.Repeat("x", MaxPasswordBytes+1), "abcdefghij\x00", "\xffabcdefghij"} {
+	// The minimum counts characters, the maximum bytes: 5 two-byte letters are 10 bytes but only 5 characters.
+	for _, p := range []string{"", strings.Repeat("x", MinPasswordChars-1), strings.Repeat("x", MaxPasswordBytes+1), "abcdefghij\x00", "\xffabcdefghij",
+		strings.Repeat("ñ", 5), strings.Repeat("😀", 19)} {
 		var v apperr.Validator
 		validatePassword(&v, "password", p)
 		assert.Error(t, v.Err(), "%q", p)

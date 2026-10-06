@@ -24,7 +24,7 @@ import (
 
 // Limits and formats of the identity module.
 const (
-	MinPasswordBytes = 10
+	MinPasswordChars = 10
 	// MaxPasswordBytes is bcrypt's input limit: longer passwords would be silently truncated.
 	MaxPasswordBytes = 72
 	maxDisplayName   = 100
@@ -402,9 +402,12 @@ func validateUsername(v *apperr.Validator, username string) {
 	v.Check(UsernamePattern.MatchString(username), "username", UsernameMessage)
 }
 
+// validatePassword checks the length in characters at the bottom (what people count) and in bytes at the top (bcrypt's
+// limit, never truncated): a 10-character password of multi-byte characters is not a 5-character one.
 func validatePassword(v *apperr.Validator, field, password string) {
-	v.Check(len(password) >= MinPasswordBytes, field, fmt.Sprintf("must be at least %d characters", MinPasswordBytes))
-	v.Check(len(password) <= MaxPasswordBytes, field, fmt.Sprintf("must be at most %d bytes", MaxPasswordBytes))
+	v.Check(utf8.RuneCountInString(password) >= MinPasswordChars, field, fmt.Sprintf("must be at least %d characters", MinPasswordChars))
+	v.Check(len(password) <= MaxPasswordBytes, field,
+		fmt.Sprintf("must be at most %d bytes (letters outside ASCII count as 2 to 4)", MaxPasswordBytes))
 	v.CheckText(field, password)
 }
 

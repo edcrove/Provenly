@@ -134,13 +134,14 @@ func contentEncoding(raw string) (gzipped, ok bool) {
 	return false, false
 }
 
-// gzipError turns a broken gzip stream into a client error; a body over the size limit stays a 413.
+// gzipError turns a broken gzip stream into an unreadable report (400 invalid_junit, like a broken XML document); a
+// body over the size limit stays a 413.
 func gzipError(err error) error {
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
 		return err
 	}
-	return apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "body", Message: "is not valid gzip: " + err.Error()})
+	return apperr.InvalidDocument("body is not valid gzip: %v", err)
 }
 
 // decompressed reads a gzip stream up to a limit of decompressed bytes.

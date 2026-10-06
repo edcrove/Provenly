@@ -45,7 +45,8 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 
 ## Identity and sessions (module `identity`)
 
-- Local accounts (MVP D13): username (lower-case, immutable) + bcrypt password (cost 12, 10 characters to 72 bytes).
+- Local accounts (MVP D13): username (lower-case, immutable) + bcrypt password (cost 12, at least 10 characters counted as characters, at most 72 bytes: bcrypt's
+  limit, never truncated; the forms say so).
   Users are never deleted (trigger). The first administrator is created on start when there are no users, from
   `PROVENLY_ADMIN_USERNAME` / `PROVENLY_ADMIN_PASSWORD`; prod refuses the public demo password.
 - New people join through single-use invitation links (7 days; email optional). Only the SHA-256 of the token is
@@ -93,7 +94,7 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   or step change; the service checks the precondition under the row lock in the write's transaction.
 - Ingestion: `POST /api/v1/ingestion/junit?provider=&runId=&runAttempt=[&pipeline=&branch=&commit=]` with the
   JUnit XML as `application/xml` body (one request per complete report; `text/xml` and `*+xml` too; a Content-Type
-  `charset` overrides the XML declaration; `Content-Encoding: gzip` is accepted with the size limit on the decompressed body, other encodings are a 415; every parameter error is listed at once). `201` creates the run, `200` is an idempotent
+  `charset` overrides the XML declaration; `Content-Encoding: gzip` is accepted with the size limit on the decompressed body (a broken gzip stream is `400 invalid_junit`), other encodings are a 415; every parameter error is listed at once). `201` creates the run, `200` is an idempotent
   replay (nothing re-processed).
 - Sharded runs (card #57): `?shard=i/N` (2 ≤ N ≤ 100) makes a report one of the N of a logical run (same provider,
   runId and runAttempt). The first shard creates the run (mode `sharded`, `running`, snapshot taken then); each shard is
@@ -232,8 +233,11 @@ password (so a locked account costs no bcrypt), counts `invalid username or pass
 ## Retries (MVP D1)
 
 Each result stores its `attempt` (from Surefire flaky/rerun elements or an `attempt`/`retry` property). A test is its
-suite + class + name in the run; its highest attempt is its logical result (flaky when it passed after a failed or
-errored attempt). The summary aggregates logical results per TC-ID with failed > error > skipped > passed.
+suite + class + name in the run; its highest attempt is its logical result (flaky when every result of it passed after a
+failed or errored attempt). Repeated names without an attempt signal share their attempt and stay variants (the
+ingestion warns how many). The summary aggregates logical results per TC-ID with failed > error > skipped > passed, and
+a TC-ID whose aggregate is failed or error is never flaky (a variant failed for good); `ListFlakyCounts` and
+`ListLatestConclusive` apply the same rules in SQL.
 
 ## JUnit → TC-ID extraction
 

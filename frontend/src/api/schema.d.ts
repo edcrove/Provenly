@@ -5243,8 +5243,8 @@ export interface operations {
         };
         /**
          * @description The JUnit XML document, uncompressed or gzip (`Content-Encoding: gzip`; the
-         *     size limit applies to the decompressed report and a broken gzip stream is a
-         *     400; any other encoding is a 415). `application/xml`, `text/xml` and any `+xml` media
+         *     size limit applies to the decompressed report; a body that is not gzip, truncated or
+         *     corrupt is an unreadable report, `400 invalid_junit`; any other encoding is a 415). `application/xml`, `text/xml` and any `+xml` media
          *     type are accepted. A `charset` parameter overrides the document's XML
          *     declaration (RFC 7303); UTF-8, US-ASCII, ISO-8859-1, windows-1252 and
          *     UTF-16 are supported, any other charset is a 415.

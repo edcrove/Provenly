@@ -248,6 +248,7 @@ func parse(r io.Reader, charset string, nameRef *regexp.Regexp) (Report, error) 
 	}
 	rep := Report{nameRef: nameRef}
 	walk(&rep, root, "")
+	rep.noticeVariants()
 	return rep, nil
 }
 
@@ -384,6 +385,31 @@ func walk(rep *Report, s xmlSuite, parent string) {
 	}
 	for _, child := range s.Suites {
 		walk(rep, child, suite)
+	}
+}
+
+// VariantsNotice tells that testcases repeat another's suite, class and name without an attempt or retry signal:
+// they are kept as variants of one test, and a failed one fails the test case (never read as a flaky retry).
+const VariantsNotice = "%d testcase(s) repeat the suite, class and name of another without an attempt or retry signal: " +
+	"counted as variants, a failure among them fails the test case"
+
+// noticeVariants counts the results that share suite, class, name and attempt with an earlier one.
+func (rep *Report) noticeVariants() {
+	type key struct {
+		suite, class, name string
+		attempt            int
+	}
+	seen := make(map[key]bool, len(rep.Results))
+	n := 0
+	for _, r := range rep.Results {
+		k := key{r.SuiteName, r.ClassName, r.TestName, r.Attempt}
+		if seen[k] {
+			n++
+		}
+		seen[k] = true
+	}
+	if n > 0 {
+		rep.notice(fmt.Sprintf(VariantsNotice, n))
 	}
 }
 

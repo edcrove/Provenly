@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/edcrove/provenly/backend/internal/app"
+	"github.com/edcrove/provenly/backend/internal/ingestion/junit"
 	"github.com/edcrove/provenly/backend/internal/platform/postgres"
 	"github.com/edcrove/provenly/backend/internal/platform/telemetry"
 )
@@ -213,6 +214,11 @@ func TestAuthentication(t *testing.T) {
 	}
 	accept(invToken, "Admin").Status(http.StatusConflict).JSON(problemOpts).Object().HasValue("code", "conflict")
 	accept(invToken, "x").Status(http.StatusBadRequest)
+	// Passwords: at least 10 characters (5 two-byte letters are not enough), at most 72 bytes (bcrypt's limit).
+	for _, pw := range []string{strings.Repeat("ñ", 5), strings.Repeat("p", 73)} {
+		e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": invToken, "username": "pat", "displayName": "Pat", "password": pw}).
+			Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().Value("errors").Array().Value(0).Object().HasValue("field", "password")
+	}
 	e.POST("/api/v1/invitations/accept").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
 	ana := accept(invToken, "ana").Status(http.StatusCreated).JSON().Object()
 	ana.Value("user").Object().HasValue("username", "ana").HasValue("isAdmin", false).HasValue("email", "ana@example.com")
@@ -792,8 +798,12 @@ func TestIngestionMediaTypes(t *testing.T) {
 	_ = ow.Close()
 	send("gzip", "application/xml", other.Bytes()).WithHeader("Content-Encoding", "gzip").Expect().
 		Status(http.StatusOK).JSON().Object().HasValue("created", false).Value("warnings").Array().Length().IsEqual(1)
-	send("gzip-broken", "application/xml", []byte{0x1f, 0x8b}).WithHeader("Content-Encoding", "gzip").Expect().
-		Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "validation_error")
+	// A body that is not gzip, truncated or corrupt is an unreadable report: 400 invalid_junit.
+	for name, body := range map[string][]byte{"broken": {0x1f, 0x8b}, "truncated": zipped.Bytes()[:15], "plain": []byte(`<testsuite/>`)} {
+		send("gzip-"+name, "application/xml", body).WithHeader("Content-Encoding", "gzip").Expect().
+			Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "invalid_junit").
+			Value("detail").String().HasPrefix("body is not valid gzip")
+	}
 	send("br", "application/xml", []byte(`<testsuite/>`)).WithHeader("Content-Encoding", "br").Expect().
 		Status(http.StatusUnsupportedMediaType).JSON(problemOpts).Object().HasValue("code", "unsupported_media_type")
 	var bomb bytes.Buffer
@@ -1252,6 +1262,14 @@ func TestQuality(t *testing.T) {
 	admin.GET("/api/v1/projects/TC/quality").WithQuery("staleDays", 7).WithQuery("window", 5).Expect().Status(http.StatusOK).
 		JSON().Object().Value("flaky").Object().HasValue("window", 5)
 	admin.GET("/api/v1/projects/TC/quality").WithQuery("staleDays", 366).Expect().Status(http.StatusBadRequest)
+
+	// A repeated name without an attempt signal is a variant: a failure among them fails the test case, which is then
+	// not flaky in that run (the ingestion says so).
+	same := `<testcase name="login"><properties><property name="tc-id" value="` + key + `"/></properties>`
+	ingest(admin, "94", 1, `<testsuite>`+same+`<failure message="x"/></testcase>`+same+`</testcase></testsuite>`).
+		Expect().Status(http.StatusCreated).JSON().Object().Value("warnings").Array().ContainsAny(fmt.Sprintf(junit.VariantsNotice, 1))
+	admin.GET("/api/v1/projects/TC/quality").Expect().Status(http.StatusOK).JSON().Object().
+		Value("flaky").Object().Value("testCases").Array().Value(0).Object().HasValue("testCaseKey", key).HasValue("runs", 1)
 	admin.GET("/api/v1/projects/TC/quality").WithQuery("window", "x").Expect().Status(http.StatusBadRequest)
 	admin.GET("/api/v1/projects/tc/quality").Expect().Status(http.StatusBadRequest)
 	admin.GET("/api/v1/projects/NOPE/quality").Expect().Status(http.StatusNotFound)

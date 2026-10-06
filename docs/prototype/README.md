@@ -60,7 +60,7 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P2-1 | Bootstrap | The first administrator comes from `PROVENLY_ADMIN_USERNAME` / `PROVENLY_ADMIN_PASSWORD` when there are no users; demo and qa ship a published demo password, prod refuses it | Self-hosting needs a first account without a setup wizard race; config is how the other settings already arrive |
 | P2-2 | Session transport | HS256 JWT (12 h) returned by sign-in and also set as an HttpOnly, SameSite=Strict cookie; the API accepts `Authorization: Bearer` or the cookie | The browser never sees the token (no XSS theft), scripts and CI tools use the bearer form; SameSite=Strict plus JSON-only bodies covers CSRF |
 | P2-3 | Revocation | Stateless sessions, but each request re-reads the user and a password-version claim signs every other session out on a password change | Real revocation without a session table; per-request user read is needed for roles anyway (feature 3) |
-| P2-4 | Passwords | bcrypt cost 12, 10 characters to 72 bytes (bcrypt's limit, never truncated silently); one answer for unknown user and wrong password, with equal timing | NIST-style minimum length, no composition rules; no account enumeration |
+| P2-4 | Passwords | bcrypt cost 12, at least 10 characters (counted as characters, 2026-10-06) to 72 bytes (bcrypt's limit, never truncated silently); one answer for unknown user and wrong password, with equal timing | NIST-style minimum length, no composition rules; no account enumeration |
 | P2-5 | Invitations | Single-use link, 7 days, optional email (prefills the account's email), revocable while pending; only the SHA-256 of the token is stored; shown once | MVP D13 (invitation link, email optional); a leaked database does not leak usable links |
 | P2-6 | Who may invite | Only administrators manage users and invitations in this feature; feature 3 replaces this with roles | Smallest rule until roles exist |
 | P2-7 | Ingestion | Stays public until CI API keys exist (feature 4) | CI cannot sign in with a person's account; keys are the MVP answer (D4, D11) |
@@ -92,15 +92,15 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 | P6-4 | Visibility | `amendmentCount` on every run (list, detail, history), an "edited" badge, an "Edited after creation" card with the history, and the summary splits "N in the snapshot + M included later" | DEC-42 asks for a visible mark in list, detail and API |
 | P6-5 | No undo | An amendment cannot be removed | Audit trail; a mistaken inclusion is visible with its reason. Revisit with the audit log (feature 20) if needed |
 | P6-6 | Actor | `authz.Guard.Actor` gives the signed-in user; API keys cannot amend | Amendments are human decisions |
-| P7-1 | Detecting retries | Only when the report says so: Surefire `<flakyFailure>`/`<flakyError>` (failed attempts before a pass) and `<rerunFailure>`/`<rerunError>` (attempts after a failure), or an `attempt` (1-based) / `retry` (0-based, Playwright) testcase property. Repeated names without a signal stay variants | Treating every repeated name as a retry would silently turn failed variants into flaky passes in existing reports |
+| P7-1 | Detecting retries | Only when the report says so: Surefire `<flakyFailure>`/`<flakyError>` (failed attempts before a pass) and `<rerunFailure>`/`<rerunError>` (attempts after a failure), or an `attempt` (1-based) / `retry` (0-based, Playwright) testcase property. Repeated names without a signal stay variants: they share their attempt, a failure among them fails the test case and the ingestion warns how many (2026-10-06) | Treating every repeated name as a retry would silently turn failed variants into flaky passes in existing reports |
 | P7-2 | Test identity | A test is its suite + class + name within the run; its attempts are numbered 1..100 | Variants (e.g. per browser) have different names and keep aggregating failed > error > skipped > passed (D1) |
-| P7-3 | Logical result | The highest attempt of each test (the later one on ties); a pass after a failed or errored attempt is `passed` and **flaky** | MVP D1, whatever the cause |
+| P7-3 | Logical result | The highest attempt of each test (every result of it on ties: variants); a pass after a failed or errored attempt is `passed` and **flaky**, unless the test case failed or errored in the run (2026-10-06) | MVP D1, whatever the cause |
 | P7-4 | Storage | Every attempt is stored as a result with `attempt`; `retried` (a later attempt exists) is derived in queries; results stay immutable | Nothing reported is lost; the history shows every attempt |
 | P7-5 | Exposure | `flaky` in run outcome and summary (TC-IDs), `flaky` per summary test case, `attempt` and `retried` per result; UI: flaky badge (list and detail), flaky test cases, attempt markers in results and history | Flaky passes count as passed but stay visible |
 | P7-6 | Limits | Attempts beyond 100 keep the last 100 with a warning; invalid attempt/retry values are first attempts with a warning; Surefire attempt details come from `<stackTrace>`, their duration is unknown | Broken reporters never fail ingestion |
 | P8-1 | Encodings | `Content-Encoding: gzip` (and `x-gzip`); no encoding or `identity` as before; anything else (br, deflate, lists) stays a 415 | D6; gzip is what CI tools produce with one command |
 | P8-2 | Size limit | `PROVENLY_MAX_INGEST_BYTES` applies to the decompressed report (413 problem past it) and the compressed body is read through the same limit | D6; a gzip bomb never expands past the limit in memory |
-| P8-3 | Broken streams | Not gzip, truncated or corrupt: 400 `validation_error` on `body` | Client error with the reason, never a 500 |
+| P8-3 | Broken streams | Not gzip, truncated or corrupt: 400 `invalid_junit` ("body is not valid gzip: …"); **superseded 2026-10-06** (it was `validation_error` on `body`) | An unreadable report, like broken XML; CI scripts branch on one code |
 | P8-4 | CI step | The API key page's ready-to-paste step now gzips the report (`gzip -c junit.xml \| curl ... --data-binary @-`) | Smaller uploads by default |
 | P9-1 | Model | Per-project **dimensions** with controlled **values** (key + display name) and free **tags** per test case; one value per dimension per test case | Planning #26: orthogonal dimensions, structured data for reporting, tags complement but do not replace them; multi-valued needs (several platforms) use tags |
 | P9-2 | Built-ins | Every project (existing ones by migration, new ones by a database trigger) gets feature, component, level, depth, type, risk and platform; level, depth, type and risk come with standard values, feature/component/platform start empty | Planning #26 list; **execution mode is not a dimension**: it is the existing `automated` flag (one source of truth) |
@@ -356,6 +356,11 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 The audit's open decisions and cards were refined by the product owner and the six personas and recorded in the
 Notion Decision Register; each one ships in its own PR.
 
+- **Variants and flaky (card #58):** repeated names without an attempt signal are variants of the test (a failure
+  among them fails the test case; the ingestion warns how many), and a test case that failed or errored in a run is
+  not flaky there, in the summary, the dashboard ranking and the latest status alike.
+- **Broken gzip is an unreadable report:** a body sent as gzip that is not gzip, truncated or corrupt answers
+  `400 invalid_junit` ("body is not valid gzip: …"), like broken XML (replaces P8-3, which said `validation_error`).
 - **Sharded runs (card #57):** one logical CI run may arrive as N reports (`?shard=i/N`; the Playwright reporter reads
   `--shard`): the first creates a running run, each shard is taken once, the last completes it (webhook once) and
   `POST /api/v1/ingestion/finalize` ends one whose shards will not all arrive as interrupted, naming the missing ones.
@@ -364,6 +369,8 @@ Notion Decision Register; each one ships in its own PR.
 - **Supply chain (card #50):** every GitHub Action is pinned to a commit SHA with its version as a comment
   (`scripts/docs-check.sh` fails on an unpinned `uses:`), and Dependabot proposes updates for actions, Go modules,
   npm packages and Docker images.
+- **Passwords (card #60):** the minimum counts characters, not bytes (`contraseña` is 10); the maximum stays 72 bytes and the
+  forms and the error say non-ASCII letters count as 2 to 4. Same rule for `PROVENLY_ADMIN_PASSWORD`.
 
 ### 24. Review-panel audit (2026-10-06): fixes
 

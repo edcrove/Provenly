@@ -124,6 +124,8 @@ targets:
     description: concurrent link replacements - twenty concurrent replacements of a requirement's, an issue's and a static suite's test cases, ten rounds each, always end as exactly one caller's set (never a union)
   - id: BE-INT-060
     description: concurrent taxonomy creations - ten concurrent dimension creations at the 30-dimension limit leave exactly 30; twenty concurrent value creations get distinct, gapless positions
+  - id: BE-INT-061
+    description: repeated names without an attempt signal are variants - the ingestion warns how many, a failed variant fails the test case in the summary, the latest conclusive status and the flaky ranking, both are listed and neither is a retry; a test that passed on a retry is not flaky when another variant of its test case failed for good
   - id: BE-INT-062
     description: sharded runs - the first shard creates a running sharded run with its snapshot and waits for the others; a shard is taken once (a replay with another report warns), a different shard count or a report without shards is a conflict; the last shard completes the run with the worst shard status; each shard answers for its own results, diagnostics and parse errors; results carry and filter by shard; after the end a known shard is a replay
   - id: BE-INT-063

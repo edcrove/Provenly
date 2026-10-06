@@ -157,11 +157,12 @@ def main():
     check("ingest charset=shift_jis", call(base, "POST", "/ingestion/junit?" + q.format(9), raw=b"<testsuite/>", ctype="application/xml; charset=shift_jis")[0], 415)
     # gzip (prototype feature 8, D6): the limit applies to the decompressed report; broken streams are 400s.
     gz = lambda b: gzip.compress(b)
-    check("ingest broken gzip", call(base, "POST", "/ingestion/junit?" + q.format(9), raw=b"\x1f\x8b", ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 400)
+    for name, raw in [("broken", b"\x1f\x8b"), ("plain", b"<testsuite/>"), ("truncated", gz(b'<testsuite/>')[:15])]:
+        st, body = call(base, "POST", "/ingestion/junit?" + q.format(9), raw=raw, ctype="application/xml", headers={"Content-Encoding": "gzip"})
+        check(f"ingest {name} gzip is invalid_junit", f"{st} {body.get('code') if isinstance(body, dict) else body}", "400 invalid_junit")
     check("ingest gzip report", call(base, "POST", "/ingestion/junit?" + q.format(50), raw=gz(b'<testsuite><testcase name="gz"/></testsuite>'), ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 201)
     check("ingest x-gzip report", call(base, "POST", "/ingestion/junit?" + q.format(51), raw=gz(b'<testsuite/>'), ctype="application/xml", headers={"Content-Encoding": "x-gzip"})[0], 201)
     check("ingest gzip bomb (64 MB of spaces)", call(base, "POST", "/ingestion/junit?" + q.format(52), raw=gz(b" " * (64 << 20)), ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 413)
-    check("ingest truncated gzip", call(base, "POST", "/ingestion/junit?" + q.format(53), raw=gz(b'<testsuite/>')[:15], ctype="application/xml", headers={"Content-Encoding": "gzip"})[0], 400)
     check("ingest br body", call(base, "POST", "/ingestion/junit?" + q.format(9), raw=b"<testsuite/>", ctype="application/xml", headers={"Content-Encoding": "br"})[0], 415)
     # Shards (card #57): ?shard=i/N with 2 <= N <= 100; malformed is 400, a mismatching N or no shard on a sharded run 409,
     # finalization ends a waiting run once.

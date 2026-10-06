@@ -187,7 +187,8 @@ func TestIngestHandlerContentEncodings(t *testing.T) {
 	} {
 		rec := send("gzip", body)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, name)
-		assert.Contains(t, rec.Body.String(), "is not valid gzip", name)
+		assert.Contains(t, rec.Body.String(), "body is not valid gzip", name)
+		assert.Contains(t, rec.Body.String(), `"code":"invalid_junit"`, name, "an unreadable report, like broken XML")
 	}
 	noise := make([]byte, 4096)
 	_, _ = rand.Read(noise)

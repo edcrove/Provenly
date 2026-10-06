@@ -242,6 +242,23 @@ func TestParseKeepsEveryFailureOfATestcase(t *testing.T) {
 	assert.Empty(t, rep.Errors)
 }
 
+// Repeated names without an attempt signal stay variants (P7-1) and the report says how many there are.
+func TestParseNoticesRepeatedNamesWithoutAnAttemptSignal(t *testing.T) {
+	rep, err := Parse(strings.NewReader(`<testsuites>
+<testsuite name="a"><testcase name="t" classname="c"><failure/></testcase><testcase name="t" classname="c"/><testcase name="t" classname="c"/></testsuite>
+<testsuite name="b"><testcase name="t" classname="c"/><testcase name="u" classname="c"><flakyFailure/></testcase></testsuite>
+<testsuite name="r"><testcase name="p" classname="c"><properties><property name="retry" value="0"/></properties><failure/></testcase>
+  <testcase name="p" classname="c"><properties><property name="retry" value="1"/></properties></testcase></testsuite>
+</testsuites>`))
+	require.NoError(t, err)
+	assert.Equal(t, []string{fmt.Sprintf(VariantsNotice, 2)}, rep.Notices,
+		"two repeats in suite a; another suite, Surefire flaky attempts and numbered retries are not repeats")
+
+	rep, err = Parse(strings.NewReader(`<testsuite name="s"><testcase name="t"/><testcase name="u"/></testsuite>`))
+	require.NoError(t, err)
+	assert.Empty(t, rep.Notices)
+}
+
 func TestParseWarnsAboutIgnoredStructure(t *testing.T) {
 	rep, err := Parse(strings.NewReader(`<testsuites>
 <testsuite name="declared on suite"><properties><property name="tc-id" value="7"/></properties>

@@ -214,6 +214,11 @@ func TestAuthentication(t *testing.T) {
 	}
 	accept(invToken, "Admin").Status(http.StatusConflict).JSON(problemOpts).Object().HasValue("code", "conflict")
 	accept(invToken, "x").Status(http.StatusBadRequest)
+	// Passwords: at least 10 characters (5 two-byte letters are not enough), at most 72 bytes (bcrypt's limit).
+	for _, pw := range []string{strings.Repeat("ñ", 5), strings.Repeat("p", 73)} {
+		e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": invToken, "username": "pat", "displayName": "Pat", "password": pw}).
+			Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().Value("errors").Array().Value(0).Object().HasValue("field", "password")
+	}
 	e.POST("/api/v1/invitations/accept").WithText(`{}`).Expect().Status(http.StatusUnsupportedMediaType)
 	ana := accept(invToken, "ana").Status(http.StatusCreated).JSON().Object()
 	ana.Value("user").Object().HasValue("username", "ana").HasValue("isAdmin", false).HasValue("email", "ana@example.com")

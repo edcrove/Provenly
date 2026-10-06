@@ -281,6 +281,12 @@ describe('FE-INT-029 account', () => {
       }
       await u.click(screen.getByRole('button', { name: 'Change password' }))
     }
+    expect(screen.getByLabelText('New password')).toHaveAccessibleDescription(
+      'At least 10 characters, at most 72 bytes (letters outside ASCII count as 2 to 4).',
+    )
+    // 37 two-byte letters are 74 bytes: over bcrypt's limit although only 37 characters.
+    await fill('correct horse', 'ñ'.repeat(37), 'ñ'.repeat(37))
+    expect(await screen.findByRole('alert')).toHaveTextContent('newPassword: must be at most 72 bytes')
     await fill('correct horse', 'a brand new password', 'something else!')
     expect(screen.getByText('The new passwords do not match.')).toBeInTheDocument()
     await fill('wrong password', 'a brand new password', 'a brand new password')

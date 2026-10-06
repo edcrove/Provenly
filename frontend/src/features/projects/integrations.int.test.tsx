@@ -18,6 +18,10 @@ describe('FE-INT-044 project integrations', () => {
   it('FE-INT-044 a maintainer adds a webhook, sees its secret once, pings, pauses and reads its deliveries', async () => {
     const { user: u } = renderRoute('/projects/TC')
     expect(await screen.findByText('No webhooks yet.')).toBeInTheDocument()
+    // How long the delivery history lasts (card #51).
+    expect(screen.getByText(/Finished deliveries are kept 90 days by default/)).toHaveTextContent(
+      'PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS',
+    )
     await u.type(screen.getByLabelText('Endpoint URL'), 'https://hooks.example.com/p')
     await u.click(screen.getByRole('button', { name: 'Add webhook' }))
     expect(await screen.findByTestId('webhook-secret')).toHaveTextContent(/^whsec_0{48}$/)

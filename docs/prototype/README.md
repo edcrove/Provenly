@@ -391,6 +391,9 @@ Notion Decision Register; each one ships in its own PR.
   test case history; footnote "Blocked is stored as error"), CI runs keep `error`; a percentage of nothing reads "—"
   with its counts ("0 of 0 executed", a grey trend bar), while the API keeps 0; "Failures without an open issue (N)"
   replaces "New failures (no open issue)"; a manual run without results says "Nothing recorded yet."
+- **Retention (card #51):** finished webhook deliveries older than `PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS` (default
+  90, `0` keeps them) are purged hourly by the delivery worker, in batches of 1,000 under an advisory lock, and the
+  count is logged; pending deliveries, audit events and run results are never purged.
 
 
 ### 24. Review-panel audit (2026-10-06): fixes

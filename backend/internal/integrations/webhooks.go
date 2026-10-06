@@ -325,13 +325,20 @@ func truncate(s string, n int) string {
 	return s
 }
 
-// Run sends due deliveries every interval until ctx ends.
+// Run sends due deliveries every interval, and purges old ones every hour, until ctx ends.
 func (s *Service) Run(ctx context.Context, interval time.Duration) {
 	t := time.NewTicker(interval)
 	defer t.Stop()
+	var nextPurge time.Time
 	for {
 		if _, err := s.DeliverDue(ctx); err != nil && ctx.Err() == nil {
 			slog.ErrorContext(ctx, "webhook deliveries", "error", err)
+		}
+		if now := s.now(); !now.Before(nextPurge) {
+			nextPurge = now.Add(purgeEvery)
+			if _, err := s.PurgeDeliveries(ctx); err != nil && ctx.Err() == nil {
+				slog.ErrorContext(ctx, "webhook delivery purge", "error", err)
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -339,4 +346,34 @@ func (s *Service) Run(ctx context.Context, interval time.Duration) {
 		case <-t.C:
 		}
 	}
+}
+
+// purgeBatch is how many deliveries one purge statement deletes; purgeEvery how often the worker purges.
+const (
+	purgeBatch = 1000
+	purgeEvery = time.Hour
+)
+
+// PurgeDeliveries deletes the finished deliveries older than the retention, in batches, and logs how many; with no
+// retention it keeps everything. Pending deliveries, audit events and run results are never purged.
+func (s *Service) PurgeDeliveries(ctx context.Context) (int64, error) {
+	if s.cfg.DeliveryRetention <= 0 {
+		return 0, nil
+	}
+	before := s.now().Add(-s.cfg.DeliveryRetention)
+	var total int64
+	for {
+		n, err := s.repo.PurgeDeliveries(ctx, before, purgeBatch)
+		total += n
+		if err != nil {
+			return total, err
+		}
+		if n < purgeBatch {
+			break
+		}
+	}
+	if total > 0 {
+		slog.InfoContext(ctx, "webhook deliveries purged", "count", total, "before", before)
+	}
+	return total, nil
 }

@@ -379,6 +379,33 @@ func (q *Queries) ListWebhooks(ctx context.Context, projectID int64) ([]Webhook,
 	return items, nil
 }
 
+const purgeWebhookDeliveries = `-- name: PurgeWebhookDeliveries :execrows
+WITH purge_lock AS (SELECT pg_try_advisory_xact_lock($1::bigint) AS held),
+doomed AS (
+    SELECT d.id FROM webhook_deliveries d, purge_lock
+    WHERE purge_lock.held AND d.status <> 'pending' AND d.completed_at < $2
+    ORDER BY d.id LIMIT $3
+)
+DELETE FROM webhook_deliveries WHERE id IN (SELECT id FROM doomed)
+`
+
+type PurgeWebhookDeliveriesParams struct {
+	LockKey    int64
+	Before     pgtype.Timestamptz
+	BatchLimit int32
+}
+
+// Deletes up to batch_limit finished deliveries completed before `before` (the retention, decision 2026-10-06).
+// The advisory lock (held for this statement) keeps two servers from purging at once: the one that does not get it
+// deletes nothing. Pending deliveries are never purged.
+func (q *Queries) PurgeWebhookDeliveries(ctx context.Context, arg PurgeWebhookDeliveriesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeWebhookDeliveries, arg.LockKey, arg.Before, arg.BatchLimit)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const recordGitHubSync = `-- name: RecordGitHubSync :exec
 UPDATE github_connections SET last_synced_at = coalesce($1, last_synced_at), last_error = $2, updated_at = now()
 WHERE project_id = $3

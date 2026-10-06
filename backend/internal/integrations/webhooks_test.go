@@ -422,3 +422,42 @@ func TestRun(t *testing.T) {
 	}
 	assert.Equal(t, 3, f.repo.claims)
 }
+
+// Finished deliveries older than the retention are purged in batches until a short batch; no retention keeps all
+// (card #51).
+func TestPurgeDeliveries(t *testing.T) {
+	keep := newFixture(t, Config{}, maintainer())
+	keep.repo.purgeable = 5
+	n, err := keep.svc.PurgeDeliveries(context.Background())
+	require.NoError(t, err)
+	assert.Zero(t, n)
+	assert.Empty(t, keep.repo.purges, "no retention: never purged")
+
+	f := newFixture(t, Config{DeliveryRetention: 90 * 24 * time.Hour}, maintainer())
+	f.repo.purgeable = 2*purgeBatch + 7
+	n, err = f.svc.PurgeDeliveries(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(2*purgeBatch+7), n)
+	require.Len(t, f.repo.purges, 3, "two full batches, then a short one")
+	assert.Equal(t, now.Add(-90*24*time.Hour), f.repo.purges[0])
+
+	f.repo.purgeable = purgeBatch + 1
+	f.repo.errs["PurgeDeliveries"] = errBoom
+	n, err = f.svc.PurgeDeliveries(context.Background())
+	assert.ErrorIs(t, err, errBoom)
+	assert.Equal(t, int64(purgeBatch), n, "what was deleted before the failure")
+}
+
+// Run purges when it starts and then once per hour, and logs a failed purge without stopping.
+func TestRunPurges(t *testing.T) {
+	f := newFixture(t, Config{DeliveryRetention: time.Hour}, maintainer())
+	f.repo.errs["PurgeDeliveries"] = errBoom
+	ctx, cancel := context.WithCancel(context.Background())
+	f.repo.onClaim = func(n int) {
+		if n == 3 {
+			cancel()
+		}
+	}
+	f.svc.Run(ctx, time.Millisecond)
+	assert.Len(t, f.repo.purges, 1, "the clock did not move: one purge for three passes")
+}

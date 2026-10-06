@@ -31,6 +31,8 @@ type Config struct {
 	WebhooksAllowPrivate bool
 	// GitHubAPIURL is the GitHub REST API the GitHub connector calls (GitHub Enterprise or a test double).
 	GitHubAPIURL string
+	// WebhookDeliveryRetentionDays is how many days finished webhook deliveries are kept (default 90; 0 keeps them).
+	WebhookDeliveryRetentionDays int
 	// OTLPExport is true when an OpenTelemetry OTLP endpoint is configured (OTEL_EXPORTER_OTLP_ENDPOINT or
 	// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT): spans are then exported.
 	OTLPExport bool
@@ -44,6 +46,12 @@ const DemoAdminPassword = "provenly-demo"
 
 // secretsKeyBytes is the size of PROVENLY_SECRETS_KEY (AES-256).
 const secretsKeyBytes = 32
+
+// Webhook deliveries are kept 90 days by default; the maximum keeps the retention a valid duration.
+const (
+	defaultDeliveryRetentionDays = 90
+	maxDeliveryRetentionDays     = 36500
+)
 
 // minSecretBytes is the shortest accepted PROVENLY_JWT_SECRET (HS256 key size).
 const minSecretBytes = 32
@@ -106,6 +114,15 @@ func Load(getenv func(string) string) (Config, error) {
 			return Config{}, fmt.Errorf("PROVENLY_WEBHOOKS_ALLOW_PRIVATE must be a boolean, got %q", raw)
 		}
 		cfg.WebhooksAllowPrivate = b
+	}
+	cfg.WebhookDeliveryRetentionDays = defaultDeliveryRetentionDays
+	if raw := getenv("PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS"); raw != "" {
+		days, err := strconv.Atoi(raw)
+		if err != nil || days < 0 || days > maxDeliveryRetentionDays {
+			return Config{}, fmt.Errorf("PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS must be a whole number of days from 0 (keep) to %d, got %q",
+				maxDeliveryRetentionDays, raw)
+		}
+		cfg.WebhookDeliveryRetentionDays = days
 	}
 	cfg.GitHubAPIURL = strings.TrimRight(valueOr(getenv("PROVENLY_GITHUB_API_URL"), "https://api.github.com"), "/")
 	cfg.AdminUsername, cfg.AdminPassword = getenv("PROVENLY_ADMIN_USERNAME"), getenv("PROVENLY_ADMIN_PASSWORD")

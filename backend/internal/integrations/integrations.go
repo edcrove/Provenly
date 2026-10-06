@@ -106,6 +106,9 @@ type Repository interface {
 	GetGitHubConnection(ctx context.Context, projectID int64) (GitHubConnection, error)
 	DeleteGitHubConnection(ctx context.Context, projectID int64) (bool, error)
 	RecordGitHubSync(ctx context.Context, projectID int64, syncedAt *time.Time, lastError string) error
+	// PurgeDeliveries deletes up to limit finished deliveries completed before `before`, unless another server holds
+	// the purge lock; it returns how many it deleted.
+	PurgeDeliveries(ctx context.Context, before time.Time, limit int32) (int64, error)
 }
 
 // Catalog is what integrations need from the catalog module.
@@ -127,6 +130,8 @@ type Config struct {
 	AllowPrivate bool
 	// GitHubAPIURL is the GitHub REST API base URL.
 	GitHubAPIURL string
+	// DeliveryRetention is how long finished webhook deliveries are kept; 0 keeps them forever.
+	DeliveryRetention time.Duration
 }
 
 // Service is the integrations use cases.

@@ -74,3 +74,15 @@ DELETE FROM github_connections WHERE project_id = @project_id;
 -- name: RecordGitHubSync :exec
 UPDATE github_connections SET last_synced_at = coalesce(sqlc.narg('synced_at'), last_synced_at), last_error = @last_error, updated_at = now()
 WHERE project_id = @project_id;
+
+-- name: PurgeWebhookDeliveries :execrows
+-- Deletes up to batch_limit finished deliveries completed before `before` (the retention, decision 2026-10-06).
+-- The advisory lock (held for this statement) keeps two servers from purging at once: the one that does not get it
+-- deletes nothing. Pending deliveries are never purged.
+WITH purge_lock AS (SELECT pg_try_advisory_xact_lock(@lock_key::bigint) AS held),
+doomed AS (
+    SELECT d.id FROM webhook_deliveries d, purge_lock
+    WHERE purge_lock.held AND d.status <> 'pending' AND d.completed_at < @before
+    ORDER BY d.id LIMIT @batch_limit
+)
+DELETE FROM webhook_deliveries WHERE id IN (SELECT id FROM doomed);

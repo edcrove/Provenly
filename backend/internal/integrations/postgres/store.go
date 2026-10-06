@@ -191,3 +191,13 @@ func (s *Store) DeleteGitHubConnection(ctx context.Context, projectID int64) (bo
 func (s *Store) RecordGitHubSync(ctx context.Context, projectID int64, syncedAt *time.Time, lastError string) error {
 	return s.q.RecordGitHubSync(ctx, integrationsdb.RecordGitHubSyncParams{ProjectID: projectID, SyncedAt: timestamptz(syncedAt), LastError: lastError})
 }
+
+// PurgeDeliveries implements integrations.Repository.
+func (s *Store) PurgeDeliveries(ctx context.Context, before time.Time, limit int32) (int64, error) {
+	return s.q.PurgeWebhookDeliveries(ctx, integrationsdb.PurgeWebhookDeliveriesParams{
+		LockKey: purgeLockKey, Before: pgtype.Timestamptz{Time: before, Valid: true}, BatchLimit: limit,
+	})
+}
+
+// purgeLockKey is the advisory lock of the delivery purge ("provpurg").
+const purgeLockKey = 0x70726f76_70757267

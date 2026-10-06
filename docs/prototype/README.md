@@ -360,6 +360,8 @@ Notion Decision Register; each one ships in its own PR.
   project API keys keep working) and reactivate users, and give single-use password reset links (24 h); the
   `provenly reset-password <username>` command is the break-glass way back in. Nobody deactivates themselves and the
   last active administrator stays.
+- **Empty CI metadata (card #55):** `pipeline=`, `branch=` and `commit=` on the ingestion are the same as absent (a
+  documented exception to "present but empty is a 400"), stored as not set; replays compare them the same way.
 - **npm name (card #64):** the Playwright reporter is published unscoped as `provenly-playwright-reporter` (the
   `@provenly` scope is not this project's), with provenance; earlier mentions of `@provenly/playwright-reporter` refer
   to it.

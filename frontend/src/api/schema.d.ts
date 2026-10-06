@@ -5438,8 +5438,20 @@ export interface operations {
                 runId: string;
                 /** @example 1 */
                 runAttempt: number;
+                /**
+                 * @description Empty is the same as absent (a documented exception to "present but empty is a 400"): CI templates expand
+                 *     unset variables to empty, e.g. `branch=${GITHUB_HEAD_REF}` on a push build.
+                 */
                 pipeline?: string;
+                /**
+                 * @description Empty is the same as absent (a documented exception to "present but empty is a 400"): CI templates expand
+                 *     unset variables to empty, e.g. `branch=${GITHUB_HEAD_REF}` on a push build.
+                 */
                 branch?: string;
+                /**
+                 * @description Empty is the same as absent (a documented exception to "present but empty is a 400"): CI templates expand
+                 *     unset variables to empty, e.g. `branch=${GITHUB_HEAD_REF}` on a push build.
+                 */
                 commit?: string;
                 /**
                  * @description How the CI execution ended (the run's `executionStatus`). `interrupted` or

@@ -195,3 +195,13 @@ func TestIngestHandlerContentEncodings(t *testing.T) {
 	assert.Equal(t, http.StatusRequestEntityTooLarge, send("gzip", gz(t, string(noise))).Code,
 		"an incompressible report over the limit is too large while still compressed")
 }
+
+// An empty pipeline, branch or commit is the same as absent (card #55), unlike other present-but-empty parameters.
+func TestIngestHandlerEmptyRunMetadata(t *testing.T) {
+	api := &stubAPI{out: Outcome{Created: true}}
+	rec := post(api, 1024, "provider=github&runId=7&runAttempt=1&pipeline=&branch=&commit=", "application/xml", "<x/>")
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, RunMeta{Provider: "github", ProviderRunID: "7", RunAttempt: 1}, api.gotMeta)
+	rec = post(&stubAPI{}, 1024, "provider=github&runId=7&runAttempt=1&status=", "application/xml", "<x/>")
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "status stays strict")
+}

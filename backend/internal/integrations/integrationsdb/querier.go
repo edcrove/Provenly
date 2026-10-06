@@ -9,14 +9,17 @@ import (
 )
 
 type Querier interface {
-	// Leases up to max_items due deliveries for a minute: concurrent workers skip each other's rows, and a worker that
-	// dies leaves its rows due again once the lease ends.
+	// Leases up to max_items due deliveries for 5 minutes (longer than a worker pass can take: 20 deliveries of at most
+	// 10 s each): concurrent workers skip each other's rows, and a worker that dies leaves its rows due again once the
+	// lease ends.
 	ClaimDueDeliveries(ctx context.Context, maxItems int32) ([]WebhookDelivery, error)
 	CountDeliveries(ctx context.Context, webhookID int64) (int64, error)
 	CreateWebhook(ctx context.Context, arg CreateWebhookParams) (Webhook, error)
 	DeleteGitHubConnection(ctx context.Context, projectID int64) (int64, error)
-	// Records one delivery attempt: still pending (retry at next_attempt_at), succeeded or failed for good.
-	FinishAttempt(ctx context.Context, arg FinishAttemptParams) error
+	// Records one delivery attempt: still pending (retry at next_attempt_at), succeeded or failed for good. Only the
+	// attempt that was claimed is recorded: a late worker whose lease expired (the row was claimed and finished again)
+	// changes nothing.
+	FinishAttempt(ctx context.Context, arg FinishAttemptParams) (int64, error)
 	GetGitHubConnection(ctx context.Context, projectID int64) (GithubConnection, error)
 	GetWebhook(ctx context.Context, arg GetWebhookParams) (Webhook, error)
 	GetWebhookByID(ctx context.Context, id int64) (Webhook, error)

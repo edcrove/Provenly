@@ -159,6 +159,9 @@ func (s *Service) CreateDimension(ctx context.Context, projectID int64, in Dimen
 	}
 	var d Dimension
 	err := s.repo.InTx(ctx, func(r Repository) error {
+		if err := r.LockScope(ctx, "dimensions", projectID); err != nil {
+			return err
+		}
 		dims, err := r.ListDimensions(ctx, projectID)
 		if err != nil {
 			return err
@@ -203,6 +206,10 @@ func (s *Service) CreateDimensionValue(ctx context.Context, projectID int64, dim
 	}
 	var d Dimension
 	err := s.repo.InTx(ctx, func(r Repository) error {
+		// Count and number the values only once concurrent creations in this dimension are done.
+		if err := r.LockScope(ctx, "dimension "+dimensionKey, projectID); err != nil {
+			return err
+		}
 		dim, err := dimension(ctx, r, projectID, dimensionKey)
 		if err != nil {
 			return err

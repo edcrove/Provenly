@@ -211,14 +211,8 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 	if err != nil {
 		return execution.TestRun{}, notFound(err)
 	}
-	return toRun(runRow{
-		TestRun: executiondb.TestRun{
-			ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
-			RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
-			CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, ReportSha256: r.ReportSha256, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName, Mode: r.Mode, StartedBy: r.StartedBy,
-		},
-		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount,
-	}), nil
+	// sqlc.embed: the run's every column, so the mapping cannot drift from the table (audit F12).
+	return toRun(runRow{TestRun: r.TestRun, ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount}), nil
 }
 
 // ListTestRuns implements execution.Repository.
@@ -229,14 +223,7 @@ func (s *Store) ListTestRuns(ctx context.Context, f execution.RunFilter, limit, 
 	}
 	out := make([]execution.TestRun, len(rows))
 	for i, r := range rows {
-		out[i] = toRun(runRow{
-			TestRun: executiondb.TestRun{
-				ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
-				RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.Status,
-				CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName, Mode: r.Mode, StartedBy: r.StartedBy,
-			},
-			ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount,
-		})
+		out[i] = toRun(runRow{TestRun: r.TestRun, ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount})
 	}
 	return out, nil
 }
@@ -393,7 +380,12 @@ func (s *Store) InsertManualResult(ctx context.Context, runID int64, r execution
 		TestRunID: runID, TestCaseID: pgtype.Int8{Int64: *r.TestCaseID, Valid: true}, RequestedTestCaseID: pgtype.Text{String: *r.RequestedTestCaseID, Valid: true},
 		TestName: r.TestName, ClassName: execution.ManualClass, Status: string(r.Status), DurationMs: int8Arg(r.DurationMs),
 		ErrorMessage: r.ErrorMessage, RecordedBy: optionalText(r.RecordedBy), FailedStep: int4Arg(r.FailedStep),
+		MaxAttempts: execution.MaxAttempts,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Every allowed attempt is used: report the one past the limit, which the service refuses (409).
+		return execution.TestResult{Attempt: execution.MaxAttempts + 1}, nil
+	}
 	return toResult(row), err
 }
 

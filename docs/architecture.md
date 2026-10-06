@@ -32,10 +32,10 @@ One Go process, three modules with their own internal interfaces. No queues, RPC
 | Idempotent TestRun per project and `{provider}:{run_id}:{run_attempt}` | `UNIQUE(project_id, external_run_id)` + `INSERT … ON CONFLICT DO NOTHING` in one transaction with snapshot and results |
 | Expected-universe snapshot is immutable | written once at run creation; triggers forbid `UPDATE`/`DELETE` and any `INSERT` outside the run's creating transaction (migration 00009) |
 | Snapshot amendments (DEC-42) are append-only and only for reported TC-IDs | `test_run_amendments`: unique per run and TC-ID; a trigger refuses `UPDATE`/`DELETE`, TC-IDs already in the snapshot and TC-IDs without a valid result in the run (migration 00018). The summary adds them to the universe; the run carries `amendmentCount` |
-| A run's identity and history are permanent | trigger forbids deleting runs and changing `external_run_id`, provider, run id, attempt, report digest or `created_at` (status and timestamps stay open for the live lifecycle); `CHECK started_at <= completed_at`; a suite timestamp later than the ingestion leaves `startedAt` unknown with a warning |
+| A run's identity and history are permanent | trigger forbids deleting runs and changing `external_run_id`, provider, run id, attempt, report digest (a live run sets it once, when its report completes it) or `created_at` (status and timestamps stay open for the live lifecycle); `CHECK started_at <= completed_at`; a suite timestamp later than the ingestion leaves `startedAt` unknown with a warning |
 | Steps belong to one test case, ordered 1..n without gaps, at most 100 | FK to `test_cases`; `UNIQUE(test_case_id, position) DEFERRABLE` + `CHECK (position >= 1)`; the service locks the test case row to shift/renumber and to enforce the 100 limit; trigger forbids moving a step to another test case |
 | Step text: action 1..2000 non-blank characters, expected result ≤ 2000 | service validation (400) backed by `CHECK`s (`test_steps_action_not_blank`, `test_steps_expected_result_length`, migration 00008) |
-| Ingested results and parse errors are the source of truth | written only by the transaction that creates their run; triggers forbid later `INSERT`, any `UPDATE` and `DELETE` (migration 00010) |
+| Ingested results and parse errors are the source of truth | written by the transaction that creates their run, and while a manual or live run is running (recorded results, the final report completing a live run); triggers forbid inserts into finished runs, any `UPDATE` and `DELETE` (migrations 00010, 00023, 00026) |
 | `untested` is never persisted | `CHECK` on `test_results.status`; derived in `execution.ComputeSummary` |
 | `testCaseId` only for valid or deprecated correlations (deprecated results stay in history) | `CHECK ((correlation IN ('valid','deprecated')) = (test_case_id IS NOT NULL))` |
 
@@ -181,10 +181,13 @@ signing secrets, connector tokens) are sealed with AES-256-GCM by `platform/secr
 refuses anything else. Secrets Provenly only verifies (passwords, API keys) stay hashed.
 
 - **Outbox**: ingestion (a created batch run, a live run completed by its report) and `Manual.Finish` call
-  `RunNotifier.RunCompleted`, which inserts one `webhook_deliveries` row per active subscribed webhook; it never
-  fails the recording. A worker started by `serve` (`Integrations.Run`, every 2 s) claims due rows with
-  `FOR UPDATE SKIP LOCKED` and a one-minute lease, POSTs them signed (`X-Provenly-Signature: sha256=HMAC(ts.body)`)
-  and records the attempt: succeeded on 2xx, else retried after 10 s, 1 min, 5 min, 30 min, then failed.
+  `RunNotifier.RunCompleted` after the run is committed, which inserts one `webhook_deliveries` row per active
+  subscribed webhook; it never fails the recording (enqueueing is at most once: a crash between the two loses that
+  run's event). A worker started by `serve` (`Integrations.Run`, every 2 s) claims due rows with
+  `FOR UPDATE SKIP LOCKED` and a five-minute lease (longer than a pass of 20 deliveries at 10 s each), POSTs them
+  signed (`X-Provenly-Signature: sha256=HMAC(ts.body)`) and records the attempt only if the row is still the one it
+  claimed (a late worker whose lease expired changes nothing): succeeded on 2xx, else retried after 10 s, 1 min,
+  5 min, 30 min, then failed.
 - **SSRF**: outbound requests (webhooks and GitHub) use a client that refuses private, loopback and link-local
   addresses after DNS resolution (dialer `Control`), follows no redirects and ignores proxies; `PROVENLY_WEBHOOKS_ALLOW_PRIVATE`
   (default: everywhere but prod) lifts it for local endpoints.

@@ -441,4 +441,7 @@ type Repository interface {
 
 	// InTx runs fn inside one database transaction.
 	InTx(ctx context.Context, fn func(Repository) error) error
+	// LockScope serializes, until the transaction ends, the writes that count or number rows of one scope (a
+	// project's dimensions, a dimension's values): the count and the insert see each other's effects.
+	LockScope(ctx context.Context, scope string, id int64) error
 }

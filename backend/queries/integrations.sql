@@ -29,9 +29,10 @@ SELECT id FROM webhooks WHERE project_id = @project_id AND active AND @event::te
 INSERT INTO webhook_deliveries (webhook_id, event, payload) VALUES (@webhook_id, @event, @payload) RETURNING id;
 
 -- name: ClaimDueDeliveries :many
--- Leases up to max_items due deliveries for a minute: concurrent workers skip each other's rows, and a worker that
--- dies leaves its rows due again once the lease ends.
-UPDATE webhook_deliveries d SET next_attempt_at = now() + interval '1 minute'
+-- Leases up to max_items due deliveries for 5 minutes (longer than a worker pass can take: 20 deliveries of at most
+-- 10 s each): concurrent workers skip each other's rows, and a worker that dies leaves its rows due again once the
+-- lease ends.
+UPDATE webhook_deliveries d SET next_attempt_at = now() + interval '5 minutes'
 WHERE d.id IN (
     SELECT x.id FROM webhook_deliveries x
     WHERE x.status = 'pending' AND x.next_attempt_at <= now()
@@ -39,12 +40,14 @@ WHERE d.id IN (
 )
 RETURNING d.*;
 
--- name: FinishAttempt :exec
--- Records one delivery attempt: still pending (retry at next_attempt_at), succeeded or failed for good.
+-- name: FinishAttempt :execrows
+-- Records one delivery attempt: still pending (retry at next_attempt_at), succeeded or failed for good. Only the
+-- attempt that was claimed is recorded: a late worker whose lease expired (the row was claimed and finished again)
+-- changes nothing.
 UPDATE webhook_deliveries SET
     status = @status, attempts = @attempts, last_status_code = sqlc.narg('last_status_code'), last_error = @last_error,
     next_attempt_at = @next_attempt_at, completed_at = CASE WHEN @status::text = 'pending' THEN NULL ELSE now() END
-WHERE id = @id;
+WHERE id = @id AND status = 'pending' AND attempts = @claimed_attempts::int;
 
 -- name: ListDeliveries :many
 SELECT * FROM webhook_deliveries WHERE webhook_id = @webhook_id ORDER BY id DESC LIMIT @page_limit OFFSET @page_offset;

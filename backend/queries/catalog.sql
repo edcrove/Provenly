@@ -397,3 +397,8 @@ DELETE FROM issue_test_cases WHERE issue_id = @issue_id AND NOT (test_case_id = 
 INSERT INTO issue_test_cases (issue_id, project_id, test_case_id)
 SELECT @issue_id, @project_id, unnest(@test_case_ids::bigint[])
 ON CONFLICT DO NOTHING;
+
+-- name: LockLinkParent :exec
+-- Serializes replacements of one requirement's, issue's or static suite's test case set: concurrent replacements run
+-- one after the other, so the set always ends as one caller's list (never a union of two).
+SELECT pg_advisory_xact_lock(hashtextextended(@kind::text, @id::bigint));

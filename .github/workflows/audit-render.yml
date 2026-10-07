@@ -1,0 +1,52 @@
+name: Audit capture on Render (one-off)
+
+on:
+  push:
+    branches: [audit/render]
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    env:
+      E2E_REMOTE_URL: https://provenly-ed.onrender.com
+      E2E_ADMIN_USERNAME: admin
+      E2E_ADMIN_PASSWORD: ${{ secrets.RENDER_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: e2e
+      - name: Cold start (measured)
+        run: |
+          start=$(date +%s)
+          for _ in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$E2E_REMOTE_URL/api/v1/auth/me" || true)
+            case "$code" in 2??|401) break ;; esac
+            sleep 5
+          done
+          mkdir -p audit-out
+          echo "{\"coldStartSeconds\": $(( $(date +%s) - start )), \"code\": \"$code\"}" > audit-out/coldstart.json
+          curl -sS -D audit-out/headers-ui.txt -o /dev/null "$E2E_REMOTE_URL/"
+          curl -sS -D audit-out/headers-api.txt -o /dev/null "$E2E_REMOTE_URL/api/v1/auth/me"
+      - run: npx playwright test --config audit/playwright.audit.config.ts
+        working-directory: e2e
+      - name: Publish the capture to audit/render-results
+        if: always()
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          cd audit-out
+          git init -q -b results
+          git -c user.name=audit -c user.email=audit@users.noreply.github.com add -A
+          git -c user.name=audit -c user.email=audit@users.noreply.github.com commit -qm "Audit capture of $E2E_REMOTE_URL"
+          git push -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" results:refs/heads/audit/render-results

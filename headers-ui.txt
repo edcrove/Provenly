@@ -1,0 +1,19 @@
+HTTP/2 200 
+date: Wed, 07 Oct 2026 22:09:34 GMT
+content-type: text/html; charset=utf-8
+cache-control: public, max-age=0, s-maxage=300
+cf-cache-status: HIT
+etag: W/"c1a6042a05c42f47dc6159a4781733c8"
+content-security-policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+last-modified: Wed, 07 Oct 2026 12:21:34 UTC
+referrer-policy: no-referrer
+rndr-id: 4b86b68e-8ad6-4e28
+server: cloudflare
+strict-transport-security: max-age=315360000; includeSubdomains; preload
+vary: Accept-Encoding
+vary: Accept-Encoding
+x-content-type-options: nosniff
+x-frame-options: DENY
+cf-ray: a4703b205baec543-ORD
+alt-svc: h3=":443"; ma=86400
+

@@ -1,0 +1,935 @@
+{
+  "base": "https://provenly-ed.onrender.com",
+  "at": "2026-10-07T22:12:16.028Z",
+  "counts": {
+    "cases": 21,
+    "runs": 10,
+    "requirements": 0,
+    "issues": 0
+  },
+  "accounts": {
+    "maintainer": "audit-maintainer-8f4660",
+    "member": "audit-member-26f02d",
+    "viewer": "audit-viewer-69aa76"
+  },
+  "apiTimings": [
+    {
+      "what": "login admin",
+      "ms": 1903,
+      "status": 200
+    },
+    {
+      "what": "GET /api/v1/test-cases?project=TC&pageSize=100",
+      "ms": 418,
+      "status": 200
+    },
+    {
+      "what": "GET /api/v1/test-runs?project=TC&pageSize=20",
+      "ms": 386,
+      "status": 200
+    },
+    {
+      "what": "GET /api/v1/projects?pageSize=100",
+      "ms": 230,
+      "status": 200
+    },
+    {
+      "what": "GET /api/v1/projects/TC/requirements",
+      "ms": 237,
+      "status": 200
+    },
+    {
+      "what": "GET /api/v1/projects/TC/issues",
+      "ms": 202,
+      "status": 200
+    },
+    {
+      "what": "login admin",
+      "ms": 1875,
+      "status": 200
+    },
+    {
+      "what": "login audit-maintainer-8f4660",
+      "ms": 1817,
+      "status": 200
+    },
+    {
+      "what": "login audit-member-26f02d",
+      "ms": 1862,
+      "status": 200
+    },
+    {
+      "what": "login audit-viewer-69aa76",
+      "ms": 2095,
+      "status": 200
+    }
+  ],
+  "visits": [
+    {
+      "role": "anonymous",
+      "name": "login",
+      "url": "/login",
+      "ms": 1534,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 401 ()"
+      ],
+      "failed": [
+        "401 GET /api/v1/auth/me"
+      ],
+      "text": "Sign in to Provenly\nAccounts are created by invitation from an administrator.\nUsername\nPassword\nSign in",
+      "status": 200,
+      "loadingMs": 28
+    },
+    {
+      "role": "anonymous",
+      "name": "deep-link",
+      "url": "/test-runs",
+      "ms": 1757,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 401 ()",
+        "Failed to load resource: the server responded with a status of 401 ()"
+      ],
+      "failed": [
+        "401 GET /api/v1/auth/me",
+        "401 GET /api/v1/auth/me"
+      ],
+      "text": "Sign in to Provenly\nAccounts are created by invitation from an administrator.\nUsername\nPassword\nSign in",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "admin",
+      "name": "test-cases",
+      "url": "/test-cases",
+      "ms": 2123,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nTest Cases\nAll statuses\nActive\nDeprecated\nAny classification\nTest level: Unit\nTest level: Integration\nTest level: System\nTest level: End to end\nDepth: Smoke\nDepth: Sanity\nDepth: Regression\nTest type: Functional\nTest type: Performance\nTest type: Security\nTest type: Accessibility\nTest type: Usability\nRisk: Critical\nRisk: High\nRisk: Medium\nRisk: Low\nNew test case\nTC-ID\tTitle\tStatus\tAutomated\tTags\nTC-21\ttraced\tactive\tYes\t\n\nTC-20\tin the default project\tactive\tNo\t\n\nTC-19\tgzip upload\tactive\tYes\t\n\nTC-18\tCheckout total with tax\tactive\tNo\t\n\nTC-17\tno precondition\tactive\tNo\t\n\nTC-16\tin the default project\tactive\tNo\t\n\nTC-15\tgzip upload\tactive\tYes\t\n\nTC-14\tCheckout total with tax\tactive\tNo\t\n\nTC-13\tno precondition\tactive\tNo\t\n\nTC-12\ttraced\tactive\tYes\t\n\nTC-11\tin the default project\tactive\tNo\t\n\nTC-10\tgzip upload\tactive\tYes\t\n\nTC-9\tCheckout total\tactive\tNo\t\n\nTC-8\tno precondition\tactive\tNo\t\n\nTC-7\tAccessibility audit of the checkout\tactive\tNo\t\n\nTC-6\tPassword reset email is sent\tactive\tNo\t\n\nTC-5\tExport orders to CSV (legacy)\tactive\tYes\t\n\nTC-4\tSearch products by name\tactive\tYes\t\n\nTC-3\tCheckout with credit card\tactive\tYes\t\n\nTC-2\tUser can log out\tactive\tYes\t\nPage 1 of 2 · 21 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 5
+    },
+    {
+      "role": "admin",
+      "name": "test-case-detail",
+      "url": "/test-cases/778",
+      "ms": 1943,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nTC-21 · traced\nactive\nautomated\nEdit\nDeprecate\nCurrent definition\nWhat this test case says today. Past results were recorded against the TC-ID, not against this exact wording: editing content keeps no copy of the old wording and never changes how old results are read.\nDescription\n—\nExpected result\n—\nCreated 2026-10-07 12:13:34 UTC · Updated 2026-10-07 12:13:34 UTC\nSteps\n\nNo steps. A test case is valid without steps.\n\nAdd step\nRequirements\nWhat this test case verifies.\n\nThis test case covers no requirement.\n\nIssues\nDefects this test case reproduces.\n\nNo issue is linked to this test case.\n\nExecution history\nObserved at execution time: test name, run, branch, commit and execution date as reported by CI; Reported is when Provenly received the report.\nResult\tObserved test name\tRun\tBranch\tCommit\tExecuted\tReported\tDuration\n\npassed\n\ttraced\tgithub:1791375214929253:1\t—\t—\t2026-09-28 10:00:00 UTC\t2026-10-07 12:13:35 UTC\t420 ms\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 24
+    },
+    {
+      "role": "admin",
+      "name": "new-test-case",
+      "url": "/test-cases/new",
+      "ms": 1938,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nNew test case\nThe TC-ID (project key and number, e.g. TC-12) is assigned by Provenly and never changes or gets reused.\nProject\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Rep",
+      "status": 200,
+      "loadingMs": 24
+    },
+    {
+      "role": "admin",
+      "name": "test-runs",
+      "url": "/test-runs",
+      "ms": 2040,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nTest Runs\nStart manual run\nRun\tProject\tVerdict\tPass rate\tTest cases\tExecution\tBranch\tCommit\tPipeline\tExternal run id\tCreated\n#106\tTC\t\nincomplete\n\t100%\t1 passed · 9 untested · 10 expected\tcompleted\t—\t—\t—\tgithub:1791375214929253:1\t2026-10-07 12:13:35 UTC\n#80\tTC\t\nincomplete\n\t100%\t1 passed · 8 untested · 9 expected\tcompleted\t—\t—\t—\tgithub:179137510589867:1\t2026-10-07 12:11:46 UTC\n#45\tTC\t\nincomplete\n\t100%\t1 passed · 7 untested · 8 expected\tcompleted\t—\t—\t—\tgithub:1791372920107829:1\t2026-10-07 11:35:20 UTC\n#35\tTC\t\nincomplete\n\t100%\t1 passed · 6 untested · 7 expected\tcompleted\t—\t—\t—\tgithub:1791372665713959:1\t2026-10-07 11:31:05 UTC\n#14\tTC\t\nincomplete\n\t100%\t1 passed · 5 untested · 6 expected\tcompleted\t—\t—\t—\tgithub:1791371928373743:1\t2026-10-07 11:18:48 UTC\n#5\tTC\t\nfailed\n\t33.33%\t1 passed · 1 failed · 1 skipped · 2 untested · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1005:1\t2026-10-07 04:11:04 UTC\n#4\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1004:1\t2026-10-07 04:11:04 UTC\n#3\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tcancelled\tfeature/search\t9f3c2a1e7b\te2e-nightly\tgithub:1003:1\t2026-10-07 04:11:04 UTC\n#2\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tinterrupted\tfeature/checkout\t9f3c2a1e7b\te2e-nightly\tgithub:1002:1\t2026-10-07 04:11:03 UTC\n#1\tTC\t\nfailed\n\t40%\t2 passed · 1 failed · 1 error · 1 skipped · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1001:1\t2026-10-07 04:11:03 UTC\nPage 1 of 1 · 10 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 4
+    },
+    {
+      "role": "admin",
+      "name": "run-detail-1",
+      "url": "/test-runs/106",
+      "ms": 1973,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nTest run #106\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:1791375214929253:1\nProvider\ngithub\nRun id\n1791375214929253\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 12:13:35 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 12:13:35 UTC\nSummary\nExpected (snapshot)\n10\nExecuted\n1\nExecution\n10%\n1 of 10 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t9\t90%\t—\npassed\t1\t10%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t10\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12, TC-15, TC-19\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-21\n\ttraced\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "admin",
+      "name": "run-detail-2",
+      "url": "/test-runs/80",
+      "ms": 1976,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nTest run #80\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:179137510589867:1\nProvider\ngithub\nRun id\n179137510589867\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 12:11:46 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 12:11:46 UTC\nSummary\nExpected (snapshot)\n9\nExecuted\n1\nExecution\n11.11%\n1 of 9 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t8\t88.89%\t—\npassed\t1\t11.11%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t9\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12, TC-15\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-19\n\tzipped\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "admin",
+      "name": "run-detail-3",
+      "url": "/test-runs/45",
+      "ms": 2223,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nTest run #45\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:1791372920107829:1\nProvider\ngithub\nRun id\n1791372920107829\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 11:35:20 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 11:35:20 UTC\nSummary\nExpected (snapshot)\n8\nExecuted\n1\nExecution\n12.50%\n1 of 8 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t7\t87.50%\t—\npassed\t1\t12.50%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t8\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-15\n\tzipped\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "admin",
+      "name": "manual-run",
+      "url": "/test-runs/manual",
+      "ms": 1999,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nNew manual run\nA manual run expects the project's active manual test cases (or every active test case), optionally of one suite. You then record each result and complete the run.\nWhat is being tested\nProject\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "admin",
+      "name": "dashboard",
+      "url": "/dashboard",
+      "ms": 1850,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nDashboard\nLatest run\n#106\nincomplete\n2026-10-07 12:13:35 UTC\nAutomation\n47.62%\n10 of 21 active test cases\nNot executed recently\n10\n10 never, 0 not in 14 days\nFlaky test cases\n0\npassed on a retry in the latest 20 runs\nRun trend\n\nPass rate (% of executed) of the latest 10 runs, oldest first. Red: the run did not pass; grey: it executed no test case.\n\nRequirement coverage\n\nNo requirements yet.\n\nIssue verification\n\nNo issues yet.\n\nNot executed recently\nBy execution start date.\nOlder than\n7 days\n14 days\n30 days\n90 days\nTC-7 never executed\nTC-8 never executed\nTC-9 never executed\nTC-11 never executed\nTC-13 never executed\nTC-14 never executed\nTC-16 never executed\nTC-17 never executed\nTC-18 never executed\nTC-20 never executed\nFlaky test cases\nOver the latest\n10 runs\n20 runs\n50 runs\n\nNo flaky test cases.",
+      "status": 200,
+      "loadingMs": 4
+    },
+    {
+      "role": "admin",
+      "name": "suites",
+      "url": "/suites",
+      "ms": 2159,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nSuites\nA suite is a named selection of a project's test cases: a static list, or a query by tag and classification. CI reports a run for a suite with &suite=<key>: only the suite's active automated test cases are expected, so a smoke run is not full of untested cases.\nName\tKey\tKind\tSelection\nNo suites in TC yet.\nPage 1 of 1 · 0 items\nPrevious\nNext\nName\nKey\nKind\nQuery (by tag and classification)\nStatic (a list of test cases)\nTag\nClassification\nAny\nTest level: Unit\nTest level: Integration\nTest level: System\nTest level: End to end\nDepth: Smoke\nDepth: Sanity\nDepth: Regression\nTest type: Functional\nTest type: Performance\nTest type: Security\nTest type: Accessibility\nTest type: Usability\nRisk: Critical\nRisk: High\nRisk: Medium\nRisk: Low\nCreate suite",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "admin",
+      "name": "requirements",
+      "url": "/requirements",
+      "ms": 1999,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nRequirements\nWhat the product must do, written here or mirrored from Jira, GitHub or Azure DevOps (maintainers import them through the API). Coverage comes from the latest result of each test case that covers a requirement.\nRequirement\tTitle\tCoverage\tTest cases\nNo requirements in TC yet.\nPage 1 of 1 · 0 items\nPrevious\nNext\nTitle\nSource\nProvenly (native)\nJira\nGitHub\nAzure DevOps\nLink (optional)\nAdd requirement",
+      "status": 200,
+      "loadingMs": 6
+    },
+    {
+      "role": "admin",
+      "name": "issues",
+      "url": "/issues",
+      "ms": 1723,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nIssues\nDefects reported here or mirrored from Jira, GitHub or Azure DevOps (maintainers import them with their state through the API). Link the test cases that reproduce an issue: its verification combines the issue's state with their latest conclusive results.\nState\nAll\nOpen\nClosed\nIssue\tTitle\tState\tVerification\nNo issues here.\nPage 1 of 1 · 0 items\nPrevious\nNext\nTitle\nTracker\nProvenly (native)\nJira\nGitHub\nAzure DevOps\nLink (optional)\nAdd issue",
+      "status": 200,
+      "loadingMs": 5
+    },
+    {
+      "role": "admin",
+      "name": "projects",
+      "url": "/projects",
+      "ms": 1746,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nProjects\nEach project numbers its test cases with its own key (e.g. CHK-12). Keys never change and projects are never deleted. TC is the default project.\nKey\tName\tDescription\tYour role\tCreated\t\nP00694CDD\t\nQuality API\nRename\n\t—\tadmin\t2026-10-07 11:16:46 UTC\tMembers\nP039D4599\t\nSign-off API\nRename\n\t—\tadmin\t2026-10-07 11:35:40 UTC\tMembers\nP074B2AC8\t\nLong lists UI\nRename\n\t—\tadmin\t2026-10-07 11:22:05 UTC\tMembers\nP096180EB\t\nLong lists UI\nRename\n\t—\tadmin\t2026-10-07 12:12:32 UTC\tMembers\nP09CBB1F3\t\nKeys project\nRename\n\t—\tadmin\t2026-10-07 11:08:23 UTC\tMembers\nP0D2C0B17\t\nSign-off API\nRename\n\t—\tadmin\t2026-10-07 12:12:12 UTC\tMembers\nP1054BBE4\t\nTokens\nRename\n\t—\tadmin\t2026-10-07 11:36:50 UTC\tMembers\nP126CCCD2\t\nLong lists API\nRename\n\t—\tadmin\t2026-10-07 12:12:25 UTC\tMembers\nP1380FB46\t\nKeys project\nRename\n\t—\tadmin\t2026-10-07 11:34:42 UTC\tMembers\nP14C611B9\t\nAmendments\nRename\n\t—\tadmin\t2026-10-07 12:10:49 UTC\tMembers\nP16358456\t\nTokens UI\nRename\n\t—\tadmin\t2026-10-07 12:13:49 UTC\tMembers\nP1D137A79\t\nSign-off API\nRename\n\t—\tadmin\t2026-10-07 11:19:35 UTC\tMembers\nP1E49BD91\t\nAudit UI\nRename\n\taudited\tadmin\t2026-10-07 12:11:09 UTC\tMembers\nP1E50F3AD\t\nMCP\nRename\n\t—\tadmin\t2026-10-07 12:12:20 UTC\tMembers\nP20457D3E\t\nSuites API\nRename\n\t—\tadmin\t2026-10-07 11:27:01 UTC\tMembers\nP2129A7FB\t\nTaxonomy API\nRename\n\t—\tadmin\t2026-10-07 11:36:33 UTC\tMembers\nP2543D744\t\nLive UI\nRename\n\t—\tadmin\t2026-10-07 11:19:14 UTC\tMembers\nP2684780D\t\nRequirements UI\nRename\n\t—\tadmin\t2026-10-07 12:12:50 UTC\tMembers\nP278586D7\t\nAudit API renamed\nRename\n\t—\tadmin\t2026-10-07 12:11:07 UTC\tMembers\nP2B5093",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "admin",
+      "name": "project-TC",
+      "url": "/projects/TC",
+      "ms": 1976,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 ()"
+      ],
+      "failed": [
+        "404 GET /api/v1/projects/TC/github"
+      ],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nProject TC\nAll projects\nMembers\nWho works in this project and with which role.\nUsername\tName\tRole\tSince\t\naudit-maintainer-56a024\tAudit maintainer\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:04:43 UTC\tRemove\naudit-maintainer-8f4660\tAudit maintainer\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:09:40 UTC\tRemove\naudit-member-26f02d\tAudit member\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:09:42 UTC\tRemove\naudit-member-8d09d5\tAudit member\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:04:45 UTC\tRemove\naudit-viewer-69aa76\tAudit viewer\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:09:45 UTC\tRemove\naudit-viewer-c894f2\tAudit viewer\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:04:47 UTC\tRemove\nPage 1 of 1 · 6 items\nPrevious\nNext\nUsername\nmaintainer\nmember\nviewer\nAdd member\n\nmaintainer: manages the project, its members and deprecations · member: creates and edits test cases and steps · viewer: reads only. Administrators can do everything in every project.\n\nClassification\nDimensions classify test cases with controlled values (one per dimension); tags are free labels on each test case. Values and dimensions are archived, never deleted, so reports keep their meaning. Click a value to archive or restore it.\nFeature\nfeature\nbuilt-in\nArchive\nNo values yet.\nAdd value to Feature\nComponent\ncomponent\nbuilt-in\nArchive\nNo values yet.\nAdd value to Component\nTest level\nlevel\nbuilt-in\nArchive\nUnit\nIntegration\nSystem\nEnd to end\nAdd value to Test level\nDepth\ndepth\nbuilt-in\nArchive\nSmoke\nSanity\nRegression\nAdd value to Depth\nTest type\ntype\nbuilt-in\nArchive\nFunctional\nPerformance\nSecur",
+      "status": 200,
+      "loadingMs": 24
+    },
+    {
+      "role": "admin",
+      "name": "users",
+      "url": "/users",
+      "ms": 2046,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nUsers\nAccounts are never deleted: deactivate the ones that leave (their sessions end at once). New people join with an invitation link.\nUsername\tName\tEmail\tRole\tSince\t\nadmin\tadmin\t—\tadmin\t2026-10-07 03:06:23 UTC\t\naudit-maintainer-56a024\tAudit maintainer\t—\tmember\t2026-10-07 22:04:43 UTC\t\nDeactivate…\nPassword reset link\n\naudit-maintainer-8f4660\tAudit maintainer\t—\tmember\t2026-10-07 22:09:40 UTC\t\nDeactivate…\nPassword reset link\n\naudit-member-26f02d\tAudit member\t—\tmember\t2026-10-07 22:09:42 UTC\t\nDeactivate…\nPassword reset link\n\naudit-member-8d09d5\tAudit member\t—\tmember\t2026-10-07 22:04:45 UTC\t\nDeactivate…\nPassword reset link\n\naudit-viewer-69aa76\tAudit viewer\t—\tmember\t2026-10-07 22:09:45 UTC\t\nDeactivate…\nPassword reset link\n\naudit-viewer-c894f2\tAudit viewer\t—\tmember\t2026-10-07 22:04:47 UTC\t\nDeactivate…\nPassword reset link\n\nrmuy0tb1m341\tViewer\t—\tmember\t2026-10-07 11:24:57 UTC\t\nDeactivate…\nPassword reset link\n\nrmuy0tdpe160\tUI Member\t—\tmember\t2026-10-07 11:25:01 UTC\t\nDeactivate…\nPassword reset link\n\nrmuy17uzv623\tViewer\t—\tmember\t2026-10-07 11:36:16 UTC\t\nDeactivate…\nPassword reset link\n\nrmuy17y26981\tUI Member\t—\tmember\t2026-10-07 11:36:20 UTC\t\nDeactivate…\nPassword reset link\n\nrmuy2j48v681\tViewer\t—\tmember\t2026-10-07 12:13:01 UTC\t\nDeactivate…\nPassword reset link\n\nrmuy2j85s152\tUI Member\t—\tmember\t2026-10-07 12:13:06 UTC\t\nDeactivate…\nPassword reset link\n\numuy0fu96240\tE2E member\t—\tmember\t2026-10-07 11:14:29 UTC\t\nDeactivate…\nPassword reset link\n\numuy0g2wi672\tGuest Tester\t—\tmember\t2026-10-07 11:14:40 UTC\t\nDeactivate…\nPassword reset link\n\numuy163jc50",
+      "status": 200,
+      "loadingMs": 29
+    },
+    {
+      "role": "admin",
+      "name": "audit",
+      "url": "/audit",
+      "ms": 1685,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nAudit log\nEvery change made through the API or the UI, with who made it (a user or a CI API key). Request contents are never recorded.\nProject\nActor\nTest case\nFilter\nWhen\tActor\tChange\tProject\n2026-10-07 22:09:46 UTC\t\naudit-viewer-69aa76\n::1\n\t\naccepted an invitation\n/api/v1/invitations/accept\n\t—\n2026-10-07 22:09:44 UTC\t\nadmin\n::1\n\t\ncreated an invitation\n/api/v1/invitations\n\t—\n2026-10-07 22:09:44 UTC\t\naudit-member-26f02d\n::1\n\t\naccepted an invitation\n/api/v1/invitations/accept\n\t—\n2026-10-07 22:09:42 UTC\t\nadmin\n::1\n\t\ncreated an invitation\n/api/v1/invitations\n\t—\n2026-10-07 22:09:42 UTC\t\naudit-maintainer-8f4660\n::1\n\t\naccepted an invitation\n/api/v1/invitations/accept\n\t—\n2026-10-07 22:09:40 UTC\t\nadmin\n::1\n\t\ncreated an invitation\n/api/v1/invitations\n\t—\n2026-10-07 22:09:38 UTC\t\nadmin\n::1\n\t\nsigned in\n/api/v1/auth/login\n\t—\n2026-10-07 22:06:24 UTC\t\naudit-viewer-c894f2\n::1\n\t\nsigned in\n/api/v1/auth/login\n\t—\n2026-10-07 22:05:59 UTC\t\naudit-member-8d09d5\n::1\n\t\nsigned in\n/api/v1/auth/login\n\t—\n2026-10-07 22:05:33 UTC\t\naudit-maintainer-56a024\n::1\n\t\nsigned in\n/api/v1/auth/login\n\t—\n2026-10-07 22:05:24 UTC\t\nadmin\n::1\n\t\nsigned in\n/api/v1/auth/login\n\t—\n2026-10-07 22:04:49 UTC\t\naudit-viewer-c894f2\n::1\n\t\naccepted an invitation\n/api/v1/invitations/accept\n\t—\n2026-10-07 22:04:47 UTC\t\nadmin\n::1\n\t\ncreated an invitation\n/api/v1/invitations\n\t—\n2026-10-07 22:04:47 UTC\t\naudit-member-8d09d5\n::1\n\t\naccepted an invitation\n/api/v1/invitations/accept\n\t—\n2026-10-07 22:04:45 UTC\t\nadmin\n::1\n\t\ncreated an invitation\n/api/v1/invitations\n\t—\n2026-10-07 22:04:44 UTC\t\naudit-maintai",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "admin",
+      "name": "account",
+      "url": "/account",
+      "ms": 1661,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nAccount\nadmin · @admin · administrator\nChange password\nCurrent password\nNew password\n\nAt least 10 characters, at most 72 bytes (letters outside ASCII count as 2 to 4).\n\nRepeat new password\nChange password\nPersonal access tokens\nScripts and AI agents read Provenly as you with a token: only the projects you give it, never a change, and only until it expires (at most a year). Send it as Authorization: Bearer <token>.\nName\tToken\tProjects\tStatus\tExpires\tLast used\t\nClaude Desktop\tpvly_pat_fa68d7ae…\tP16358456\trevoked\t2027-01-05 12:13:51 UTC\t2026-10-07 12:13:51 UTC\t\nscripts\tpvly_pat_80968d7b…\tPD63139E8\trevoked\t2027-10-07 12:13:47 UTC\t2026-10-07 12:13:47 UTC\t\nClaude Desktop\tpvly_pat_2e8e04a9…\tP596FACF5\trevoked\t2027-01-05 11:36:53 UTC\t2026-10-07 11:36:53 UTC\t\nscripts\tpvly_pat_c466a3f1…\tP1054BBE4\trevoked\t2027-10-07 11:36:50 UTC\t2026-10-07 11:36:51 UTC\t\nscripts\tpvly_pat_20627cd9…\tP812677BF\trevoked\t2027-10-07 11:31:16 UTC\t2026-10-07 11:31:16 UTC\t\nPage 1 of 1 · 5 items\nPrevious\nNext\nToken name\nExpires in\n30 days\n90 days\n180 days\n365 days\nProjects it can read\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality",
+      "status": 200,
+      "loadingMs": 23
+    },
+    {
+      "role": "admin",
+      "name": "not-found",
+      "url": "/nope",
+      "ms": 1644,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nPage not found\nGo to test cases",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "admin-phone",
+      "name": "test-cases",
+      "url": "/test-cases",
+      "ms": 1733,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nTest Cases\nAll statuses\nActive\nDeprecated\nAny classification\nTest level: Unit\nTest level: Integration\nTest level: System\nTest level: End to end\nDepth: Smoke\nDepth: Sanity\nDepth: Regression\nTest type: Functional\nTest type: Performance\nTest type: Security\nTest type: Accessibility\nTest type: Usability\nRisk: Critical\nRisk: High\nRisk: Medium\nRisk: Low\nNew test case\nTC-ID\tTitle\tStatus\tAutomated\tTags\nTC-21\ttraced\tactive\tYes\t\n\nTC-20\tin the default project\tactive\tNo\t\n\nTC-19\tgzip upload\tactive\tYes\t\n\nTC-18\tCheckout total with tax\tactive\tNo\t\n\nTC-17\tno precondition\tactive\tNo\t\n\nTC-16\tin the default project\tactive\tNo\t\n\nTC-15\tgzip upload\tactive\tYes\t\n\nTC-14\tCheckout total with tax\tactive\tNo\t\n\nTC-13\tno precondition\tactive\tNo\t\n\nTC-12\ttraced\tactive\tYes\t\n\nTC-11\tin the default project\tactive\tNo\t\n\nTC-10\tgzip upload\tactive\tYes\t\n\nTC-9\tCheckout total\tactive\tNo\t\n\nTC-8\tno precondition\tactive\tNo\t\n\nTC-7\tAccessibility audit of the checkout\tactive\tNo\t\n\nTC-6\tPassword reset email is sent\tactive\tNo\t\n\nTC-5\tExport orders to CSV (legacy)\tactive\tYes\t\n\nTC-4\tSearch products by name\tactive\tYes\t\n\nTC-3\tCheckout with credit card\tactive\tYes\t\n\nTC-2\tUser can log out\tactive\tYes\t\nPage 1 of 2 · 21 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 5
+    },
+    {
+      "role": "admin-phone",
+      "name": "test-case-detail",
+      "url": "/test-cases/778",
+      "ms": 1996,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nTC-21 · traced\nactive\nautomated\nEdit\nDeprecate\nCurrent definition\nWhat this test case says today. Past results were recorded against the TC-ID, not against this exact wording: editing content keeps no copy of the old wording and never changes how old results are read.\nDescription\n—\nExpected result\n—\nCreated 2026-10-07 12:13:34 UTC · Updated 2026-10-07 12:13:34 UTC\nSteps\n\nNo steps. A test case is valid without steps.\n\nAdd step\nRequirements\nWhat this test case verifies.\n\nThis test case covers no requirement.\n\nIssues\nDefects this test case reproduces.\n\nNo issue is linked to this test case.\n\nExecution history\nObserved at execution time: test name, run, branch, commit and execution date as reported by CI; Reported is when Provenly received the report.\nResult\tObserved test name\tRun\tBranch\tCommit\tExecuted\tReported\tDuration\n\npassed\n\ttraced\tgithub:1791375214929253:1\t—\t—\t2026-09-28 10:00:00 UTC\t2026-10-07 12:13:35 UTC\t420 ms\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "admin-phone",
+      "name": "run-detail-1",
+      "url": "/test-runs/106",
+      "ms": 2399,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nTest run #106\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:1791375214929253:1\nProvider\ngithub\nRun id\n1791375214929253\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 12:13:35 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 12:13:35 UTC\nSummary\nExpected (snapshot)\n10\nExecuted\n1\nExecution\n10%\n1 of 10 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t9\t90%\t—\npassed\t1\t10%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t10\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12, TC-15, TC-19\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-21\n\ttraced\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "admin-phone",
+      "name": "manual-run",
+      "url": "/test-runs/manual",
+      "ms": 1731,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nNew manual run\nA manual run expects the project's active manual test cases (or every active test case), optionally of one suite. You then record each result and complete the run.\nWhat is being tested\nProject\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "admin-phone",
+      "name": "dashboard",
+      "url": "/dashboard",
+      "ms": 1662,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nUsers\nAudit\nAll projects\nP00694CDD · Quality API\nP039D4599 · Sign-off API\nP074B2AC8 · Long lists UI\nP096180EB · Long lists UI\nP09CBB1F3 · Keys project\nP0D2C0B17 · Sign-off API\nP1054BBE4 · Tokens\nP126CCCD2 · Long lists API\nP1380FB46 · Keys project\nP14C611B9 · Amendments\nP16358456 · Tokens UI\nP1D137A79 · Sign-off API\nP1E49BD91 · Audit UI\nP1E50F3AD · MCP\nP20457D3E · Suites API\nP2129A7FB · Taxonomy API\nP2543D744 · Live UI\nP2684780D · Requirements UI\nP278586D7 · Audit API renamed\nP2B509323 · Sharded\nP31178FD9 · Quality UI\nP3A312412 · Audit UI\nP3A90BD1E · Retries\nP3A9E85A7 · Sign-off UI\nP3AD49DE8 · UI roles\nP3D005429 · Live API\nP3D0F9166 · Sharded\nP40144CAE · Tokens UI\nP415A1E2C · UI amendments\nP428A35DE · UI keys\nP4606EB19 · Requirements API\nP472F9132 · Issues UI\nP4C8C7183 · UI retries\nP55ED6F7B · Audit words\nP560E6B35 · Requirements API\nP596FACF5 · Tokens UI\nP5C27E5E1 · Quality API\nP5C83285F · Audit API renamed\nP5CF73EAE · Taxonomy API\nP60B92939 · Quality UI\nP617A9B6E · Roles project\nP61DD97F5 · Issues API\nP62AF4587 · MCP\nP62B64EF2 · Live UI\nP68AAD7EF · Requirements API\nP6B19FF52 · Audit API renamed\nP6B308FFD · Suites UI\nP6E7A3F48 · Roles project\nP7903900F · Roles project\nP79BA34FB · Live API\nP7CDFBD0F · Sharded\nP7E7B5AB5 · Retries\nP806B4FE8 · UI roles\nP812677BF · Tokens\nP83D90FD9 · Tokens elsewhere\nP895E1205 · Amendments\nP8C29953B · UI retries\nP903235E2 · Suites UI\nP9113227A · Tokens elsewhere\nP92CBBCAE · Audit words\nP93C21BA7 · Reporter\nP9A27AF0F · Taxonomy UI\nP9D8896F2 · Sign-off UI\nPA286B536 · Keys project\nPA2A40328 · Long lists API\nPA2B33582 · Sign-off UI\nPA3944D3C · Issues API\nPA556752E · Issues UI\nPA92D8130 · Taxonomy API\nPAA886EAE · Reporter\nPAB677F6A · Requirements UI\nPB04635BF · UI amendments\nPB4B5D225 · Requirements UI\nPB7306ACD · Tokens elsewhere\nPB7710E0C · Suites API\nPB8D703BF · Issues API\nPB8F10F2B · Taxonomy UI\nPBC87FA11 · Audit UI\nPC147515F · UI keys\nPC428631D · Quality UI\nPC5282B55 · UI keys\nPC816E6BB · Retries\nPC96A5E53 · MCP\nPCCD8EE7D · Taxonomy UI\nPD2760FF6 · Live API\nPD3C4AB22 · Reporter\nPD63139E8 · Tokens\nPDCF66D8E · Long lists API\nPDE456047 · Quality API\nPE16A2419 · Audit words\nPE3B77154 · UI amendments\nPE6F5BA46 · Long lists UI\nPE841D298 · Suites API\nPE97188C8 · UI retries\nPEB6EB212 · Amendments\nPF1807C92 · Live UI\nPF1DFAD32 · UI roles\nPF3798C45 · Issues UI\nPF86F6CBB · Suites UI\nTC · Default\nadmin\nSign out\nDashboard\nLatest run\n#106\nincomplete\n2026-10-07 12:13:35 UTC\nAutomation\n47.62%\n10 of 21 active test cases\nNot executed recently\n10\n10 never, 0 not in 14 days\nFlaky test cases\n0\npassed on a retry in the latest 20 runs\nRun trend\n\nPass rate (% of executed) of the latest 10 runs, oldest first. Red: the run did not pass; grey: it executed no test case.\n\nRequirement coverage\n\nNo requirements yet.\n\nIssue verification\n\nNo issues yet.\n\nNot executed recently\nBy execution start date.\nOlder than\n7 days\n14 days\n30 days\n90 days\nTC-7 never executed\nTC-8 never executed\nTC-9 never executed\nTC-11 never executed\nTC-13 never executed\nTC-14 never executed\nTC-16 never executed\nTC-17 never executed\nTC-18 never executed\nTC-20 never executed\nFlaky test cases\nOver the latest\n10 runs\n20 runs\n50 runs\n\nNo flaky test cases.",
+      "status": 200,
+      "loadingMs": 4
+    },
+    {
+      "role": "maintainer",
+      "name": "test-cases",
+      "url": "/test-cases",
+      "ms": 1696,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nTest Cases\nAll statuses\nActive\nDeprecated\nAny classification\nTest level: Unit\nTest level: Integration\nTest level: System\nTest level: End to end\nDepth: Smoke\nDepth: Sanity\nDepth: Regression\nTest type: Functional\nTest type: Performance\nTest type: Security\nTest type: Accessibility\nTest type: Usability\nRisk: Critical\nRisk: High\nRisk: Medium\nRisk: Low\nNew test case\nTC-ID\tTitle\tStatus\tAutomated\tTags\nTC-21\ttraced\tactive\tYes\t\n\nTC-20\tin the default project\tactive\tNo\t\n\nTC-19\tgzip upload\tactive\tYes\t\n\nTC-18\tCheckout total with tax\tactive\tNo\t\n\nTC-17\tno precondition\tactive\tNo\t\n\nTC-16\tin the default project\tactive\tNo\t\n\nTC-15\tgzip upload\tactive\tYes\t\n\nTC-14\tCheckout total with tax\tactive\tNo\t\n\nTC-13\tno precondition\tactive\tNo\t\n\nTC-12\ttraced\tactive\tYes\t\n\nTC-11\tin the default project\tactive\tNo\t\n\nTC-10\tgzip upload\tactive\tYes\t\n\nTC-9\tCheckout total\tactive\tNo\t\n\nTC-8\tno precondition\tactive\tNo\t\n\nTC-7\tAccessibility audit of the checkout\tactive\tNo\t\n\nTC-6\tPassword reset email is sent\tactive\tNo\t\n\nTC-5\tExport orders to CSV (legacy)\tactive\tYes\t\n\nTC-4\tSearch products by name\tactive\tYes\t\n\nTC-3\tCheckout with credit card\tactive\tYes\t\n\nTC-2\tUser can log out\tactive\tYes\t\nPage 1 of 2 · 21 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "maintainer",
+      "name": "test-case-detail",
+      "url": "/test-cases/778",
+      "ms": 2014,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nTC-21 · traced\nactive\nautomated\nEdit\nDeprecate\nCurrent definition\nWhat this test case says today. Past results were recorded against the TC-ID, not against this exact wording: editing content keeps no copy of the old wording and never changes how old results are read.\nDescription\n—\nExpected result\n—\nCreated 2026-10-07 12:13:34 UTC · Updated 2026-10-07 12:13:34 UTC\nSteps\n\nNo steps. A test case is valid without steps.\n\nAdd step\nRequirements\nWhat this test case verifies.\n\nThis test case covers no requirement.\n\nIssues\nDefects this test case reproduces.\n\nNo issue is linked to this test case.\n\nExecution history\nObserved at execution time: test name, run, branch, commit and execution date as reported by CI; Reported is when Provenly received the report.\nResult\tObserved test name\tRun\tBranch\tCommit\tExecuted\tReported\tDuration\n\npassed\n\ttraced\tgithub:1791375214929253:1\t—\t—\t2026-09-28 10:00:00 UTC\t2026-10-07 12:13:35 UTC\t420 ms\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "maintainer",
+      "name": "new-test-case",
+      "url": "/test-cases/new",
+      "ms": 1858,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nNew test case\nThe TC-ID (project key and number, e.g. TC-12) is assigned by Provenly and never changes or gets reused.\nProject\nTC · Default\nTitle\nDescription\nExpected result\nAutomated (an automated test declares this TC-ID)\nTags\nClassification\nFeature\n—\nComponent\n—\nTest level\n—\nUnit\nIntegration\nSystem\nEnd to end\nDepth\n—\nSmoke\nSanity\nRegression\nTest type\n—\nFunctional\nPerformance\nSecurity\nAccessibility\nUsability\nRisk\n—\nCritical\nHigh\nMedium\nLow\nPlatform\n—\nCreate test case\nCancel",
+      "status": 200,
+      "loadingMs": 20
+    },
+    {
+      "role": "maintainer",
+      "name": "test-runs",
+      "url": "/test-runs",
+      "ms": 1524,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nTest Runs\nStart manual run\nRun\tProject\tVerdict\tPass rate\tTest cases\tExecution\tBranch\tCommit\tPipeline\tExternal run id\tCreated\n#106\tTC\t\nincomplete\n\t100%\t1 passed · 9 untested · 10 expected\tcompleted\t—\t—\t—\tgithub:1791375214929253:1\t2026-10-07 12:13:35 UTC\n#80\tTC\t\nincomplete\n\t100%\t1 passed · 8 untested · 9 expected\tcompleted\t—\t—\t—\tgithub:179137510589867:1\t2026-10-07 12:11:46 UTC\n#45\tTC\t\nincomplete\n\t100%\t1 passed · 7 untested · 8 expected\tcompleted\t—\t—\t—\tgithub:1791372920107829:1\t2026-10-07 11:35:20 UTC\n#35\tTC\t\nincomplete\n\t100%\t1 passed · 6 untested · 7 expected\tcompleted\t—\t—\t—\tgithub:1791372665713959:1\t2026-10-07 11:31:05 UTC\n#14\tTC\t\nincomplete\n\t100%\t1 passed · 5 untested · 6 expected\tcompleted\t—\t—\t—\tgithub:1791371928373743:1\t2026-10-07 11:18:48 UTC\n#5\tTC\t\nfailed\n\t33.33%\t1 passed · 1 failed · 1 skipped · 2 untested · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1005:1\t2026-10-07 04:11:04 UTC\n#4\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1004:1\t2026-10-07 04:11:04 UTC\n#3\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tcancelled\tfeature/search\t9f3c2a1e7b\te2e-nightly\tgithub:1003:1\t2026-10-07 04:11:04 UTC\n#2\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tinterrupted\tfeature/checkout\t9f3c2a1e7b\te2e-nightly\tgithub:1002:1\t2026-10-07 04:11:03 UTC\n#1\tTC\t\nfailed\n\t40%\t2 passed · 1 failed · 1 error · 1 skipped · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1001:1\t2026-10-07 04:11:03 UTC\nPage 1 of 1 · 10 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 4
+    },
+    {
+      "role": "maintainer",
+      "name": "run-detail-1",
+      "url": "/test-runs/106",
+      "ms": 1754,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nTest run #106\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:1791375214929253:1\nProvider\ngithub\nRun id\n1791375214929253\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 12:13:35 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 12:13:35 UTC\nSummary\nExpected (snapshot)\n10\nExecuted\n1\nExecution\n10%\n1 of 10 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t9\t90%\t—\npassed\t1\t10%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t10\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12, TC-15, TC-19\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-21\n\ttraced\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 20
+    },
+    {
+      "role": "maintainer",
+      "name": "run-detail-2",
+      "url": "/test-runs/80",
+      "ms": 2068,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nTest run #80\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:179137510589867:1\nProvider\ngithub\nRun id\n179137510589867\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 12:11:46 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 12:11:46 UTC\nSummary\nExpected (snapshot)\n9\nExecuted\n1\nExecution\n11.11%\n1 of 9 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t8\t88.89%\t—\npassed\t1\t11.11%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t9\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12, TC-15\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-19\n\tzipped\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "maintainer",
+      "name": "run-detail-3",
+      "url": "/test-runs/45",
+      "ms": 1750,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nTest run #45\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:1791372920107829:1\nProvider\ngithub\nRun id\n1791372920107829\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 11:35:20 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 11:35:20 UTC\nSummary\nExpected (snapshot)\n8\nExecuted\n1\nExecution\n12.50%\n1 of 8 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t7\t87.50%\t—\npassed\t1\t12.50%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t8\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-15\n\tzipped\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "maintainer",
+      "name": "manual-run",
+      "url": "/test-runs/manual",
+      "ms": 1837,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nNew manual run\nA manual run expects the project's active manual test cases (or every active test case), optionally of one suite. You then record each result and complete the run.\nWhat is being tested\nProject\nTC · Default\nSuite\nThe whole project\nExpected test cases\nManual test cases (CI runs the automated ones)\nEvery active test case\nBranch or build (optional)\nStart manual run\nCancel",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "maintainer",
+      "name": "dashboard",
+      "url": "/dashboard",
+      "ms": 1694,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nDashboard\nLatest run\n#106\nincomplete\n2026-10-07 12:13:35 UTC\nAutomation\n47.62%\n10 of 21 active test cases\nNot executed recently\n10\n10 never, 0 not in 14 days\nFlaky test cases\n0\npassed on a retry in the latest 20 runs\nRun trend\n\nPass rate (% of executed) of the latest 10 runs, oldest first. Red: the run did not pass; grey: it executed no test case.\n\nRequirement coverage\n\nNo requirements yet.\n\nIssue verification\n\nNo issues yet.\n\nNot executed recently\nBy execution start date.\nOlder than\n7 days\n14 days\n30 days\n90 days\nTC-7 never executed\nTC-8 never executed\nTC-9 never executed\nTC-11 never executed\nTC-13 never executed\nTC-14 never executed\nTC-16 never executed\nTC-17 never executed\nTC-18 never executed\nTC-20 never executed\nFlaky test cases\nOver the latest\n10 runs\n20 runs\n50 runs\n\nNo flaky test cases.",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "maintainer",
+      "name": "suites",
+      "url": "/suites",
+      "ms": 1685,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nSuites\nA suite is a named selection of a project's test cases: a static list, or a query by tag and classification. CI reports a run for a suite with &suite=<key>: only the suite's active automated test cases are expected, so a smoke run is not full of untested cases.\nName\tKey\tKind\tSelection\nNo suites in TC yet.\nPage 1 of 1 · 0 items\nPrevious\nNext\nName\nKey\nKind\nQuery (by tag and classification)\nStatic (a list of test cases)\nTag\nClassification\nAny\nTest level: Unit\nTest level: Integration\nTest level: System\nTest level: End to end\nDepth: Smoke\nDepth: Sanity\nDepth: Regression\nTest type: Functional\nTest type: Performance\nTest type: Security\nTest type: Accessibility\nTest type: Usability\nRisk: Critical\nRisk: High\nRisk: Medium\nRisk: Low\nCreate suite",
+      "status": 200,
+      "loadingMs": 4
+    },
+    {
+      "role": "maintainer",
+      "name": "requirements",
+      "url": "/requirements",
+      "ms": 1831,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nRequirements\nWhat the product must do, written here or mirrored from Jira, GitHub or Azure DevOps (maintainers import them through the API). Coverage comes from the latest result of each test case that covers a requirement.\nRequirement\tTitle\tCoverage\tTest cases\nNo requirements in TC yet.\nPage 1 of 1 · 0 items\nPrevious\nNext\nTitle\nSource\nProvenly (native)\nJira\nGitHub\nAzure DevOps\nLink (optional)\nAdd requirement",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "maintainer",
+      "name": "issues",
+      "url": "/issues",
+      "ms": 1518,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nIssues\nDefects reported here or mirrored from Jira, GitHub or Azure DevOps (maintainers import them with their state through the API). Link the test cases that reproduce an issue: its verification combines the issue's state with their latest conclusive results.\nState\nAll\nOpen\nClosed\nIssue\tTitle\tState\tVerification\nNo issues here.\nPage 1 of 1 · 0 items\nPrevious\nNext\nTitle\nTracker\nProvenly (native)\nJira\nGitHub\nAzure DevOps\nLink (optional)\nAdd issue",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "maintainer",
+      "name": "projects",
+      "url": "/projects",
+      "ms": 1512,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nProjects\nEach project numbers its test cases with its own key (e.g. CHK-12). Keys never change and projects are never deleted. TC is the default project.\nKey\tName\tDescription\tYour role\tCreated\t\nTC\t\nDefault\nRename\n\tTest cases created before projects existed.\tmaintainer\t2026-10-07 03:06:19 UTC\tMembers\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "maintainer",
+      "name": "project-TC",
+      "url": "/projects/TC",
+      "ms": 1728,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 ()"
+      ],
+      "failed": [
+        "404 GET /api/v1/projects/TC/github"
+      ],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nProject TC\nAll projects\nMembers\nWho works in this project and with which role.\nUsername\tName\tRole\tSince\t\naudit-maintainer-56a024\tAudit maintainer\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:04:43 UTC\tRemove\naudit-maintainer-8f4660\tAudit maintainer\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:09:40 UTC\tRemove\naudit-member-26f02d\tAudit member\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:09:42 UTC\tRemove\naudit-member-8d09d5\tAudit member\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:04:45 UTC\tRemove\naudit-viewer-69aa76\tAudit viewer\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:09:45 UTC\tRemove\naudit-viewer-c894f2\tAudit viewer\t\nmaintainer\nmember\nviewer\n\t2026-10-07 22:04:47 UTC\tRemove\nPage 1 of 1 · 6 items\nPrevious\nNext\nUsername\nmaintainer\nmember\nviewer\nAdd member\n\nmaintainer: manages the project, its members and deprecations · member: creates and edits test cases and steps · viewer: reads only. Administrators can do everything in every project.\n\nClassification\nDimensions classify test cases with controlled values (one per dimension); tags are free labels on each test case. Values and dimensions are archived, never deleted, so reports keep their meaning. Click a value to archive or restore it.\nFeature\nfeature\nbuilt-in\nArchive\nNo values yet.\nAdd value to Feature\nComponent\ncomponent\nbuilt-in\nArchive\nNo values yet.\nAdd value to Component\nTest level\nlevel\nbuilt-in\nArchive\nUnit\nIntegration\nSystem\nEnd to end\nAdd value to Test level\nDepth\ndepth\nbuilt-in\nArchive\nSmoke\nSanity\nRegression\nAdd value to Depth\nTest type\ntype\nbuilt-in\nArchive\nFunctional\nPerformance\nSecurity\nAccessibility\nUsability\nAdd value to Test type\nRisk\nrisk\nbuilt-in\nArchive\nCritical\nHigh\nMedium\nLow\nAdd value to Risk\nPlatform\nplatform\nbuilt-in\nArchive\nNo values yet.\nAdd value to Platform\nAdd dimension\nAPI keys\nCI reports runs into this project with a key. A key opens nothing else, and only this project.\nName\tKey\tStatus\tCreated\tLast used\t\nNo API keys yet.\nPage 1 of 1 · 0 items\nPrevious\nNext\nKey name\nCreate API key\nWebhooks\nEvery completed run (CI, live or manual) is sent to these endpoints as JSON, signed, and retried for about 40 minutes until it gets a 2xx. Finished deliveries are kept 90 days by default (the server's PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS).\nEndpoint\tState\tLast delivery\t\nNo webhooks yet.\nPage 1 of 1 · 0 items\nPrevious\nNext\nEndpoint URL\nAdd webhook\nGitHub Issues\nMirror a repository's issues (not pull requests) into this project's issues, read-only, to link them to test cases. The token is stored encrypted and never shown again.\nRepository\nLabels (optional)\nToken\nConnect",
+      "status": 200,
+      "loadingMs": 23
+    },
+    {
+      "role": "maintainer",
+      "name": "users",
+      "url": "/users",
+      "ms": 1503,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nUsers\nNot allowed\nOnly administrators can manage users and invitations.",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "maintainer",
+      "name": "audit",
+      "url": "/audit",
+      "ms": 1543,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 403 ()"
+      ],
+      "failed": [
+        "403 GET /api/v1/audit?page=1"
+      ],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nAudit log\nEvery change made through the API or the UI, with who made it (a user or a CI API key). Request contents are never recorded.\nProject\nActor\nTest case\nFilter\nSomething went wrong\nonly administrators can manage users and invitations",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "maintainer",
+      "name": "account",
+      "url": "/account",
+      "ms": 1677,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit maintainer\nSign out\nAccount\nAudit maintainer · @audit-maintainer-8f4660\nChange password\nCurrent password\nNew password\n\nAt least 10 characters, at most 72 bytes (letters outside ASCII count as 2 to 4).\n\nRepeat new password\nChange password\nPersonal access tokens\nScripts and AI agents read Provenly as you with a token: only the projects you give it, never a change, and only until it expires (at most a year). Send it as Authorization: Bearer <token>.\nName\tToken\tProjects\tStatus\tExpires\tLast used\t\nNo tokens yet.\nPage 1 of 1 · 0 items\nPrevious\nNext\nToken name\nExpires in\n30 days\n90 days\n180 days\n365 days\nProjects it can read\nTC · Default\nCreate token\nAgents (MCP)\nAI agents read Provenly through its Model Context Protocol endpoint, as you and read-only (projects, test cases, runs, history, quality, issues, requirements). Connect one with a personal access token (above), limited to the projects you give it:\nclaude mcp add --transport http provenly \"https://provenly-ed.onrender.com/api/v1/mcp\" --header \"Authorization: Bearer YOUR_TOKEN\"",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "member",
+      "name": "test-cases",
+      "url": "/test-cases",
+      "ms": 1574,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nTest Cases\nAll statuses\nActive\nDeprecated\nAny classification\nTest level: Unit\nTest level: Integration\nTest level: System\nTest level: End to end\nDepth: Smoke\nDepth: Sanity\nDepth: Regression\nTest type: Functional\nTest type: Performance\nTest type: Security\nTest type: Accessibility\nTest type: Usability\nRisk: Critical\nRisk: High\nRisk: Medium\nRisk: Low\nNew test case\nTC-ID\tTitle\tStatus\tAutomated\tTags\nTC-21\ttraced\tactive\tYes\t\n\nTC-20\tin the default project\tactive\tNo\t\n\nTC-19\tgzip upload\tactive\tYes\t\n\nTC-18\tCheckout total with tax\tactive\tNo\t\n\nTC-17\tno precondition\tactive\tNo\t\n\nTC-16\tin the default project\tactive\tNo\t\n\nTC-15\tgzip upload\tactive\tYes\t\n\nTC-14\tCheckout total with tax\tactive\tNo\t\n\nTC-13\tno precondition\tactive\tNo\t\n\nTC-12\ttraced\tactive\tYes\t\n\nTC-11\tin the default project\tactive\tNo\t\n\nTC-10\tgzip upload\tactive\tYes\t\n\nTC-9\tCheckout total\tactive\tNo\t\n\nTC-8\tno precondition\tactive\tNo\t\n\nTC-7\tAccessibility audit of the checkout\tactive\tNo\t\n\nTC-6\tPassword reset email is sent\tactive\tNo\t\n\nTC-5\tExport orders to CSV (legacy)\tactive\tYes\t\n\nTC-4\tSearch products by name\tactive\tYes\t\n\nTC-3\tCheckout with credit card\tactive\tYes\t\n\nTC-2\tUser can log out\tactive\tYes\t\nPage 1 of 2 · 21 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 4
+    },
+    {
+      "role": "member",
+      "name": "test-case-detail",
+      "url": "/test-cases/778",
+      "ms": 1755,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nTC-21 · traced\nactive\nautomated\nEdit\nCurrent definition\nWhat this test case says today. Past results were recorded against the TC-ID, not against this exact wording: editing content keeps no copy of the old wording and never changes how old results are read.\nDescription\n—\nExpected result\n—\nCreated 2026-10-07 12:13:34 UTC · Updated 2026-10-07 12:13:34 UTC\nSteps\n\nNo steps. A test case is valid without steps.\n\nAdd step\nRequirements\nWhat this test case verifies.\n\nThis test case covers no requirement.\n\nIssues\nDefects this test case reproduces.\n\nNo issue is linked to this test case.\n\nExecution history\nObserved at execution time: test name, run, branch, commit and execution date as reported by CI; Reported is when Provenly received the report.\nResult\tObserved test name\tRun\tBranch\tCommit\tExecuted\tReported\tDuration\n\npassed\n\ttraced\tgithub:1791375214929253:1\t—\t—\t2026-09-28 10:00:00 UTC\t2026-10-07 12:13:35 UTC\t420 ms\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "member",
+      "name": "new-test-case",
+      "url": "/test-cases/new",
+      "ms": 1679,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nNew test case\nThe TC-ID (project key and number, e.g. TC-12) is assigned by Provenly and never changes or gets reused.\nProject\nTC · Default\nTitle\nDescription\nExpected result\nAutomated (an automated test declares this TC-ID)\nTags\nClassification\nFeature\n—\nComponent\n—\nTest level\n—\nUnit\nIntegration\nSystem\nEnd to end\nDepth\n—\nSmoke\nSanity\nRegression\nTest type\n—\nFunctional\nPerformance\nSecurity\nAccessibility\nUsability\nRisk\n—\nCritical\nHigh\nMedium\nLow\nPlatform\n—\nCreate test case\nCancel",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "member",
+      "name": "test-runs",
+      "url": "/test-runs",
+      "ms": 1806,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nTest Runs\nStart manual run\nRun\tProject\tVerdict\tPass rate\tTest cases\tExecution\tBranch\tCommit\tPipeline\tExternal run id\tCreated\n#106\tTC\t\nincomplete\n\t100%\t1 passed · 9 untested · 10 expected\tcompleted\t—\t—\t—\tgithub:1791375214929253:1\t2026-10-07 12:13:35 UTC\n#80\tTC\t\nincomplete\n\t100%\t1 passed · 8 untested · 9 expected\tcompleted\t—\t—\t—\tgithub:179137510589867:1\t2026-10-07 12:11:46 UTC\n#45\tTC\t\nincomplete\n\t100%\t1 passed · 7 untested · 8 expected\tcompleted\t—\t—\t—\tgithub:1791372920107829:1\t2026-10-07 11:35:20 UTC\n#35\tTC\t\nincomplete\n\t100%\t1 passed · 6 untested · 7 expected\tcompleted\t—\t—\t—\tgithub:1791372665713959:1\t2026-10-07 11:31:05 UTC\n#14\tTC\t\nincomplete\n\t100%\t1 passed · 5 untested · 6 expected\tcompleted\t—\t—\t—\tgithub:1791371928373743:1\t2026-10-07 11:18:48 UTC\n#5\tTC\t\nfailed\n\t33.33%\t1 passed · 1 failed · 1 skipped · 2 untested · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1005:1\t2026-10-07 04:11:04 UTC\n#4\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1004:1\t2026-10-07 04:11:04 UTC\n#3\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tcancelled\tfeature/search\t9f3c2a1e7b\te2e-nightly\tgithub:1003:1\t2026-10-07 04:11:04 UTC\n#2\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tinterrupted\tfeature/checkout\t9f3c2a1e7b\te2e-nightly\tgithub:1002:1\t2026-10-07 04:11:03 UTC\n#1\tTC\t\nfailed\n\t40%\t2 passed · 1 failed · 1 error · 1 skipped · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1001:1\t2026-10-07 04:11:03 UTC\nPage 1 of 1 · 10 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 4
+    },
+    {
+      "role": "member",
+      "name": "run-detail-1",
+      "url": "/test-runs/106",
+      "ms": 1922,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nTest run #106\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:1791375214929253:1\nProvider\ngithub\nRun id\n1791375214929253\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 12:13:35 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 12:13:35 UTC\nSummary\nExpected (snapshot)\n10\nExecuted\n1\nExecution\n10%\n1 of 10 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t9\t90%\t—\npassed\t1\t10%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t10\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12, TC-15, TC-19\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-21\n\ttraced\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "member",
+      "name": "run-detail-2",
+      "url": "/test-runs/80",
+      "ms": 1894,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nTest run #80\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:179137510589867:1\nProvider\ngithub\nRun id\n179137510589867\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 12:11:46 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 12:11:46 UTC\nSummary\nExpected (snapshot)\n9\nExecuted\n1\nExecution\n11.11%\n1 of 9 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t8\t88.89%\t—\npassed\t1\t11.11%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t9\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12, TC-15\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-19\n\tzipped\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "member",
+      "name": "run-detail-3",
+      "url": "/test-runs/45",
+      "ms": 1887,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nTest run #45\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:1791372920107829:1\nProvider\ngithub\nRun id\n1791372920107829\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 11:35:20 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 11:35:20 UTC\nSummary\nExpected (snapshot)\n8\nExecuted\n1\nExecution\n12.50%\n1 of 8 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t7\t87.50%\t—\npassed\t1\t12.50%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t8\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-15\n\tzipped\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "member",
+      "name": "manual-run",
+      "url": "/test-runs/manual",
+      "ms": 1694,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nNew manual run\nA manual run expects the project's active manual test cases (or every active test case), optionally of one suite. You then record each result and complete the run.\nWhat is being tested\nProject\nTC · Default\nSuite\nThe whole project\nExpected test cases\nManual test cases (CI runs the automated ones)\nEvery active test case\nBranch or build (optional)\nStart manual run\nCancel",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "member",
+      "name": "dashboard",
+      "url": "/dashboard",
+      "ms": 1589,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nDashboard\nLatest run\n#106\nincomplete\n2026-10-07 12:13:35 UTC\nAutomation\n47.62%\n10 of 21 active test cases\nNot executed recently\n10\n10 never, 0 not in 14 days\nFlaky test cases\n0\npassed on a retry in the latest 20 runs\nRun trend\n\nPass rate (% of executed) of the latest 10 runs, oldest first. Red: the run did not pass; grey: it executed no test case.\n\nRequirement coverage\n\nNo requirements yet.\n\nIssue verification\n\nNo issues yet.\n\nNot executed recently\nBy execution start date.\nOlder than\n7 days\n14 days\n30 days\n90 days\nTC-7 never executed\nTC-8 never executed\nTC-9 never executed\nTC-11 never executed\nTC-13 never executed\nTC-14 never executed\nTC-16 never executed\nTC-17 never executed\nTC-18 never executed\nTC-20 never executed\nFlaky test cases\nOver the latest\n10 runs\n20 runs\n50 runs\n\nNo flaky test cases.",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "member",
+      "name": "suites",
+      "url": "/suites",
+      "ms": 1553,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nSuites\nA suite is a named selection of a project's test cases: a static list, or a query by tag and classification. CI reports a run for a suite with &suite=<key>: only the suite's active automated test cases are expected, so a smoke run is not full of untested cases.\nName\tKey\tKind\tSelection\nNo suites in TC yet.\nPage 1 of 1 · 0 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "member",
+      "name": "requirements",
+      "url": "/requirements",
+      "ms": 1537,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nRequirements\nWhat the product must do, written here or mirrored from Jira, GitHub or Azure DevOps (maintainers import them through the API). Coverage comes from the latest result of each test case that covers a requirement.\nRequirement\tTitle\tCoverage\tTest cases\nNo requirements in TC yet.\nPage 1 of 1 · 0 items\nPrevious\nNext\nTitle\nSource\nProvenly (native)\nJira\nGitHub\nAzure DevOps\nLink (optional)\nAdd requirement",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "member",
+      "name": "issues",
+      "url": "/issues",
+      "ms": 1546,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nIssues\nDefects reported here or mirrored from Jira, GitHub or Azure DevOps (maintainers import them with their state through the API). Link the test cases that reproduce an issue: its verification combines the issue's state with their latest conclusive results.\nState\nAll\nOpen\nClosed\nIssue\tTitle\tState\tVerification\nNo issues here.\nPage 1 of 1 · 0 items\nPrevious\nNext\nTitle\nTracker\nProvenly (native)\nJira\nGitHub\nAzure DevOps\nLink (optional)\nAdd issue",
+      "status": 200,
+      "loadingMs": 2
+    },
+    {
+      "role": "member",
+      "name": "projects",
+      "url": "/projects",
+      "ms": 1526,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nProjects\nEach project numbers its test cases with its own key (e.g. CHK-12). Keys never change and projects are never deleted. TC is the default project.\nKey\tName\tDescription\tYour role\tCreated\t\nTC\t\nDefault\n\tTest cases created before projects existed.\tmember\t2026-10-07 03:06:19 UTC\tMembers\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "member",
+      "name": "project-TC",
+      "url": "/projects/TC",
+      "ms": 1532,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nProject TC\nAll projects\nMembers\nWho works in this project and with which role.\nUsername\tName\tRole\tSince\t\naudit-maintainer-56a024\tAudit maintainer\tmaintainer\t2026-10-07 22:04:43 UTC\t\naudit-maintainer-8f4660\tAudit maintainer\tmaintainer\t2026-10-07 22:09:40 UTC\t\naudit-member-26f02d\tAudit member\tmember\t2026-10-07 22:09:42 UTC\t\naudit-member-8d09d5\tAudit member\tmember\t2026-10-07 22:04:45 UTC\t\naudit-viewer-69aa76\tAudit viewer\tviewer\t2026-10-07 22:09:45 UTC\t\naudit-viewer-c894f2\tAudit viewer\tviewer\t2026-10-07 22:04:47 UTC\t\nPage 1 of 1 · 6 items\nPrevious\nNext\nClassification\nDimensions classify test cases with controlled values (one per dimension); tags are free labels on each test case. Values and dimensions are archived, never deleted, so reports keep their meaning.\nFeature\nfeature\nbuilt-in\nNo values yet.\nComponent\ncomponent\nbuilt-in\nNo values yet.\nTest level\nlevel\nbuilt-in\nUnit\nIntegration\nSystem\nEnd to end\nDepth\ndepth\nbuilt-in\nSmoke\nSanity\nRegression\nTest type\ntype\nbuilt-in\nFunctional\nPerformance\nSecurity\nAccessibility\nUsability\nRisk\nrisk\nbuilt-in\nCritical\nHigh\nMedium\nLow\nPlatform\nplatform\nbuilt-in\nNo values yet.",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "member",
+      "name": "users",
+      "url": "/users",
+      "ms": 1775,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nUsers\nNot allowed\nOnly administrators can manage users and invitations.",
+      "status": 200,
+      "loadingMs": 20
+    },
+    {
+      "role": "member",
+      "name": "audit",
+      "url": "/audit",
+      "ms": 1563,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 403 ()"
+      ],
+      "failed": [
+        "403 GET /api/v1/audit?page=1"
+      ],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nAudit log\nEvery change made through the API or the UI, with who made it (a user or a CI API key). Request contents are never recorded.\nProject\nActor\nTest case\nFilter\nSomething went wrong\nonly administrators can manage users and invitations",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "member",
+      "name": "account",
+      "url": "/account",
+      "ms": 1525,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit member\nSign out\nAccount\nAudit member · @audit-member-26f02d\nChange password\nCurrent password\nNew password\n\nAt least 10 characters, at most 72 bytes (letters outside ASCII count as 2 to 4).\n\nRepeat new password\nChange password\nPersonal access tokens\nScripts and AI agents read Provenly as you with a token: only the projects you give it, never a change, and only until it expires (at most a year). Send it as Authorization: Bearer <token>.\nName\tToken\tProjects\tStatus\tExpires\tLast used\t\nNo tokens yet.\nPage 1 of 1 · 0 items\nPrevious\nNext\nToken name\nExpires in\n30 days\n90 days\n180 days\n365 days\nProjects it can read\nTC · Default\nCreate token\nAgents (MCP)\nAI agents read Provenly through its Model Context Protocol endpoint, as you and read-only (projects, test cases, runs, history, quality, issues, requirements). Connect one with a personal access token (above), limited to the projects you give it:\nclaude mcp add --transport http provenly \"https://provenly-ed.onrender.com/api/v1/mcp\" --header \"Authorization: Bearer YOUR_TOKEN\"",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "viewer",
+      "name": "test-cases",
+      "url": "/test-cases",
+      "ms": 1593,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nTest Cases\nAll statuses\nActive\nDeprecated\nAny classification\nTest level: Unit\nTest level: Integration\nTest level: System\nTest level: End to end\nDepth: Smoke\nDepth: Sanity\nDepth: Regression\nTest type: Functional\nTest type: Performance\nTest type: Security\nTest type: Accessibility\nTest type: Usability\nRisk: Critical\nRisk: High\nRisk: Medium\nRisk: Low\nTC-ID\tTitle\tStatus\tAutomated\tTags\nTC-21\ttraced\tactive\tYes\t\n\nTC-20\tin the default project\tactive\tNo\t\n\nTC-19\tgzip upload\tactive\tYes\t\n\nTC-18\tCheckout total with tax\tactive\tNo\t\n\nTC-17\tno precondition\tactive\tNo\t\n\nTC-16\tin the default project\tactive\tNo\t\n\nTC-15\tgzip upload\tactive\tYes\t\n\nTC-14\tCheckout total with tax\tactive\tNo\t\n\nTC-13\tno precondition\tactive\tNo\t\n\nTC-12\ttraced\tactive\tYes\t\n\nTC-11\tin the default project\tactive\tNo\t\n\nTC-10\tgzip upload\tactive\tYes\t\n\nTC-9\tCheckout total\tactive\tNo\t\n\nTC-8\tno precondition\tactive\tNo\t\n\nTC-7\tAccessibility audit of the checkout\tactive\tNo\t\n\nTC-6\tPassword reset email is sent\tactive\tNo\t\n\nTC-5\tExport orders to CSV (legacy)\tactive\tYes\t\n\nTC-4\tSearch products by name\tactive\tYes\t\n\nTC-3\tCheckout with credit card\tactive\tYes\t\n\nTC-2\tUser can log out\tactive\tYes\t\nPage 1 of 2 · 21 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 4
+    },
+    {
+      "role": "viewer",
+      "name": "test-case-detail",
+      "url": "/test-cases/778",
+      "ms": 1712,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nTC-21 · traced\nactive\nautomated\nCurrent definition\nWhat this test case says today. Past results were recorded against the TC-ID, not against this exact wording: editing content keeps no copy of the old wording and never changes how old results are read.\nDescription\n—\nExpected result\n—\nCreated 2026-10-07 12:13:34 UTC · Updated 2026-10-07 12:13:34 UTC\nSteps\n\nNo steps. A test case is valid without steps.\n\nRequirements\nWhat this test case verifies.\n\nThis test case covers no requirement.\n\nIssues\nDefects this test case reproduces.\n\nNo issue is linked to this test case.\n\nExecution history\nObserved at execution time: test name, run, branch, commit and execution date as reported by CI; Reported is when Provenly received the report.\nResult\tObserved test name\tRun\tBranch\tCommit\tExecuted\tReported\tDuration\n\npassed\n\ttraced\tgithub:1791375214929253:1\t—\t—\t2026-09-28 10:00:00 UTC\t2026-10-07 12:13:35 UTC\t420 ms\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "viewer",
+      "name": "new-test-case",
+      "url": "/test-cases/new",
+      "ms": 1496,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nNew test case\nThe TC-ID (project key and number, e.g. -12) is assigned by Provenly and never changes or gets reused.\nProject\nTitle\nDescription\nExpected result\nAutomated (an automated test declares this TC-ID)\nTags\nCreate test case\nCancel",
+      "status": 200,
+      "loadingMs": 22
+    },
+    {
+      "role": "viewer",
+      "name": "test-runs",
+      "url": "/test-runs",
+      "ms": 1716,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nTest Runs\nRun\tProject\tVerdict\tPass rate\tTest cases\tExecution\tBranch\tCommit\tPipeline\tExternal run id\tCreated\n#106\tTC\t\nincomplete\n\t100%\t1 passed · 9 untested · 10 expected\tcompleted\t—\t—\t—\tgithub:1791375214929253:1\t2026-10-07 12:13:35 UTC\n#80\tTC\t\nincomplete\n\t100%\t1 passed · 8 untested · 9 expected\tcompleted\t—\t—\t—\tgithub:179137510589867:1\t2026-10-07 12:11:46 UTC\n#45\tTC\t\nincomplete\n\t100%\t1 passed · 7 untested · 8 expected\tcompleted\t—\t—\t—\tgithub:1791372920107829:1\t2026-10-07 11:35:20 UTC\n#35\tTC\t\nincomplete\n\t100%\t1 passed · 6 untested · 7 expected\tcompleted\t—\t—\t—\tgithub:1791372665713959:1\t2026-10-07 11:31:05 UTC\n#14\tTC\t\nincomplete\n\t100%\t1 passed · 5 untested · 6 expected\tcompleted\t—\t—\t—\tgithub:1791371928373743:1\t2026-10-07 11:18:48 UTC\n#5\tTC\t\nfailed\n\t33.33%\t1 passed · 1 failed · 1 skipped · 2 untested · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1005:1\t2026-10-07 04:11:04 UTC\n#4\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1004:1\t2026-10-07 04:11:04 UTC\n#3\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tcancelled\tfeature/search\t9f3c2a1e7b\te2e-nightly\tgithub:1003:1\t2026-10-07 04:11:04 UTC\n#2\tTC\t\nincomplete\n\t100%\t1 passed · 4 untested · 5 expected\tinterrupted\tfeature/checkout\t9f3c2a1e7b\te2e-nightly\tgithub:1002:1\t2026-10-07 04:11:03 UTC\n#1\tTC\t\nfailed\n\t40%\t2 passed · 1 failed · 1 error · 1 skipped · 5 expected\tcompleted\tmain\t9f3c2a1e7b\te2e-nightly\tgithub:1001:1\t2026-10-07 04:11:03 UTC\nPage 1 of 1 · 10 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "viewer",
+      "name": "run-detail-1",
+      "url": "/test-runs/106",
+      "ms": 1773,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nTest run #106\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:1791375214929253:1\nProvider\ngithub\nRun id\n1791375214929253\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 12:13:35 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 12:13:35 UTC\nSummary\nExpected (snapshot)\n10\nExecuted\n1\nExecution\n10%\n1 of 10 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t9\t90%\t—\npassed\t1\t10%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t10\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12, TC-15, TC-19\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-21\n\ttraced\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "viewer",
+      "name": "run-detail-2",
+      "url": "/test-runs/80",
+      "ms": 1697,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nTest run #80\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:179137510589867:1\nProvider\ngithub\nRun id\n179137510589867\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 12:11:46 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 12:11:46 UTC\nSummary\nExpected (snapshot)\n9\nExecuted\n1\nExecution\n11.11%\n1 of 9 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t8\t88.89%\t—\npassed\t1\t11.11%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t9\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12, TC-15\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-19\n\tzipped\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "viewer",
+      "name": "run-detail-3",
+      "url": "/test-runs/45",
+      "ms": 1710,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nTest run #45\nincomplete\n100% of executed passed\nRun metadata\nExternal run id\ngithub:1791372920107829:1\nProvider\ngithub\nRun id\n1791372920107829\nAttempt\n1\nPipeline\n—\nBranch\n—\nCommit\n—\nExecution status\ncompleted\nCreated\n2026-10-07 11:35:20 UTC\nStarted\n2026-09-28 10:00:00 UTC\nCompleted\n2026-10-07 11:35:20 UTC\nSummary\nExpected (snapshot)\n8\nExecuted\n1\nExecution\n12.50%\n1 of 8 test cases executed\nPass rate\n100%\n1 of 1 executed passed\nStatus\tTest cases\t% of expected\t% of executed\nuntested\t7\t87.50%\t—\npassed\t1\t12.50%\t100%\nfailed\t0\t0%\t0%\nerror\t0\t0%\t0%\nskipped\t0\t0%\t0%\nTotal\t8\t100%\t100%\n\nEach executed TC-ID counts once with its aggregated status (failed > error > skipped > passed); a retried test counts with its last attempt. The expected universe is the snapshot taken when the run was created (the active automated test cases, of its suite if it names one; a manual run's own selection).\n\nUntested: TC-1, TC-2, TC-3, TC-4, TC-5, TC-10, TC-12\nTC-ID diagnostics\nExcluded from the universe and the percentages.\n\nEvery result declared a valid TC-ID.\n\nResults\nEvery individual result as ingested (e.g. one per browser).\nAll statuses\npassed\nfailed\nerror\nskipped\nAll correlations\nvalid\nmissing\nmalformed\nunknown\ndeprecated\nwrong_project\nTC-ID\tTest name\tStatus\tDuration\tError\n\nTC-15\n\tzipped\t\npassed\n\t420 ms\t\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "viewer",
+      "name": "manual-run",
+      "url": "/test-runs/manual",
+      "ms": 1487,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nNew manual run\nA manual run expects the project's active manual test cases (or every active test case), optionally of one suite. You then record each result and complete the run.\nWhat is being tested\nProject\nSuite\nThe whole project\nExpected test cases\nManual test cases (CI runs the automated ones)\nEvery active test case\nBranch or build (optional)\nStart manual run\nCancel",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "viewer",
+      "name": "dashboard",
+      "url": "/dashboard",
+      "ms": 1586,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nDashboard\nLatest run\n#106\nincomplete\n2026-10-07 12:13:35 UTC\nAutomation\n47.62%\n10 of 21 active test cases\nNot executed recently\n10\n10 never, 0 not in 14 days\nFlaky test cases\n0\npassed on a retry in the latest 20 runs\nRun trend\n\nPass rate (% of executed) of the latest 10 runs, oldest first. Red: the run did not pass; grey: it executed no test case.\n\nRequirement coverage\n\nNo requirements yet.\n\nIssue verification\n\nNo issues yet.\n\nNot executed recently\nBy execution start date.\nOlder than\n7 days\n14 days\n30 days\n90 days\nTC-7 never executed\nTC-8 never executed\nTC-9 never executed\nTC-11 never executed\nTC-13 never executed\nTC-14 never executed\nTC-16 never executed\nTC-17 never executed\nTC-18 never executed\nTC-20 never executed\nFlaky test cases\nOver the latest\n10 runs\n20 runs\n50 runs\n\nNo flaky test cases.",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "viewer",
+      "name": "suites",
+      "url": "/suites",
+      "ms": 1576,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nSuites\nA suite is a named selection of a project's test cases: a static list, or a query by tag and classification. CI reports a run for a suite with &suite=<key>: only the suite's active automated test cases are expected, so a smoke run is not full of untested cases.\nName\tKey\tKind\tSelection\nNo suites in TC yet.\nPage 1 of 1 · 0 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "viewer",
+      "name": "requirements",
+      "url": "/requirements",
+      "ms": 1687,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nRequirements\nWhat the product must do, written here or mirrored from Jira, GitHub or Azure DevOps (maintainers import them through the API). Coverage comes from the latest result of each test case that covers a requirement.\nRequirement\tTitle\tCoverage\tTest cases\nNo requirements in TC yet.\nPage 1 of 1 · 0 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "viewer",
+      "name": "issues",
+      "url": "/issues",
+      "ms": 1834,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nIssues\nDefects reported here or mirrored from Jira, GitHub or Azure DevOps (maintainers import them with their state through the API). Link the test cases that reproduce an issue: its verification combines the issue's state with their latest conclusive results.\nState\nAll\nOpen\nClosed\nIssue\tTitle\tState\tVerification\nNo issues here.\nPage 1 of 1 · 0 items\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 3
+    },
+    {
+      "role": "viewer",
+      "name": "projects",
+      "url": "/projects",
+      "ms": 1519,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nProjects\nEach project numbers its test cases with its own key (e.g. CHK-12). Keys never change and projects are never deleted. TC is the default project.\nKey\tName\tDescription\tYour role\tCreated\t\nTC\t\nDefault\n\tTest cases created before projects existed.\tviewer\t2026-10-07 03:06:19 UTC\tMembers\nPage 1 of 1 · 1 item\nPrevious\nNext",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "viewer",
+      "name": "project-TC",
+      "url": "/projects/TC",
+      "ms": 1522,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nProject TC\nAll projects\nMembers\nWho works in this project and with which role.\nUsername\tName\tRole\tSince\t\naudit-maintainer-56a024\tAudit maintainer\tmaintainer\t2026-10-07 22:04:43 UTC\t\naudit-maintainer-8f4660\tAudit maintainer\tmaintainer\t2026-10-07 22:09:40 UTC\t\naudit-member-26f02d\tAudit member\tmember\t2026-10-07 22:09:42 UTC\t\naudit-member-8d09d5\tAudit member\tmember\t2026-10-07 22:04:45 UTC\t\naudit-viewer-69aa76\tAudit viewer\tviewer\t2026-10-07 22:09:45 UTC\t\naudit-viewer-c894f2\tAudit viewer\tviewer\t2026-10-07 22:04:47 UTC\t\nPage 1 of 1 · 6 items\nPrevious\nNext\nClassification\nDimensions classify test cases with controlled values (one per dimension); tags are free labels on each test case. Values and dimensions are archived, never deleted, so reports keep their meaning.\nFeature\nfeature\nbuilt-in\nNo values yet.\nComponent\ncomponent\nbuilt-in\nNo values yet.\nTest level\nlevel\nbuilt-in\nUnit\nIntegration\nSystem\nEnd to end\nDepth\ndepth\nbuilt-in\nSmoke\nSanity\nRegression\nTest type\ntype\nbuilt-in\nFunctional\nPerformance\nSecurity\nAccessibility\nUsability\nRisk\nrisk\nbuilt-in\nCritical\nHigh\nMedium\nLow\nPlatform\nplatform\nbuilt-in\nNo values yet.",
+      "status": 200,
+      "loadingMs": 31
+    },
+    {
+      "role": "viewer",
+      "name": "users",
+      "url": "/users",
+      "ms": 1496,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nUsers\nNot allowed\nOnly administrators can manage users and invitations.",
+      "status": 200,
+      "loadingMs": 21
+    },
+    {
+      "role": "viewer",
+      "name": "audit",
+      "url": "/audit",
+      "ms": 1555,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 403 ()"
+      ],
+      "failed": [
+        "403 GET /api/v1/audit?page=1"
+      ],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nAudit log\nEvery change made through the API or the UI, with who made it (a user or a CI API key). Request contents are never recorded.\nProject\nActor\nTest case\nFilter\nSomething went wrong\nonly administrators can manage users and invitations",
+      "status": 200,
+      "loadingMs": 20
+    },
+    {
+      "role": "viewer",
+      "name": "account",
+      "url": "/account",
+      "ms": 1504,
+      "consoleErrors": [],
+      "failed": [],
+      "text": "Provenly\nDashboard\nTest Cases\nTest Runs\nSuites\nRequirements\nIssues\nProjects\nAll projects\nTC · Default\nAudit viewer\nSign out\nAccount\nAudit viewer · @audit-viewer-69aa76\nChange password\nCurrent password\nNew password\n\nAt least 10 characters, at most 72 bytes (letters outside ASCII count as 2 to 4).\n\nRepeat new password\nChange password\nPersonal access tokens\nScripts and AI agents read Provenly as you with a token: only the projects you give it, never a change, and only until it expires (at most a year). Send it as Authorization: Bearer <token>.\nName\tToken\tProjects\tStatus\tExpires\tLast used\t\nNo tokens yet.\nPage 1 of 1 · 0 items\nPrevious\nNext\nToken name\nExpires in\n30 days\n90 days\n180 days\n365 days\nProjects it can read\nTC · Default\nCreate token\nAgents (MCP)\nAI agents read Provenly through its Model Context Protocol endpoint, as you and read-only (projects, test cases, runs, history, quality, issues, requirements). Connect one with a personal access token (above), limited to the projects you give it:\nclaude mcp add --transport http provenly \"https://provenly-ed.onrender.com/api/v1/mcp\" --header \"Authorization: Bearer YOUR_TOKEN\"",
+      "status": 200,
+      "loadingMs": 21
+    }
+  ]
+}

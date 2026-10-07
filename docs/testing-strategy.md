@@ -85,6 +85,19 @@ make gates               # evaluate the 8 gates from collected evidence
 make coverage            # everything above
 ```
 
+### E2E reports and deployed instances
+
+In GitHub Actions every Playwright run writes a visual **job summary** (`e2e/support/summary-reporter.ts`: totals, a
+pass/fail bar, one row per spec, each failure with its error and the full list of journeys), marks failures as
+annotations and uploads the HTML report (`playwright-report` artifact, with traces of failures).
+
+The same journeys run against a deployed instance with `E2E_REMOTE_URL` (the UI origin; it must proxy `/api`, as the
+Render static site and the docker nginx do) plus `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD`: no local servers, no
+coverage, longer timeouts, and journeys tagged `@local` are skipped (they need the local GitHub double and webhook
+receivers, or deprecate every automated test case). The others create their own projects, test cases and runs on the
+instance. Locally: `make e2e-remote URL=https://… E2E_ADMIN_PASSWORD=…`; in CI: the **E2E on a deployed instance**
+workflow (Actions → Run workflow; the password comes from a repository secret, `RENDER_ADMIN_PASSWORD` by default).
+
 ## Spike: unifying Go raw coverage (Go 1.26, re-verified on 1.27.1)
 
 Verified in this repository (not assumed):

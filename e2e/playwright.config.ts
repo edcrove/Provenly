@@ -10,9 +10,15 @@ export const githubPort = Number(process.env.E2E_GITHUB_PORT ?? '8098')
 const databaseUrl =
   process.env.PROVENLY_DATABASE_URL ?? 'postgres://provenly:provenly@localhost:5439/provenly_e2e?sslmode=disable'
 
-export const apiURL = `http://localhost:${apiPort}`
-export const adminUsername = 'admin'
-export const adminPassword = 'e2e admin password'
+/**
+ * E2E_REMOTE_URL runs the journeys against a deployed instance instead of the local stack: the UI origin, which must
+ * also serve the API under /api (the Render static site and the docker nginx proxy it), so the session cookie the
+ * global sign-in saves belongs to the pages under test. Journeys tagged @local need the local stack and are skipped.
+ */
+export const remoteURL = process.env.E2E_REMOTE_URL?.replace(/\/+$/, '') || undefined
+export const apiURL = remoteURL ?? `http://localhost:${apiPort}`
+export const adminUsername = (remoteURL && process.env.E2E_ADMIN_USERNAME) || 'admin'
+export const adminPassword = (remoteURL && process.env.E2E_ADMIN_PASSWORD) || 'e2e admin password'
 /** Browser state signed in as the administrator, written by the global setup. */
 export const adminState = path.join(import.meta.dirname, '.auth/admin.json')
 
@@ -25,7 +31,9 @@ export const adminState = path.join(import.meta.dirname, '.auth/admin.json')
 export default defineConfig({
   testDir: './tests',
   globalSetup: './support/sign-in.ts',
-  globalTeardown: './support/remap-coverage.ts',
+  // Coverage evidence only exists on the instrumented local stack.
+  globalTeardown: remoteURL ? undefined : './support/remap-coverage.ts',
+  grepInvert: remoteURL ? /@local/ : undefined,
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -34,19 +42,25 @@ export default defineConfig({
     ['list'],
     ['json', { outputFile: 'coverage/results.json' }],
     ['html', { open: 'never' }],
+    // In GitHub Actions: failures as annotations on the run, and a visual summary on the job page.
+    ...(process.env.GITHUB_ACTIONS ? [['github'] as const] : []),
+    ['./support/summary-reporter.ts'],
     // Dogfooding (prototype feature 16): with PROVENLY_URL and PROVENLY_API_KEY set, these journeys report themselves
     // to a Provenly instance; without them the reporter does nothing.
     ['../reporters/playwright/src/index.ts'],
   ],
   use: {
-    baseURL: `http://localhost:${webPort}`,
+    baseURL: remoteURL ?? `http://localhost:${webPort}`,
     // Every journey (browser and API request fixture) starts signed in as the administrator.
     storageState: adminState,
     trace: 'retain-on-failure',
     // Optional: run on an already installed Chromium instead of Playwright's own build.
     launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined },
   },
-  webServer: [
+  // A deployed instance is slower than localhost (network, free-tier cold starts).
+  timeout: remoteURL ? 120_000 : undefined,
+  expect: remoteURL ? { timeout: 20_000 } : undefined,
+  webServer: remoteURL ? undefined : [
     {
       command: `${path.join(root, 'backend/bin/provenly-cover')} serve`,
       url: `${apiURL}/healthz`,

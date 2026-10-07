@@ -1,6 +1,7 @@
 import { byName, byProperty, expect, junit, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
-test.describe('Frontend UI journeys', () => {
+// @local: isolateUniverse deprecates every automated test case, which would wipe a deployed instance's data.
+test.describe('Frontend UI journeys', { tag: '@local' }, () => {
   test('[FE-E2E-001] manage a test case in the UI: create, edit, steps and deprecate', async ({ page }) => {
     await page.goto('/')
     await expect(page).toHaveURL(/\/test-cases$/)

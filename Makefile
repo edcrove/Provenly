@@ -32,7 +32,7 @@ LOAD_DOTENV := set -a; [ ! -f $(ROOT)/.env.local ] || . $(ROOT)/.env.local; set 
 .PHONY: help probe setup up dev down ps logs infra db-dump db-reset db-restore demo-reset seed-snapshot seed-rebuild-demo \
 	check-env guard-prod migrate dev-backend dev-frontend generate check-generated lint screenshots \
 	test-backend-unit test-backend-integration test-backend-contract fuzz \
-	test-frontend-unit test-frontend-integration test-frontend-contract test-reporter test-e2e \
+	test-frontend-unit test-frontend-integration test-frontend-contract test-reporter test-e2e e2e-remote \
 	test gates coverage clean
 
 help: ## Show this help
@@ -175,6 +175,10 @@ test-frontend-contract: ## Frontend Contract (generated client + MSW handlers va
 
 test-e2e: ## E2E journeys (Playwright) on the instrumented stack and an ephemeral database
 	./scripts/e2e.sh
+
+e2e-remote: ## E2E journeys against a deployed instance: make e2e-remote URL=https://… E2E_ADMIN_PASSWORD=… (skips @local)
+	@test -n "$(URL)" || (echo "usage: make e2e-remote URL=<UI origin> [E2E_ADMIN_USERNAME=admin] E2E_ADMIN_PASSWORD=…" >&2; exit 2)
+	cd e2e && E2E_REMOTE_URL="$(URL)" npx playwright test
 
 test-reporter: ## Playwright reporter unit tests (100% coverage thresholds)
 	cd reporters/playwright && npm test

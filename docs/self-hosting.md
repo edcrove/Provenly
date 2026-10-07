@@ -125,3 +125,6 @@ What to expect on the free plan: the API sleeps after 15 minutes without request
 after creation. The API runs with `PROVENLY_ENV=prod` (Render generates the JWT secret and the secrets key) and
 applies migrations on start (`PROVENLY_AUTO_MIGRATE`). The UI is a static site that proxies `/api/*` to the API, so
 the session cookie stays same-origin. Backups (section 4) do not apply.
+
+To run the E2E journeys against it, save the admin password as the repository secret `RENDER_ADMIN_PASSWORD` and run
+the **E2E on a deployed instance** workflow (see `docs/testing-strategy.md`); they add their own test data.

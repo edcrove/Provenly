@@ -1,7 +1,8 @@
 import { apiURL } from '../playwright.config'
 import { byName, byProperty, expect, junit, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
-test.describe('Backend API journeys', () => {
+// @local: isolateUniverse deprecates every automated test case, which would wipe a deployed instance's data.
+test.describe('Backend API journeys', { tag: '@local' }, () => {
   test('[BE-E2E-001] health check responds through the public interface', async ({ request }) => {
     const res = await request.get(`${apiURL}/healthz`)
     expect(res.status()).toBe(200)

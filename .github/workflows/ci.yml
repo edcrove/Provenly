@@ -283,7 +283,8 @@ jobs:
           path: e2e/coverage/
           if-no-files-found: ignore
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        if: failure()
+        # Always: the visual report of the journeys (the job summary links to it).
+        if: always()
         with:
           name: playwright-report
           path: e2e/playwright-report/

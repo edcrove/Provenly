@@ -64,6 +64,7 @@ make coverage        # every layer + the 10 gates (needs Docker); prints "Overal
 make screenshots     # docs/screenshots on an ephemeral DB
 make dev-backend / make dev-frontend   # non-docker dev (reads .env.local, not .env)
 scripts/doctor.sh [--fix]              # environment check (pinned tools, packages, docker, chromium, ports)
+make e2e-remote URL=... E2E_ADMIN_PASSWORD=...   # E2E on a deployed instance (skips @local); CI: workflow e2e-remote.yml
 make probe [BASE=URL]                  # edge-case sweep (scripts/probe/edge_cases.py); also runs in CI (docker job)
 scripts/readme-flow.sh [API]           # README curl walkthrough, verbatim, on a fresh demo (CI docker job)
 scripts/env-checks.sh                  # environments: isolation, seeds, dump/restore, prod guards (CI only)

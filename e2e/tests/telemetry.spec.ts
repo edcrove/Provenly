@@ -4,8 +4,9 @@ import { byProperty, expect, junit, test, uniqueRunId } from '../support/fixture
 test.describe('OpenTelemetry (DEC-11)', () => {
   test('[BE-E2E-023] every response names its trace and continues the caller\'s traceparent, ingestion included', async ({ request, provenly }) => {
     const traceId = '4bf92f3577b34da6a3ce929d0e0e4736'
-    const health = await request.get(`${apiURL}/healthz`, { headers: { traceparent: `00-${traceId}-00f067aa0ba902b7-01` } })
-    expect(health.headers()['x-trace-id']).toBe(traceId)
+    // An API route (not /healthz) so the journey also runs through a deployed UI origin that proxies /api.
+    const listed = await request.get(`${apiURL}/api/v1/projects`, { headers: { traceparent: `00-${traceId}-00f067aa0ba902b7-01` } })
+    expect(listed.headers()['x-trace-id']).toBe(traceId)
 
     const tc = await provenly.createTestCase({ title: 'traced', automated: true })
     const otherTrace = '0af7651916cd43dd8448eb211c80319c'

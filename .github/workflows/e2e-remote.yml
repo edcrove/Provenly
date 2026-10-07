@@ -1,0 +1,74 @@
+name: E2E on a deployed instance
+
+# Runs the Playwright journeys against a deployed Provenly (for example the Render demo) on demand. Journeys tagged
+# @local (they need the local stack or would wipe data) are skipped; the others create their own projects, test
+# cases and runs on the instance. Results: the job summary and the playwright-report artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: UI origin of the instance (it must proxy /api to the backend)
+        default: https://provenly-ed.onrender.com
+        required: true
+      username:
+        description: Administrator username
+        default: admin
+        required: true
+      password_secret:
+        description: Name of the repository secret with that administrator's password
+        default: RENDER_ADMIN_PASSWORD
+        required: true
+
+concurrency:
+  group: e2e-remote
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E · ${{ inputs.url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      E2E_REMOTE_URL: ${{ inputs.url }}
+      E2E_ADMIN_USERNAME: ${{ inputs.username }}
+      E2E_ADMIN_PASSWORD: ${{ secrets[inputs.password_secret] }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: e2e
+      - name: Check the password secret
+        run: |
+          if [ -z "$E2E_ADMIN_PASSWORD" ]; then
+            echo "::error::Repository secret '$SECRET' is missing or empty"
+            exit 1
+          fi
+        env:
+          SECRET: ${{ inputs.password_secret }}
+      - name: Wake the instance (free tiers sleep)
+        run: |
+          for _ in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${E2E_REMOTE_URL%/}/api/v1/auth/me" || true)
+            case "$code" in 2??|401) echo "API answered $code"; exit 0 ;; esac
+            echo "API answered '$code', waiting"; sleep 10
+          done
+          echo "::error::$E2E_REMOTE_URL did not answer within 5 minutes"
+          exit 1
+      - name: Playwright journeys
+        run: npx playwright test
+        working-directory: e2e
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        if: always()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          if-no-files-found: ignore

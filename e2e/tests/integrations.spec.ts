@@ -35,7 +35,8 @@ const githubIssues = JSON.stringify([
   { number: 7, title: 'Old crash', html_url: 'https://github.com/acme/shop/issues/7', state: 'closed', state_reason: 'completed' },
 ])
 
-test.describe('Integrations: webhooks and GitHub Issues (prototype feature 18)', () => {
+// @local: needs the GitHub double and webhook receivers on this machine (private addresses allowed).
+test.describe('Integrations: webhooks and GitHub Issues (prototype feature 18)', { tag: '@local' }, () => {
   test('[BE-E2E-024] a completed run is delivered to a webhook, signed; GitHub issues are mirrored through the API', async ({ request, provenly }) => {
     const key = uniqueProjectKey()
     await provenly.createProject(key, 'Integrations API')

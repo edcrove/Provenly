@@ -33,7 +33,8 @@ jobs:
       - name: Playwright against Render
         working-directory: e2e
         env:
-          E2E_REMOTE_API: ${{ env.API }}
+          # Through the UI origin (it proxies /api/*), so the session cookie belongs to the pages under test.
+          E2E_REMOTE_API: ${{ env.WEB }}
           E2E_REMOTE_WEB: ${{ env.WEB }}
           E2E_ADMIN_PASSWORD: ${{ secrets.RENDER_ADMIN_PASSWORD }}
         # Left out: api/ui deprecate every automated test case (would wipe the demo's universe);

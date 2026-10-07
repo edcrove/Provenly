@@ -1,0 +1,51 @@
+name: E2E on Render (one-off)
+
+on:
+  push:
+    branches: [e2e/render]
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      API: https://provenly-ed-api.onrender.com
+      WEB: https://provenly-ed.onrender.com
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "22"
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: e2e
+      - name: Wake the API (free tier cold start)
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS --max-time 20 "$API/readyz" && curl -fsS --max-time 20 -o /dev/null "$WEB" && exit 0
+            sleep 10
+          done
+          exit 1
+      - name: Playwright against Render
+        working-directory: e2e
+        env:
+          E2E_REMOTE_API: ${{ env.API }}
+          E2E_REMOTE_WEB: ${{ env.WEB }}
+          E2E_ADMIN_PASSWORD: ${{ secrets.RENDER_ADMIN_PASSWORD }}
+        # Left out: api/ui deprecate every automated test case (would wipe the demo's universe);
+        # integrations needs the local GitHub double and private webhook targets.
+        run: |
+          specs=$(ls tests/*.spec.ts | grep -vE '/(api|ui|integrations)\.spec\.ts$')
+          npx playwright test $specs
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        if: always()
+        with:
+          name: playwright-render
+          path: |
+            e2e/playwright-report/
+            e2e/coverage/results.json
+          if-no-files-found: ignore

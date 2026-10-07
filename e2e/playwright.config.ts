@@ -10,9 +10,12 @@ export const githubPort = Number(process.env.E2E_GITHUB_PORT ?? '8098')
 const databaseUrl =
   process.env.PROVENLY_DATABASE_URL ?? 'postgres://provenly:provenly@localhost:5439/provenly_e2e?sslmode=disable'
 
-export const apiURL = `http://localhost:${apiPort}`
+/** E2E_REMOTE_API / E2E_REMOTE_WEB: run against a deployed instance instead of the local stack. */
+const remoteApi = process.env.E2E_REMOTE_API
+const remoteWeb = process.env.E2E_REMOTE_WEB
+export const apiURL = remoteApi ?? `http://localhost:${apiPort}`
 export const adminUsername = 'admin'
-export const adminPassword = 'e2e admin password'
+export const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? 'e2e admin password'
 /** Browser state signed in as the administrator, written by the global setup. */
 export const adminState = path.join(import.meta.dirname, '.auth/admin.json')
 
@@ -25,7 +28,7 @@ export const adminState = path.join(import.meta.dirname, '.auth/admin.json')
 export default defineConfig({
   testDir: './tests',
   globalSetup: './support/sign-in.ts',
-  globalTeardown: './support/remap-coverage.ts',
+  globalTeardown: remoteApi ? undefined : './support/remap-coverage.ts',
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -39,14 +42,16 @@ export default defineConfig({
     ['../reporters/playwright/src/index.ts'],
   ],
   use: {
-    baseURL: `http://localhost:${webPort}`,
+    baseURL: remoteWeb ?? `http://localhost:${webPort}`,
     // Every journey (browser and API request fixture) starts signed in as the administrator.
     storageState: adminState,
     trace: 'retain-on-failure',
     // Optional: run on an already installed Chromium instead of Playwright's own build.
     launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined },
   },
-  webServer: [
+  timeout: remoteApi ? 120_000 : undefined,
+  expect: remoteApi ? { timeout: 20_000 } : undefined,
+  webServer: remoteApi ? undefined : [
     {
       command: `${path.join(root, 'backend/bin/provenly-cover')} serve`,
       url: `${apiURL}/healthz`,

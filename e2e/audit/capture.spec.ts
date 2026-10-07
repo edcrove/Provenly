@@ -9,7 +9,7 @@ const out = path.join(import.meta.dirname, '../../audit-out')
 const shots = path.join(out, 'shots')
 mkdirSync(shots, { recursive: true })
 
-interface Visit { role: string; name: string; url: string; status?: number; ms: number; consoleErrors: string[]; failed: string[]; text: string; error?: string }
+interface Visit { loadingMs?: number; role: string; name: string; url: string; status?: number; ms: number; consoleErrors: string[]; failed: string[]; text: string; error?: string }
 const visits: Visit[] = []
 const apiTimings: { what: string; ms: number; status: number }[] = []
 
@@ -32,7 +32,12 @@ async function visit(ctx: BrowserContext, role: string, name: string, url: strin
     const r = await page.goto(url, { waitUntil: 'networkidle', timeout: 90_000 })
     v.status = r?.status()
     if (after) await after(page)
+    await page.waitForTimeout(500)
     await page.waitForLoadState('networkidle').catch(() => {})
+    // A page still saying Loading… after 30 s is a finding; a shorter wait is just the capture being early.
+    const t2 = Date.now()
+    await page.getByText('Loading…', { exact: true }).first().waitFor({ state: 'detached', timeout: 30_000 }).catch(() => { v.error = 'still Loading… after 30 s' })
+    v.loadingMs = Date.now() - t2
   } catch (e) {
     v.error = String(e).slice(0, 400)
   }

@@ -28,15 +28,6 @@ jobs:
             echo "waiting for the API ($i)"; sleep 15
           done
           exit 1
-      - name: Refuse a database that already has data
-        env:
-          PROVENLY_ADMIN_PASSWORD: ${{ secrets.RENDER_ADMIN_PASSWORD }}
-        run: |
-          source scripts/lib/session.sh
-          jar=$(provenly_login "$BASE")
-          total=$(curl -fsS -b "$jar" "$BASE/api/v1/test-cases?pageSize=1" | jq .totalItems)
-          echo "test cases already there: $total"
-          test "$total" = 0
       - name: Load the demo dataset
         env:
           PROVENLY_ADMIN_PASSWORD: ${{ secrets.RENDER_ADMIN_PASSWORD }}

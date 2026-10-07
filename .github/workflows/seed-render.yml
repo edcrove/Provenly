@@ -1,0 +1,43 @@
+# One-off: loads the demo dataset into the temporary Render instance (render.yaml) through its public API.
+# Runs on a push to the seed/render branch; the admin password comes from the RENDER_ADMIN_PASSWORD secret.
+name: Seed Render demo data
+
+on:
+  push:
+    branches: [seed/render]
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BASE: https://provenly-ed.onrender.com
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Wake the API (free instances sleep)
+        run: |
+          for i in $(seq 40); do
+            if curl -fsS --max-time 20 https://provenly-ed-api.onrender.com/readyz >/dev/null; then
+              echo "API ready"; exit 0
+            fi
+            echo "waiting for the API ($i)"; sleep 15
+          done
+          exit 1
+      - name: Refuse a database that already has data
+        env:
+          PROVENLY_ADMIN_PASSWORD: ${{ secrets.RENDER_ADMIN_PASSWORD }}
+        run: |
+          source scripts/lib/session.sh
+          jar=$(provenly_login "$BASE")
+          total=$(curl -fsS -b "$jar" "$BASE/api/v1/test-cases?pageSize=1" | jq .totalItems)
+          echo "test cases already there: $total"
+          test "$total" = 0
+      - name: Load the demo dataset
+        env:
+          PROVENLY_ADMIN_PASSWORD: ${{ secrets.RENDER_ADMIN_PASSWORD }}
+        run: scripts/seed/demo-data.sh "$BASE"

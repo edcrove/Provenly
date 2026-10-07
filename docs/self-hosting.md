@@ -108,3 +108,20 @@ is healthy while its last success is under 26 hours old (`docker compose ps`, or
   (open `<web address>/reset-password?token=...`) and reactivates the account.
 - **Agents**: MCP clients connect to `/api/v1/mcp` with a user's session token (Account page).
 - **Security reports**: see `SECURITY.md`.
+
+## 7. Try it on Render (free, temporary)
+
+`render.yaml` is a Render Blueprint for a throwaway instance to try Provenly, not for real data:
+
+1. Sign in to [Render](https://render.com) with GitHub, then **New → Blueprint**, pick this repository and the branch
+   to try (`prototype/full-product` until the prototype is merged).
+2. Render asks for `PROVENLY_ADMIN_PASSWORD` (at least 10 characters; the demo password is refused): sign in as
+   `admin` with it.
+3. The UI is `https://provenly-ed.onrender.com`. If Render renamed a service because the name was taken, use its real
+   URL and point the `/api/*` rewrite of `provenly-ed` at the API's.
+
+What to expect on the free plan: the API sleeps after 15 minutes without requests and takes about a minute to wake
+(the first page load waits); the database starts empty (no demo data) and Render deletes free databases 30 days
+after creation. The API runs with `PROVENLY_ENV=prod` (Render generates the JWT secret and the secrets key) and
+applies migrations on start (`PROVENLY_AUTO_MIGRATE`). The UI is a static site that proxies `/api/*` to the API, so
+the session cookie stays same-origin. Backups (section 4) do not apply.

@@ -175,3 +175,8 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     storage (P1-9); project-scoped URLs are an Incubator item.
     **Status: Asked by Ed (2026-10-08, deployed persona audit: "el orden de los ítems del menú y el acceso a la vista
     de proyectos y la relación con sus partes no está clara"), refined by the PO agent.** FE-INT-059, FE-E2E-030.
+
+20. **Times in the viewer's zone.** Every date the UI shows is the viewer's local time with its UTC offset
+    ("2026-10-08 11:03:05 UTC−3"), computed per date so summer time is right; the API keeps sending UTC. Tests read
+    dates in UTC (`TZ=UTC` for Vitest, `timezoneId: 'UTC'` for Playwright); the screenshots use America/Montevideo.
+    **Status: Asked by Ed (2026-10-08, deployed persona audit: raw UTC everywhere), refined by the PO agent.**

@@ -6,6 +6,8 @@ import { withBase } from './vitest.shared.ts'
 export default withBase(
   defineConfig({
     test: {
+      // Dates show in the viewer's time zone: tests read them in UTC wherever they run.
+      env: { TZ: 'UTC' },
       name: 'contract',
       environment: 'node',
       include: ['src/contract/**/*.test.ts'],

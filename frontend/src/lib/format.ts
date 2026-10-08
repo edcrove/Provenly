@@ -13,12 +13,27 @@ export function formatDuration(ms: number | null): string {
   return `${Math.floor(total / 60)}m ${total % 60}s`
 }
 
-/** Formats an ISO timestamp (UTC) for tables; empty for null. */
-export function formatDateTime(iso: string | null | undefined): string {
+/** "UTC", "UTC−3", "UTC+5:30": a UTC offset in minutes, as people read it. */
+export function formatOffset(minutes: number): string {
+  if (minutes === 0) return 'UTC'
+  const abs = Math.abs(minutes)
+  const h = Math.floor(abs / 60)
+  const m = abs % 60
+  return `UTC${minutes < 0 ? '−' : '+'}${h}${m ? `:${String(m).padStart(2, '0')}` : ''}`
+}
+
+/**
+ * Formats an ISO timestamp for tables in the viewer's local time with its UTC offset, e.g. "2026-10-08 11:03:05
+ * UTC−3" ("—" when missing or invalid). offsetMinutes defaults to the browser's offset at that instant (so summer time
+ * is right for each date).
+ */
+export function formatDateTime(iso: string | null | undefined, offsetMinutes?: number): string {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+  const offset = offsetMinutes ?? -d.getTimezoneOffset()
+  const local = new Date(d.getTime() + offset * 60_000)
+  return `${local.toISOString().replace('T', ' ').slice(0, 19)} ${formatOffset(offset)}`
 }
 
 /** Formats a 0..100 percentage for display, rounded to 2 decimals (the API sends 6). */

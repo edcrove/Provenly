@@ -14,6 +14,7 @@ import { useProjectRole } from '@/features/projects/useProjectRole'
 import { can } from '@/lib/roles'
 import { positiveInt } from '@/lib/status'
 import { selectionLabel } from '@/lib/suites'
+import { Breadcrumb } from '@/features/projects/ProjectScope'
 
 /** Adds one of the project's active test cases to a static suite, searching by key or title (DEC-78). */
 function AddCase({ suite, projectKey }: { suite: Suite; projectKey: string }) {
@@ -123,6 +124,7 @@ export function SuiteDetailPage() {
       {(s) => (
         <Card>
           <CardHeader>
+            <Breadcrumb projectKey={projectKey} section="Suites" to="/suites" current={s.key} />
             <PageTitle title={`${s.name} · suite`} />
             <CardTitle as="h1" className="flex flex-wrap items-center gap-2 text-xl">
               {s.name}

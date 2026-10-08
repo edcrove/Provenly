@@ -1,5 +1,5 @@
 import { apiURL } from '../playwright.config'
-import { byProperty, expect, junit, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
+import { byProperty, expect, junit, pickProject, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
 const retried = (name: string, key: string) =>
   `<testcase name="${name}" classname="suite"><properties><property name="tc-id" value="${key}"/><property name="attempt" value="1"/></properties><failure message="x"/></testcase>` +
@@ -52,7 +52,7 @@ test.describe('Quality dashboard', () => {
     await request.put(`${apiURL}/api/v1/projects/${key}/requirements/${(await req.json()).id}/test-cases`, { data: { testCaseIds: [login.id] } })
 
     await page.goto('/dashboard')
-    await page.getByLabel('Current project').selectOption(key)
+    await pickProject(page, key)
     await expect(page.getByTestId('latest-run')).toContainText(`#${second}`)
     await expect(page.getByTestId(`trend-${first}`)).toBeVisible()
     await expect(page.getByTestId('automation-rate')).toHaveText('50%')
@@ -61,6 +61,6 @@ test.describe('Quality dashboard', () => {
     await expect(page.getByTestId('coverage-breakdown')).toContainText('Passing: 1')
     await page.getByTestId(`trend-${first}`).click()
     await expect(page.getByTestId('verdict-badge').first()).toContainText('failed')
-    await page.getByLabel('Current project').selectOption('')
+    await pickProject(page, '')
   })
 })

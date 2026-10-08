@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 
 import { apiURL, githubPort } from '../playwright.config'
-import { byProperty, expect, junit, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
+import { byProperty, expect, junit, pickProject, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
 interface Received {
   headers: IncomingMessage['headers']
@@ -114,7 +114,7 @@ test.describe('Integrations: webhooks and GitHub Issues (prototype feature 18)',
       await page.getByRole('button', { name: 'Sync issues now' }).click()
       await expect(page.getByText('Synced: 2 created, 0 updated.')).toBeVisible()
       await page.goto('/issues')
-      await page.getByLabel('Current project').selectOption(key)
+      await pickProject(page, key)
       await expect(page.getByText('Checkout loses the cart')).toBeVisible()
     } finally {
       await receiver.close()

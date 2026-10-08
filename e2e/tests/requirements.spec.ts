@@ -1,5 +1,5 @@
 import { apiURL } from '../playwright.config'
-import { byProperty, expect, junit, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
+import { byProperty, expect, junit, pickProject, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
 const failure = '<failure message="boom">trace</failure>'
 
@@ -61,7 +61,7 @@ test.describe('Requirements and traceability', () => {
     const login = await provenly.createTestCase({ title: 'Sign in works', project: key, automated: true })
 
     await page.goto('/requirements')
-    await page.getByLabel('Current project').selectOption(key)
+    await pickProject(page, key)
     await page.getByLabel('Title').fill('Users sign in with email')
     await page.getByRole('button', { name: 'Add requirement' }).click()
     await expect(page.getByTestId('requirement-R-1')).toContainText('Not covered')
@@ -84,6 +84,6 @@ test.describe('Requirements and traceability', () => {
     await page.getByRole('link', { name: login.key }).click()
     await expect(page.getByTestId('covered-requirements')).toContainText('R-1')
     await expect(page.getByTestId('covered-requirements')).toContainText('Failing')
-    await page.getByLabel('Current project').selectOption('')
+    await pickProject(page, '')
   })
 })

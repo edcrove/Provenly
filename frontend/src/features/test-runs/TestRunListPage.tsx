@@ -14,6 +14,7 @@ import { formatDateTime, formatPercent, outcomeBreakdown, shortCommit } from '@/
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { can } from '@/lib/roles'
 import { positiveInt } from '@/lib/status'
+import { ScopeLabel } from '@/features/projects/ProjectScope'
 
 export function TestRunListPage() {
   const [params, setParams] = useSearchParams()
@@ -31,9 +32,12 @@ export function TestRunListPage() {
       <CardHeader>
         <PageTitle title="Test Runs" />
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle as="h1" className="text-xl">
-            Test Runs
-          </CardTitle>
+          <div className="grid gap-1">
+            <CardTitle as="h1" className="text-xl">
+              Test Runs
+            </CardTitle>
+            <ScopeLabel />
+          </div>
           {(projects.data?.items ?? []).some((p) => can(p.myRole, 'member')) ? (
             <Button asChild variant="outline">
               <Link to="/test-runs/manual">

@@ -164,3 +164,14 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     **Status: Decided by Ed (2026-10-04) — optimistic locking in the MVP** (`docs/mvp-plan.md` D7, card 1.5): reads
     return an `ETag`, writes accept `If-Match` and answer 412 on a mismatch; `If-Match` stays optional in the API and
     the UI always sends it.
+
+19. **Navigation: the project first.** The header starts with the project switcher (a searchable combobox naming the
+    current project, or "All projects"), then the pages of that project in working order — Dashboard, Test Runs, Test
+    Cases, Suites, Requirements, Issues, and Settings (the project page) once one project is chosen; Projects, Users
+    and Audit sit apart on the right as the workspace. Lists say their scope under the title, pages of one project
+    offer the projects to pick while "All projects" is chosen, and detail pages show a breadcrumb with their project
+    and a "Switch to KEY" link (opening another project's item never changes the current project silently). Below
+    1280 px the items move into a Menu so the header stays one row. The current project stays in this browser's
+    storage (P1-9); project-scoped URLs are an Incubator item.
+    **Status: Asked by Ed (2026-10-08, deployed persona audit: "el orden de los ítems del menú y el acceso a la vista
+    de proyectos y la relación con sus partes no está clara"), refined by the PO agent.** FE-INT-059, FE-E2E-030.

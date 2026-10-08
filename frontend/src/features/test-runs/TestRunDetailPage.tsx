@@ -21,6 +21,7 @@ import { RunDiagnostics } from './RunDiagnostics'
 import { RunParseErrors } from './RunParseErrors'
 import { RunResults } from './RunResults'
 import { RunSummary } from './RunSummary'
+import { Breadcrumb } from '@/features/projects/ProjectScope'
 
 function Metadata({ run }: { run: TestRun }) {
   const rows: [string, string][] = [
@@ -79,6 +80,12 @@ export function TestRunDetailPage() {
     <QueryState page query={run}>
       {(r) => (
         <div className="grid gap-4">
+          <Breadcrumb
+            projectKey={projects.find((p) => p.id === r.projectId)?.key ?? ''}
+            section="Test Runs"
+            to="/test-runs"
+            current={`Run #${r.id}`}
+          />
           <div className="flex flex-wrap items-center gap-3">
             <PageTitle title={`Test run #${r.id}`} />
             <h1 className="text-2xl font-semibold">Test run #{r.id}</h1>

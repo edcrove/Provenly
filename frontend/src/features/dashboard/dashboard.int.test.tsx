@@ -13,9 +13,9 @@ describe('FE-INT-042 quality dashboard', () => {
   it('FE-INT-042 asks for a project, then shows the latest run, trend, automation, stale and flaky tests', async () => {
     db.flaky = { 153: 3 }
     const { user: u } = renderRoute('/dashboard')
-    expect(await screen.findByText('Choose a project (top right) to see its quality.')).toBeInTheDocument()
-    await screen.findByRole('option', { name: /^TC/ })
-    await u.selectOptions(screen.getByRole('combobox', { name: 'Current project' }), 'TC')
+    expect(await screen.findByText('Pick a project to see its quality.')).toBeInTheDocument()
+    // The chooser offers the projects themselves: one click opens the project.
+    await u.click(await screen.findByRole('button', { name: /^TC · / }))
 
     expect(await screen.findByTestId('latest-run')).toHaveTextContent('#7')
     expect(screen.getByTestId('trend-7')).toHaveAttribute('href', '/test-runs/7')

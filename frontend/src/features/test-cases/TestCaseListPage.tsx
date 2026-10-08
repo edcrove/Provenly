@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { can } from '@/lib/roles'
 import { pickEnum, positiveInt } from '@/lib/status'
+import { ScopeLabel } from '@/features/projects/ProjectScope'
 
 const statuses = ['active', 'deprecated'] as const
 
@@ -108,9 +109,12 @@ export function TestCaseListPage() {
     <Card>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
         <PageTitle title="Test Cases" />
-        <CardTitle as="h1" className="text-xl">
-          Test Cases
-        </CardTitle>
+        <div className="grid gap-1">
+          <CardTitle as="h1" className="text-xl">
+            Test Cases
+          </CardTitle>
+          <ScopeLabel />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <NativeSelect
             aria-label="Filter by status"

@@ -5257,6 +5257,10 @@ export interface operations {
             query?: {
                 page?: components["parameters"]["Page"];
                 pageSize?: components["parameters"]["PageSize"];
+                /** @description Only results of runs of this branch, exactly as CI reported it. */
+                branch?: string;
+                /** @description Only results with this status (e.g. the latest pass on main is status=passed&branch=main&pageSize=1). */
+                status?: "passed" | "failed" | "error" | "skipped";
             };
             header?: never;
             path: {

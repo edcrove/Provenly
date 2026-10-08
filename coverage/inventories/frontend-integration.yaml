@@ -204,3 +204,6 @@ targets:
   - id: FE-INT-063
     description: a failed run opens on its failures (deployed audit) - a run with failures or errors shows its results before its metadata and summary, tests whose last attempt failed or errored first; a passing run keeps its metadata first
     surfaces: [src/features/test-runs/TestRunDetailPage.tsx]
+  - id: FE-INT-064
+    description: did it pass on main lately (deployed audit) - the test case history says when it last passed (any branch, with its branch; or on the branch chosen), filters by branch (Enter, trimmed), and says when it never passed or has no results there
+    surfaces: [src/features/test-cases/TestCaseHistory.tsx, src/api/queries.ts]

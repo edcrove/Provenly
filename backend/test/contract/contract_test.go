@@ -157,6 +157,10 @@ func TestTestCases(t *testing.T) {
 	e.GET("/api/v1/test-cases/xyz/results").Expect().Status(http.StatusBadRequest)
 	e.GET("/api/v1/test-cases/987654/results").Expect().Status(http.StatusNotFound)
 	e.GET(path+"/results").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
+	e.GET(path+"/results").WithQuery("branch", "main").WithQuery("status", "passed").Expect().Status(http.StatusOK).
+		JSON().Object().HasValue("totalItems", 0)
+	e.GET(path+"/results").WithQuery("status", "green").Expect().Status(http.StatusBadRequest)
+	e.GET(path+"/results").WithQuery("branch", "").Expect().Status(http.StatusBadRequest)
 }
 
 // TestKeyFilter: ?key=<PROJECT>-<number> finds a test case by its key, zero or one item (card #53).

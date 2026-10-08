@@ -70,3 +70,5 @@ targets:
     description: automated or manual test cases (deployed audit) - a QA lead narrows a project's test cases to the manual ones (the filter goes to the URL) and the automated one disappears
   - id: FE-E2E-035
     description: a failed run (deployed audit) - a developer opening a run with a failure sees the Results section first and the failing result at the top, the passing one after it
+  - id: FE-E2E-036
+    description: did it pass on main lately (deployed audit) - a test case page says when it last passed and on which branch; filtered to a branch where it only failed it says it never passed there and lists that branch's results only

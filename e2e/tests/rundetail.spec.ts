@@ -18,3 +18,18 @@ test.describe('A failed run (deployed audit)', () => {
     await expect(rows.nth(1)).toContainText(ok.key)
   })
 })
+
+test.describe('Did it pass on main lately? (deployed audit)', () => {
+  test('[FE-E2E-036] a developer reads when a test case last passed on main and filters its history by branch', async ({ page, provenly }) => {
+    const tc = await provenly.createTestCase({ title: 'pay with voucher', automated: true })
+    expect((await provenly.ingest(uniqueRunId(), 1, junit(byProperty('pay with voucher', tc.key)), { branch: 'main' })).status()).toBe(201)
+    expect((await provenly.ingest(uniqueRunId(), 1, junit(byProperty('pay with voucher', tc.key, '<failure/>')), { branch: 'feature/vouchers' })).status()).toBe(201)
+    await page.goto(`/test-cases/${tc.id}`)
+    await expect(page.getByTestId('last-passed')).toContainText('Last passed: ')
+    await expect(page.getByTestId('last-passed')).toContainText('(main)')
+    await page.getByLabel('History branch').fill('feature/vouchers')
+    await page.keyboard.press('Enter')
+    await expect(page.getByTestId('last-passed')).toHaveText('Never passed on feature/vouchers.')
+    await expect(page.getByRole('table', { name: 'Execution history' }).getByRole('row')).toHaveCount(2)
+  })
+})

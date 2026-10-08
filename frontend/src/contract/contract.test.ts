@@ -2979,6 +2979,22 @@ const scenarios: Scenario[] = [
   },
   {
     op: 'GET /api/v1/test-cases/{testCaseId}/results',
+    status: 200,
+    call: (c) =>
+      c.GET('/api/v1/test-cases/{testCaseId}/results', {
+        params: { path: tc, query: { branch: 'main', status: 'passed', pageSize: 1 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/test-cases/{testCaseId}/results',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/test-cases/{testCaseId}/results', {
+        params: { path: tc, query: { status: 'green' as 'passed' } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/test-cases/{testCaseId}/results',
     status: 400,
     call: (c) =>
       c.GET('/api/v1/test-cases/{testCaseId}/results', { params: { path: tc, query: { pageSize: 500 } } }),

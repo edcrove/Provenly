@@ -23,7 +23,7 @@ type API interface {
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, page pagination.Page) (pagination.Result[TestResult], error)
 	Summary(ctx context.Context, runID int64) (Summary, error)
 	ListParseErrors(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[ParseError], error)
-	History(ctx context.Context, testCaseID int64, page pagination.Page) (pagination.Result[HistoryEntry], error)
+	HistoryOf(ctx context.Context, testCaseID int64, f HistoryFilter, page pagination.Page) (pagination.Result[HistoryEntry], error)
 	Amend(ctx context.Context, runID, testCaseID int64, reason string, by authz.Actor) (Amendment, error)
 	ListAmendments(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[Amendment], error)
 	Live(ctx context.Context, runID int64) (Live, error)
@@ -561,6 +561,20 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	var f HistoryFilter
+	if f.Branch, err = httpx.TextQuery(r, "branch", 255); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	status, err := httpx.EnumQuery(r, "status", enumStrings(ResultStatuses)...)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	if status != nil {
+		s := ResultStatus(*status)
+		f.Status = &s
+	}
 	projectID, err := h.catalog.ProjectOf(r.Context(), id)
 	if err == nil {
 		err = h.guard.Require(r.Context(), projectID, authz.RoleViewer, apperr.NotFound("test case %d not found", id))
@@ -569,7 +583,7 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	res, err := h.api.History(r.Context(), id, page)
+	res, err := h.api.HistoryOf(r.Context(), id, f, page)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

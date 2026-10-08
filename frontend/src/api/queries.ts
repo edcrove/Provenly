@@ -869,14 +869,21 @@ export function useStepMutations(id: number) {
   }
 }
 
-export function useTestCaseHistory(id: number, page: number) {
+/** A test case's history, optionally of one branch and one status (status=passed, pageSize=1: the latest pass). */
+export function useTestCaseHistory(
+  id: number,
+  page: number,
+  filter: { branch?: string; status?: ResultStatus; pageSize?: number } = {},
+) {
+  const { branch, status, pageSize } = filter
+  const key = [...keys.history(id), branch, status, pageSize, page]
   return useQuery({
-    queryKey: [...keys.history(id), page],
-    placeholderData: (prev, q) => previousPage([...keys.history(id), page], prev, q?.queryKey),
+    queryKey: key,
+    placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/test-cases/{testCaseId}/results', {
-          params: { path: { testCaseId: id }, query: { page } },
+          params: { path: { testCaseId: id }, query: { page, branch, status, pageSize } },
         }),
       ),
   })

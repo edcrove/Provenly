@@ -205,6 +205,12 @@ type NewRun struct {
 }
 
 // RunFilter narrows a run list; nil fields do not filter.
+// HistoryFilter narrows a test case's history: results of runs of one branch, of one status (nil: no condition).
+type HistoryFilter struct {
+	Branch *string
+	Status *ResultStatus
+}
+
 type RunFilter struct {
 	// ProjectIDs nil means every project.
 	ProjectIDs []int64
@@ -393,8 +399,8 @@ type Repository interface {
 	// ListSummaryInputs returns the snapshot TC-IDs and valid results of each given run.
 	ListSummaryInputs(ctx context.Context, runIDs []int64) (map[int64]SummaryInputs, error)
 	ListDiagnostics(ctx context.Context, runID int64) ([]Diagnostic, error)
-	ListResultsForTestCase(ctx context.Context, testCaseID int64, limit, offset int32) ([]HistoryEntry, error)
-	CountResultsForTestCase(ctx context.Context, testCaseID int64) (int64, error)
+	ListResultsForTestCase(ctx context.Context, testCaseID int64, f HistoryFilter, limit, offset int32) ([]HistoryEntry, error)
+	CountResultsForTestCase(ctx context.Context, testCaseID int64, f HistoryFilter) (int64, error)
 
 	// InsertAmendment returns ErrConflict when the TC-ID is already amended into the run.
 	InsertAmendment(ctx context.Context, a NewAmendment) (Amendment, error)

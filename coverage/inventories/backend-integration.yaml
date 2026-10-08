@@ -152,3 +152,5 @@ targets:
     description: personal access tokens (card #62) through the HTTP API on a real database - a token over one of two projects reads it (lists narrowed, MCP too) as its person, gets 403 for the other project, any write and making tokens; an administrator's token cannot administer (users, invitations, audit); revoked and expired tokens are 401; deactivation revokes the person's tokens; creation and revocation are audited; only the digest is stored; a 365-day token fits the bound exactly; rows are never deleted or edited and the projects never change (triggers), a token over 365 days or with another prefix cannot exist (CHECK)
   - id: BE-INT-074
     description: runs list filters (deployed audit) on a real database - runs are narrowed by branch (exact, case-sensitive), execution status, mode and an inclusive creation window, filters combine, and the total follows the same filter
+  - id: BE-INT-075
+    description: a test case's history filtered by branch and status (deployed audit) on a real database - results of one branch newest first, the latest pass on main as one item, and totals that follow the filter

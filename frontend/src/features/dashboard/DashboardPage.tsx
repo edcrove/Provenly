@@ -14,6 +14,7 @@ import { useCurrentProject } from '@/features/projects/currentProject'
 import { executedLabel, formatDateTime, formatPercent, plural } from '@/lib/format'
 import { verificationLabel, verificationVariant } from '@/lib/issues'
 import { coverageLabel, coverageVariant } from '@/lib/requirements'
+import { PrintButton } from '@/components/PrintButton'
 import { verdictLabel } from '@/lib/status'
 import { ProjectChooser, ScopeLabel } from '@/features/projects/ProjectScope'
 
@@ -408,9 +409,12 @@ export function DashboardPage() {
   return (
     <div className="grid gap-4">
       <PageTitle title="Dashboard" />
-      <div className="grid gap-1">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <ScopeLabel />
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="grid gap-1">
+          <h1 className="text-2xl font-semibold">Dashboard</h1>
+          <ScopeLabel />
+        </div>
+        {project ? <PrintButton what={`dashboard of ${project}`} /> : null}
       </div>
       {!project ? <ProjectChooser what="quality" /> : <ProjectDashboard project={project} />}
     </div>

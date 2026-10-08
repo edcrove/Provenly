@@ -19,6 +19,8 @@ import { ManualExecution } from '@/features/manual/ManualExecution'
 import { RunAmendments } from './RunAmendments'
 import { RunDiagnostics } from './RunDiagnostics'
 import { RunParseErrors } from './RunParseErrors'
+import { PrintButton } from '@/components/PrintButton'
+
 import { RunResults } from './RunResults'
 import { RunSummary } from './RunSummary'
 import { Breadcrumb } from '@/features/projects/ProjectScope'
@@ -118,6 +120,9 @@ export function TestRunDetailPage() {
                 {r.outcome.executed > 0
                   ? `${formatPercent(r.outcome.passRate)} of executed passed${running ? ' so far' : ''}`
                   : `— (0 of ${r.outcome.executed + r.outcome.untested} executed)`}
+              </span>
+              <span className="ml-auto">
+                <PrintButton what={`test run #${r.id}`} />
               </span>
             </div>
             {r.shards ? <ShardsProgress shards={r.shards} running={running} /> : null}

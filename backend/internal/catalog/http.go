@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/auditnote"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/etag"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
@@ -458,6 +459,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	auditnote.Created(r.Context(), tc.Key(), true)
 	httpx.WriteJSON(w, http.StatusCreated, ToDTO(tc))
 }
 
@@ -697,6 +699,7 @@ func (h *Handler) createProject(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	auditnote.Created(r.Context(), p.Key, false)
 	httpx.WriteJSON(w, http.StatusCreated, ProjectToDTO(p, authz.RoleAdmin))
 }
 

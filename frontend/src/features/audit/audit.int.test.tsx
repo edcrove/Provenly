@@ -119,3 +119,22 @@ describe('FE-INT-055 sign-in events in the audit log (card #49)', () => {
     expect(within(row).getByText('198.51.100.7')).toHaveAttribute('title', 'Mozilla/5.0')
   })
 })
+
+describe('FE-INT-065 the audit log of the current project', () => {
+  it('FE-INT-065 opens on the current project and widens to every project when the field is cleared', async () => {
+    db.audit.push(
+      event(1, { project: 'TC', summary: 'created a test case TC-9', testCase: 'TC-9' }),
+      event(2, { project: 'CHK' }),
+    )
+    localStorage.setItem('provenly.project', 'TC')
+    const { user: u, router } = renderRoute('/audit')
+    expect(await screen.findByTestId('audit-1')).toHaveTextContent('created a test case TC-9')
+    expect(screen.queryByTestId('audit-2')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Project')).toHaveValue('TC')
+
+    await u.clear(screen.getByLabelText('Project'))
+    await u.click(screen.getByRole('button', { name: 'Filter' }))
+    expect(await screen.findByTestId('audit-2')).toBeInTheDocument()
+    expect(router.state.location.search).toBe('?project=')
+  })
+})

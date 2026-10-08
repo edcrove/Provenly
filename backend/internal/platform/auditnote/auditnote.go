@@ -8,7 +8,11 @@ import "context"
 type key struct{}
 
 // Note is what the request told the audit log.
-type Note struct{ projectID int64 }
+type Note struct {
+	projectID   int64
+	created     string
+	testCaseKey string
+}
 
 // Open returns a context carrying an empty note.
 func Open(ctx context.Context) (context.Context, *Note) {
@@ -25,3 +29,20 @@ func Project(ctx context.Context, id int64) {
 
 // ProjectID is the project recorded, 0 when none.
 func (n *Note) ProjectID() int64 { return n.projectID }
+
+// Created names what a creation made (a project key, a test case key), so the entry says which one. A test case also
+// makes the entry findable by its key. Without a note it does nothing.
+func Created(ctx context.Context, name string, testCase bool) {
+	if n, ok := ctx.Value(key{}).(*Note); ok {
+		n.created = name
+		if testCase {
+			n.testCaseKey = name
+		}
+	}
+}
+
+// Created is the name recorded by Created, empty when none.
+func (n *Note) Created() string { return n.created }
+
+// TestCaseKey is the key of a test case the request created, empty when none.
+func (n *Note) TestCaseKey() string { return n.testCaseKey }

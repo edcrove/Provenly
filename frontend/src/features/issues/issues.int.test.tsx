@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
 import { db } from '@/test/mockApi'
-import { renderRoute } from '@/test/render'
+import { pickProject, renderRoute } from '@/test/render'
 import { server } from '@/test/server'
 
 const at = '2026-10-05T10:00:00Z'
@@ -36,9 +36,9 @@ describe('FE-INT-041 issues and verification', () => {
     db.issues.push(jiraIssue())
     db.latest[153] = 'failed'
     const { user: u } = renderRoute('/issues')
-    expect(await screen.findByText('Choose a project (top right) to see its issues.')).toBeInTheDocument()
-    await screen.findByRole('option', { name: /^TC/ })
-    await u.selectOptions(screen.getByRole('combobox', { name: 'Current project' }), 'TC')
+    expect(await screen.findByText('Pick a project to see its issues.')).toBeInTheDocument()
+    await screen.findByRole('button', { name: /^TC · / })
+    await pickProject(u, 'TC')
     const row = await screen.findByTestId('issue-PAY-7')
     expect(row).toHaveTextContent('Jira PAY-7')
     expect(row).toHaveTextContent('open')

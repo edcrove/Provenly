@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { testCase } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
-import { renderRoute } from '@/test/render'
+import { pickProject, renderRoute } from '@/test/render'
 
 const asViewer = () => {
   db.users.push({ ...db.users[0], id: 2, username: 'ana', isAdmin: false })
@@ -143,7 +143,7 @@ describe('FE-INT-037 taxonomy: tags and classification', () => {
     await u.type(screen.getByLabelText('Tag'), '{Enter}')
     expect(await screen.findAllByText('#smoke')).toHaveLength(2)
 
-    await u.selectOptions(screen.getByRole('combobox', { name: 'Current project' }), 'TC')
+    await pickProject(u, 'TC')
     await u.selectOptions(await screen.findByLabelText('Filter by classification'), 'risk:critical')
     await waitFor(() => expect(screen.queryByText('Logout works')).not.toBeInTheDocument())
     expect(screen.getByText('Login works')).toBeInTheDocument()

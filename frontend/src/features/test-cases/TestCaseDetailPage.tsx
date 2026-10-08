@@ -30,6 +30,7 @@ import { CoveredRequirements } from '@/features/requirements/CoveredRequirements
 import { StepsEditor } from './StepsEditor'
 import { TestCaseForm, type TestCaseFormValues } from './TestCaseForm'
 import { TestCaseHistory } from './TestCaseHistory'
+import { Breadcrumb } from '@/features/projects/ProjectScope'
 
 const fields = (tc: TestCase): TestCaseFormValues => ({
   title: tc.title,
@@ -62,6 +63,7 @@ function Definition({ tc }: { tc: TestCase }) {
 
   return (
     <div className="grid gap-4">
+      <Breadcrumb projectKey={tc.projectKey} section="Test Cases" to="/test-cases" current={tc.key} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <PageTitle title={`${tc.key} · ${tc.title}`} />

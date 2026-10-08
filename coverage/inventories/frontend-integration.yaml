@@ -189,3 +189,6 @@ targets:
   - id: FE-INT-058
     description: forms a role cannot use (deployed audit) - a viewer opening the new test case or new manual run page by URL is told why (member role needed) instead of a form with an empty project list; the audit log refuses non-administrators with its own message and no filters
     surfaces: [src/components/NotAllowed.tsx, src/features/test-cases/NewTestCasePage.tsx, src/features/manual/NewManualRunPage.tsx, src/features/audit/AuditPage.tsx, src/features/auth/UsersPage.tsx]
+  - id: FE-INT-059
+    description: navigation (deployed audit) - the header lists the project pages in working order with Settings only for one project, the workspace (Projects; Users and Audit for administrators) apart; the project switcher is a searchable, keyboard-operable combobox with a link to every project; on phones the items move into a Menu that closes on a choice; pages of one project offer the projects to pick while every project is chosen; detail pages show a breadcrumb with their project and offer to switch to it
+    surfaces: [src/app/Layout.tsx, src/features/projects/ProjectSwitcher.tsx, src/features/projects/ProjectScope.tsx, src/features/projects/currentProject.ts]

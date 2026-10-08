@@ -1,5 +1,5 @@
 import { apiURL } from '../playwright.config'
-import { byProperty, expect, junit, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
+import { byProperty, expect, junit, pickProject, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
 const failure = '<failure message="boom">trace</failure>'
 const skipped = '<skipped/>'
@@ -65,7 +65,7 @@ test.describe('Issues and verification (DEC-8)', () => {
 
     await page.goto(`/test-runs/${run}`)
     await expect(page.getByTestId('run-new-failures')).toContainText(login.key)
-    await page.getByLabel('Current project').selectOption(key)
+    await pickProject(page, key)
     await page.goto('/issues')
     await page.getByLabel('Title').fill('Sign-in rejects valid passwords')
     await page.getByRole('button', { name: 'Add issue' }).click()
@@ -85,6 +85,6 @@ test.describe('Issues and verification (DEC-8)', () => {
     await expect(page.getByTestId('verification-badge')).toHaveText('Validated fixed')
     await page.getByRole('link', { name: login.key }).click()
     await expect(page.getByTestId('linked-issues')).toContainText('Validated fixed')
-    await page.getByLabel('Current project').selectOption('')
+    await pickProject(page, '')
   })
 })

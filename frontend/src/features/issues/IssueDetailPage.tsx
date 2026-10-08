@@ -17,6 +17,7 @@ import { verificationLabel, verificationVariant } from '@/lib/issues'
 import { requirementRef as issueRef } from '@/lib/requirements'
 import { can } from '@/lib/roles'
 import { positiveInt } from '@/lib/status'
+import { Breadcrumb } from '@/features/projects/ProjectScope'
 
 function LinkedTests({ issue, projectKey, edit }: { issue: Issue; projectKey: string; edit: boolean }) {
   const m = useIssueMutations(projectKey)
@@ -117,6 +118,7 @@ export function IssueDetailPage() {
       {(i) => (
         <Card>
           <CardHeader>
+            <Breadcrumb projectKey={projectKey} section="Issues" to="/issues" current={issueRef(i)} />
             <PageTitle title={`${issueRef(i)} · ${i.title}`} />
             <CardTitle as="h1" className="flex flex-wrap items-center gap-2 text-xl">
               <span className="font-mono">{issueRef(i)}</span> · {i.title}

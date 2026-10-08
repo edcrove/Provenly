@@ -19,6 +19,7 @@ import { can } from '@/lib/roles'
 import { usePage } from '@/lib/usePage'
 
 import { selectionLabel } from '@/lib/suites'
+import { ProjectChooser, ScopeLabel } from '@/features/projects/ProjectScope'
 
 function NewSuite({ projectKey }: { projectKey: string }) {
   const m = useSuiteMutations(projectKey)
@@ -153,6 +154,7 @@ export function SuitesPage() {
         <CardTitle as="h1" className="text-xl">
           Suites
         </CardTitle>
+        <ScopeLabel />
         <CardDescription>
           A suite is a named selection of a project&apos;s test cases: a static list, or a query by tag and
           classification. CI reports a run for a suite with <code>&amp;suite=&lt;key&gt;</code>: only the
@@ -161,7 +163,7 @@ export function SuitesPage() {
       </CardHeader>
       <CardContent className="grid gap-6">
         {!project ? (
-          <p className="text-muted-foreground text-sm">Choose a project (top right) to see its suites.</p>
+          <ProjectChooser what="suites" />
         ) : (
           <>
             <QueryState query={suites}>

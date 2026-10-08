@@ -16,6 +16,7 @@ import { formatDateTime } from '@/lib/format'
 import { coverageLabel, coverageVariant, requirementRef } from '@/lib/requirements'
 import { can } from '@/lib/roles'
 import { positiveInt } from '@/lib/status'
+import { Breadcrumb } from '@/features/projects/ProjectScope'
 
 function Coverage({ req, projectKey, edit }: { req: Requirement; projectKey: string; edit: boolean }) {
   const m = useRequirementMutations(projectKey)
@@ -105,6 +106,12 @@ export function RequirementDetailPage() {
       {(r) => (
         <Card>
           <CardHeader>
+            <Breadcrumb
+              projectKey={projectKey}
+              section="Requirements"
+              to="/requirements"
+              current={requirementRef(r)}
+            />
             <PageTitle title={`${requirementRef(r)} · ${r.title}`} />
             <CardTitle as="h1" className="flex flex-wrap items-center gap-2 text-xl">
               <span className="font-mono">{requirementRef(r)}</span> · {r.title}

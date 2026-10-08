@@ -15,6 +15,7 @@ import { formatDateTime, formatPercent, plural } from '@/lib/format'
 import { verificationLabel, verificationVariant } from '@/lib/issues'
 import { coverageLabel, coverageVariant } from '@/lib/requirements'
 import { verdictLabel } from '@/lib/status'
+import { ProjectChooser, ScopeLabel } from '@/features/projects/ProjectScope'
 
 function Stat({
   label,
@@ -331,12 +332,11 @@ export function DashboardPage() {
   return (
     <div className="grid gap-4">
       <PageTitle title="Dashboard" />
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
-      {!project ? (
-        <p className="text-muted-foreground text-sm">Choose a project (top right) to see its quality.</p>
-      ) : (
-        <ProjectDashboard project={project} />
-      )}
+      <div className="grid gap-1">
+        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <ScopeLabel />
+      </div>
+      {!project ? <ProjectChooser what="quality" /> : <ProjectDashboard project={project} />}
     </div>
   )
 }

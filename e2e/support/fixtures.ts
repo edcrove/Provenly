@@ -18,6 +18,15 @@ export interface TestCase {
   automated: boolean
 }
 
+/** Chooses a project in the header's switcher ('' for every project). */
+export async function pickProject(page: Page, key: string) {
+  await page.getByRole('button', { name: /^Current project: / }).click()
+  await page
+    .getByRole('listbox', { name: 'Projects' })
+    .getByRole('option', { name: key ? new RegExp(`^${key} · `) : 'All projects' })
+    .click()
+}
+
 /** A per-run random suffix: accounts the journeys create never have a password published in this repository. */
 const runSecret = randomUUID()
 

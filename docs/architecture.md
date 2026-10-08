@@ -63,7 +63,9 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   TLS: the web container passes the TLS proxy's `X-Forwarded-Proto` through). Every request re-reads the user; a
   password change invalidates older sessions (password-version claim). The web container adds a strict
   Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff` and `Referrer-Policy: no-referrer`
-  (`frontend/security-headers.conf`).
+  (`frontend/security-headers.conf`). The API sends the last three itself on every response (`httpx.SecurityHeaders`,
+  the outermost middleware), so a deployment without the web container keeps them; the web container hides the API's
+  copies under `/api` so each header appears once.
 - `identity.Protect` wraps the routes of the other modules: every API route needs a session except health, readiness,
   sign-in, sign-out and accepting an invitation. Without a session the answer is `401 unauthorized`;
   administrator-only operations answer `403 forbidden`.
@@ -101,6 +103,8 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 - `GET /api/v1/test-cases?key=<PROJECT>-<number>` (card #53) finds a test case by its key: zero or one item, combinable
   with the other filters; a key of an unknown or invisible project gives no item (not a 404), anything that is not a
   key is a 400. The MCP `search_test_cases` tool takes it too.
+- `GET /api/v1/test-cases?automated=true|false` lists only automated or only manual test cases (any other value is a
+  400); the list's "Filter by execution" uses it.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,
   `totalItems`, `totalPages`. Every list is paged, the project's suites, requirements, issues, dimensions and webhooks
   included (DEC-78); counts a screen needs over the whole list come with the page (`coverageCounts`,
@@ -167,6 +171,11 @@ identity) and the execution module stores it (`StartRun`, `RecordResult`, `Finis
 append-only: the `test_run_children_immutable` trigger admits inserts only in the creating transaction or while a
 non-batch run is running, and `test_runs_protect_identity` freezes a finished run's status. Manual results use the
 class name `provenly-manual`, so a re-test is the next attempt of the same test and is never counted as flaky.
+
+The execution panel shows each test case's title and steps; the failed step is chosen from its steps (no failed step
+when it has none). A note or failed step typed but not yet recorded is kept in the browser's `sessionStorage`
+(`provenly.manual.<run>.<testCase>`, this tab only) until the result is recorded, so a reload does not lose it; an
+unreadable draft is ignored.
 
 ## Requirements and traceability (prototype feature 12)
 
@@ -272,7 +281,9 @@ a body's `project`) is filed under it. Before the handler runs the router resolv
 (catalog lookups that never check access, used only for changes already allowed), the test case key and step position
 the route names, then stores a `summary` ("deleted CHK-4 step 3", from the `summaries` table of route patterns) and the
 `test_case_key` (`GET /audit?testCase=CHK-4`). Events recorded before have neither and are not backfilled: the table is
-append-only.
+append-only. A creation names what it made: the handler writes the new key to the note (`auditnote.Created`), so the
+summary reads "created a test case CHK-21" or "created a project PAY", and a created test case is found by its key
+too. The audit page opens on the current project; clearing the field shows every project.
 
 Card #49 records sign-in events, which have no signed-in caller: `identity.Service` reports them through its
 `AuthLog` port (implemented by `audit.Service`) — a sign-in that succeeds, fails (401) or is locked out (429), a

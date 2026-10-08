@@ -351,6 +351,56 @@ Filled in as each feature is merged: behavior, API, UI, tests, known limits.
 - **Tests**: unit (execution service, ingestion orchestration and handlers, DTOs), BE-INT-048, backend and frontend
   contract, FE-INT-039, BE-E2E-017, FE-E2E-019, probe manual sweep (inputs, concurrency, closed runs).
 
+### 26. Deployed audit (2026-10-08)
+
+The six personas audited the Render deployment (https://provenly-ed.onrender.com) from captures taken by GitHub
+Actions; the E2E journeys also run against it (workflow **E2E on a deployed instance**, `make e2e-remote`, PR #62,
+`docs/testing-strategy.md`). Ed asked to fix everything and to make the menu order, the access to projects and their
+relation with their parts clear. Each item shipped in its own PR (#63–#78) with tests in every layer touched.
+
+**Defects (PR #63)**
+- The audit log, new test case and new manual run say **Not allowed** with the reason when the role cannot use them
+  (the audit page answered with a red 403; viewers got a form with an empty project list). FE-INT-058.
+- `GET /projects/{key}/github` answers 204 when the project is not connected (every project page logged a 404).
+- Selects shrink with their card, so forms fit a phone. FE-E2E-029.
+- E2E accounts get random passwords per run (none published in this public repository).
+- The Render Blueprint trusts Render's internal proxies, so the audit log records the client's address; the
+  self-hosting guide covers the free database's expiry, `pg_dump`, cold start and sign-in time.
+
+**Navigation and projects (PRs #64, #65, implementation decision 19)**
+- The header starts with a searchable project switcher, then the project's pages in working order (Dashboard, Test
+  Runs, Test Cases, Suites, Requirements, Issues, Settings); Projects, Users and Audit sit apart. Lists say their scope,
+  detail pages show a breadcrumb with their project. Below 1280 px the pages move into a Menu. FE-INT-059, FE-E2E-030,
+  screenshots 72–73.
+- A project's name on the Projects page opens its dashboard; its Settings page links to its pages and to its sections
+  (members, classification, API keys, webhooks, GitHub) and explains how CI reports runs. FE-INT-060, FE-E2E-031.
+
+**Reading results (PRs #66–#69, #73, #74, implementation decision 20)**
+- Dates are the viewer's local time with the offset ("2026-10-08 11:03:05 UTC−3").
+- Runs show how much executed next to the pass rate ("1 of 10 (10%)"), in the list and on the dashboard.
+- The dashboard trend has an axis, run numbers and dates, a legend, incomplete runs in amber (not red) and no pass rate
+  when nothing executed.
+- The runs list filters by branch, execution status, mode and days (no verdict filter: it is derived, not stored).
+  BE-INT-074, BE-E2E-031, FE-INT-061, FE-E2E-032.
+- A failed run lists its failures and errors first and opens on them. FE-INT-063, FE-E2E-035.
+- A test case's history says when it last passed and filters by branch (`branch`, `status` on the history endpoint).
+  BE-INT-075, FE-INT-064, FE-E2E-036.
+
+**Working (PRs #70–#72, #75–#78)**
+- Manual execution rows show the test case's title and steps, the failed step is picked from its steps and an
+  unrecorded note survives a reload (`sessionStorage`). FE-INT-053.
+- Wide tables on a phone scroll inside their card with the first column fixed and a hint. FE-E2E-033.
+- Test cases filter by automated or manual (`?automated=`). FE-INT-062, FE-E2E-034.
+- The audit log names what a creation made ("created a test case CHK-21") and opens on the current project.
+  FE-INT-065.
+- Users show the "Instance role" (Administrator or User), apart from project roles.
+- The dashboard and a run print as a report (Print button, print stylesheet). FE-INT-066, FE-E2E-037.
+- The API sends `nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer` itself (the web container
+  already did).
+
+**Open for Ed:** deactivating the E2E accounts left on Render; whether a run links to its CI job (`ciUrl`), an audit
+view for maintainers (P20-5), per-project run numbers and test case versions (recommended for the Incubator).
+
 ### 25. Refined follow-ups (2026-10-06)
 
 The audit's open decisions and cards were refined by the product owner and the six personas and recorded in the

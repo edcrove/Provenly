@@ -75,6 +75,7 @@ test.describe('Accounts', () => {
 
     await admin.reload()
     await expect(admin.getByTestId(`user-${username}`)).toContainText('Guest Tester')
+    await expect(admin.getByTestId(`user-${username}`)).toContainText('User')
     await expect(admin.getByRole('table', { name: 'Invitations' })).toContainText('accepted')
 
     await guest.getByRole('button', { name: 'Sign out' }).click()

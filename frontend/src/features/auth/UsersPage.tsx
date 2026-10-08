@@ -288,7 +288,8 @@ export function UsersPage() {
           </CardTitle>
           <CardDescription>
             Accounts are never deleted: deactivate the ones that leave (their sessions end at once). New
-            people join with an invitation link.
+            people join with an invitation link. Administrators can do everything in every project; users work
+            in the projects they are members of, with the role each project&apos;s Settings shows.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -301,7 +302,7 @@ export function UsersPage() {
                       <TableHead>Username</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
+                      <TableHead>Instance role</TableHead>
                       <TableHead>Since</TableHead>
                       <TableHead />
                     </TableRow>
@@ -323,7 +324,7 @@ export function UsersPage() {
                           ) : null}
                         </TableCell>
                         <TableCell>{u.email ?? '—'}</TableCell>
-                        <TableCell>{u.isAdmin ? <Badge>admin</Badge> : 'member'}</TableCell>
+                        <TableCell>{u.isAdmin ? <Badge>Administrator</Badge> : 'User'}</TableCell>
                         <TableCell className="whitespace-nowrap">{formatDateTime(u.createdAt)}</TableCell>
                         <TableCell>{u.username === me.username ? null : <UserActions user={u} />}</TableCell>
                       </TableRow>

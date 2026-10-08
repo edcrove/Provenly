@@ -81,7 +81,9 @@ describe('FE-INT-027 users and invitations', () => {
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
     await u.click(await screen.findByRole('link', { name: 'Users' }))
     expect(await screen.findByTestId('user-admin')).toHaveTextContent('admin')
-    expect(screen.getByTestId('user-ana')).toHaveTextContent('member')
+    // The instance role (not a project role, which each project's settings show).
+    expect(screen.getByTestId('user-ana')).toHaveTextContent('User')
+    expect(screen.getByRole('columnheader', { name: 'Instance role' })).toBeInTheDocument()
     expect(screen.getByTestId('invitation-50')).toHaveTextContent('accepted')
     expect(within(screen.getByTestId('invitation-50')).queryByRole('button')).not.toBeInTheDocument()
 

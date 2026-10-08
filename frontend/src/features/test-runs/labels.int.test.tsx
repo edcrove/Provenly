@@ -85,7 +85,7 @@ describe('FE-INT-052 status labels (card #65)', () => {
     const dashboard = renderRoute('/dashboard')
     const empty = await screen.findByTestId('trend-8')
     expect(empty).toHaveClass('bg-muted-foreground/40')
-    expect(empty).toHaveAccessibleName(/^Run #8: no tests, 0 of 0 executed$/)
+    expect(empty).toHaveAccessibleName('Run #8: no tests, no pass rate, executed 0 of 2 (0%)')
     expect(screen.getByTestId('trend-7')).toHaveClass('bg-red-600')
     dashboard.unmount()
     renderRoute('/test-runs/8')

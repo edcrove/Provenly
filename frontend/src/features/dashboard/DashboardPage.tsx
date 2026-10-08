@@ -43,42 +43,112 @@ function Stat({
 const runVerdict = (r: TestRun) =>
   `${verdictLabel(r.outcome.verdict)}${r.executionStatus === 'running' ? ' so far (running)' : ''}`
 
-/** Pass rate of the latest runs, oldest first: one bar per run, red when its verdict is not passed. */
+/** The colour of a run's bar, by verdict: incomplete is amber and striped, never the red of a failure. */
+const verdictFill: Record<TestRun['outcome']['verdict'], { className: string; striped?: boolean }> = {
+  passed: { className: 'bg-emerald-600' },
+  failed: { className: 'bg-red-600' },
+  incomplete: { className: 'bg-amber-500', striped: true },
+  no_tests: { className: 'bg-muted-foreground/40' },
+}
+
+const stripes = {
+  backgroundImage: 'repeating-linear-gradient(45deg, rgb(255 255 255 / 0.45) 0 3px, transparent 3px 7px)',
+}
+
+/** The legend of the trend: identity is never colour alone (the incomplete swatch is striped). */
+function TrendLegend() {
+  return (
+    <ul className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs" aria-label="Legend">
+      {(Object.keys(verdictFill) as TestRun['outcome']['verdict'][]).map((v) => (
+        <li key={v} className="flex items-center gap-1.5">
+          <span
+            className={`inline-block size-3 rounded-sm ${verdictFill[v].className}`}
+            style={verdictFill[v].striped ? stripes : undefined}
+            aria-hidden
+          />
+          {verdictLabel(v)}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * Pass rate of the latest runs, oldest first: one bar per run (height: % of executed that passed, on a 0-100% axis),
+ * coloured by its verdict and labelled with its number and local date. An incomplete run at 100% is a tall amber bar,
+ * not a red one.
+ */
 function Trend({ runs }: { runs: TestRun[] }) {
   const ordered = [...runs].reverse()
   if (ordered.length === 0) return <p className="text-muted-foreground text-sm">No runs yet.</p>
   return (
     <div className="grid gap-2">
-      <ul className="flex h-32 items-end gap-1" aria-label="Pass rate of the latest runs">
-        {ordered.map((r) => {
-          // A run that executed nothing has no pass rate: a grey stub, not a 0% red bar.
-          const rate =
-            r.outcome.executed > 0
-              ? `${formatPercent(r.outcome.passRate)} of executed passed`
-              : '0 of 0 executed'
-          const colour =
-            r.outcome.executed === 0
-              ? 'bg-muted-foreground/40'
-              : r.outcome.verdict === 'passed'
-                ? 'bg-emerald-600'
-                : 'bg-red-600'
-          return (
-            <li key={r.id} className="flex h-full max-w-12 flex-1 items-end">
-              <Link
-                to={`/test-runs/${r.id}`}
-                title={`#${r.id} · ${r.outcome.verdict} · ${rate}`}
-                aria-label={`Run #${r.id}: ${runVerdict(r)}, ${rate}`}
-                data-testid={`trend-${r.id}`}
-                className={`min-h-1 w-full rounded-t ${colour}`}
-                style={{ height: `${Math.max(r.outcome.passRate, 2)}%` }}
+      <div className="flex gap-2">
+        <div
+          className="text-muted-foreground flex h-32 flex-col justify-between text-right text-[10px] tabular-nums"
+          aria-hidden
+        >
+          <span className="-translate-y-1/2">100%</span>
+          <span>50%</span>
+          <span className="translate-y-1/2">0%</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="relative h-32">
+            {/* Recessive grid at 0, 50 and 100%. */}
+            {[0, 50, 100].map((y) => (
+              <div
+                key={y}
+                className="border-border absolute inset-x-0 border-t"
+                style={{ bottom: `${y}%` }}
+                aria-hidden
               />
-            </li>
-          )
-        })}
-      </ul>
+            ))}
+            <ul className="relative flex h-full items-end gap-1" aria-label="Pass rate of the latest runs">
+              {ordered.map((r) => {
+                // A run that executed nothing has no pass rate: a grey stub, not a 0% bar.
+                const rate =
+                  r.outcome.executed > 0
+                    ? `${formatPercent(r.outcome.passRate)} of executed passed`
+                    : 'no pass rate'
+                const executed = `executed ${executedLabel(r.outcome.executed, r.expectedCount)}`
+                const fill = verdictFill[r.outcome.verdict]
+                return (
+                  <li key={r.id} className="flex h-full max-w-12 flex-1 items-end">
+                    <Link
+                      to={`/test-runs/${r.id}`}
+                      title={`#${r.id} · ${formatDateTime(r.createdAt)} · ${verdictLabel(r.outcome.verdict)} · ${rate} · ${executed}`}
+                      aria-label={`Run #${r.id}: ${runVerdict(r)}, ${rate}, ${executed}`}
+                      data-testid={`trend-${r.id}`}
+                      className={`min-h-1 w-full rounded-t ${fill.className}`}
+                      style={{
+                        height: `${Math.max(r.outcome.passRate, 2)}%`,
+                        ...(fill.striped ? stripes : {}),
+                      }}
+                    />
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+          <ul className="mt-1 flex gap-1" aria-hidden>
+            {ordered.map((r) => (
+              <li
+                key={r.id}
+                className="text-muted-foreground max-w-12 min-w-0 flex-1 truncate text-center text-[10px] leading-tight tabular-nums"
+                data-testid={`trend-label-${r.id}`}
+              >
+                #{r.id}
+                <br />
+                {formatDateTime(r.createdAt).slice(5, 10)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <TrendLegend />
       <p className="text-muted-foreground text-xs">
-        Pass rate (% of executed) of the latest {ordered.length} runs, oldest first. Red: the run did not
-        pass; grey: it executed no test case.
+        Pass rate (% of executed) of the latest {ordered.length} runs, oldest first; hover a bar for how much
+        of the run executed.
       </p>
     </div>
   )

@@ -210,3 +210,6 @@ targets:
   - id: FE-INT-065
     description: the audit log of the current project (deployed audit) - it opens filtered by the project chosen in the header and widens to every project when the field is cleared (?project= in the URL); a creation reads with what it made
     surfaces: [src/features/audit/AuditPage.tsx]
+  - id: FE-INT-066
+    description: printing a report (deployed audit) - the dashboard of a project and a run page offer Print (the browser's print dialog) with a print-only caption saying what was printed and when
+    surfaces: [src/components/PrintButton.tsx, src/features/dashboard/DashboardPage.tsx, src/features/test-runs/TestRunDetailPage.tsx]

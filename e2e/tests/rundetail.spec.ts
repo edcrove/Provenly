@@ -33,3 +33,20 @@ test.describe('Did it pass on main lately? (deployed audit)', () => {
     await expect(page.getByRole('table', { name: 'Execution history' }).getByRole('row')).toHaveCount(2)
   })
 })
+
+test.describe('Printing a report (deployed audit)', () => {
+  test('[FE-E2E-037] a printed run shows its content and caption, without the header, menu or buttons', async ({ page, provenly }) => {
+    const tc = await provenly.createTestCase({ title: 'printable', automated: true })
+    const res = await provenly.ingest(uniqueRunId(), 1, junit(byProperty('printable', tc.key)))
+    const runId = ((await res.json()) as { testRun: { id: number } }).testRun.id
+    await page.goto(`/test-runs/${runId}`)
+    await expect(page.getByRole('button', { name: 'Print' })).toBeVisible()
+    await expect(page.getByTestId('print-caption')).toBeHidden()
+    await page.emulateMedia({ media: 'print' })
+    await expect(page.getByRole('banner')).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Print' })).toBeHidden()
+    await expect(page.getByTestId('print-caption')).toBeVisible()
+    await expect(page.getByTestId('print-caption')).toContainText(`test run #${runId}`)
+    await expect(page.getByRole('table', { name: 'Results' })).toBeVisible()
+  })
+})

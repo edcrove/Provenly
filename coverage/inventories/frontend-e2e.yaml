@@ -72,3 +72,5 @@ targets:
     description: a failed run (deployed audit) - a developer opening a run with a failure sees the Results section first and the failing result at the top, the passing one after it
   - id: FE-E2E-036
     description: did it pass on main lately (deployed audit) - a test case page says when it last passed and on which branch; filtered to a branch where it only failed it says it never passed there and lists that branch's results only
+  - id: FE-E2E-037
+    description: printing a report (deployed audit) - printed (print media), a run page hides the header, menu and buttons and shows its content with a caption naming the run and when it was printed

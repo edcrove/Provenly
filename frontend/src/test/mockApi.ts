@@ -2216,6 +2216,13 @@ export const handlers = [
           (!correlation || r.correlation === correlation) &&
           (!shard || r.shard === Number(shard)),
       )
+      // Like the server: tests whose last attempt failed, then errored, then the rest; ingestion order otherwise.
+      const test = (r: TestResult) => `${r.suiteName}\u0000${r.className}\u0000${r.testName}`
+      const last = new Map<string, TestResult>()
+      for (const r of db.results.filter((x) => x.testRunId === run.id))
+        if ((last.get(test(r))?.attempt ?? 0) <= r.attempt) last.set(test(r), r)
+      const rank = (r: TestResult) => ({ failed: 0, error: 1 })[last.get(test(r))!.status as string] ?? 2
+      items.sort((a, b) => rank(a) - rank(b) || a.id - b.id)
       return respond(pageOf(url, items))
     }),
   ),

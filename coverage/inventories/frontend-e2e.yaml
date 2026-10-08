@@ -68,3 +68,5 @@ targets:
     description: phone tables (deployed audit) - at 390 px a run's results table scrolls inside its card with its first column fixed and a "Scroll sideways for more columns" hint, and the page itself never scrolls sideways
   - id: FE-E2E-034
     description: automated or manual test cases (deployed audit) - a QA lead narrows a project's test cases to the manual ones (the filter goes to the URL) and the automated one disappears
+  - id: FE-E2E-035
+    description: a failed run (deployed audit) - a developer opening a run with a failure sees the Results section first and the failing result at the top, the passing one after it

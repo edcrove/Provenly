@@ -1012,7 +1012,10 @@ WHERE t.test_run_id = $1
   AND ($2::text IS NULL OR t.status = $2::text)
   AND ($3::text IS NULL OR t.correlation = $3::text)
   AND ($4::int IS NULL OR t.shard = $4::int)
-ORDER BY t.id
+ORDER BY CASE (
+    SELECT x.status FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
+      AND x.class_name = t.class_name AND x.test_name = t.test_name ORDER BY x.attempt DESC, x.id DESC LIMIT 1
+) WHEN 'failed' THEN 0 WHEN 'error' THEN 1 ELSE 2 END, t.id
 LIMIT $6 OFFSET $5
 `
 
@@ -1031,6 +1034,8 @@ type ListRunResultsRow struct {
 }
 
 // retried: a later attempt of the same test exists in the run, so this one is not its logical result.
+// What needs attention first (deployed audit): tests whose logical result (last attempt) failed, then errored, then
+// the rest; attempts of one test keep their ingestion order next to each other.
 func (q *Queries) ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]ListRunResultsRow, error) {
 	rows, err := q.db.Query(ctx, listRunResults,
 		arg.TestRunID,

@@ -42,6 +42,15 @@ export function formatPercent(value: number): string {
   return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(2)}%`
 }
 
+/**
+ * How much of a run's expected universe executed, e.g. "1 of 10 (10%)": next to the pass rate, so "100%" of one
+ * executed test case does not read as a run where everything passed. "0 of 0" for a run that expected nothing.
+ */
+export function executedLabel(executed: number, expected: number): string {
+  if (expected === 0) return `${executed} of 0`
+  return `${executed} of ${expected} (${formatPercent((executed / expected) * 100)})`
+}
+
 /** Sums precise percentages (the API sends 6 decimals); round only when displaying the result. */
 export function sumPercents(values: number[]): number {
   return values.reduce((acc, v) => acc + v, 0)

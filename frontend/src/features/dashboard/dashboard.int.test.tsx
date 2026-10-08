@@ -18,6 +18,7 @@ describe('FE-INT-042 quality dashboard', () => {
     await u.click(await screen.findByRole('button', { name: /^TC · / }))
 
     expect(await screen.findByTestId('latest-run')).toHaveTextContent('#7')
+    expect(screen.getByTestId('latest-run-rates')).toHaveTextContent('Executed 1 of 2 (50%) · Passed 0%')
     expect(screen.getByTestId('trend-7')).toHaveAttribute('href', '/test-runs/7')
     // The trend is a list of links (a link with role=listitem was neither), each saying its verdict.
     const trend = screen.getByRole('list', { name: 'Pass rate of the latest runs' })

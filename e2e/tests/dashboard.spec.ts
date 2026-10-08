@@ -54,6 +54,7 @@ test.describe('Quality dashboard', () => {
     await page.goto('/dashboard')
     await pickProject(page, key)
     await expect(page.getByTestId('latest-run')).toContainText(`#${second}`)
+    await expect(page.getByTestId('latest-run-rates')).toContainText(/^Executed \d+ of \d+/)
     await expect(page.getByTestId(`trend-${first}`)).toBeVisible()
     await expect(page.getByTestId('automation-rate')).toHaveText('50%')
     await expect(page.getByTestId('stale-cases')).toContainText('never executed')

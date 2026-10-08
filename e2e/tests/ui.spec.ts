@@ -211,6 +211,7 @@ test.describe('Frontend UI journeys', { tag: '@local' }, () => {
     await expect(row.getByTestId('verdict-badge')).toHaveText('incomplete')
     await expect(row.getByTestId('pass-rate')).toHaveText('100%')
     await expect(row.getByTestId('outcome-breakdown')).toContainText('1 passed · 1 untested')
+    await expect(row.getByTestId('executed')).toHaveText('1 of 2 (50%)')
     await expect(row.getByTestId('execution-badge')).toHaveText('interrupted')
     await page.goto(`/test-runs/${run.testRun.id}`)
     await expect(page.getByTestId('interrupted-run')).toContainText('The CI execution was interrupted')

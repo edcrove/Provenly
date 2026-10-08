@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 
 import type { TestRun, TestRunSummary } from '@/api/client'
-import { useManualRun } from '@/api/queries'
+import { useManualRun, useTestCase, useTestSteps } from '@/api/queries'
 import { InlineConfirm } from '@/components/InlineConfirm'
 import { ErrorAlert } from '@/components/QueryState'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { plural } from '@/lib/format'
 
@@ -21,28 +22,87 @@ const actions = [
   { status: 'skipped', label: 'Skip' },
 ] as const
 
-/** One expected test case of a running manual run: its current result and the buttons that record the next one. */
+/** A row's unsaved note and failed step, kept for this tab so a reload or a detour does not lose them. */
+interface Draft {
+  note: string
+  step: string
+}
+const draftKey = (runId: number, testCaseId: number) => `provenly.manual.${runId}.${testCaseId}`
+
+function loadDraft(key: string): Draft {
+  try {
+    const d = JSON.parse(globalThis.sessionStorage?.getItem(key) ?? 'null') as Partial<Draft> | null
+    return {
+      note: typeof d?.note === 'string' ? d.note : '',
+      step: typeof d?.step === 'string' ? d.step : '',
+    }
+  } catch {
+    return { note: '', step: '' }
+  }
+}
+
+function saveDraft(key: string, d: Draft) {
+  try {
+    if (d.note || d.step) globalThis.sessionStorage?.setItem(key, JSON.stringify(d))
+    else globalThis.sessionStorage?.removeItem(key)
+  } catch {
+    // Not kept; the row still works.
+  }
+}
+
+/**
+ * One expected test case of a running manual run: what it is (title, steps on demand), its current result and the
+ * buttons that record the next one. The failed step is picked from the test case's own steps.
+ */
 function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
   const { record } = useManualRun(runId)
-  const [note, setNote] = useState('')
-  const [step, setStep] = useState('')
+  const storeKey = draftKey(runId, outcome.testCaseId)
+  const [draft, setDraftState] = useState<Draft>(() => loadDraft(storeKey))
+  const setDraft = (d: Draft) => {
+    setDraftState(d)
+    saveDraft(storeKey, d)
+  }
+  const { note, step } = draft
   const [saved, setSaved] = useState<string | null>(null)
+  const title = useTestCase(outcome.testCaseId).data?.title
+  const steps = useTestSteps(outcome.testCaseId).data?.items ?? []
   const key = outcome.testCaseKey ?? String(outcome.testCaseId)
   // A failed step means the test failed or was blocked: never drop it silently on Pass or Skip.
   const stepOnly = step.trim() !== ''
   return (
     <TableRow data-testid={`manual-${key}`}>
-      <TableCell className="font-mono">
-        <Link to={`/test-cases/${outcome.testCaseId}`} target="_blank" rel="noopener" className="underline">
+      <TableCell className="max-w-80 align-top">
+        <Link
+          to={`/test-cases/${outcome.testCaseId}`}
+          target="_blank"
+          rel="noopener"
+          className="font-mono underline"
+        >
           {key}
           <span aria-hidden="true"> ↗</span>
           <span className="sr-only"> (opens in a new tab)</span>
         </Link>
+        {title ? <div className="text-sm break-words">{title}</div> : null}
+        {steps.length > 0 ? (
+          <details className="mt-1 text-xs">
+            <summary className="text-muted-foreground cursor-pointer">{plural(steps.length, 'step')}</summary>
+            <ol className="mt-1 grid list-decimal gap-1 pl-4" data-testid={`steps-${key}`}>
+              {steps.map((st) => (
+                <li key={st.id} className="break-words">
+                  {st.action}
+                  {st.expectedResult ? (
+                    <span className="text-muted-foreground"> → {st.expectedResult}</span>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          </details>
+        ) : null}
       </TableCell>
-      <TableCell>
+      <TableCell className="align-top">
         <StatusBadge status={outcome.status} manual />
       </TableCell>
-      <TableCell>
+      <TableCell className="align-top">
         <div className="grid gap-1">
           <div className="flex flex-wrap gap-1">
             <Input
@@ -50,17 +110,23 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
               placeholder="Note (optional)"
               className="h-8 w-48"
               value={note}
-              onChange={(e) => setNote(e.target.value)}
+              onChange={(e) => setDraft({ note: e.target.value, step })}
             />
-            <Input
-              aria-label={`Failed step of ${key}`}
-              placeholder="Step"
-              type="number"
-              min={1}
-              className="h-8 w-20"
-              value={step}
-              onChange={(e) => setStep(e.target.value)}
-            />
+            {steps.length > 0 ? (
+              <NativeSelect
+                aria-label={`Failed step of ${key}`}
+                className="h-8 w-40"
+                value={step}
+                onChange={(e) => setDraft({ note, step: e.target.value })}
+              >
+                <option value="">No failed step</option>
+                {steps.map((st) => (
+                  <option key={st.id} value={String(st.position)}>
+                    {st.position}. {st.action}
+                  </option>
+                ))}
+              </NativeSelect>
+            ) : null}
           </div>
           {stepOnly ? (
             <p className="text-muted-foreground text-xs" data-testid={`step-hint-${key}`}>
@@ -76,7 +142,7 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
           ) : null}
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="align-top">
         <div className="flex flex-wrap gap-1">
           {actions.map((a) => (
             <Button
@@ -101,8 +167,7 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
                       const failedStep =
                         (a.status === 'failed' || a.status === 'error') && step ? ` at step ${step}` : ''
                       setSaved(`Saved · ${a.label === 'Blocked' ? 'blocked' : a.status}${failedStep}`)
-                      setNote('')
-                      setStep('')
+                      setDraft({ note: '', step: '' })
                     },
                   },
                 )
@@ -135,7 +200,7 @@ export function ManualExecution({ run, summary }: { run: TestRun; summary: TestR
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>TC-ID</TableHead>
+              <TableHead>Test case</TableHead>
               <TableHead>Result</TableHead>
               <TableHead>Note and failed step</TableHead>
               <TableHead>Record</TableHead>

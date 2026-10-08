@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
-import { project, testCase } from '@/test/fixtures'
+import { project, testCase, testStep } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { renderRoute } from '@/test/render'
 import { server } from '@/test/server'
@@ -12,6 +12,17 @@ const at = '2026-10-05T10:00:00Z'
 describe('FE-INT-039 manual execution', () => {
   it('FE-INT-039 starts a manual run, records results (with a re-test) and completes it', async () => {
     db.testCases.push(testCase({ id: 160, title: 'Checkout by hand', automated: false }))
+    db.steps.push(
+      testStep({
+        id: 60,
+        testCaseId: 160,
+        position: 1,
+        action: 'Add a book to the cart',
+        expectedResult: '',
+      }),
+      testStep({ id: 61, testCaseId: 160, position: 2, action: 'Pay', expectedResult: 'The order is paid' }),
+      testStep({ id: 62, testCaseId: 160, position: 3, action: 'Open the receipt', expectedResult: '' }),
+    )
     const { user: u, router } = renderRoute('/test-runs')
     await u.click(await screen.findByRole('link', { name: /Start manual run/ }))
     await u.type(await screen.findByLabelText('What is being tested'), 'Release 2.4 sign-off')
@@ -31,7 +42,9 @@ describe('FE-INT-039 manual execution', () => {
     )
 
     await u.type(within(row).getByLabelText('Note for TC-160'), 'Pay button missing')
-    await u.type(within(row).getByLabelText('Failed step of TC-160'), '2')
+    // The failed step is one of the test case's steps.
+    await u.selectOptions(await within(row).findByLabelText('Failed step of TC-160'), '2')
+    expect(within(row).getByRole('option', { name: '2. Pay' })).toBeInTheDocument()
     await u.click(within(row).getByRole('button', { name: 'Fail' }))
     await waitFor(() => expect(within(row).getByTestId('status-badge')).toHaveTextContent('failed'))
     const failed = db.results.at(-1)!
@@ -44,13 +57,13 @@ describe('FE-INT-039 manual execution', () => {
     expect(within(row).getByLabelText('Note for TC-160')).toHaveValue('')
 
     // A failed step is never dropped silently: Pass and Skip wait until it is cleared.
-    await u.type(within(row).getByLabelText('Failed step of TC-160'), '3')
+    await u.selectOptions(within(row).getByLabelText('Failed step of TC-160'), '3')
     expect(within(row).getByRole('button', { name: 'Pass' })).toBeDisabled()
     expect(within(row).getByRole('button', { name: 'Skip' })).toBeDisabled()
     expect(within(row).getByRole('button', { name: 'Fail' })).toBeEnabled()
     expect(within(row).getByTestId('step-hint-TC-160')).toHaveTextContent('clear it to pass or skip')
     // A re-test after the fix: the last result counts.
-    await u.clear(within(row).getByLabelText('Failed step of TC-160'))
+    await u.selectOptions(within(row).getByLabelText('Failed step of TC-160'), '')
     expect(within(row).queryByTestId('step-hint-TC-160')).not.toBeInTheDocument()
     await u.click(within(row).getByRole('button', { name: 'Pass' }))
     await waitFor(() => expect(within(row).getByTestId('status-badge')).toHaveTextContent('passed'))

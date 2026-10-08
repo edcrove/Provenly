@@ -29,6 +29,10 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        # The API sends these too (for deployments without this proxy): keep one copy, this proxy's.
+        proxy_hide_header X-Content-Type-Options;
+        proxy_hide_header X-Frame-Options;
+        proxy_hide_header Referrer-Policy;
         include /etc/nginx/security-headers.conf;
     }
 

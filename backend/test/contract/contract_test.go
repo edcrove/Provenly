@@ -100,7 +100,12 @@ func TestProjectKeys(t *testing.T) {
 
 func TestSystem(t *testing.T) {
 	e := api(t, fresh(t), 1<<20)
-	e.GET("/healthz").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "ok")
+	healthz := e.GET("/healthz").Expect().Status(http.StatusOK)
+	healthz.JSON().Object().HasValue("status", "ok")
+	// Security headers on every API response (MIME sniffing, framing, referrer).
+	healthz.Header("X-Content-Type-Options").IsEqual("nosniff")
+	healthz.Header("X-Frame-Options").IsEqual("DENY")
+	healthz.Header("Referrer-Policy").IsEqual("no-referrer")
 	e.GET("/readyz").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "ok")
 
 	down := app.NewServicesWith(db.Pool, time.Now, identityConfig())

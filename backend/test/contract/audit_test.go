@@ -43,8 +43,11 @@ func TestAuditLog(t *testing.T) {
 	id := admin.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "pay", "project": "AUD"}).Expect().Status(http.StatusCreated).
 		JSON().Object().Value("id").Number().Raw()
 	admin.PATCH(fmt.Sprintf("/api/v1/test-cases/%d", int64(id))).WithJSON(map[string]any{"title": "pay by card"}).Expect().Status(http.StatusOK)
-	edit := admin.GET("/api/v1/audit").WithQuery("testCase", "AUD-1").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1).
-		Value("items").Array().Value(0).Object()
+	// Its creation names it and is found by its key too (deployed audit).
+	history := admin.GET("/api/v1/audit").WithQuery("testCase", "AUD-1").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 2).
+		Value("items").Array()
+	history.Value(1).Object().HasValue("summary", "created a test case AUD-1").HasValue("testCase", "AUD-1")
+	edit := history.Value(0).Object()
 	edit.HasValue("summary", "edited AUD-1").HasValue("testCase", "AUD-1").HasValue("project", "AUD").HasValue("action", "PATCH /api/v1/test-cases/{testCaseId}")
 	admin.GET("/api/v1/audit").WithQuery("project", "AUD").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 3)
 

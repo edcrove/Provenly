@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/select'
 import { useCurrentProject } from '@/features/projects/currentProject'
-import { formatDateTime, formatPercent, plural } from '@/lib/format'
+import { executedLabel, formatDateTime, formatPercent, plural } from '@/lib/format'
 import { verificationLabel, verificationVariant } from '@/lib/issues'
 import { coverageLabel, coverageVariant } from '@/lib/requirements'
 import { verdictLabel } from '@/lib/status'
@@ -154,6 +154,12 @@ function ProjectDashboard({ project }: { project: string }) {
             </div>
           )}
           {/* "—" alone cannot tell loading, a failed read and no runs apart. */}
+          {latest ? (
+            <div className="text-sm tabular-nums" data-testid="latest-run-rates">
+              Executed {executedLabel(latest.outcome.executed, latest.expectedCount)} · Passed{' '}
+              {latest.outcome.executed > 0 ? formatPercent(latest.outcome.passRate) : '—'}
+            </div>
+          ) : null}
           <div className="text-muted-foreground text-xs" data-testid="latest-run-hint">
             {latest
               ? formatDateTime(latest.createdAt)

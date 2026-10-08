@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  executedLabel,
   formatDateTime,
   formatOffset,
   formatDuration,
@@ -79,5 +80,14 @@ describe('format', () => {
     expect(shortCommit('0123456789abcdef')).toBe('0123456789')
     expect(shortCommit('abc')).toBe('abc')
     expect(shortCommit('')).toBe('—')
+  })
+})
+
+describe('executedLabel', () => {
+  it('says how many expected test cases executed, with the share', () => {
+    expect(executedLabel(1, 10)).toBe('1 of 10 (10%)')
+    expect(executedLabel(2, 3)).toBe('2 of 3 (66.67%)')
+    expect(executedLabel(5, 5)).toBe('5 of 5 (100%)')
+    expect(executedLabel(0, 0)).toBe('0 of 0')
   })
 })

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatDateTime, formatPercent, outcomeBreakdown, shortCommit } from '@/lib/format'
+import { executedLabel, formatDateTime, formatPercent, outcomeBreakdown, shortCommit } from '@/lib/format'
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { can } from '@/lib/roles'
 import { positiveInt } from '@/lib/status'
@@ -71,6 +71,7 @@ export function TestRunListPage() {
                     <TableHead>Project</TableHead>
                     <TableHead>Verdict</TableHead>
                     <TableHead>Pass rate</TableHead>
+                    <TableHead>Executed</TableHead>
                     <TableHead>Test cases</TableHead>
                     <TableHead>Execution</TableHead>
                     <TableHead>Branch</TableHead>
@@ -83,7 +84,7 @@ export function TestRunListPage() {
                 <TableBody>
                   {data.items.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-muted-foreground">
+                      <TableCell colSpan={12} className="text-muted-foreground">
                         {suite
                           ? `No runs of suite ${suite} yet.`
                           : project
@@ -116,6 +117,9 @@ export function TestRunListPage() {
                       <TableCell className="tabular-nums" data-testid="pass-rate">
                         {run.outcome.executed > 0 ? formatPercent(run.outcome.passRate) : '—'}
                         {run.executionStatus === 'running' && run.outcome.executed > 0 ? ' so far' : ''}
+                      </TableCell>
+                      <TableCell className="tabular-nums whitespace-nowrap" data-testid="executed">
+                        {executedLabel(run.outcome.executed, run.expectedCount)}
                       </TableCell>
                       <TableCell data-testid="outcome-breakdown">
                         {outcomeBreakdown(run.outcome)

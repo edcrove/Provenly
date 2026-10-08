@@ -53,6 +53,7 @@ describe('FE-INT-008 test run list', () => {
     const rows = (await screen.findAllByRole('row')).slice(1)
     expect(within(rows[0]).getByTestId('verdict-badge')).toHaveTextContent('no tests')
     expect(within(rows[0]).getByTestId('pass-rate')).toHaveTextContent('—')
+    expect(within(rows[0]).getByTestId('executed')).toHaveTextContent('0 of 0')
     expect(within(rows[0]).getByTestId('outcome-breakdown')).toHaveTextContent('no test cases · 0 expected')
     expect(within(rows[0]).getByTestId('execution-badge')).toHaveTextContent('cancelled')
 
@@ -60,11 +61,14 @@ describe('FE-INT-008 test run list', () => {
     expect(within(rows[1]).getAllByText('—')).toHaveLength(3)
     expect(within(rows[1]).getByTestId('verdict-badge')).toHaveTextContent('passed')
     expect(within(rows[1]).getByTestId('pass-rate')).toHaveTextContent('100%')
+    expect(within(rows[1]).getByTestId('executed')).toHaveTextContent('2 of 2 (100%)')
     expect(within(rows[1]).getByTestId('outcome-breakdown')).toHaveTextContent('2 passed · 2 expected')
     expect(within(rows[1]).getByTestId('execution-badge')).toHaveTextContent('interrupted')
 
     expect(within(rows[2]).getByTestId('verdict-badge')).toHaveTextContent('failed')
     expect(within(rows[2]).getByTestId('pass-rate')).toHaveTextContent('0%')
+    // Next to the pass rate, how much of the expected universe executed.
+    expect(within(rows[2]).getByTestId('executed')).toHaveTextContent('1 of 2 (50%)')
     expect(within(rows[2]).getByTestId('outcome-breakdown')).toHaveTextContent(
       '1 failed · 1 untested · 2 expected',
     )

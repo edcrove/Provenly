@@ -95,7 +95,7 @@ describe('FE-INT-033 project API keys', () => {
     renderRoute('/projects/TC')
     await screen.findByRole('heading', { name: 'API keys' })
     expect(await screen.findByText('Something went wrong')).toBeInTheDocument()
-    expect(document.title).toBe('Project TC · Provenly')
+    expect(document.title).toBe('TC · settings · Provenly')
     expect(document.querySelectorAll('title')).toHaveLength(1)
   })
 

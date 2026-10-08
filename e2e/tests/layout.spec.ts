@@ -53,3 +53,22 @@ test.describe('Navigation (deployed audit)', () => {
     await expect(page.locator('#main-menu')).toHaveCount(0)
   })
 })
+
+test.describe('A project and its parts (deployed audit)', () => {
+  test('[FE-E2E-031] a project opens from the projects page; its settings link to its pages and sections', async ({ page }) => {
+    await page.goto('/projects')
+    await page.getByTestId('project-TC').getByRole('link', { name: 'Default' }).click()
+    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page.getByRole('button', { name: 'Current project: TC · Default' })).toBeVisible()
+
+    await page.goto('/projects')
+    await page.getByTestId('project-TC').getByRole('link', { name: 'Settings' }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('TC · Default — Settings')
+    await page.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Webhooks' }).click()
+    await expect(page).toHaveURL(/\/projects\/TC#webhooks$/)
+    await page.getByText('How CI reports runs here').click()
+    await expect(page.getByTestId('ci-snippet')).toContainText('/api/v1/ingestion/junit?project=TC')
+    await page.getByRole('navigation', { name: 'In this project' }).getByRole('link', { name: 'Issues' }).click()
+    await expect(page).toHaveURL(/\/issues$/)
+  })
+})

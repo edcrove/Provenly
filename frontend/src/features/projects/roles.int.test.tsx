@@ -90,7 +90,7 @@ describe('FE-INT-031 project members', () => {
   it('FE-INT-031 an administrator adds, changes and removes members', async () => {
     db.users.push(user({ id: 2, username: 'ana', displayName: 'Ana Pérez', isAdmin: false }))
     const { user: u } = renderRoute('/projects')
-    await u.click(within(await screen.findByTestId('project-TC')).getByRole('link', { name: 'Members' }))
+    await u.click(within(await screen.findByTestId('project-TC')).getByRole('link', { name: 'Settings' }))
     expect(await screen.findByText(/No members yet/)).toBeInTheDocument()
 
     await u.type(screen.getByLabelText('Username'), 'nobody')
@@ -119,7 +119,7 @@ describe('FE-INT-031 project members', () => {
     expect(row).toHaveTextContent('viewer')
     expect(within(row).queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.queryByRole('form', { name: 'Add member' })).not.toBeInTheDocument()
-    expect(document.title).toBe('Project TC · Provenly')
+    expect(document.title).toBe('TC · settings · Provenly')
   })
 
   it('FE-INT-031 a failed change on a row is shown there', async () => {
@@ -152,7 +152,7 @@ describe('FE-INT-031 project members', () => {
     }
     const { user: u, router } = renderRoute('/projects/TC')
     await screen.findByTestId('member-user00')
-    await u.click(screen.getByRole('button', { name: /next/i }))
+    await u.click(within(document.getElementById('members')!).getByRole('button', { name: /next/i }))
     expect(await screen.findByTestId('member-user20')).toBeInTheDocument()
     expect(router.state.location.search).toBe('?page=2')
     await router.navigate('/projects/NOPE')

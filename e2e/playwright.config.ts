@@ -51,6 +51,8 @@ export default defineConfig({
   ],
   use: {
     baseURL: remoteURL ?? `http://localhost:${webPort}`,
+    // Dates show in the browser's time zone: journeys read them in UTC.
+    timezoneId: 'UTC',
     // Every journey (browser and API request fixture) starts signed in as the administrator.
     storageState: adminState,
     trace: 'retain-on-failure',

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   formatDateTime,
+  formatOffset,
   formatDuration,
   formatPercent,
   outcomeBreakdown,
@@ -48,6 +49,12 @@ describe('format', () => {
 
   it('formats timestamps in UTC', () => {
     expect(formatDateTime('2026-09-28T10:11:12.345Z')).toBe('2026-09-28 10:11:12 UTC')
+    // The viewer's local time with its offset (UYT, India, a crossing of midnight).
+    expect(formatDateTime('2026-10-08T14:03:05Z', -180)).toBe('2026-10-08 11:03:05 UTC−3')
+    expect(formatDateTime('2026-10-08T14:03:05Z', 330)).toBe('2026-10-08 19:33:05 UTC+5:30')
+    expect(formatDateTime('2026-10-08T01:00:00Z', -180)).toBe('2026-10-07 22:00:00 UTC−3')
+    expect(formatOffset(0)).toBe('UTC')
+    expect(formatOffset(-570)).toBe('UTC−9:30')
     expect(formatDateTime(null)).toBe('—')
     expect(formatDateTime(undefined)).toBe('—')
     expect(formatDateTime('not a date')).toBe('—')

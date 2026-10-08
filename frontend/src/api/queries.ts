@@ -8,7 +8,7 @@ import {
 import { useRef } from 'react'
 
 import { previousPage } from '@/lib/paging'
-import { ApiError, unwrap } from '@/lib/problem'
+import { unwrap } from '@/lib/problem'
 import type { MemberRole } from '@/lib/roles'
 import type { Correlation, ResultStatus } from '@/lib/status'
 
@@ -1086,15 +1086,10 @@ const githubKey = (projectKey: string) => [...keys.projects, projectKey, 'github
 export function useGitHubConnection(projectKey: string) {
   return useQuery({
     queryKey: githubKey(projectKey),
+    // 204: the project is not connected (null), as opposed to an unknown project (404, an error).
     queryFn: async () => {
-      try {
-        return unwrap(
-          await api.GET('/api/v1/projects/{projectKey}/github', { params: { path: { projectKey } } }),
-        )
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 404) return null
-        throw e
-      }
+      const res = await api.GET('/api/v1/projects/{projectKey}/github', { params: { path: { projectKey } } })
+      return res.response.status === 204 ? null : unwrap(res)
     },
   })
 }

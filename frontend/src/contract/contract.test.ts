@@ -2349,8 +2349,13 @@ const integrationScenarios: Scenario[] = [
   },
   {
     op: 'GET /api/v1/projects/{projectKey}/github',
-    status: 404,
+    status: 204,
     call: (c) => c.GET('/api/v1/projects/{projectKey}/github', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/github',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/github', { params: { path: nope } }),
   },
   {
     op: 'GET /api/v1/projects/{projectKey}/github',

@@ -57,7 +57,11 @@ describe('FE-INT-046 audit log', () => {
     db.users.push(user({ id: 2, username: 'ana', isAdmin: false }))
     db.session = 2
     renderRoute('/audit')
-    expect(await screen.findByText(/administrator/i)).toBeInTheDocument()
+    // A clear refusal about this page (not the users pages' message), and no filters that could only fail.
+    expect(await screen.findByText('Not allowed')).toBeInTheDocument()
+    expect(screen.getByText('Only administrators can read the audit log.')).toBeInTheDocument()
+    expect(screen.queryByText(/users and invitations/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: 'Filter the audit log' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Audit' })).not.toBeInTheDocument()
   })
 })

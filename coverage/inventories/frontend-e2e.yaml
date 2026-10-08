@@ -56,3 +56,5 @@ targets:
     description: with 105 test cases the requirement picker says "Showing 50 of 105, type to search.", finds the last one by its key typed in lower case and links it (shown by key, never by id); the suite picker finds one by title (DEC-78)
   - id: FE-E2E-028
     description: a person makes a personal access token on the account page for one project, sees it once with the MCP command, reads the project with it, sees its last use and revokes it (then 401) (card #62)
+  - id: FE-E2E-029
+    description: at phone width (390 px) the new manual run and new test case forms fit the screen - no input or select runs past the right edge, whatever the length of their options (deployed audit)

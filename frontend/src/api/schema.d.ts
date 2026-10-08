@@ -4533,6 +4533,13 @@ export interface operations {
                     "application/json": components["schemas"]["GitHubConnection"];
                 };
             };
+            /** @description The project is not connected to GitHub (an unknown or invisible project is a 404) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

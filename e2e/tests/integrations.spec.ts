@@ -69,7 +69,8 @@ test.describe('Integrations: webhooks and GitHub Issues (prototype feature 18)',
         .toBe('succeeded')
 
       expect((await request.post(`${base}/webhooks`, { data: { url: 'ftp://x', events: ['run.completed'] } })).status()).toBe(400)
-      expect((await request.get(`${base}/github`)).status()).toBe(404)
+      // Not connected yet: a state (204), not an error.
+      expect((await request.get(`${base}/github`)).status()).toBe(204)
       const connected = await request.put(`${base}/github`, { data: { repository: 'acme/shop', token: 'ghp_e2e_token_4321' } })
       expect(await connected.json()).toMatchObject({ repository: 'acme/shop', tokenHint: '…4321', lastSyncedAt: null })
       expect(await (await request.post(`${base}/github/sync`)).json()).toEqual({ created: 2, updated: 0 })

@@ -1568,7 +1568,7 @@ export const handlers = [
       const p = integrationProject(params.projectKey)
       if (p instanceof Response) return p
       const c = db.github.find((x) => x.projectId === p.id)
-      return c ? respond(githubView(c)) : notFound(`GitHub connection of ${p.key}`)
+      return c ? respond(githubView(c)) : new HttpResponse(null, { status: 204 })
     }),
   ),
   http.put(

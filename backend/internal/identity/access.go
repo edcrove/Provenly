@@ -106,7 +106,7 @@ func (s *Service) RequireAdmin(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return requireAdmin(ctx, u)
+	return requireAdminFor(ctx, u, "only administrators can do this")
 }
 
 // errProjectHidden answers a project the caller cannot see. The HTTP adapter rewrites it with the requested key, so

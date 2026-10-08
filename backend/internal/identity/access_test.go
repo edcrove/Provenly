@@ -51,6 +51,9 @@ func TestGuard(t *testing.T) {
 
 	assert.NoError(t, s.RequireAdmin(asAdmin))
 	assert.Equal(t, apperr.KindForbidden, kindOf(t, s.RequireAdmin(asAna)))
+	// Other modules (audit, projects) get a message that does not name the users pages.
+	forbidden, _ := apperr.As(s.RequireAdmin(asAna))
+	assert.Equal(t, "only administrators can do this", forbidden.Message)
 
 	// Without a signed-in user every check is "sign in".
 	for _, err := range []error{s.RequireAdmin(ctx), s.Require(ctx, 1, authz.RoleViewer, gone)} {

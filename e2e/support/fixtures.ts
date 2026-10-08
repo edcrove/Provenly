@@ -18,6 +18,12 @@ export interface TestCase {
   automated: boolean
 }
 
+/** A per-run random suffix: accounts the journeys create never have a password published in this repository. */
+const runSecret = randomUUID()
+
+/** The password of an account a journey creates (also when it runs against a deployed, public instance). */
+export const secret = (label: string) => `${label} ${runSecret}`
+
 /** Thin client of the public REST API, used for API journeys and for CI simulation. */
 export class ProvenlyApi {
   constructor(readonly request: APIRequestContext) {}

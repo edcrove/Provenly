@@ -120,11 +120,15 @@ is healthy while its last success is under 26 hours old (`docker compose ps`, or
 3. The UI is `https://provenly-ed.onrender.com`. If Render renamed a service because the name was taken, use its real
    URL and point the `/api/*` rewrite of `provenly-ed` at the API's.
 
-What to expect on the free plan: the API sleeps after 15 minutes without requests and takes about a minute to wake
-(the first page load waits); the database starts empty (no demo data) and Render deletes free databases 30 days
-after creation. The API runs with `PROVENLY_ENV=prod` (Render generates the JWT secret and the secrets key) and
+What to expect on the free plan: the API sleeps after 15 minutes without requests and takes up to a minute to wake
+(the first page load waits); every sign-in takes about 2 seconds (password hashing on a shared CPU), which is not an
+outage. The database starts empty (`scripts/seed/demo-data.sh https://<your UI>` loads the demo data) and **Render
+deletes free databases 30 days after creation** (the database page shows the date): it is not for real data. To keep
+what you put in it, add your IP to the database's access control in Render (the Blueprint allows none) and run
+`pg_dump "<External Database URL>" > provenly.sql` before that date. The API runs with `PROVENLY_ENV=prod` (Render generates the JWT secret and the secrets key) and
 applies migrations on start (`PROVENLY_AUTO_MIGRATE`). The UI is a static site that proxies `/api/*` to the API, so
-the session cookie stays same-origin. Backups (section 4) do not apply.
+the session cookie stays same-origin. The Blueprint trusts Render's internal proxies (`PROVENLY_TRUSTED_PROXIES`), so the audit log records the
+client's address. Backups (section 4) do not apply.
 
 To run the E2E journeys against it, save the admin password as the repository secret `RENDER_ADMIN_PASSWORD` and run
 the **E2E on a deployed instance** workflow (see `docs/testing-strategy.md`); they add their own test data.

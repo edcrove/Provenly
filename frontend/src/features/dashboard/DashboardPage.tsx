@@ -109,7 +109,7 @@ function Trend({ runs }: { runs: TestRun[] }) {
                 const rate =
                   r.outcome.executed > 0
                     ? `${formatPercent(r.outcome.passRate)} of executed passed`
-                    : '0 of 0 executed'
+                    : 'no pass rate'
                 const executed = `executed ${executedLabel(r.outcome.executed, r.expectedCount)}`
                 const fill = verdictFill[r.outcome.verdict]
                 return (

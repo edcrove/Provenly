@@ -1333,6 +1333,36 @@ const suiteScenarios: Scenario[] = [
     status: 400,
     call: (c) => c.GET('/api/v1/test-runs', { params: { query: { suite: 'Smoke' } } }),
   },
+  // Filters (deployed audit): branch, execution status, mode and the creation window.
+  {
+    op: 'GET /api/v1/test-runs',
+    status: 200,
+    call: (c) =>
+      c.GET('/api/v1/test-runs', {
+        params: {
+          query: {
+            branch: 'main',
+            executionStatus: 'completed',
+            mode: 'batch',
+            from: '2026-10-01T03:00:00.000Z',
+            to: '2026-10-09T02:59:59.999Z',
+          },
+        },
+      }),
+  },
+  {
+    op: 'GET /api/v1/test-runs',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/test-runs', {
+        params: { query: { from: '2026-10-02T00:00:00Z', to: '2026-10-01T00:00:00Z' } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/test-runs',
+    status: 400,
+    call: (c) => c.GET('/api/v1/test-runs', { params: { query: { branch: '' } } }),
+  },
 ]
 
 const manualTcs = () => {

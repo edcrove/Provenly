@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
@@ -91,4 +93,35 @@ func PatternQuery(r *http.Request, name string, re *regexp.Regexp, message strin
 		return nil, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: name, Message: message})
 	}
 	return &raw, nil
+}
+
+// TextQuery reads an optional free-text query parameter: present but empty, longer than max runes, invalid UTF-8 or
+// with NUL characters is invalid.
+func TextQuery(r *http.Request, name string, maxRunes int) (*string, error) {
+	q := r.URL.Query()
+	if !q.Has(name) {
+		return nil, nil
+	}
+	raw := q.Get(name)
+	var v apperr.Validator
+	v.Check(raw != "", name, "must not be empty")
+	v.CheckText(name, raw)
+	v.Check(utf8.RuneCountInString(raw) <= maxRunes, name, fmt.Sprintf("must be at most %d characters", maxRunes))
+	if err := v.Err(); err != nil {
+		return nil, err
+	}
+	return &raw, nil
+}
+
+// TimeQuery reads an optional RFC 3339 date-time query parameter (e.g. 2026-10-08T03:00:00Z).
+func TimeQuery(r *http.Request, name string) (*time.Time, error) {
+	q := r.URL.Query()
+	if !q.Has(name) {
+		return nil, nil
+	}
+	t, err := time.Parse(time.RFC3339, q.Get(name))
+	if err != nil {
+		return nil, apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: name, Message: "must be an RFC 3339 date-time such as 2026-10-08T03:00:00Z"})
+	}
+	return &t, nil
 }

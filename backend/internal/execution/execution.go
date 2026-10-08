@@ -209,6 +209,12 @@ type RunFilter struct {
 	// ProjectIDs nil means every project.
 	ProjectIDs []int64
 	SuiteKey   *string
+	// Branch matches exactly; Status is the execution status, Mode how results arrive; From and To bound the creation
+	// time (inclusive). nil means no condition.
+	Branch   *string
+	Status   *string
+	Mode     *string
+	From, To *time.Time
 }
 
 // ExecutionStatuses are the statuses CI may report with a final report.

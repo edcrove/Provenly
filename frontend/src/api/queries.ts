@@ -14,6 +14,7 @@ import type { Correlation, ResultStatus } from '@/lib/status'
 
 import {
   api,
+  type RunListFilter,
   type TestCase,
   type AcceptInvitationRequest,
   type CreateInvitationRequest,
@@ -876,13 +877,14 @@ export function useTestCaseHistory(id: number, page: number) {
   })
 }
 
-export function useTestRuns(page: number, project?: string, suite?: string) {
-  const key = [...keys.testRuns, 'list', project, suite, page]
+export function useTestRuns(page: number, project?: string, suite?: string, filter: RunListFilter = {}) {
+  // The filter as text: keys compare element by element (previousPage), so an equal filter must be equal.
+  const key = [...keys.testRuns, 'list', project, suite, JSON.stringify(filter), page]
   return useQuery({
     queryKey: key,
     placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
-      unwrap(await api.GET('/api/v1/test-runs', { params: { query: { page, project, suite } } })),
+      unwrap(await api.GET('/api/v1/test-runs', { params: { query: { ...filter, page, project, suite } } })),
   })
 }
 

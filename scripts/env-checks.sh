@@ -133,10 +133,11 @@ since=$(date +%s)
 for i in $(seq 1 60); do
   # Touch again every 10 s in case a poll cycle missed the change.
   [ $((i % 10)) = 1 ] && touch backend/cmd/provenly/main.go
-  api_logs | grep -q 'building' && break
+  # grep reads all the logs (no -q): an early exit would SIGPIPE docker compose and fail under pipefail.
+  api_logs | grep 'building' >/dev/null && break
   sleep 1
 done
-api_logs | grep -q 'building' || fail "air did not rebuild the API"
+api_logs | grep 'building' >/dev/null || fail "air did not rebuild the API"
 for _ in $(seq 1 60); do curl_ -o /dev/null http://localhost:8180/readyz 2>/dev/null && break; sleep 1; done
 curl_ http://localhost:3100/ | grep -q '@vite/client' || fail "the dev UI is not the Vite dev server"
 api http://localhost:3100 -o /dev/null http://localhost:3100/api/v1/test-runs || fail "the Vite dev server does not proxy /api"

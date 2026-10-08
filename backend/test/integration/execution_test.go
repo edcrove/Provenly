@@ -214,6 +214,50 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Equal(t, int32(1), sum.ExpectedTotal)
 	})
 
+	t.Run("BE-INT-074_runs_list_filters_by_branch_status_mode_and_creation_window", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Automated: true})
+		doc := junitFor(tcProp("a", itoa(tc.ID), ""))
+		ingest := func(id, branch string, status execution.RunStatus) int64 {
+			m := meta(id, 1)
+			m.Branch, m.Status = branch, status
+			res, err := s.Ingestion.IngestJUnit(ctx, m, strings.NewReader(doc))
+			require.NoError(t, err)
+			return res.Run.ID
+		}
+		mainRun := ingest("740", "main", "")
+		broken := ingest("741", "main", execution.RunInterrupted)
+		feature := ingest("742", "feature/x", "")
+		ids := func(f execution.RunFilter) []int64 {
+			page, err := s.Execution.ListRuns(ctx, f, pagination.Default())
+			require.NoError(t, err)
+			out := []int64{}
+			for _, r := range page.Items {
+				out = append(out, r.ID)
+			}
+			assert.Equal(t, int64(len(out)), page.Total, "the count follows the same filter")
+			return out
+		}
+		str := func(v string) *string { return &v }
+		assert.Equal(t, []int64{broken, mainRun}, ids(execution.RunFilter{Branch: str("main")}))
+		assert.Equal(t, []int64{}, ids(execution.RunFilter{Branch: str("Main")}), "branches match exactly")
+		assert.Equal(t, []int64{broken}, ids(execution.RunFilter{Status: str("interrupted")}))
+		assert.Equal(t, []int64{feature, mainRun}, ids(execution.RunFilter{Status: str("completed")}))
+		assert.Equal(t, []int64{feature, broken, mainRun}, ids(execution.RunFilter{Mode: str("batch")}))
+		assert.Equal(t, []int64{}, ids(execution.RunFilter{Mode: str("manual")}))
+		assert.Equal(t, []int64{mainRun}, ids(execution.RunFilter{Branch: str("main"), Status: str("completed")}), "filters combine")
+
+		run, err := s.Execution.GetRun(ctx, broken)
+		require.NoError(t, err)
+		at := run.CreatedAt
+		later := at.Add(time.Hour)
+		assert.Contains(t, ids(execution.RunFilter{From: &at, To: &at}), broken, "both bounds are inclusive")
+		assert.Equal(t, []int64{}, ids(execution.RunFilter{From: &later}))
+		earlier := at.Add(-time.Hour)
+		assert.Equal(t, []int64{}, ids(execution.RunFilter{To: &earlier}))
+		assert.Len(t, ids(execution.RunFilter{From: &earlier, To: &later}), 3)
+	})
+
 	t.Run("BE-INT-009_rerun_attempt_creates_new_run_and_preserves_history", func(t *testing.T) {
 		s, ctx := fresh(t)
 		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Automated: true})

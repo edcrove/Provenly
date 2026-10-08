@@ -470,6 +470,13 @@ def main():
         check(f"test cases ?{qs[-40:]}", call(base, "GET", f"/test-cases?{qs}")[0], exp)
     for qs, exp in [("suite=probe-static", 200), ("suite=", 400), ("suite=Bad", 400), ("suite=%00", 400)]:
         check(f"runs ?{qs}", call(base, "GET", f"/test-runs?{qs}")[0], exp)
+    # Runs list filters (deployed audit): branch, execution status, mode and creation window.
+    for qs, exp in [("branch=main", 200), ("branch=", 400), ("branch=%00", 400), ("branch=%ff", 400), ("branch=" + "b" * 256, 400),
+                    ("executionStatus=running", 200), ("executionStatus=failed", 400), ("executionStatus=", 400),
+                    ("mode=manual", 200), ("mode=ci", 400), ("from=2026-10-01T00:00:00Z", 200), ("from=2026-10-01", 400),
+                    ("to=2026-10-01T00:00:00%2B05:30", 200), ("to=x", 400),
+                    ("from=2026-10-02T00:00:00Z&to=2026-10-01T00:00:00Z", 400), ("from=2026-10-01T00:00:00Z&to=2026-10-01T00:00:00Z", 200)]:
+        check(f"runs ?{qs[:60]}", call(base, "GET", f"/test-runs?{qs}")[0], exp)
     sq = "/ingestion/junit?project=" + key + "&" + q.format(60)
     for suite, exp in [("&suite=", 400), ("&suite=Bad", 400), ("&suite=nope", 404), ("&suite=" + "s" * 31, 400)]:
         check(f"ingest {suite}", call(base, "POST", sq + suite, raw=xml, ctype="application/xml")[0], exp)

@@ -302,6 +302,21 @@ func TestProjects(t *testing.T) {
 	e.GET("/api/v1/test-runs").WithQuery("project", "CHK").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
 	e.GET("/api/v1/test-runs").WithQuery("project", "TC").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
 	e.GET("/api/v1/test-runs").WithQuery("project", "NOPE").Expect().Status(http.StatusNotFound)
+	// Filters (deployed audit): branch, execution status, mode and the creation window; bad values are 400.
+	e.GET("/api/v1/test-runs").WithQuery("project", "CHK").WithQuery("branch", "main").WithQuery("executionStatus", "completed").
+		WithQuery("mode", "batch").WithQuery("from", "2000-01-01T00:00:00Z").WithQuery("to", "2999-01-01T00:00:00-03:00").
+		Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	e.GET("/api/v1/test-runs").WithQuery("branch", "nope").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
+	for _, q := range []map[string]string{
+		{"branch": ""}, {"executionStatus": "failed"}, {"mode": "ci"}, {"from": "2026-10-01"},
+		{"from": "2026-10-02T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+	} {
+		req := e.GET("/api/v1/test-runs")
+		for k, v := range q {
+			req = req.WithQuery(k, v)
+		}
+		req.Expect().Status(http.StatusBadRequest)
+	}
 }
 
 // TestAuthentication: every protected operation answers 401 without a session, sign-in and invitations

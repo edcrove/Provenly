@@ -2157,11 +2157,34 @@ export const handlers = [
       if (p instanceof Response) return p
       const suite = url.searchParams.get('suite')
       if (suite !== null && !DIMENSION.test(suite)) return validation('suite', 'must be a suite key')
+      const q = (name: string) => url.searchParams.get(name)
+      const branch = q('branch')
+      if (branch === '') return validation('branch', 'must not be empty')
+      const status = q('executionStatus')
+      if (status !== null && !['running', 'completed', 'interrupted', 'cancelled'].includes(status))
+        return validation('executionStatus', 'must be one of running, completed, interrupted, cancelled')
+      const mode = q('mode')
+      if (mode !== null && !['batch', 'live', 'manual', 'sharded'].includes(mode))
+        return validation('mode', 'must be one of batch, live, manual, sharded')
+      const from = q('from') === null ? null : Date.parse(q('from')!)
+      const to = q('to') === null ? null : Date.parse(q('to')!)
+      if (Number.isNaN(from)) return validation('from', 'must be an RFC 3339 date-time')
+      if (Number.isNaN(to)) return validation('to', 'must be an RFC 3339 date-time')
+      if (from !== null && to !== null && from > to) return validation('from', 'must not be after to')
       return respond(
         pageOf(
           url,
           db.runs
-            .filter((r) => (!p || r.projectId === p.id) && (suite === null || r.suite?.key === suite))
+            .filter(
+              (r) =>
+                (!p || r.projectId === p.id) &&
+                (suite === null || r.suite?.key === suite) &&
+                (branch === null || r.branch === branch) &&
+                (status === null || r.executionStatus === status) &&
+                (mode === null || r.mode === mode) &&
+                (from === null || Date.parse(r.createdAt) >= from) &&
+                (to === null || Date.parse(r.createdAt) <= to),
+            )
             .sort((a, b) => b.id - a.id),
         ),
       )

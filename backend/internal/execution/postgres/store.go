@@ -222,7 +222,10 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 
 // ListTestRuns implements execution.Repository.
 func (s *Store) ListTestRuns(ctx context.Context, f execution.RunFilter, limit, offset int32) ([]execution.TestRun, error) {
-	rows, err := s.q.ListTestRuns(ctx, executiondb.ListTestRunsParams{ProjectIds: f.ProjectIDs, SuiteKey: filterText(f.SuiteKey), PageLimit: limit, PageOffset: offset})
+	rows, err := s.q.ListTestRuns(ctx, executiondb.ListTestRunsParams{
+		ProjectIds: f.ProjectIDs, SuiteKey: filterText(f.SuiteKey), Branch: filterText(f.Branch), Status: filterText(f.Status),
+		Mode: filterText(f.Mode), CreatedFrom: timestamptz(f.From), CreatedTo: timestamptz(f.To), PageLimit: limit, PageOffset: offset,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +238,10 @@ func (s *Store) ListTestRuns(ctx context.Context, f execution.RunFilter, limit, 
 
 // CountTestRuns implements execution.Repository.
 func (s *Store) CountTestRuns(ctx context.Context, f execution.RunFilter) (int64, error) {
-	return s.q.CountTestRuns(ctx, executiondb.CountTestRunsParams{ProjectIds: f.ProjectIDs, SuiteKey: filterText(f.SuiteKey)})
+	return s.q.CountTestRuns(ctx, executiondb.CountTestRunsParams{
+		ProjectIds: f.ProjectIDs, SuiteKey: filterText(f.SuiteKey), Branch: filterText(f.Branch), Status: filterText(f.Status),
+		Mode: filterText(f.Mode), CreatedFrom: timestamptz(f.From), CreatedTo: timestamptz(f.To),
+	})
 }
 
 // optionalText is NULL for an empty string.

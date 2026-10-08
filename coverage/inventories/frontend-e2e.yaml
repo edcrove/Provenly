@@ -62,3 +62,5 @@ targets:
     description: navigation (deployed audit) - the header puts the project switcher first and then the project's pages in working order (Dashboard, Test Runs, Test Cases, Suites, Requirements, Issues, and Settings once one project is chosen); the switcher finds a project by typing; list pages say their scope; on a phone the header is one row (at most 56 px) with the pages behind Menu
   - id: FE-E2E-031
     description: a project and its parts (deployed audit) - a project opens by its name from the projects page (current project, dashboard); its Settings page is titled with the project, its section index jumps to webhooks, shows how CI reports into it and opens its pages
+  - id: FE-E2E-032
+    description: filtering runs (deployed audit) - someone looking for their run types its branch in the runs list (the filter goes to the URL), sees only that run, narrows by execution status to an empty "No runs match these filters." and clears the filters

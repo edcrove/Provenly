@@ -195,3 +195,6 @@ targets:
   - id: FE-INT-060
     description: a project and its parts (deployed audit) - the projects page opens a project by its name (it becomes the current project, on its dashboard) and its settings by a Settings link; the settings page names the project, says what it holds, links to its pages (opening them in this project) and lists its sections (CI API keys, webhooks and GitHub only for maintainers), with a CI snippet for this instance before any key exists
     surfaces: [src/features/projects/ProjectsPage.tsx, src/features/projects/ProjectMembersPage.tsx, src/features/projects/ApiKeysSection.tsx]
+  - id: FE-INT-061
+    description: filtering the runs list (deployed audit) - by branch (Enter, trimmed), execution status, mode and a range of local days, combined, kept in the URL (back to page 1), with "No runs match these filters." and Clear filters; unknown values and non-dates in the URL are ignored rather than sent
+    surfaces: [src/features/test-runs/RunFilters.tsx, src/lib/runFilters.ts, src/features/test-runs/TestRunListPage.tsx, src/api/queries.ts]

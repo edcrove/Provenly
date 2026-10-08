@@ -103,15 +103,33 @@ const countTestRuns = `-- name: CountTestRuns :one
 SELECT count(*) FROM test_runs
 WHERE ($1::bigint[] IS NULL OR project_id = ANY($1::bigint[]))
   AND ($2::text IS NULL OR suite_key = $2::text)
+  AND ($3::text IS NULL OR branch = $3::text)
+  AND ($4::text IS NULL OR status = $4::text)
+  AND ($5::text IS NULL OR mode = $5::text)
+  AND ($6::timestamptz IS NULL OR created_at >= $6::timestamptz)
+  AND ($7::timestamptz IS NULL OR created_at <= $7::timestamptz)
 `
 
 type CountTestRunsParams struct {
-	ProjectIds []int64
-	SuiteKey   pgtype.Text
+	ProjectIds  []int64
+	SuiteKey    pgtype.Text
+	Branch      pgtype.Text
+	Status      pgtype.Text
+	Mode        pgtype.Text
+	CreatedFrom pgtype.Timestamptz
+	CreatedTo   pgtype.Timestamptz
 }
 
 func (q *Queries) CountTestRuns(ctx context.Context, arg CountTestRunsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countTestRuns, arg.ProjectIds, arg.SuiteKey)
+	row := q.db.QueryRow(ctx, countTestRuns,
+		arg.ProjectIds,
+		arg.SuiteKey,
+		arg.Branch,
+		arg.Status,
+		arg.Mode,
+		arg.CreatedFrom,
+		arg.CreatedTo,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -1160,16 +1178,26 @@ WHERE r.id IN (
     SELECT p.id FROM test_runs p
     WHERE ($1::bigint[] IS NULL OR p.project_id = ANY($1::bigint[]))
       AND ($2::text IS NULL OR p.suite_key = $2::text)
-    ORDER BY p.id DESC LIMIT $4 OFFSET $3
+      AND ($3::text IS NULL OR p.branch = $3::text)
+      AND ($4::text IS NULL OR p.status = $4::text)
+      AND ($5::text IS NULL OR p.mode = $5::text)
+      AND ($6::timestamptz IS NULL OR p.created_at >= $6::timestamptz)
+      AND ($7::timestamptz IS NULL OR p.created_at <= $7::timestamptz)
+    ORDER BY p.id DESC LIMIT $9 OFFSET $8
 )
 ORDER BY r.id DESC
 `
 
 type ListTestRunsParams struct {
-	ProjectIds []int64
-	SuiteKey   pgtype.Text
-	PageOffset int32
-	PageLimit  int32
+	ProjectIds  []int64
+	SuiteKey    pgtype.Text
+	Branch      pgtype.Text
+	Status      pgtype.Text
+	Mode        pgtype.Text
+	CreatedFrom pgtype.Timestamptz
+	CreatedTo   pgtype.Timestamptz
+	PageOffset  int32
+	PageLimit   int32
 }
 
 type ListTestRunsRow struct {
@@ -1186,6 +1214,11 @@ func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]L
 	rows, err := q.db.Query(ctx, listTestRuns,
 		arg.ProjectIds,
 		arg.SuiteKey,
+		arg.Branch,
+		arg.Status,
+		arg.Mode,
+		arg.CreatedFrom,
+		arg.CreatedTo,
 		arg.PageOffset,
 		arg.PageLimit,
 	)

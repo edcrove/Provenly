@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -162,6 +163,36 @@ func TestEnumQuery(t *testing.T) {
 
 	_, err = EnumQuery(httptest.NewRequest(http.MethodGet, "/?status=c", nil), "status", "a", "b")
 	require.Error(t, err)
+}
+
+func TestTextQuery(t *testing.T) {
+	v, err := TextQuery(httptest.NewRequest(http.MethodGet, "/", nil), "branch", 5)
+	require.NoError(t, err)
+	assert.Nil(t, v)
+	v, err = TextQuery(httptest.NewRequest(http.MethodGet, "/?branch=ma%20in&branch=x", nil), "branch", 5)
+	require.NoError(t, err)
+	assert.Equal(t, "ma in", *v, "the first repeated value wins")
+	for _, target := range []string{"/?branch=", "/?branch=%00", "/?branch=%ff", "/?branch=abcdef"} {
+		_, err = TextQuery(httptest.NewRequest(http.MethodGet, target, nil), "branch", 5)
+		e, ok := apperr.As(err)
+		require.True(t, ok, target)
+		assert.Equal(t, "branch", e.Fields[0].Field, target)
+	}
+}
+
+func TestTimeQuery(t *testing.T) {
+	v, err := TimeQuery(httptest.NewRequest(http.MethodGet, "/", nil), "from")
+	require.NoError(t, err)
+	assert.Nil(t, v)
+	v, err = TimeQuery(httptest.NewRequest(http.MethodGet, "/?from=2026-10-08T03:00:00-03:00", nil), "from")
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2026, 10, 8, 6, 0, 0, 0, time.UTC), v.UTC())
+	for _, target := range []string{"/?from=", "/?from=2026-10-08", "/?from=now"} {
+		_, err = TimeQuery(httptest.NewRequest(http.MethodGet, target, nil), "from")
+		e, ok := apperr.As(err)
+		require.True(t, ok, target)
+		assert.Equal(t, []apperr.FieldError{{Field: "from", Message: "must be an RFC 3339 date-time such as 2026-10-08T03:00:00Z"}}, e.Fields)
+	}
 }
 
 func TestMiddleware(t *testing.T) {

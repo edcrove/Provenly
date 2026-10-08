@@ -5293,6 +5293,16 @@ export interface operations {
                 project?: components["parameters"]["ProjectFilter"];
                 /** @description Only runs reported for the suite with this key. */
                 suite?: string;
+                /** @description Only runs of this branch, exactly as CI reported it. */
+                branch?: string;
+                /** @description Only runs with this execution status. */
+                executionStatus?: components["schemas"]["RunExecutionStatus"];
+                /** @description Only runs whose results arrive this way. */
+                mode?: "batch" | "live" | "manual" | "sharded";
+                /** @description Only runs created at or after this instant (RFC 3339). */
+                from?: string;
+                /** @description Only runs created at or before this instant (RFC 3339); not before from (400). */
+                to?: string;
             };
             header?: never;
             path?: never;

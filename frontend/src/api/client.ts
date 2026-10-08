@@ -20,6 +20,11 @@ export type Project = components['schemas']['Project']
 export type CreateProjectRequest = components['schemas']['CreateProjectRequest']
 export type UpdateProjectRequest = components['schemas']['UpdateProjectRequest']
 export type TestCase = components['schemas']['TestCase']
+/** The runs list's filters (branch exact, execution status, mode, creation window as RFC 3339 instants). */
+export type RunListFilter = Pick<
+  NonNullable<paths['/api/v1/test-runs']['get']['parameters']['query']>,
+  'branch' | 'executionStatus' | 'mode' | 'from' | 'to'
+>
 export type Dimension = components['schemas']['Dimension']
 export type Suite = components['schemas']['Suite']
 export type Requirement = components['schemas']['Requirement']

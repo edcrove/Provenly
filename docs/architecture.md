@@ -107,6 +107,9 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   `verificationCounts`) instead of fetching every page. Pickers search on the server: `GET /api/v1/test-cases?q=`
   matches the title (case-insensitive, `%` and `_` literal) or a key or number (`chk-12`, `12`); blank or over 200
   characters is a 400.
+- `GET /api/v1/test-runs` (deployed audit) filters by `branch` (exact, 1..255 characters), `executionStatus`, `mode`
+  and the creation window `from`/`to` (RFC 3339 instants, inclusive; `from` after `to` is a 400); the count follows the
+  same filter. The UI sends whole local days. A verdict filter would need the outcome in SQL: not offered.
 - Query parameters: unknown ones are ignored; every known parameter is applied and validated (an invalid value of a
   known parameter is a `400` even when unknown ones are present). A known parameter present but empty (`status=`) is
   invalid; a repeated one uses its first value. Exception (card #55): the ingestion's `pipeline`, `branch` and `commit`

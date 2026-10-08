@@ -406,7 +406,7 @@ describe('FE-INT-011 run results', () => {
     const { user, router } = renderRoute('/test-runs/7')
     const table = await screen.findByRole('table', { name: 'Results' })
     await within(table).findAllByTestId('result-row')
-    const section = table.parentElement!.parentElement!
+    const section = table.closest('[data-slot="card"]') as HTMLElement
     await user.click(within(section).getByRole('button', { name: 'Next' }))
     await waitFor(() => expect(rows()).toHaveLength(1))
     expect(within(rows()[0]).getByText('t21')).toBeInTheDocument()

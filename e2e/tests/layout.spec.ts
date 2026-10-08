@@ -1,4 +1,4 @@
-import { expect, pickProject, test } from '../support/fixtures'
+import { byProperty, expect, junit, pickProject, test, uniqueRunId } from '../support/fixtures'
 
 test.describe('Phone layout (deployed audit)', () => {
   test.use({ viewport: { width: 390, height: 844 } })
@@ -70,5 +70,32 @@ test.describe('A project and its parts (deployed audit)', () => {
     await expect(page.getByTestId('ci-snippet')).toContainText('/api/v1/ingestion/junit?project=TC')
     await page.getByRole('navigation', { name: 'In this project' }).getByRole('link', { name: 'Issues' }).click()
     await expect(page).toHaveURL(/\/issues$/)
+  })
+})
+
+test.describe('Phone tables (deployed audit)', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('[FE-E2E-033] on a phone a wide table scrolls inside its card, keeps its first column and says so', async ({ page, provenly }) => {
+    const tc = await provenly.createTestCase({ title: 'phone table', automated: true })
+    const res = await provenly.ingest(uniqueRunId(), 1, junit(byProperty('phone table', tc.key, '<failure message="Expected 200 but got 500 from the payments service"/>')))
+    const runId = ((await res.json()) as { testRun: { id: number } }).testRun.id
+    await page.goto(`/test-runs/${runId}`)
+    await expect(page.getByRole('table', { name: 'Results' })).toBeVisible()
+    // Every table wider than its card scrolls inside it, keeps its first column and says so; the others say nothing.
+    const tables = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-slot="table-container"]')].map((c) => ({
+        overflows: c.scrollWidth > c.clientWidth + 1,
+        hint: c.parentElement!.querySelector('[data-testid="table-scroll-hint"]')?.textContent ?? null,
+        firstColumn: getComputedStyle(c.querySelector('tr > *')!).position,
+      })),
+    )
+    expect(tables.some((t) => t.overflows)).toBe(true)
+    for (const t of tables) {
+      expect(t.hint).toBe(t.overflows ? 'Scroll sideways for more columns →' : null)
+      expect(t.firstColumn).toBe(t.overflows ? 'sticky' : 'static')
+    }
+    // The page itself never scrolls sideways: only the table does.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   })
 })

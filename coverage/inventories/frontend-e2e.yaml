@@ -60,3 +60,5 @@ targets:
     description: at phone width (390 px) the new manual run and new test case forms fit the screen - no input or select runs past the right edge, whatever the length of their options (deployed audit)
   - id: FE-E2E-030
     description: navigation (deployed audit) - the header puts the project switcher first and then the project's pages in working order (Dashboard, Test Runs, Test Cases, Suites, Requirements, Issues, and Settings once one project is chosen); the switcher finds a project by typing; list pages say their scope; on a phone the header is one row (at most 56 px) with the pages behind Menu
+  - id: FE-E2E-031
+    description: a project and its parts (deployed audit) - a project opens by its name from the projects page (current project, dashboard); its Settings page is titled with the project, its section index jumps to webhooks, shows how CI reports into it and opens its pages

@@ -192,3 +192,6 @@ targets:
   - id: FE-INT-059
     description: navigation (deployed audit) - the header lists the project pages in working order with Settings only for one project, the workspace (Projects; Users and Audit for administrators) apart; the project switcher is a searchable, keyboard-operable combobox with a link to every project; on phones the items move into a Menu that closes on a choice; pages of one project offer the projects to pick while every project is chosen; detail pages show a breadcrumb with their project and offer to switch to it
     surfaces: [src/app/Layout.tsx, src/features/projects/ProjectSwitcher.tsx, src/features/projects/ProjectScope.tsx, src/features/projects/currentProject.ts]
+  - id: FE-INT-060
+    description: a project and its parts (deployed audit) - the projects page opens a project by its name (it becomes the current project, on its dashboard) and its settings by a Settings link; the settings page names the project, says what it holds, links to its pages (opening them in this project) and lists its sections (CI API keys, webhooks and GitHub only for maintainers), with a CI snippet for this instance before any key exists
+    surfaces: [src/features/projects/ProjectsPage.tsx, src/features/projects/ProjectMembersPage.tsx, src/features/projects/ApiKeysSection.tsx]

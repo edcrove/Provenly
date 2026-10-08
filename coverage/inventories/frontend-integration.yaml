@@ -201,3 +201,6 @@ targets:
   - id: FE-INT-062
     description: automated or manual test cases (deployed audit) - the test case list narrows to automated or manual ones (?automated= in the URL), says when none match, and widens again
     surfaces: [src/features/test-cases/TestCaseListPage.tsx, src/api/queries.ts]
+  - id: FE-INT-063
+    description: a failed run opens on its failures (deployed audit) - a run with failures or errors shows its results before its metadata and summary, tests whose last attempt failed or errored first; a passing run keeps its metadata first
+    surfaces: [src/features/test-runs/TestRunDetailPage.tsx]

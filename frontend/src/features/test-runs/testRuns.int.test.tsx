@@ -351,17 +351,40 @@ describe('FE-INT-010 TC-ID diagnostics', () => {
   })
 })
 
+describe('FE-INT-063 a failed run opens on its failures', () => {
+  it('FE-INT-063 a run with failures shows its results first; a passing one keeps its metadata first', async () => {
+    const order = () =>
+      screen
+        .getAllByRole('heading', { level: 2 })
+        .map((h) => h.textContent)
+        .filter((t) => t === 'Results' || t === 'Run metadata')
+    const failing = renderRoute('/test-runs/7')
+    await screen.findByRole('table', { name: 'Results' })
+    expect(order()).toEqual(['Results', 'Run metadata'])
+    failing.unmount()
+
+    db.runs[0] = {
+      ...db.runs[0],
+      outcome: { ...db.runs[0].outcome, verdict: 'passed', failed: 0, error: 0, passed: 1 },
+    }
+    renderRoute('/test-runs/7')
+    await screen.findByRole('table', { name: 'Results' })
+    expect(order()).toEqual(['Run metadata', 'Results'])
+  })
+})
+
 describe('FE-INT-011 run results', () => {
   it('FE-INT-011 shows every individual result, linking valid TC-IDs', async () => {
     renderRoute('/test-runs/7')
     const table = await screen.findByRole('table', { name: 'Results' })
     const rows = await within(table).findAllByTestId('result-row')
     expect(rows).toHaveLength(3)
-    expect(within(rows[0]).getByRole('link', { name: 'TC-153' })).toHaveAttribute('href', '/test-cases/153')
-    expect(within(rows[1]).getByText('boom')).toBeInTheDocument()
-    expect(within(rows[1]).getByRole('button', { name: 'Show error details of boom' })).toBeInTheDocument()
+    // The failure comes first (deployed audit), then the rest in ingestion order.
+    expect(within(rows[0]).getByText('boom')).toBeInTheDocument()
+    expect(within(rows[0]).getByRole('button', { name: 'Show error details of boom' })).toBeInTheDocument()
+    expect(within(rows[1]).getByRole('link', { name: 'TC-153' })).toHaveAttribute('href', '/test-cases/153')
+    expect(within(rows[1]).getByText('1.20 s')).toBeInTheDocument()
     expect(within(rows[2]).getByText('missing')).toBeInTheDocument()
-    expect(within(rows[0]).getByText('1.20 s')).toBeInTheDocument()
   })
 
   it('FE-INT-011 shows deprecated results linked to their test case with a badge', async () => {

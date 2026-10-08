@@ -67,6 +67,8 @@ type Querier interface {
 	ListResultsForTestCase(ctx context.Context, arg ListResultsForTestCaseParams) ([]ListResultsForTestCaseRow, error)
 	ListRunEvents(ctx context.Context, testRunID int64) ([]TestRunEvent, error)
 	// retried: a later attempt of the same test exists in the run, so this one is not its logical result.
+	// What needs attention first (deployed audit): tests whose logical result (last attempt) failed, then errored, then
+	// the rest; attempts of one test keep their ingestion order next to each other.
 	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]ListRunResultsRow, error)
 	ListRunShards(ctx context.Context, testRunID int64) ([]ListRunShardsRow, error)
 	// Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status, the

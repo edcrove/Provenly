@@ -78,98 +78,109 @@ export function TestRunDetailPage() {
   if (!id) return <NotFoundPage />
   return (
     <QueryState page query={run}>
-      {(r) => (
-        <div className="grid gap-4">
-          <Breadcrumb
-            projectKey={projects.find((p) => p.id === r.projectId)?.key ?? ''}
-            section="Test Runs"
-            to="/test-runs"
-            current={`Run #${r.id}`}
-          />
-          <div className="flex flex-wrap items-center gap-3">
-            <PageTitle title={`Test run #${r.id}`} />
-            <h1 className="text-2xl font-semibold">Test run #{r.id}</h1>
-            <VerdictBadge verdict={r.outcome.verdict} running={r.executionStatus === 'running'} />
-            <EditedBadge amendments={r.amendmentCount} />
-            <FlakyBadge count={r.outcome.flaky} />
-            <SuiteBadge suite={r.suite} />
-            {isInterruptedRun(r.executionStatus) || r.executionStatus === 'running' ? (
-              <ExecutionBadge status={r.executionStatus} />
-            ) : null}
-            {r.mode !== 'batch' ? <Badge variant="outline">{r.mode}</Badge> : null}
-            <span className="text-muted-foreground text-sm" data-testid="run-pass-rate">
-              {r.outcome.executed > 0
-                ? `${formatPercent(r.outcome.passRate)} of executed passed${running ? ' so far' : ''}`
-                : `— (0 of ${r.outcome.executed + r.outcome.untested} executed)`}
-            </span>
-          </div>
-          {r.shards ? <ShardsProgress shards={r.shards} running={running} /> : null}
-          {isInterruptedRun(r.executionStatus) ? (
-            <Alert variant="destructive" data-testid="interrupted-run">
-              <AlertTitle>
-                The CI execution {r.executionStatus === 'interrupted' ? 'was interrupted' : 'was cancelled'}
-              </AlertTitle>
-              <AlertDescription>
-                The report may be incomplete: untested test cases may simply not have run.
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          <Card>
-            <CardHeader>
-              <CardTitle as="h2">Run metadata</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Metadata run={r} />
-            </CardContent>
-          </Card>
-          <QueryState query={summary}>
-            {(s) => (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle as="h2">Summary</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <RunSummary summary={s} running={running} manual={r.mode === 'manual'} />
-                    <RunKnownIssues
-                      projectKey={projects.find((p) => p.id === r.projectId)?.key ?? ''}
-                      summary={s}
-                    />
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle as="h2">TC-ID diagnostics</CardTitle>
-                    <CardDescription>Excluded from the universe and the percentages.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <RunDiagnostics summary={s} testRunId={r.id} suite={r.suite?.name} />
-                  </CardContent>
-                </Card>
-                {r.mode === 'live' ? <LivePanel run={r} /> : null}
-                {r.mode === 'manual' &&
-                r.executionStatus === 'running' &&
-                can(projects.find((p) => p.id === r.projectId)?.myRole, 'member') ? (
-                  <ManualExecution run={r} summary={s} />
-                ) : null}
-                {r.amendmentCount > 0 ? (
-                  <RunAmendments testRunId={r.id} snapshotTotal={s.snapshotTotal} />
-                ) : null}
-              </>
-            )}
-          </QueryState>
-          <RunParseErrors testRunId={r.id} />
-          <Card>
+      {(r) => {
+        // A run with failures opens on its results (failures first); the metadata and summary follow.
+        const failing = r.outcome.failed + r.outcome.error > 0
+        const results = (
+          <Card data-testid="results-card">
             <CardHeader>
               <CardTitle as="h2">Results</CardTitle>
-              <CardDescription>Every individual result as ingested (e.g. one per browser).</CardDescription>
+              <CardDescription>
+                Every individual result as ingested (e.g. one per browser); tests whose last attempt failed or
+                errored come first.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <RunResults testRunId={r.id} shards={r.shards?.total} manual={r.mode === 'manual'} />
             </CardContent>
           </Card>
-        </div>
-      )}
+        )
+        return (
+          <div className="grid gap-4">
+            <Breadcrumb
+              projectKey={projects.find((p) => p.id === r.projectId)?.key ?? ''}
+              section="Test Runs"
+              to="/test-runs"
+              current={`Run #${r.id}`}
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <PageTitle title={`Test run #${r.id}`} />
+              <h1 className="text-2xl font-semibold">Test run #{r.id}</h1>
+              <VerdictBadge verdict={r.outcome.verdict} running={r.executionStatus === 'running'} />
+              <EditedBadge amendments={r.amendmentCount} />
+              <FlakyBadge count={r.outcome.flaky} />
+              <SuiteBadge suite={r.suite} />
+              {isInterruptedRun(r.executionStatus) || r.executionStatus === 'running' ? (
+                <ExecutionBadge status={r.executionStatus} />
+              ) : null}
+              {r.mode !== 'batch' ? <Badge variant="outline">{r.mode}</Badge> : null}
+              <span className="text-muted-foreground text-sm" data-testid="run-pass-rate">
+                {r.outcome.executed > 0
+                  ? `${formatPercent(r.outcome.passRate)} of executed passed${running ? ' so far' : ''}`
+                  : `— (0 of ${r.outcome.executed + r.outcome.untested} executed)`}
+              </span>
+            </div>
+            {r.shards ? <ShardsProgress shards={r.shards} running={running} /> : null}
+            {isInterruptedRun(r.executionStatus) ? (
+              <Alert variant="destructive" data-testid="interrupted-run">
+                <AlertTitle>
+                  The CI execution {r.executionStatus === 'interrupted' ? 'was interrupted' : 'was cancelled'}
+                </AlertTitle>
+                <AlertDescription>
+                  The report may be incomplete: untested test cases may simply not have run.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {failing ? results : null}
+            <Card>
+              <CardHeader>
+                <CardTitle as="h2">Run metadata</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Metadata run={r} />
+              </CardContent>
+            </Card>
+            <QueryState query={summary}>
+              {(s) => (
+                <>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle as="h2">Summary</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <RunSummary summary={s} running={running} manual={r.mode === 'manual'} />
+                      <RunKnownIssues
+                        projectKey={projects.find((p) => p.id === r.projectId)?.key ?? ''}
+                        summary={s}
+                      />
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle as="h2">TC-ID diagnostics</CardTitle>
+                      <CardDescription>Excluded from the universe and the percentages.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <RunDiagnostics summary={s} testRunId={r.id} suite={r.suite?.name} />
+                    </CardContent>
+                  </Card>
+                  {r.mode === 'live' ? <LivePanel run={r} /> : null}
+                  {r.mode === 'manual' &&
+                  r.executionStatus === 'running' &&
+                  can(projects.find((p) => p.id === r.projectId)?.myRole, 'member') ? (
+                    <ManualExecution run={r} summary={s} />
+                  ) : null}
+                  {r.amendmentCount > 0 ? (
+                    <RunAmendments testRunId={r.id} snapshotTotal={s.snapshotTotal} />
+                  ) : null}
+                </>
+              )}
+            </QueryState>
+            <RunParseErrors testRunId={r.id} />
+            {failing ? null : results}
+          </div>
+        )
+      }}
     </QueryState>
   )
 }

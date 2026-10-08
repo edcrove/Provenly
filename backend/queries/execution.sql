@@ -70,7 +70,12 @@ WHERE t.test_run_id = @test_run_id
   AND (sqlc.narg('status')::text IS NULL OR t.status = sqlc.narg('status')::text)
   AND (sqlc.narg('correlation')::text IS NULL OR t.correlation = sqlc.narg('correlation')::text)
   AND (sqlc.narg('shard')::int IS NULL OR t.shard = sqlc.narg('shard')::int)
-ORDER BY t.id
+-- What needs attention first (deployed audit): tests whose logical result (last attempt) failed, then errored, then
+-- the rest; attempts of one test keep their ingestion order next to each other.
+ORDER BY CASE (
+    SELECT x.status FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
+      AND x.class_name = t.class_name AND x.test_name = t.test_name ORDER BY x.attempt DESC, x.id DESC LIMIT 1
+) WHEN 'failed' THEN 0 WHEN 'error' THEN 1 ELSE 2 END, t.id
 LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountRunResults :one

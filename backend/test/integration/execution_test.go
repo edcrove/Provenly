@@ -78,14 +78,15 @@ func TestExecutionPersistence(t *testing.T) {
 		res, err := s.Execution.ListRunResults(ctx, out.Run.ID, execution.ResultFilter{}, pagination.Default())
 		require.NoError(t, err)
 		assert.Equal(t, int64(7), res.Total)
-		first := res.Items[0]
+		// The failure comes first (deployed audit), then the rest in ingestion order.
+		assert.Equal(t, "boom", res.Items[0].ErrorMessage)
+		assert.Equal(t, "trace", res.Items[0].ErrorDetails)
+		first := res.Items[1]
 		assert.Equal(t, login.ID, *first.TestCaseID)
 		assert.Equal(t, itoa(login.ID), *first.RequestedTestCaseID)
 		assert.Equal(t, int64(250), *first.DurationMs)
 		assert.Equal(t, "suite", first.SuiteName)
 		assert.Equal(t, "c", first.ClassName)
-		assert.Equal(t, "boom", res.Items[1].ErrorMessage)
-		assert.Equal(t, "trace", res.Items[1].ErrorDetails)
 
 		sum, err := s.Execution.Summary(ctx, out.Run.ID)
 		require.NoError(t, err)

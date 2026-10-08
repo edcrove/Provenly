@@ -6,6 +6,18 @@ import (
 	"time"
 )
 
+// SecurityHeaders marks every API response as what it says it is (nosniff) and never to be framed or to leak its URL:
+// deployments that proxy the API without a hardening proxy of their own (Render's rewrite) still send them.
+func SecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Recover turns panics into a 500 Problem response.
 func Recover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

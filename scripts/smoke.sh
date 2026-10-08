@@ -21,6 +21,9 @@ for path in / /api/v1/auth/me; do
     grep -qi "^$want" <<<"$h" || fail "$path lacks the header: $want"
   done
 done
+# The API sends its own copies (for deployments without this proxy); through the proxy each header comes once.
+[ "$(curl -s --noproxy '*' -o /dev/null -D - "$web/api/v1/auth/me" | grep -ci '^x-content-type-options:')" = 1 ] ||
+  fail "the API's security headers are repeated through the proxy"
 login_cookie() { curl -s --noproxy '*' -o /dev/null -D - -H 'Content-Type: application/json' "$@" -X POST "$web/api/v1/auth/login" \
   -d "{\"username\":\"${PROVENLY_ADMIN_USERNAME:-admin}\",\"password\":\"${PROVENLY_ADMIN_PASSWORD:-provenly-demo}\"}" | grep -i '^set-cookie: provenly_session='; }
 login_cookie -H 'X-Forwarded-Proto: https' | grep -qi '; Secure' || fail "the session cookie is not Secure behind a TLS proxy"

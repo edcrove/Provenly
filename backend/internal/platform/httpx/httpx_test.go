@@ -195,6 +195,16 @@ func TestTimeQuery(t *testing.T) {
 	}
 }
 
+func TestSecurityHeaders(t *testing.T) {
+	rec := httptest.NewRecorder()
+	SecurityHeaders(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	assert.Equal(t, http.StatusTeapot, rec.Code)
+	assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"))
+	assert.Equal(t, "DENY", rec.Header().Get("X-Frame-Options"))
+	assert.Equal(t, "no-referrer", rec.Header().Get("Referrer-Policy"))
+}
+
 func TestMiddleware(t *testing.T) {
 	panicking := Recover(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("boom") }))
 	rec := httptest.NewRecorder()

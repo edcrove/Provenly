@@ -11,6 +11,7 @@ import {
   useRevokeInvitation,
   useUsers,
 } from '@/api/queries'
+import { NotAllowed } from '@/components/NotAllowed'
 import { PageTitle } from '@/components/PageTitle'
 import { Pagination } from '@/components/Pagination'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
@@ -275,22 +276,7 @@ export function UsersPage() {
   }
 
   if (!admin)
-    return (
-      <Card>
-        <CardHeader>
-          <PageTitle title="Users" />
-          <CardTitle as="h1" className="text-xl">
-            Users
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ErrorAlert
-            error={new Error('Only administrators can manage users and invitations.')}
-            title="Not allowed"
-          />
-        </CardContent>
-      </Card>
-    )
+    return <NotAllowed title="Users" reason="Only administrators can manage users and invitations." />
 
   return (
     <div className="grid gap-6">

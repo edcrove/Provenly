@@ -5,6 +5,7 @@ import { useCreateTestCase, useDimensions, useProjects } from '@/api/queries'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/select'
+import { NotAllowed } from '@/components/NotAllowed'
 import { PageTitle } from '@/components/PageTitle'
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { can } from '@/lib/roles'
@@ -15,13 +16,22 @@ import { TestCaseForm } from './TestCaseForm'
 export function NewTestCasePage() {
   const navigate = useNavigate()
   const create = useCreateTestCase()
-  const projects = (useProjects().data?.items ?? []).filter((p) => can(p.myRole, 'member'))
+  const all = useProjects()
+  const projects = (all.data?.items ?? []).filter((p) => can(p.myRole, 'member'))
   const { project: current } = useCurrentProject()
   const [chosen, setProject] = useState(current)
   // The select shows only projects the user can write to: send the one it shows (the current project, else the
   // default TC, else the first one), never a hidden default the user cannot write to.
   const project = [chosen, 'TC'].find((k) => projects.some((p) => p.key === k)) ?? projects[0]?.key ?? ''
   const dimensions = useDimensions(project).data?.items ?? []
+  // A viewer everywhere (e.g. following a shared link) gets the reason, not a form whose project list is empty.
+  if (all.data && projects.length === 0)
+    return (
+      <NotAllowed
+        title="New test case"
+        reason="Creating test cases needs the member role (or higher) in a project."
+      />
+    )
   return (
     <Card className="max-w-2xl">
       <CardHeader>

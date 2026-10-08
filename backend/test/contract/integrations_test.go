@@ -66,7 +66,8 @@ func TestIntegrations(t *testing.T) {
 	admin.PATCH(webhooks + "/987654").WithJSON(map[string]any{"active": true}).Expect().Status(http.StatusNotFound)
 
 	github := "/api/v1/projects/TC/github"
-	admin.GET(github).Expect().Status(http.StatusNotFound)
+	admin.GET(github).Expect().Status(http.StatusNoContent).NoContent()
+	admin.GET("/api/v1/projects/NOPE/github").Expect().Status(http.StatusNotFound)
 	admin.POST(github + "/sync").Expect().Status(http.StatusNotFound)
 	admin.DELETE(github).Expect().Status(http.StatusNotFound)
 	admin.PUT(github).WithJSON(map[string]any{"repository": "acme/shop"}).Expect().Status(http.StatusBadRequest)

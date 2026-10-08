@@ -1,7 +1,7 @@
 import { request as apiRequest } from '@playwright/test'
 
 import { apiURL } from '../playwright.config'
-import { expect, test, uniqueProjectKey } from '../support/fixtures'
+import { expect, secret, test, uniqueProjectKey } from '../support/fixtures'
 
 const unique = () => `r${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`
 const empty = { cookies: [], origins: [] }
@@ -18,7 +18,7 @@ test.describe('Project roles', () => {
     const username = unique()
     const anon = await apiRequest.newContext({ storageState: empty })
     const session = await (await anon.post(`${apiURL}/api/v1/invitations/accept`, {
-      data: { token: inv.token, username, displayName: 'Viewer', password: 'viewer password' },
+      data: { token: inv.token, username, displayName: 'Viewer', password: secret('viewer password') },
     })).json()
     const viewer = await apiRequest.newContext({ storageState: empty, extraHTTPHeaders: { Authorization: `Bearer ${session.token}` } })
 
@@ -52,7 +52,7 @@ test.describe('Project roles', () => {
     const username = unique()
     const anon = await apiRequest.newContext({ storageState: empty })
     expect((await anon.post(`${apiURL}/api/v1/invitations/accept`, {
-      data: { token: inv.token, username, displayName: 'UI Member', password: 'member password' },
+      data: { token: inv.token, username, displayName: 'UI Member', password: secret('member password') },
     })).status()).toBe(201)
     await anon.dispose()
 
@@ -67,7 +67,7 @@ test.describe('Project roles', () => {
     const member = await ctx.newPage()
     await member.goto(`/test-cases/${tc.id}`)
     await member.getByLabel('Username').fill(username)
-    await member.getByLabel('Password').fill('member password')
+    await member.getByLabel('Password').fill(secret('member password'))
     await member.getByRole('button', { name: 'Sign in' }).click()
     await expect(member.getByRole('heading', { level: 1 })).toContainText('Role-gated case')
     await expect(member.getByRole('button', { name: 'Edit' })).toBeVisible()

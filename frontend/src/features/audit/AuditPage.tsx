@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router'
 
 import { useAuditEvents } from '@/api/queries'
+import { NotAllowed } from '@/components/NotAllowed'
 import { PageTitle } from '@/components/PageTitle'
 import { Pagination } from '@/components/Pagination'
 import { QueryState } from '@/components/QueryState'
@@ -10,11 +11,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useCurrentUser } from '@/features/auth/currentUser'
 import { formatDateTime } from '@/lib/format'
 import { positiveInt } from '@/lib/status'
 
 /** The audit log (administrators): who changed what through the API, newest first, by project, actor and test case. */
 export function AuditPage() {
+  const me = useCurrentUser()
+  if (!me.isAdmin)
+    return <NotAllowed title="Audit log" reason="Only administrators can read the audit log." />
+  return <AuditLog />
+}
+
+function AuditLog() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
   const project = params.get('project') ?? ''

@@ -240,6 +240,8 @@ refuses anything else. Secrets Provenly only verifies (passwords, API keys) stay
 - **GitHub**: `POST /projects/{key}/github/sync` reads up to 5 pages of 100 issues (`PROVENLY_GITHUB_API_URL`,
   default the public API) and mirrors them through `catalog.ImportIssues` (provider `github`, external id = number);
   failures are 502 `upstream_error` and recorded on the connection; a token another key sealed is 409.
+  `GET /projects/{key}/github` answers 204 when the project is not connected (a state, not an error; an unknown or
+  invisible project stays 404), so the project page loads without failed requests.
 
 ## Agents: MCP (prototype feature 19, DEC-10)
 

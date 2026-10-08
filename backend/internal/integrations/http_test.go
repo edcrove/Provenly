@@ -102,7 +102,9 @@ func TestGitHubRoutes(t *testing.T) {
 	defer srv.Close()
 	f := newFixture(t, Config{AllowPrivate: true, GitHubAPIURL: srv.URL}, maintainer())
 
-	assert.Equal(t, http.StatusNotFound, serve(t, f.svc, call{"GET", "/api/v1/projects/SHOP/github", ""}).Code)
+	notConnected := serve(t, f.svc, call{"GET", "/api/v1/projects/SHOP/github", ""})
+	assert.Equal(t, http.StatusNoContent, notConnected.Code)
+	assert.Empty(t, notConnected.Body.String())
 	rec := serve(t, f.svc, call{"PUT", "/api/v1/projects/SHOP/github", `{"repository":"acme/shop","token":"ghp_abcd9876","labels":""}`})
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"repository":"acme/shop","labels":"","tokenHint":"…9876","lastSyncedAt":null,"lastError":null,"updatedAt":"2026-10-05T12:00:00Z"}`, rec.Body.String())

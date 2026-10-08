@@ -42,6 +42,10 @@ services:
         value: admin
       - key: PROVENLY_ADMIN_PASSWORD
         sync: false
+      # Render's own proxies (loopback sidecar, private network) add X-Forwarded-For: believe them so the audit log
+      # keeps the client's address instead of ::1.
+      - key: PROVENLY_TRUSTED_PROXIES
+        value: "::1/128,127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7"
 
   - type: web
     name: provenly-ed

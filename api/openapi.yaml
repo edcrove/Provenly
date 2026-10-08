@@ -1582,6 +1582,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GitHubConnection"
+        "204":
+          description: The project is not connected to GitHub (an unknown or invisible project is a 404)
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":

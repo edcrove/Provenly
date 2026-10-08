@@ -186,3 +186,6 @@ targets:
   - id: FE-INT-057
     description: personal access tokens on the account page (card #62) - a token is made for chosen projects with a lifetime (90 days by default, 30 chosen), shown once with its MCP command, listed with projects, status and last use (never its secret) and revoked after an inline confirmation (Cancel focused); a refused token says why; the agents card's MCP command uses a token placeholder, never the password
     surfaces: [src/features/auth/TokensSection.tsx, src/features/auth/AccountPage.tsx, src/lib/mcpSnippet.ts, src/api/queries.ts]
+  - id: FE-INT-058
+    description: forms a role cannot use (deployed audit) - a viewer opening the new test case or new manual run page by URL is told why (member role needed) instead of a form with an empty project list; the audit log refuses non-administrators with its own message and no filters
+    surfaces: [src/components/NotAllowed.tsx, src/features/test-cases/NewTestCasePage.tsx, src/features/manual/NewManualRunPage.tsx, src/features/audit/AuditPage.tsx, src/features/auth/UsersPage.tsx]

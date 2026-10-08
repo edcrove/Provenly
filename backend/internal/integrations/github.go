@@ -59,8 +59,11 @@ type GitHubInput struct {
 	Labels     string
 }
 
+// errNoConnection marks "not connected": a state for readers of the connection, a 404 for actions that need one.
+var errNoConnection = errors.New("no GitHub connection")
+
 func noConnection(key string) error {
-	return apperr.NotFound("project %s has no GitHub connection", key)
+	return errors.Join(errNoConnection, apperr.NotFound("project %s has no GitHub connection", key))
 }
 
 func (s *Service) view(c GitHubConnection) GitHubView {

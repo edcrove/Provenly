@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { apiURL } from '../playwright.config'
-import { expect, junit, test, uniqueRunId } from '../support/fixtures'
+import { expect, junit, pickProject, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
 test.describe('Filtering runs (deployed audit)', () => {
   test('[BE-E2E-031] the runs list filters by branch, execution status and creation window through the API', async ({ request, provenly }) => {
@@ -37,5 +37,20 @@ test.describe('Filtering runs (deployed audit)', () => {
     await expect(page.getByText('No runs match these filters.')).toBeVisible()
     await page.getByRole('button', { name: 'Clear filters' }).click()
     await expect(page).toHaveURL(/\/test-runs$/)
+  })
+})
+
+test.describe('Automated or manual test cases (deployed audit)', () => {
+  test('[FE-E2E-034] a QA lead narrows a project\'s test cases to the manual ones', async ({ page, provenly }) => {
+    const key = uniqueProjectKey()
+    await provenly.createProject(key, 'Execution filter')
+    await provenly.createTestCase({ title: 'Scripted login', automated: true, project: key })
+    await provenly.createTestCase({ title: 'Exploratory checkout', automated: false, project: key })
+    await page.goto('/test-cases')
+    await pickProject(page, key)
+    await page.getByLabel('Filter by execution').selectOption('false')
+    await expect(page).toHaveURL(/automated=false/)
+    await expect(page.getByText('Exploratory checkout')).toBeVisible()
+    await expect(page.getByText('Scripted login')).toBeHidden()
   })
 })

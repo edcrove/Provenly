@@ -1333,6 +1333,19 @@ const suiteScenarios: Scenario[] = [
     status: 400,
     call: (c) => c.GET('/api/v1/test-runs', { params: { query: { suite: 'Smoke' } } }),
   },
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 200,
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { automated: 'false' } } }),
+  },
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/test-cases', {
+        params: { query: { automated: 'yes' as 'true' } },
+      }),
+  },
   // Filters (deployed audit): branch, execution status, mode and the creation window.
   {
     op: 'GET /api/v1/test-runs',

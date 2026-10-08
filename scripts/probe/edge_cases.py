@@ -152,6 +152,8 @@ def main():
             check(f"GET {path}?{qs}", call(base, "GET", f"{path}?{qs}")[0], exp)
     check("status= (empty enum)", call(base, "GET", "/test-cases?status=")[0], 400)
     check("status=bogus", call(base, "GET", "/test-cases?status=bogus")[0], 400)
+    for qs, exp in [("automated=true", 200), ("automated=false", 200), ("automated=", 400), ("automated=1", 400), ("automated=%00", 400)]:
+        check(f"test cases ?{qs}", call(base, "GET", f"/test-cases?{qs}")[0], exp)
 
     for pid, exp in [("0", 400), ("-1", 400), ("abc", 400), ("1.5", 400), ("9223372036854775808", 400),
                      ("9223372036854775807", 404), ("%00", 400)]:

@@ -1923,6 +1923,9 @@ export const handlers = [
       if (tcKey !== null && !/^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,17}$/.test(tcKey))
         return validation('key', 'must be a test case key: <PROJECT>-<number> (e.g. CHK-12)')
       // ?q=: a title containing the text (any case), or a key or number, like the server (DEC-78).
+      const automated = url.searchParams.get('automated')
+      if (automated !== null && automated !== 'true' && automated !== 'false')
+        return validation('automated', 'must be one of true, false')
       const search = url.searchParams.get('q')?.trim()
       if (search === '') return validation('q', 'must not be empty')
       const searchNumber = search?.match(/^(?:[A-Za-z][A-Za-z0-9]{1,9}-)?([1-9][0-9]{0,17})$/)?.[1]
@@ -1936,6 +1939,7 @@ export const handlers = [
             found(t) &&
             (tcKey === null || t.key === tcKey) &&
             (!status || t.status === status) &&
+            (automated === null || String(t.automated) === automated) &&
             (!p || t.projectId === p.id) &&
             (tag === null || t.tags.includes(tag)) &&
             inSuite(t) &&

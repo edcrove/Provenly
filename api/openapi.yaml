@@ -1879,6 +1879,13 @@ paths:
           schema:
             $ref: "#/components/schemas/TestCaseStatus"
         - $ref: "#/components/parameters/ProjectFilter"
+        - name: automated
+          in: query
+          required: false
+          description: Only automated (true) or manual (false) test cases.
+          schema:
+            type: string
+            enum: ["true", "false"]
         - name: tag
           in: query
           required: false

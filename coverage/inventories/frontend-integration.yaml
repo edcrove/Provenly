@@ -198,3 +198,6 @@ targets:
   - id: FE-INT-061
     description: filtering the runs list (deployed audit) - by branch (Enter, trimmed), execution status, mode and a range of local days, combined, kept in the URL (back to page 1), with "No runs match these filters." and Clear filters; unknown values and non-dates in the URL are ignored rather than sent
     surfaces: [src/features/test-runs/RunFilters.tsx, src/lib/runFilters.ts, src/features/test-runs/TestRunListPage.tsx, src/api/queries.ts]
+  - id: FE-INT-062
+    description: automated or manual test cases (deployed audit) - the test case list narrows to automated or manual ones (?automated= in the URL), says when none match, and widens again
+    surfaces: [src/features/test-cases/TestCaseListPage.tsx, src/api/queries.ts]

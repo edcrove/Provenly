@@ -340,6 +340,16 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	// ?automated=true|false: automated or manual test cases only (the execution mode is the automated flag, P9-2).
+	automated, err := httpx.EnumQuery(r, "automated", "true", "false")
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	if automated != nil {
+		v := *automated == "true"
+		f.Automated = &v
+	}
 	if f.Classified, err = classifiedQuery(r); err != nil {
 		httpx.WriteError(w, r, err)
 		return

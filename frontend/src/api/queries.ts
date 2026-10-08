@@ -343,6 +343,8 @@ export function useUpdateProject(key: string) {
 /** Narrows the test case list: a tag and `dimension:value` pairs that must all hold. */
 export interface TestCaseFilter {
   status?: 'active' | 'deprecated'
+  /** Automated ('true') or manual ('false') test cases only. */
+  automated?: 'true' | 'false'
   project?: string
   tag?: string
   classification?: string
@@ -356,12 +358,13 @@ export interface TestCaseFilter {
 }
 
 export function useTestCases(page: number, filter: TestCaseFilter = {}) {
-  const { status, project, tag, classification, suite, key: tcKey, q, pageSize } = filter
+  const { status, automated, project, tag, classification, suite, key: tcKey, q, pageSize } = filter
   const key = [
     ...keys.testCases,
     'list',
     project,
     status,
+    automated,
     tag,
     classification,
     suite,
@@ -376,7 +379,9 @@ export function useTestCases(page: number, filter: TestCaseFilter = {}) {
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/test-cases', {
-          params: { query: { page, pageSize, status, project, tag, classification, suite, key: tcKey, q } },
+          params: {
+            query: { page, pageSize, status, automated, project, tag, classification, suite, key: tcKey, q },
+          },
         }),
       ),
   })

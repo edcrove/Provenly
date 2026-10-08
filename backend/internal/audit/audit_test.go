@@ -232,6 +232,23 @@ func TestRouterNamesWhatChanged(t *testing.T) {
 		Status: 200, Summary: "finished run #12"}, repo.events[4], "no project allowed: none recorded")
 	assert.Empty(t, repo.events[5].Summary, "an operation without a summary")
 
+	// A creation names what it made; a created test case is findable by its key (deployed audit).
+	a.HandleFunc("POST /api/v1/test-cases", func(w http.ResponseWriter, r *http.Request) {
+		auditnote.Created(r.Context(), "CHK-21", true)
+		w.WriteHeader(http.StatusCreated)
+	})
+	a.HandleFunc("POST /api/v1/projects", func(w http.ResponseWriter, r *http.Request) {
+		auditnote.Created(r.Context(), "PAY", false)
+		w.WriteHeader(http.StatusCreated)
+	})
+	serve(h, http.MethodPost, "/api/v1/test-cases")
+	serve(h, http.MethodPost, "/api/v1/projects")
+	require.Len(t, repo.events, 8)
+	assert.Equal(t, "created a test case CHK-21", repo.events[6].Summary)
+	assert.Equal(t, "CHK-21", repo.events[6].TestCaseKey)
+	assert.Equal(t, "created a project PAY", repo.events[7].Summary)
+	assert.Empty(t, repo.events[7].TestCaseKey)
+
 	// Without a resolver, or when it fails, the ids stay.
 	repo.events = nil
 	svc.SetResolver(fakeNames{err: errBoom})

@@ -207,3 +207,6 @@ targets:
   - id: FE-INT-064
     description: did it pass on main lately (deployed audit) - the test case history says when it last passed (any branch, with its branch; or on the branch chosen), filters by branch (Enter, trimmed), and says when it never passed or has no results there
     surfaces: [src/features/test-cases/TestCaseHistory.tsx, src/api/queries.ts]
+  - id: FE-INT-065
+    description: the audit log of the current project (deployed audit) - it opens filtered by the project chosen in the header and widens to every project when the field is cleared (?project= in the URL); a creation reads with what it made
+    surfaces: [src/features/audit/AuditPage.tsx]

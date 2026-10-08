@@ -51,9 +51,11 @@ test.describe('Audit log (prototype feature 20)', () => {
     await page.getByLabel('Test case').fill(tc.key.toLowerCase())
     await page.getByRole('button', { name: 'Filter' }).click()
     const rows = page.locator('[data-testid^="audit-"]')
-    await expect(rows).toHaveCount(1)
+    // Its creation names it too (deployed audit), newest first.
+    await expect(rows).toHaveCount(2)
     await expect(rows.first()).toContainText(`edited ${tc.key}`)
     await expect(rows.first()).toContainText(`/api/v1/test-cases/${tc.id}`)
     await expect(rows.first()).toContainText(key)
+    await expect(rows.nth(1)).toContainText(`created a test case ${tc.key}`)
   })
 })

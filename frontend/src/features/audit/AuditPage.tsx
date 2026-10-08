@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useCurrentUser } from '@/features/auth/currentUser'
+import { useCurrentProject } from '@/features/projects/currentProject'
 import { formatDateTime } from '@/lib/format'
 import { positiveInt } from '@/lib/status'
 
@@ -26,7 +27,9 @@ export function AuditPage() {
 function AuditLog() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
-  const project = params.get('project') ?? ''
+  // Without ?project= the log opens on the current project; ?project= (empty) is every project.
+  const { project: current } = useCurrentProject()
+  const project = params.get('project') ?? current
   const actor = params.get('actor') ?? ''
   const testCase = params.get('testCase') ?? ''
   const [draft, setDraft] = useState({ project, actor, testCase })
@@ -37,7 +40,8 @@ function AuditLog() {
   const apply = (e: FormEvent) => {
     e.preventDefault()
     const next: Record<string, string> = {}
-    if (draft.project.trim()) next.project = draft.project.trim().toUpperCase()
+    // An empty project means every project: say so in the URL only when it would otherwise default to the current one.
+    if (draft.project.trim() || current) next.project = draft.project.trim().toUpperCase()
     if (draft.actor.trim()) next.actor = draft.actor.trim()
     if (draft.testCase.trim()) next.testCase = draft.testCase.trim().toUpperCase()
     setParams(next)

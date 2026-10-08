@@ -204,13 +204,13 @@ type NewRun struct {
 	ShardTotal int32
 }
 
-// RunFilter narrows a run list; nil fields do not filter.
 // HistoryFilter narrows a test case's history: results of runs of one branch, of one status (nil: no condition).
 type HistoryFilter struct {
 	Branch *string
 	Status *ResultStatus
 }
 
+// RunFilter narrows a run list; nil fields do not filter.
 type RunFilter struct {
 	// ProjectIDs nil means every project.
 	ProjectIDs []int64

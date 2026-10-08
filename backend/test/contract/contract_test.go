@@ -128,6 +128,8 @@ func TestTestCases(t *testing.T) {
 		WithQuery("automated", "true").WithQuery("limit", 1).Expect().Status(http.StatusOK).
 		JSON().Object().HasValue("totalItems", 0).HasValue("pageSize", 5)
 	e.GET("/api/v1/test-cases").WithQuery("pageSize", 0).WithQuery("foo", "bar").Expect().Status(http.StatusBadRequest)
+	e.GET("/api/v1/test-cases").WithQuery("automated", "false").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
+	e.GET("/api/v1/test-cases").WithQuery("automated", "yes").Expect().Status(http.StatusBadRequest)
 
 	path := "/api/v1/test-cases/" + strconv.FormatInt(id, 10)
 	e.GET(path).Expect().Status(http.StatusOK)

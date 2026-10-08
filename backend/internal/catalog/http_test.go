@@ -193,10 +193,27 @@ func TestHandlerIgnoresUnknownQueryParameters(t *testing.T) {
 	require.NotNil(t, api.gotStatus)
 	assert.Equal(t, StatusDeprecated, *api.gotStatus)
 	assert.Equal(t, pagination.Page{Number: 2, Size: 5}, api.gotPage)
+	require.NotNil(t, api.gotFilter.Automated)
+	assert.True(t, *api.gotFilter.Automated)
 
 	rec = serve(api, "GET", "/api/v1/test-cases?pageSize=0&foo=bar", "")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"field":"pageSize"`)
+}
+
+// ?automated= narrows to automated or manual test cases; anything but true or false is a 400.
+func TestHandlerAutomatedFilter(t *testing.T) {
+	api := &stubAPI{}
+	serve(api, "GET", "/api/v1/test-cases?automated=false", "")
+	require.NotNil(t, api.gotFilter.Automated)
+	assert.False(t, *api.gotFilter.Automated)
+	serve(api, "GET", "/api/v1/test-cases", "")
+	assert.Nil(t, api.gotFilter.Automated)
+	for _, target := range []string{"/api/v1/test-cases?automated=", "/api/v1/test-cases?automated=yes", "/api/v1/test-cases?automated=TRUE"} {
+		rec := serve(api, "GET", target, "")
+		assert.Equal(t, http.StatusBadRequest, rec.Code, target)
+		assert.Contains(t, rec.Body.String(), `"field":"automated"`, target)
+	}
 }
 
 func TestHandlerErrors(t *testing.T) {

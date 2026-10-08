@@ -4846,6 +4846,8 @@ export interface operations {
                  * @example CHK
                  */
                 project?: components["parameters"]["ProjectFilter"];
+                /** @description Only automated (true) or manual (false) test cases. */
+                automated?: "true" | "false";
                 /** @description Only test cases with this tag. */
                 tag?: components["schemas"]["Tag"];
                 /**

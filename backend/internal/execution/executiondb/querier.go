@@ -15,7 +15,7 @@ type Querier interface {
 	CompleteLiveRun(ctx context.Context, arg CompleteLiveRunParams) error
 	CountAmendments(ctx context.Context, testRunID int64) (int64, error)
 	CountParseErrors(ctx context.Context, testRunID int64) (int64, error)
-	CountResultsForTestCase(ctx context.Context, testCaseID pgtype.Int8) (int64, error)
+	CountResultsForTestCase(ctx context.Context, arg CountResultsForTestCaseParams) (int64, error)
 	CountRunEvents(ctx context.Context, testRunID int64) (int32, error)
 	CountRunResults(ctx context.Context, arg CountRunResultsParams) (int64, error)
 	CountTestRuns(ctx context.Context, arg CountTestRunsParams) (int64, error)

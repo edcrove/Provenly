@@ -110,6 +110,9 @@ ORDER BY id;
 -- are computed once, not for every row skipped by OFFSET or repeated per result.
 WITH page AS (
     SELECT p.id FROM test_results p WHERE p.test_case_id = @test_case_id
+      AND (sqlc.narg('status')::text IS NULL OR p.status = sqlc.narg('status')::text)
+      AND (sqlc.narg('branch')::text IS NULL OR EXISTS (
+          SELECT 1 FROM test_runs b WHERE b.id = p.test_run_id AND b.branch = sqlc.narg('branch')::text))
     ORDER BY p.id DESC LIMIT @page_limit OFFSET @page_offset
 ), counts AS (
     SELECT r.id,
@@ -136,7 +139,10 @@ WHERE t.id IN (SELECT id FROM page)
 ORDER BY t.id DESC;
 
 -- name: CountResultsForTestCase :one
-SELECT count(*) FROM test_results WHERE test_case_id = @test_case_id;
+SELECT count(*) FROM test_results p WHERE p.test_case_id = @test_case_id
+  AND (sqlc.narg('status')::text IS NULL OR p.status = sqlc.narg('status')::text)
+  AND (sqlc.narg('branch')::text IS NULL OR EXISTS (
+      SELECT 1 FROM test_runs b WHERE b.id = p.test_run_id AND b.branch = sqlc.narg('branch')::text));
 
 -- name: InsertParseErrors :copyfrom
 INSERT INTO test_run_parse_errors (test_run_id, case_index, test_name, message, persisted, severity, shard)

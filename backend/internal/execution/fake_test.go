@@ -250,15 +250,18 @@ func (f *fakeRepo) ListDiagnostics(_ context.Context, runID int64) ([]Diagnostic
 	return out, nil
 }
 
-func (f *fakeRepo) ListResultsForTestCase(ctx context.Context, tcID int64, limit, offset int32) ([]HistoryEntry, error) {
+func (f *fakeRepo) ListResultsForTestCase(ctx context.Context, tcID int64, hf HistoryFilter, limit, offset int32) ([]HistoryEntry, error) {
 	if err := f.errs["ListResultsForTestCase"]; err != nil {
 		return nil, err
 	}
 	var out []HistoryEntry
 	for runID := f.nextRun; runID >= 1; runID-- {
 		for _, r := range f.results[runID] {
-			if r.TestCaseID != nil && *r.TestCaseID == tcID {
+			if r.TestCaseID != nil && *r.TestCaseID == tcID && (hf.Status == nil || r.Status == *hf.Status) {
 				run, _ := f.GetTestRun(ctx, runID)
+				if hf.Branch != nil && run.Branch != *hf.Branch {
+					continue
+				}
 				out = append(out, HistoryEntry{Result: r, Run: run})
 			}
 		}
@@ -269,11 +272,11 @@ func (f *fakeRepo) ListResultsForTestCase(ctx context.Context, tcID int64, limit
 	return out[offset:min(len(out), int(offset+limit))], nil
 }
 
-func (f *fakeRepo) CountResultsForTestCase(ctx context.Context, tcID int64) (int64, error) {
+func (f *fakeRepo) CountResultsForTestCase(ctx context.Context, tcID int64, hf HistoryFilter) (int64, error) {
 	if err := f.errs["CountResultsForTestCase"]; err != nil {
 		return 0, err
 	}
-	all, _ := f.ListResultsForTestCase(ctx, tcID, 1<<30, 0)
+	all, _ := f.ListResultsForTestCase(ctx, tcID, hf, 1<<30, 0)
 	return int64(len(all)), nil
 }
 

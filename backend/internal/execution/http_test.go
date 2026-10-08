@@ -23,6 +23,7 @@ type stubAPI struct {
 	gotFilter   ResultFilter
 	gotProjects []int64
 	gotRuns     RunFilter
+	gotHistory  HistoryFilter
 	gotSuite    *string
 	gotAmend    []any
 	// runErr fails GetRun alone (after the cheap RunProject authorized the request); runReads counts GetRun calls.
@@ -63,7 +64,8 @@ func (s *stubAPI) Live(context.Context, int64) (Live, error) {
 func (s *stubAPI) ListParseErrors(_ context.Context, _ int64, p pagination.Page) (pagination.Result[ParseError], error) {
 	return pagination.Result[ParseError]{Items: []ParseError{{Index: 2, TestName: "t", Message: "m", Persisted: true, Severity: "warning"}}, Page: p, Total: 1}, s.err
 }
-func (s *stubAPI) History(_ context.Context, _ int64, p pagination.Page) (pagination.Result[HistoryEntry], error) {
+func (s *stubAPI) HistoryOf(_ context.Context, _ int64, f HistoryFilter, p pagination.Page) (pagination.Result[HistoryEntry], error) {
+	s.gotHistory = f
 	return pagination.Result[HistoryEntry]{Items: []HistoryEntry{{Result: sampleResult, Run: sampleRun}}, Page: p, Total: 1}, s.err
 }
 
@@ -178,6 +180,27 @@ func TestHandlerRunFilters(t *testing.T) {
 		"/api/v1/test-runs?from=2026-10-01":                                   "from",
 		"/api/v1/test-runs?to=yesterday":                                      "to",
 		"/api/v1/test-runs?from=2026-10-02T00:00:00Z&to=2026-10-01T00:00:00Z": "from",
+	} {
+		rec := serve(api, stubCatalog{}, target)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, target)
+		assert.Contains(t, rec.Body.String(), `"field":"`+field+`"`, target)
+	}
+}
+
+// A test case's history filters by branch and status; bad values are 400s.
+func TestHandlerHistoryFilters(t *testing.T) {
+	api := &stubAPI{}
+	require.Equal(t, http.StatusOK, serve(api, stubCatalog{}, "/api/v1/test-cases/153/results?branch=main&status=passed").Code)
+	assert.Equal(t, "main", *api.gotHistory.Branch)
+	assert.Equal(t, Passed, *api.gotHistory.Status)
+	serve(api, stubCatalog{}, "/api/v1/test-cases/153/results")
+	assert.Nil(t, api.gotHistory.Branch)
+	assert.Nil(t, api.gotHistory.Status)
+	for target, field := range map[string]string{
+		"/api/v1/test-cases/153/results?branch=":      "branch",
+		"/api/v1/test-cases/153/results?branch=%00":   "branch",
+		"/api/v1/test-cases/153/results?status=green": "status",
+		"/api/v1/test-cases/153/results?status=":      "status",
 	} {
 		rec := serve(api, stubCatalog{}, target)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, target)

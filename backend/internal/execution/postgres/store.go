@@ -310,9 +310,10 @@ func (s *Store) ListDiagnostics(ctx context.Context, runID int64) ([]execution.D
 }
 
 // ListResultsForTestCase implements execution.Repository.
-func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, limit, offset int32) ([]execution.HistoryEntry, error) {
+func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, f execution.HistoryFilter, limit, offset int32) ([]execution.HistoryEntry, error) {
 	rows, err := s.q.ListResultsForTestCase(ctx, executiondb.ListResultsForTestCaseParams{
-		TestCaseID: pgtype.Int8{Int64: testCaseID, Valid: true}, PageLimit: limit, PageOffset: offset,
+		TestCaseID: pgtype.Int8{Int64: testCaseID, Valid: true}, Status: filterText(f.Status), Branch: filterText(f.Branch),
+		PageLimit: limit, PageOffset: offset,
 	})
 	if err != nil {
 		return nil, err
@@ -338,8 +339,10 @@ func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, li
 }
 
 // CountResultsForTestCase implements execution.Repository.
-func (s *Store) CountResultsForTestCase(ctx context.Context, testCaseID int64) (int64, error) {
-	return s.q.CountResultsForTestCase(ctx, pgtype.Int8{Int64: testCaseID, Valid: true})
+func (s *Store) CountResultsForTestCase(ctx context.Context, testCaseID int64, f execution.HistoryFilter) (int64, error) {
+	return s.q.CountResultsForTestCase(ctx, executiondb.CountResultsForTestCaseParams{
+		TestCaseID: pgtype.Int8{Int64: testCaseID, Valid: true}, Status: filterText(f.Status), Branch: filterText(f.Branch),
+	})
 }
 
 func toAmendment(r executiondb.TestRunAmendment) execution.Amendment {

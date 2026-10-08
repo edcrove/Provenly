@@ -259,6 +259,33 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Len(t, ids(execution.RunFilter{From: &earlier, To: &later}), 3)
 	})
 
+	t.Run("BE-INT-075_history_filters_by_branch_and_status", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Automated: true})
+		ingest := func(id, branch, inner string) {
+			m := meta(id, 1)
+			m.Branch = branch
+			_, err := s.Ingestion.IngestJUnit(ctx, m, strings.NewReader(junitFor(tcProp("a", itoa(tc.ID), inner))))
+			require.NoError(t, err)
+		}
+		ingest("750", "main", "")
+		ingest("751", "feature/x", "")
+		ingest("752", "main", `<failure/>`)
+		passed, failed := execution.Passed, execution.Failed
+		main := "main"
+		h, err := s.Execution.HistoryOf(ctx, tc.ID, execution.HistoryFilter{Branch: &main}, pagination.Default())
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), h.Total)
+		assert.Equal(t, failed, h.Items[0].Result.Status, "newest first")
+		last, err := s.Execution.HistoryOf(ctx, tc.ID, execution.HistoryFilter{Branch: &main, Status: &passed}, pagination.Page{Number: 1, Size: 1})
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), last.Total)
+		assert.Equal(t, "github:750:1", last.Items[0].Run.ExternalRunID, "the latest pass on main")
+		all, err := s.Execution.HistoryOf(ctx, tc.ID, execution.HistoryFilter{Status: &passed}, pagination.Default())
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), all.Total)
+	})
+
 	t.Run("BE-INT-009_rerun_attempt_creates_new_run_and_preserves_history", func(t *testing.T) {
 		s, ctx := fresh(t)
 		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Automated: true})

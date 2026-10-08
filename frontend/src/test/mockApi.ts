@@ -2146,11 +2146,18 @@ export const handlers = [
     guard(({ params, request }) => {
       const tc = findCase(params.testCaseId)
       if (tc instanceof Response) return tc
+      const url = new URL(request.url)
+      const branch = url.searchParams.get('branch')
+      if (branch === '') return validation('branch', 'must not be empty')
+      const status = url.searchParams.get('status')
+      if (status !== null && !['passed', 'failed', 'error', 'skipped'].includes(status))
+        return validation('status', 'must be one of passed, failed, error, skipped')
       const items: TestCaseResult[] = db.results
-        .filter((r) => r.testCaseId === tc.id)
+        .filter((r) => r.testCaseId === tc.id && (status === null || r.status === status))
         .sort((a, b) => b.id - a.id)
         .map((result) => ({ result, run: db.runs.find((r) => r.id === result.testRunId)! }))
-      return respond(pageOf(new URL(request.url), items))
+        .filter(({ run }) => branch === null || run.branch === branch)
+      return respond(pageOf(url, items))
     }),
   ),
   http.get(

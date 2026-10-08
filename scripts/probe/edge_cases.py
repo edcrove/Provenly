@@ -152,6 +152,8 @@ def main():
             check(f"GET {path}?{qs}", call(base, "GET", f"{path}?{qs}")[0], exp)
     check("status= (empty enum)", call(base, "GET", "/test-cases?status=")[0], 400)
     check("status=bogus", call(base, "GET", "/test-cases?status=bogus")[0], 400)
+    for qs, exp in [("branch=main", 200), ("status=passed", 200), ("branch=", 400), ("branch=%00", 400), ("status=green", 400), ("status=", 400)]:
+        check(f"history ?{qs}", call(base, "GET", f"/test-cases/{a}/results?{qs}")[0], exp)
     for qs, exp in [("automated=true", 200), ("automated=false", 200), ("automated=", 400), ("automated=1", 400), ("automated=%00", 400)]:
         check(f"test cases ?{qs}", call(base, "GET", f"/test-cases?{qs}")[0], exp)
 

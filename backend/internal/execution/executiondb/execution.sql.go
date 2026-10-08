@@ -51,11 +51,20 @@ func (q *Queries) CountParseErrors(ctx context.Context, testRunID int64) (int64,
 }
 
 const countResultsForTestCase = `-- name: CountResultsForTestCase :one
-SELECT count(*) FROM test_results WHERE test_case_id = $1
+SELECT count(*) FROM test_results p WHERE p.test_case_id = $1
+  AND ($2::text IS NULL OR p.status = $2::text)
+  AND ($3::text IS NULL OR EXISTS (
+      SELECT 1 FROM test_runs b WHERE b.id = p.test_run_id AND b.branch = $3::text))
 `
 
-func (q *Queries) CountResultsForTestCase(ctx context.Context, testCaseID pgtype.Int8) (int64, error) {
-	row := q.db.QueryRow(ctx, countResultsForTestCase, testCaseID)
+type CountResultsForTestCaseParams struct {
+	TestCaseID pgtype.Int8
+	Status     pgtype.Text
+	Branch     pgtype.Text
+}
+
+func (q *Queries) CountResultsForTestCase(ctx context.Context, arg CountResultsForTestCaseParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countResultsForTestCase, arg.TestCaseID, arg.Status, arg.Branch)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -843,7 +852,10 @@ func (q *Queries) ListParseErrors(ctx context.Context, arg ListParseErrorsParams
 const listResultsForTestCase = `-- name: ListResultsForTestCase :many
 WITH page AS (
     SELECT p.id FROM test_results p WHERE p.test_case_id = $1
-    ORDER BY p.id DESC LIMIT $3 OFFSET $2
+      AND ($2::text IS NULL OR p.status = $2::text)
+      AND ($3::text IS NULL OR EXISTS (
+          SELECT 1 FROM test_runs b WHERE b.id = p.test_run_id AND b.branch = $3::text))
+    ORDER BY p.id DESC LIMIT $5 OFFSET $4
 ), counts AS (
     SELECT r.id,
         (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
@@ -871,6 +883,8 @@ ORDER BY t.id DESC
 
 type ListResultsForTestCaseParams struct {
 	TestCaseID pgtype.Int8
+	Status     pgtype.Text
+	Branch     pgtype.Text
 	PageOffset int32
 	PageLimit  int32
 }
@@ -905,7 +919,13 @@ type ListResultsForTestCaseRow struct {
 // The page is chosen first (index on test_case_id, id DESC) and each run's counts
 // are computed once, not for every row skipped by OFFSET or repeated per result.
 func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsForTestCaseParams) ([]ListResultsForTestCaseRow, error) {
-	rows, err := q.db.Query(ctx, listResultsForTestCase, arg.TestCaseID, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listResultsForTestCase,
+		arg.TestCaseID,
+		arg.Status,
+		arg.Branch,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

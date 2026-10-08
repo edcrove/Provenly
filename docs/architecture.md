@@ -107,6 +107,8 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   `verificationCounts`) instead of fetching every page. Pickers search on the server: `GET /api/v1/test-cases?q=`
   matches the title (case-insensitive, `%` and `_` literal) or a key or number (`chk-12`, `12`); blank or over 200
   characters is a 400.
+- `GET /api/v1/test-cases/{id}/results` (history) filters by `branch` (exact) and `status`; the test case page asks for
+  `status=passed&pageSize=1` to say when it last passed (on the branch chosen, or any).
 - `GET /api/v1/test-runs/{id}/results` lists the tests whose last attempt failed first, then errored, then the rest
   (ingestion order otherwise; a test's attempts stay together), so a failed run opens on its failures.
 - `GET /api/v1/test-runs` (deployed audit) filters by `branch` (exact, 1..255 characters), `executionStatus`, `mode`

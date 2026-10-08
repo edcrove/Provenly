@@ -682,7 +682,8 @@ def main():
                              ("PUT", "/github"), ("DELETE", "/github"), ("POST", "/github/sync")]:
             check(f"{method} /projects/{bad}{path}", call(base, method, f"/projects/{bad}{path}", {} if method in ("POST", "PUT") else None)[0], 400)
     gh = f"/projects/{key}/github"
-    check("no GitHub connection", call(base, "GET", gh)[0], 404)
+    check("no GitHub connection (a state)", call(base, "GET", gh)[0], 204)
+    check("GitHub of an unknown project", call(base, "GET", "/projects/NOPE404/github")[0], 404)
     check("sync without a connection", call(base, "POST", gh + "/sync")[0], 404)
     check("disconnect without a connection", call(base, "DELETE", gh)[0], 404)
     for body, exp in [({}, 400), ({"repository": "acme/shop"}, 400), ({"repository": "acme", "token": "t"}, 400),

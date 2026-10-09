@@ -16,16 +16,23 @@ SELECT count(*) FROM audit_events
 WHERE ($1::text IS NULL OR project_key = $1)
   AND ($2::text IS NULL OR actor = $2)
   AND ($3::text IS NULL OR test_case_key = $3)
+  AND ($4::text[] IS NULL OR project_key = ANY($4::text[]))
 `
 
 type CountAuditEventsParams struct {
 	ProjectKey  pgtype.Text
 	Actor       pgtype.Text
 	TestCaseKey pgtype.Text
+	ProjectKeys []string
 }
 
 func (q *Queries) CountAuditEvents(ctx context.Context, arg CountAuditEventsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countAuditEvents, arg.ProjectKey, arg.Actor, arg.TestCaseKey)
+	row := q.db.QueryRow(ctx, countAuditEvents,
+		arg.ProjectKey,
+		arg.Actor,
+		arg.TestCaseKey,
+		arg.ProjectKeys,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -69,23 +76,26 @@ SELECT id, occurred_at, actor, action, path, project_key, status, summary, test_
 WHERE ($1::text IS NULL OR project_key = $1)
   AND ($2::text IS NULL OR actor = $2)
   AND ($3::text IS NULL OR test_case_key = $3)
-ORDER BY id DESC LIMIT $5 OFFSET $4
+  AND ($4::text[] IS NULL OR project_key = ANY($4::text[]))
+ORDER BY id DESC LIMIT $6 OFFSET $5
 `
 
 type ListAuditEventsParams struct {
 	ProjectKey  pgtype.Text
 	Actor       pgtype.Text
 	TestCaseKey pgtype.Text
+	ProjectKeys []string
 	PageOffset  int32
 	PageLimit   int32
 }
 
-// Newest first, narrowed by project, actor and/or test case.
+// Newest first, narrowed by project, actor and/or test case; project_keys limits a maintainer to their projects.
 func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error) {
 	rows, err := q.db.Query(ctx, listAuditEvents,
 		arg.ProjectKey,
 		arg.Actor,
 		arg.TestCaseKey,
+		arg.ProjectKeys,
 		arg.PageOffset,
 		arg.PageLimit,
 	)

@@ -34,8 +34,9 @@ const (
 
 // A personal access token reads: it never changes anything, never administers, and only sees its projects.
 var (
-	errBadToken     = apperr.Unauthorized("the personal access token is invalid, expired or revoked")
-	errTokenAdmin   = apperr.Forbidden("a personal access token cannot be used for administration")
+	errBadToken = apperr.Unauthorized("the personal access token is invalid, expired or revoked")
+	// ErrTokenAdmin refuses administration (and the audit log) to a personal access token (card #62).
+	ErrTokenAdmin   = apperr.Forbidden("a personal access token cannot be used for administration")
 	errTokenProject = apperr.Forbidden("this personal access token does not cover the project")
 	// ErrTokenReadOnly answers a change attempted with a personal access token.
 	ErrTokenReadOnly = apperr.Forbidden("a personal access token is read-only: sign in to make changes")

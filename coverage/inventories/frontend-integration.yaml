@@ -213,3 +213,6 @@ targets:
   - id: FE-INT-066
     description: printing a report (deployed audit) - the dashboard of a project and a run page offer Print (the browser's print dialog) with a print-only caption saying what was printed and when
     surfaces: [src/components/PrintButton.tsx, src/features/dashboard/DashboardPage.tsx, src/features/test-runs/TestRunDetailPage.tsx]
+  - id: FE-INT-067
+    description: maintainer audit view (P20-5, Ed 2026-10-09) - a maintainer has the Audit link and reads only the changes to the projects they maintain (another project's and project-less events are not listed, addresses are not shown), the page says which projects those are, asking for another project shows the refusal, and a current project they do not maintain opens the log on all of theirs
+    surfaces: [src/features/audit/AuditPage.tsx, src/features/audit/access.ts, src/app/Layout.tsx]

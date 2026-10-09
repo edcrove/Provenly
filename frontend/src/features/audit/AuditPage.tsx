@@ -11,24 +11,37 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useAuditAccess } from '@/features/audit/access'
 import { useCurrentUser } from '@/features/auth/currentUser'
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { formatDateTime } from '@/lib/format'
 import { positiveInt } from '@/lib/status'
 
-/** The audit log (administrators): who changed what through the API, newest first, by project, actor and test case. */
+/**
+ * The audit log: who changed what through the API, newest first, by project, actor and test case. Administrators read
+ * all of it; maintainers the changes to the projects they maintain (P20-5).
+ */
 export function AuditPage() {
   const me = useCurrentUser()
-  if (!me.isAdmin)
-    return <NotAllowed title="Audit log" reason="Only administrators can read the audit log." />
-  return <AuditLog />
+  const access = useAuditAccess(me.isAdmin)
+  if (!access.ready) return <p className="text-muted-foreground">Loading…</p>
+  if (!access.allowed)
+    return (
+      <NotAllowed
+        title="Audit log"
+        reason="Only administrators and project maintainers can read the audit log."
+      />
+    )
+  return <AuditLog maintained={access.maintained} />
 }
 
-function AuditLog() {
+function AuditLog({ maintained }: { maintained: string[] | null }) {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
-  // Without ?project= the log opens on the current project; ?project= (empty) is every project.
-  const { project: current } = useCurrentProject()
+  // Without ?project= the log opens on the current project (for a maintainer, one they maintain); ?project= (empty) is
+  // every project they can read.
+  const { project: chosen } = useCurrentProject()
+  const current = maintained === null || maintained.includes(chosen) ? chosen : ''
   const project = params.get('project') ?? current
   const actor = params.get('actor') ?? ''
   const testCase = params.get('testCase') ?? ''
@@ -56,6 +69,7 @@ function AuditLog() {
         <CardDescription>
           Every change made through the API or the UI, with who made it (a user or a CI API key). Request
           contents are never recorded.
+          {maintained ? ` You see the changes to the projects you maintain: ${maintained.join(', ')}.` : null}
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-6">

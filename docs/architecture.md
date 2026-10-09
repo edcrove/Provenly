@@ -285,6 +285,12 @@ append-only. A creation names what it made: the handler writes the new key to th
 summary reads "created a test case CHK-21" or "created a project PAY", and a created test case is found by its key
 too. The audit page opens on the current project; clearing the field shows every project.
 
+Who reads it (P20-5, Ed 2026-10-09): administrators the whole log; a project maintainer only the events filed under
+the projects they maintain (`audit.Filter.ProjectKeys`, from identity's scope), without the client address and user
+agent, and a project they do not maintain is a 403; events without a project (sign-ins, accounts, invitations) stay
+with administrators. A personal access token never reads the log (administration, card #62). The header shows Audit to
+administrators and maintainers.
+
 Card #49 records sign-in events, which have no signed-in caller: `identity.Service` reports them through its
 `AuthLog` port (implemented by `audit.Service`) — a sign-in that succeeds, fails (401) or is locked out (429), a
 sign-out with a valid session, an accepted invitation, a password reset — with the account's username, or `unknown`

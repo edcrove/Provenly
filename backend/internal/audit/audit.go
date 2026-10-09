@@ -1,6 +1,6 @@
 // Package audit keeps the audit log (Incubator, Project & Authorization): every authenticated change made through the
 // API is recorded with who made it, which operation, the request path and the project it addressed, never the request
-// body. The log is append-only and read by administrators.
+// body. The log is append-only, read by administrators and, for the projects they maintain, by maintainers.
 package audit
 
 import (
@@ -16,6 +16,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/identity"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/auditnote"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/clientinfo"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
@@ -44,6 +45,8 @@ type Filter struct {
 	ProjectKey  string
 	Actor       string
 	TestCaseKey string
+	// ProjectKeys, when not nil, keeps only events filed under these projects (a maintainer's view).
+	ProjectKeys []string
 }
 
 // Repository is the persistence port of the audit module.
@@ -53,9 +56,9 @@ type Repository interface {
 	Count(ctx context.Context, f Filter) (int64, error)
 }
 
-// Access authorizes reading the log (administrators).
+// Access says what the caller may read of the log: everything (administrators) or their projects' events.
 type Access interface {
-	RequireAdmin(ctx context.Context) error
+	Scope(ctx context.Context) (authz.Scope, error)
 }
 
 // Service records and lists audit events.
@@ -74,7 +77,7 @@ func (s *Service) SetResolver(r Resolver) { s.resolver = r }
 // Page is one page of events.
 type Page = pagination.Result[Event]
 
-// Events lists the log, newest first (administrators).
+// Events lists the log, newest first: all of it for administrators, their projects' events for maintainers.
 func (s *Service) Events(ctx context.Context, f Filter, page pagination.Page) (Page, error) {
 	var v apperr.Validator
 	v.Check(utf8.RuneCountInString(f.Actor) <= 200, "actor", "must be at most 200 characters")
@@ -85,18 +88,58 @@ func (s *Service) Events(ctx context.Context, f Filter, page pagination.Page) (P
 	if err := v.Err(); err != nil {
 		return Page{}, err
 	}
-	if err := s.access.RequireAdmin(ctx); err != nil {
+	// Reading the log is administration: a personal access token never does it (card #62).
+	if _, byToken := identity.TokenFrom(ctx); byToken {
+		return Page{}, identity.ErrTokenAdmin
+	}
+	scope, err := s.access.Scope(ctx)
+	if err != nil {
 		return Page{}, err
+	}
+	if !scope.All {
+		if f.ProjectKeys, err = s.maintained(ctx, scope); err != nil {
+			return Page{}, err
+		}
+		if f.ProjectKey != "" && !slices.Contains(f.ProjectKeys, f.ProjectKey) {
+			return Page{}, apperr.Forbidden("you can read the audit log of the projects you maintain")
+		}
 	}
 	items, err := s.repo.List(ctx, f, page.Limit(), page.Offset())
 	if err != nil {
 		return Page{}, err
+	}
+	if !scope.All {
+		// Where a change came from (address, browser) stays with administrators.
+		for i := range items {
+			items[i].IP, items[i].UserAgent = "", ""
+		}
 	}
 	total, err := s.repo.Count(ctx, f)
 	if err != nil {
 		return Page{}, err
 	}
 	return Page{Items: items, Page: page, Total: total}, nil
+}
+
+// maintained returns the keys of the projects the caller maintains (P20-5, Ed 2026-10-09): their events are what a
+// maintainer reads. Events without a project (sign-ins, accounts, invitations) stay with administrators.
+func (s *Service) maintained(ctx context.Context, scope authz.Scope) ([]string, error) {
+	var keys []string
+	for id, role := range scope.Roles {
+		if role < authz.RoleMaintainer || s.resolver == nil {
+			continue
+		}
+		key, err := s.resolver.ProjectKey(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	if len(keys) == 0 {
+		return nil, apperr.Forbidden("only administrators and project maintainers can read the audit log")
+	}
+	slices.Sort(keys)
+	return keys, nil
 }
 
 // actor names who made the request: the signed-in user, or the API key (its name and prefix).

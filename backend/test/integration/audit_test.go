@@ -169,6 +169,66 @@ func TestAudit(t *testing.T) {
 		}
 	})
 
+	t.Run("BE-INT-076_a_maintainer_reads_only_the_events_of_the_projects_they_maintain", func(t *testing.T) {
+		s, ctx := fresh(t)
+		store := auditpg.NewStore(db.Pool)
+		for _, key := range []string{"AUD", "AUD", "PAY", ""} {
+			require.NoError(t, store.Insert(ctx, audit.Event{Actor: "ana", Action: "POST /x", Path: "/x", ProjectKey: key, Status: 201, IP: "203.0.113.9"}))
+		}
+		count := func(f audit.Filter) int64 {
+			n, err := store.Count(ctx, f)
+			require.NoError(t, err)
+			items, err := store.List(ctx, f, 100, 0)
+			require.NoError(t, err)
+			require.Len(t, items, int(n), "the page and the count agree")
+			return n
+		}
+		assert.Equal(t, int64(4), count(audit.Filter{}), "no restriction: every event, without a project too")
+		assert.Equal(t, int64(2), count(audit.Filter{ProjectKeys: []string{"AUD"}}))
+		assert.Equal(t, int64(3), count(audit.Filter{ProjectKeys: []string{"AUD", "PAY"}}), "never the events without a project")
+		assert.Equal(t, int64(0), count(audit.Filter{ProjectKeys: []string{"AUD"}, ProjectKey: "PAY"}))
+		assert.Equal(t, int64(0), count(audit.Filter{ProjectKeys: []string{}}))
+
+		// Through the service: a maintainer of AUD (not of PAY) reads AUD's events without addresses.
+		require.NoError(t, s.Identity.Bootstrap(context.Background(), "admin", "correct horse"))
+		srv := httptest.NewServer(app.NewHandler(s, 1<<20))
+		defer srv.Close()
+		as := func(token, method, path, body string) (int, map[string]any) {
+			req, _ := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
+			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set("Content-Type", "application/json")
+			res, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer res.Body.Close()
+			var out map[string]any
+			_ = json.NewDecoder(res.Body).Decode(&out)
+			return res.StatusCode, out
+		}
+		admin, err := s.Identity.Login(context.Background(), "admin", "correct horse")
+		require.NoError(t, err)
+		for _, p := range []string{`{"key":"AUD","name":"Audited"}`, `{"key":"PAY","name":"Payments"}`} {
+			code, _ := as(admin.Token, "POST", "/api/v1/projects", p)
+			require.Equal(t, 201, code)
+		}
+		_, inv := as(admin.Token, "POST", "/api/v1/invitations", `{"project":"AUD","role":"maintainer"}`)
+		code, _ := as("", "POST", "/api/v1/invitations/accept", fmt.Sprintf(`{"token":%q,"username":"mia","displayName":"Mia","password":"mia's password"}`, inv["token"]))
+		require.Equal(t, 201, code)
+		_, _ = as(admin.Token, "PUT", "/api/v1/projects/PAY/members/mia", `{"role":"member"}`)
+		mia, err := s.Identity.Login(context.Background(), "mia", "mia's password")
+		require.NoError(t, err)
+		code, page := as(mia.Token, "GET", "/api/v1/audit?pageSize=100", "")
+		require.Equal(t, 200, code)
+		items := page["items"].([]any)
+		require.NotEmpty(t, items)
+		for _, it := range items {
+			e := it.(map[string]any)
+			assert.Equal(t, "AUD", e["project"])
+			assert.Nil(t, e["ip"])
+		}
+		code, _ = as(mia.Token, "GET", "/api/v1/audit?project=PAY", "")
+		assert.Equal(t, 403, code)
+	})
+
 	t.Run("BE-INT-071_sign_ins_failures_lockouts_and_public_routes_are_audited_with_the_client_never_a_secret", func(t *testing.T) {
 		s, ctx := fresh(t)
 		require.NoError(t, s.Identity.Bootstrap(context.Background(), "admin", "correct horse"))

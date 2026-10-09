@@ -1568,7 +1568,7 @@ export const handlers = [
       const p = integrationProject(params.projectKey)
       if (p instanceof Response) return p
       const c = db.github.find((x) => x.projectId === p.id)
-      return c ? respond(githubView(c)) : notFound(`GitHub connection of ${p.key}`)
+      return c ? respond(githubView(c)) : new HttpResponse(null, { status: 204 })
     }),
   ),
   http.put(
@@ -1923,6 +1923,9 @@ export const handlers = [
       if (tcKey !== null && !/^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,17}$/.test(tcKey))
         return validation('key', 'must be a test case key: <PROJECT>-<number> (e.g. CHK-12)')
       // ?q=: a title containing the text (any case), or a key or number, like the server (DEC-78).
+      const automated = url.searchParams.get('automated')
+      if (automated !== null && automated !== 'true' && automated !== 'false')
+        return validation('automated', 'must be one of true, false')
       const search = url.searchParams.get('q')?.trim()
       if (search === '') return validation('q', 'must not be empty')
       const searchNumber = search?.match(/^(?:[A-Za-z][A-Za-z0-9]{1,9}-)?([1-9][0-9]{0,17})$/)?.[1]
@@ -1936,6 +1939,7 @@ export const handlers = [
             found(t) &&
             (tcKey === null || t.key === tcKey) &&
             (!status || t.status === status) &&
+            (automated === null || String(t.automated) === automated) &&
             (!p || t.projectId === p.id) &&
             (tag === null || t.tags.includes(tag)) &&
             inSuite(t) &&
@@ -2142,11 +2146,18 @@ export const handlers = [
     guard(({ params, request }) => {
       const tc = findCase(params.testCaseId)
       if (tc instanceof Response) return tc
+      const url = new URL(request.url)
+      const branch = url.searchParams.get('branch')
+      if (branch === '') return validation('branch', 'must not be empty')
+      const status = url.searchParams.get('status')
+      if (status !== null && !['passed', 'failed', 'error', 'skipped'].includes(status))
+        return validation('status', 'must be one of passed, failed, error, skipped')
       const items: TestCaseResult[] = db.results
-        .filter((r) => r.testCaseId === tc.id)
+        .filter((r) => r.testCaseId === tc.id && (status === null || r.status === status))
         .sort((a, b) => b.id - a.id)
         .map((result) => ({ result, run: db.runs.find((r) => r.id === result.testRunId)! }))
-      return respond(pageOf(new URL(request.url), items))
+        .filter(({ run }) => branch === null || run.branch === branch)
+      return respond(pageOf(url, items))
     }),
   ),
   http.get(
@@ -2157,11 +2168,34 @@ export const handlers = [
       if (p instanceof Response) return p
       const suite = url.searchParams.get('suite')
       if (suite !== null && !DIMENSION.test(suite)) return validation('suite', 'must be a suite key')
+      const q = (name: string) => url.searchParams.get(name)
+      const branch = q('branch')
+      if (branch === '') return validation('branch', 'must not be empty')
+      const status = q('executionStatus')
+      if (status !== null && !['running', 'completed', 'interrupted', 'cancelled'].includes(status))
+        return validation('executionStatus', 'must be one of running, completed, interrupted, cancelled')
+      const mode = q('mode')
+      if (mode !== null && !['batch', 'live', 'manual', 'sharded'].includes(mode))
+        return validation('mode', 'must be one of batch, live, manual, sharded')
+      const from = q('from') === null ? null : Date.parse(q('from')!)
+      const to = q('to') === null ? null : Date.parse(q('to')!)
+      if (Number.isNaN(from)) return validation('from', 'must be an RFC 3339 date-time')
+      if (Number.isNaN(to)) return validation('to', 'must be an RFC 3339 date-time')
+      if (from !== null && to !== null && from > to) return validation('from', 'must not be after to')
       return respond(
         pageOf(
           url,
           db.runs
-            .filter((r) => (!p || r.projectId === p.id) && (suite === null || r.suite?.key === suite))
+            .filter(
+              (r) =>
+                (!p || r.projectId === p.id) &&
+                (suite === null || r.suite?.key === suite) &&
+                (branch === null || r.branch === branch) &&
+                (status === null || r.executionStatus === status) &&
+                (mode === null || r.mode === mode) &&
+                (from === null || Date.parse(r.createdAt) >= from) &&
+                (to === null || Date.parse(r.createdAt) <= to),
+            )
             .sort((a, b) => b.id - a.id),
         ),
       )
@@ -2189,6 +2223,13 @@ export const handlers = [
           (!correlation || r.correlation === correlation) &&
           (!shard || r.shard === Number(shard)),
       )
+      // Like the server: tests whose last attempt failed, then errored, then the rest; ingestion order otherwise.
+      const test = (r: TestResult) => `${r.suiteName}\u0000${r.className}\u0000${r.testName}`
+      const last = new Map<string, TestResult>()
+      for (const r of db.results.filter((x) => x.testRunId === run.id))
+        if ((last.get(test(r))?.attempt ?? 0) <= r.attempt) last.set(test(r), r)
+      const rank = (r: TestResult) => ({ failed: 0, error: 1 })[last.get(test(r))!.status as string] ?? 2
+      items.sort((a, b) => rank(a) - rank(b) || a.id - b.id)
       return respond(pageOf(url, items))
     }),
   ),

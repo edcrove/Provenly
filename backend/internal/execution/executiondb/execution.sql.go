@@ -51,11 +51,20 @@ func (q *Queries) CountParseErrors(ctx context.Context, testRunID int64) (int64,
 }
 
 const countResultsForTestCase = `-- name: CountResultsForTestCase :one
-SELECT count(*) FROM test_results WHERE test_case_id = $1
+SELECT count(*) FROM test_results p WHERE p.test_case_id = $1
+  AND ($2::text IS NULL OR p.status = $2::text)
+  AND ($3::text IS NULL OR EXISTS (
+      SELECT 1 FROM test_runs b WHERE b.id = p.test_run_id AND b.branch = $3::text))
 `
 
-func (q *Queries) CountResultsForTestCase(ctx context.Context, testCaseID pgtype.Int8) (int64, error) {
-	row := q.db.QueryRow(ctx, countResultsForTestCase, testCaseID)
+type CountResultsForTestCaseParams struct {
+	TestCaseID pgtype.Int8
+	Status     pgtype.Text
+	Branch     pgtype.Text
+}
+
+func (q *Queries) CountResultsForTestCase(ctx context.Context, arg CountResultsForTestCaseParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countResultsForTestCase, arg.TestCaseID, arg.Status, arg.Branch)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -103,15 +112,33 @@ const countTestRuns = `-- name: CountTestRuns :one
 SELECT count(*) FROM test_runs
 WHERE ($1::bigint[] IS NULL OR project_id = ANY($1::bigint[]))
   AND ($2::text IS NULL OR suite_key = $2::text)
+  AND ($3::text IS NULL OR branch = $3::text)
+  AND ($4::text IS NULL OR status = $4::text)
+  AND ($5::text IS NULL OR mode = $5::text)
+  AND ($6::timestamptz IS NULL OR created_at >= $6::timestamptz)
+  AND ($7::timestamptz IS NULL OR created_at <= $7::timestamptz)
 `
 
 type CountTestRunsParams struct {
-	ProjectIds []int64
-	SuiteKey   pgtype.Text
+	ProjectIds  []int64
+	SuiteKey    pgtype.Text
+	Branch      pgtype.Text
+	Status      pgtype.Text
+	Mode        pgtype.Text
+	CreatedFrom pgtype.Timestamptz
+	CreatedTo   pgtype.Timestamptz
 }
 
 func (q *Queries) CountTestRuns(ctx context.Context, arg CountTestRunsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countTestRuns, arg.ProjectIds, arg.SuiteKey)
+	row := q.db.QueryRow(ctx, countTestRuns,
+		arg.ProjectIds,
+		arg.SuiteKey,
+		arg.Branch,
+		arg.Status,
+		arg.Mode,
+		arg.CreatedFrom,
+		arg.CreatedTo,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -825,7 +852,10 @@ func (q *Queries) ListParseErrors(ctx context.Context, arg ListParseErrorsParams
 const listResultsForTestCase = `-- name: ListResultsForTestCase :many
 WITH page AS (
     SELECT p.id FROM test_results p WHERE p.test_case_id = $1
-    ORDER BY p.id DESC LIMIT $3 OFFSET $2
+      AND ($2::text IS NULL OR p.status = $2::text)
+      AND ($3::text IS NULL OR EXISTS (
+          SELECT 1 FROM test_runs b WHERE b.id = p.test_run_id AND b.branch = $3::text))
+    ORDER BY p.id DESC LIMIT $5 OFFSET $4
 ), counts AS (
     SELECT r.id,
         (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
@@ -853,6 +883,8 @@ ORDER BY t.id DESC
 
 type ListResultsForTestCaseParams struct {
 	TestCaseID pgtype.Int8
+	Status     pgtype.Text
+	Branch     pgtype.Text
 	PageOffset int32
 	PageLimit  int32
 }
@@ -887,7 +919,13 @@ type ListResultsForTestCaseRow struct {
 // The page is chosen first (index on test_case_id, id DESC) and each run's counts
 // are computed once, not for every row skipped by OFFSET or repeated per result.
 func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsForTestCaseParams) ([]ListResultsForTestCaseRow, error) {
-	rows, err := q.db.Query(ctx, listResultsForTestCase, arg.TestCaseID, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listResultsForTestCase,
+		arg.TestCaseID,
+		arg.Status,
+		arg.Branch,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -994,7 +1032,10 @@ WHERE t.test_run_id = $1
   AND ($2::text IS NULL OR t.status = $2::text)
   AND ($3::text IS NULL OR t.correlation = $3::text)
   AND ($4::int IS NULL OR t.shard = $4::int)
-ORDER BY t.id
+ORDER BY CASE (
+    SELECT x.status FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
+      AND x.class_name = t.class_name AND x.test_name = t.test_name ORDER BY x.attempt DESC, x.id DESC LIMIT 1
+) WHEN 'failed' THEN 0 WHEN 'error' THEN 1 ELSE 2 END, t.id
 LIMIT $6 OFFSET $5
 `
 
@@ -1013,6 +1054,8 @@ type ListRunResultsRow struct {
 }
 
 // retried: a later attempt of the same test exists in the run, so this one is not its logical result.
+// What needs attention first (deployed audit): tests whose logical result (last attempt) failed, then errored, then
+// the rest; attempts of one test keep their ingestion order next to each other.
 func (q *Queries) ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]ListRunResultsRow, error) {
 	rows, err := q.db.Query(ctx, listRunResults,
 		arg.TestRunID,
@@ -1160,16 +1203,26 @@ WHERE r.id IN (
     SELECT p.id FROM test_runs p
     WHERE ($1::bigint[] IS NULL OR p.project_id = ANY($1::bigint[]))
       AND ($2::text IS NULL OR p.suite_key = $2::text)
-    ORDER BY p.id DESC LIMIT $4 OFFSET $3
+      AND ($3::text IS NULL OR p.branch = $3::text)
+      AND ($4::text IS NULL OR p.status = $4::text)
+      AND ($5::text IS NULL OR p.mode = $5::text)
+      AND ($6::timestamptz IS NULL OR p.created_at >= $6::timestamptz)
+      AND ($7::timestamptz IS NULL OR p.created_at <= $7::timestamptz)
+    ORDER BY p.id DESC LIMIT $9 OFFSET $8
 )
 ORDER BY r.id DESC
 `
 
 type ListTestRunsParams struct {
-	ProjectIds []int64
-	SuiteKey   pgtype.Text
-	PageOffset int32
-	PageLimit  int32
+	ProjectIds  []int64
+	SuiteKey    pgtype.Text
+	Branch      pgtype.Text
+	Status      pgtype.Text
+	Mode        pgtype.Text
+	CreatedFrom pgtype.Timestamptz
+	CreatedTo   pgtype.Timestamptz
+	PageOffset  int32
+	PageLimit   int32
 }
 
 type ListTestRunsRow struct {
@@ -1186,6 +1239,11 @@ func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]L
 	rows, err := q.db.Query(ctx, listTestRuns,
 		arg.ProjectIds,
 		arg.SuiteKey,
+		arg.Branch,
+		arg.Status,
+		arg.Mode,
+		arg.CreatedFrom,
+		arg.CreatedTo,
 		arg.PageOffset,
 		arg.PageLimit,
 	)

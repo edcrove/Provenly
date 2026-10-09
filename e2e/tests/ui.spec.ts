@@ -1,4 +1,4 @@
-import { byName, byProperty, expect, junit, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
+import { byName, byProperty, expect, junit, pickProject, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
 // @local: isolateUniverse deprecates every automated test case, which would wipe a deployed instance's data.
 test.describe('Frontend UI journeys', { tag: '@local' }, () => {
@@ -39,7 +39,7 @@ test.describe('Frontend UI journeys', { tag: '@local' }, () => {
     await expect(page.getByText('deprecated', { exact: true })).toBeVisible()
     await expect(heading).toContainText(key)
 
-    await page.getByRole('link', { name: 'Test Cases' }).click()
+    await page.getByRole('banner').getByRole('link', { name: 'Test Cases' }).click()
     await page.getByLabel('Filter by status').selectOption('deprecated')
     await page.getByRole('link', { name: key }).click()
     await page.getByRole('button', { name: 'Reactivate' }).click()
@@ -211,6 +211,7 @@ test.describe('Frontend UI journeys', { tag: '@local' }, () => {
     await expect(row.getByTestId('verdict-badge')).toHaveText('incomplete')
     await expect(row.getByTestId('pass-rate')).toHaveText('100%')
     await expect(row.getByTestId('outcome-breakdown')).toContainText('1 passed · 1 untested')
+    await expect(row.getByTestId('executed')).toHaveText('1 of 2 (50%)')
     await expect(row.getByTestId('execution-badge')).toHaveText('interrupted')
     await page.goto(`/test-runs/${run.testRun.id}`)
     await expect(page.getByTestId('interrupted-run')).toContainText('The CI execution was interrupted')
@@ -292,8 +293,7 @@ test.describe('Frontend UI journeys', { tag: '@local' }, () => {
     await page.getByRole('button', { name: 'Create project' }).click()
     // The project list is paginated by key and other journeys create projects too: check the new one where it is
     // always visible, as the current project.
-    await expect(page.getByLabel('Current project')).toHaveValue(key)
-    await expect(page.getByLabel('Current project').locator('option:checked')).toContainText('E2E UI project')
+    await expect(page.getByRole('button', { name: `Current project: ${key} · E2E UI project` })).toBeVisible()
 
     await page.getByRole('link', { name: 'Test Cases' }).click()
     await expect(page.getByText(`No test cases yet in ${key}.`)).toBeVisible()
@@ -310,7 +310,7 @@ test.describe('Frontend UI journeys', { tag: '@local' }, () => {
     await page.getByRole('link', { name: `#${run.testRun.id}` }).click()
     await expect(page.getByTestId('result-row').getByRole('link', { name: `${key}-1` })).toBeVisible()
 
-    await page.getByLabel('Current project').selectOption('')
+    await pickProject(page, '')
     await page.getByRole('link', { name: 'Test Cases' }).click()
     await expect(page).toHaveURL(/\/test-cases$/)
     // The run page links the test case too: wait until it is gone before looking it up in the list.

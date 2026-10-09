@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 
 import type { Member } from '@/api/client'
-import { useMemberMutations, useProjectMembers } from '@/api/queries'
+import { useMemberMutations, useProjectMembers, useProjects } from '@/api/queries'
 import { PageTitle } from '@/components/PageTitle'
 import { Pagination } from '@/components/Pagination'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
@@ -17,6 +17,7 @@ import { can, memberRoles, roleDescriptions, type MemberRole } from '@/lib/roles
 import { positiveInt } from '@/lib/status'
 
 import { ApiKeysSection } from './ApiKeysSection'
+import { useCurrentProject } from './currentProject'
 import { ClassificationSection } from './ClassificationSection'
 import { GitHubSection } from './GitHubSection'
 import { useProjectRole } from './useProjectRole'
@@ -112,25 +113,73 @@ function AddMember({ projectKey }: { projectKey: string }) {
   )
 }
 
-/** A project's members; maintainers and administrators add, change and remove them. */
+/** The pages that show what a project holds; opening one makes this the current project. */
+const projectPages = [
+  { to: '/dashboard', label: 'Dashboard' },
+  { to: '/test-runs', label: 'Test Runs' },
+  { to: '/test-cases', label: 'Test Cases' },
+  { to: '/suites', label: 'Suites' },
+  { to: '/requirements', label: 'Requirements' },
+  { to: '/issues', label: 'Issues' },
+]
+
+/**
+ * A project's settings: what it holds (links to its pages), its members, classification and, for maintainers, CI API
+ * keys, webhooks and GitHub. Maintainers and administrators change them; everyone else reads members and classification.
+ */
 export function ProjectMembersPage() {
   const { projectKey = '' } = useParams()
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
   const members = useProjectMembers(projectKey, page)
   const manage = can(useProjectRole(projectKey), 'maintainer')
+  const { setProject } = useCurrentProject()
+  const project = useProjects().data?.items.find((p) => p.key === projectKey)
+  const sections = [
+    { id: 'members', label: 'Members' },
+    { id: 'classification', label: 'Classification' },
+    ...(manage
+      ? [
+          { id: 'api-keys', label: 'CI API keys' },
+          { id: 'webhooks', label: 'Webhooks' },
+          { id: 'github', label: 'GitHub' },
+        ]
+      : []),
+  ]
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <PageTitle title={`Project ${projectKey}`} />
+      <div className="grid gap-2">
+        <PageTitle title={`${projectKey} · settings`} />
         <h1 className="text-2xl font-semibold">
-          Project <span className="font-mono">{projectKey}</span>
+          <span className="font-mono">{projectKey}</span>
+          {project ? ` · ${project.name}` : ''} — Settings
         </h1>
-        <Link to="/projects" className="text-muted-foreground text-sm underline">
-          All projects
-        </Link>
+        <p className="text-muted-foreground max-w-3xl text-sm">
+          A project owns its test cases (numbered {projectKey}-1, {projectKey}-2…), runs, suites,
+          requirements, issues, members and integrations. Its key never changes.{' '}
+          <Link to="/projects" className="underline">
+            All projects
+          </Link>
+        </p>
+        <nav aria-label="In this project" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          {projectPages.map((l) => (
+            <Link key={l.to} to={l.to} className="underline" onClick={() => setProject(projectKey)}>
+              {l.label}
+            </Link>
+          ))}
+        </nav>
+        <nav
+          aria-label="On this page"
+          className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-sm"
+        >
+          {sections.map((s) => (
+            <a key={s.id} href={`#${s.id}`} className="hover:text-foreground">
+              {s.label}
+            </a>
+          ))}
+        </nav>
       </div>
-      <Card>
+      <Card id="members" className="scroll-mt-4">
         <CardHeader>
           <CardTitle as="h2" className="text-lg">
             Members
@@ -176,10 +225,22 @@ export function ProjectMembersPage() {
           {manage ? <AddMember projectKey={projectKey} /> : null}
         </CardContent>
       </Card>
-      <ClassificationSection projectKey={projectKey} manage={manage} />
-      {manage ? <ApiKeysSection projectKey={projectKey} /> : null}
-      {manage ? <WebhooksSection projectKey={projectKey} /> : null}
-      {manage ? <GitHubSection projectKey={projectKey} /> : null}
+      <section id="classification" className="scroll-mt-4">
+        <ClassificationSection projectKey={projectKey} manage={manage} />
+      </section>
+      {manage ? (
+        <>
+          <section id="api-keys" className="scroll-mt-4">
+            <ApiKeysSection projectKey={projectKey} />
+          </section>
+          <section id="webhooks" className="scroll-mt-4">
+            <WebhooksSection projectKey={projectKey} />
+          </section>
+          <section id="github" className="scroll-mt-4">
+            <GitHubSection projectKey={projectKey} />
+          </section>
+        </>
+      ) : null}
     </div>
   )
 }

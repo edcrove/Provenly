@@ -1333,6 +1333,49 @@ const suiteScenarios: Scenario[] = [
     status: 400,
     call: (c) => c.GET('/api/v1/test-runs', { params: { query: { suite: 'Smoke' } } }),
   },
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 200,
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { automated: 'false' } } }),
+  },
+  {
+    op: 'GET /api/v1/test-cases',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/test-cases', {
+        params: { query: { automated: 'yes' as 'true' } },
+      }),
+  },
+  // Filters (deployed audit): branch, execution status, mode and the creation window.
+  {
+    op: 'GET /api/v1/test-runs',
+    status: 200,
+    call: (c) =>
+      c.GET('/api/v1/test-runs', {
+        params: {
+          query: {
+            branch: 'main',
+            executionStatus: 'completed',
+            mode: 'batch',
+            from: '2026-10-01T03:00:00.000Z',
+            to: '2026-10-09T02:59:59.999Z',
+          },
+        },
+      }),
+  },
+  {
+    op: 'GET /api/v1/test-runs',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/test-runs', {
+        params: { query: { from: '2026-10-02T00:00:00Z', to: '2026-10-01T00:00:00Z' } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/test-runs',
+    status: 400,
+    call: (c) => c.GET('/api/v1/test-runs', { params: { query: { branch: '' } } }),
+  },
 ]
 
 const manualTcs = () => {
@@ -2349,8 +2392,13 @@ const integrationScenarios: Scenario[] = [
   },
   {
     op: 'GET /api/v1/projects/{projectKey}/github',
-    status: 404,
+    status: 204,
     call: (c) => c.GET('/api/v1/projects/{projectKey}/github', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}/github',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}/github', { params: { path: nope } }),
   },
   {
     op: 'GET /api/v1/projects/{projectKey}/github',
@@ -2928,6 +2976,22 @@ const scenarios: Scenario[] = [
     status: 200,
     call: (c) =>
       c.GET('/api/v1/test-cases/{testCaseId}/results', { params: { path: tc, query: { page: 1 } } }),
+  },
+  {
+    op: 'GET /api/v1/test-cases/{testCaseId}/results',
+    status: 200,
+    call: (c) =>
+      c.GET('/api/v1/test-cases/{testCaseId}/results', {
+        params: { path: tc, query: { branch: 'main', status: 'passed', pageSize: 1 } },
+      }),
+  },
+  {
+    op: 'GET /api/v1/test-cases/{testCaseId}/results',
+    status: 400,
+    call: (c) =>
+      c.GET('/api/v1/test-cases/{testCaseId}/results', {
+        params: { path: tc, query: { status: 'green' as 'passed' } },
+      }),
   },
   {
     op: 'GET /api/v1/test-cases/{testCaseId}/results',

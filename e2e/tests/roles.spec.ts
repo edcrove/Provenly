@@ -1,9 +1,8 @@
 import { request as apiRequest } from '@playwright/test'
 
 import { apiURL } from '../playwright.config'
-import { expect, test, uniqueProjectKey } from '../support/fixtures'
+import { expect, secret, test, uniqueProjectKey, uniqueUsername } from '../support/fixtures'
 
-const unique = () => `r${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`
 const empty = { cookies: [], origins: [] }
 
 test.describe('Project roles', () => {
@@ -15,10 +14,10 @@ test.describe('Project roles', () => {
 
     // An invitation makes the new account a viewer of the project.
     const inv = await (await request.post(`${apiURL}/api/v1/invitations`, { data: { project: key, role: 'viewer' } })).json()
-    const username = unique()
+    const username = uniqueUsername()
     const anon = await apiRequest.newContext({ storageState: empty })
     const session = await (await anon.post(`${apiURL}/api/v1/invitations/accept`, {
-      data: { token: inv.token, username, displayName: 'Viewer', password: 'viewer password' },
+      data: { token: inv.token, username, displayName: 'Viewer', password: secret('viewer password') },
     })).json()
     const viewer = await apiRequest.newContext({ storageState: empty, extraHTTPHeaders: { Authorization: `Bearer ${session.token}` } })
 
@@ -48,11 +47,11 @@ test.describe('Project roles', () => {
     const key = uniqueProjectKey()
     await provenly.createProject(key, 'UI roles')
     const tc = await provenly.createTestCase({ title: 'Role-gated case', project: key })
-    const inv = await (await page.request.post(`${apiURL}/api/v1/invitations`, { data: {} })).json()
-    const username = unique()
+    const inv = await (await page.request.post(`${apiURL}/api/v1/invitations`, { data: { note: 'e2e' } })).json()
+    const username = uniqueUsername()
     const anon = await apiRequest.newContext({ storageState: empty })
     expect((await anon.post(`${apiURL}/api/v1/invitations/accept`, {
-      data: { token: inv.token, username, displayName: 'UI Member', password: 'member password' },
+      data: { token: inv.token, username, displayName: 'UI Member', password: secret('member password') },
     })).status()).toBe(201)
     await anon.dispose()
 
@@ -67,7 +66,7 @@ test.describe('Project roles', () => {
     const member = await ctx.newPage()
     await member.goto(`/test-cases/${tc.id}`)
     await member.getByLabel('Username').fill(username)
-    await member.getByLabel('Password').fill('member password')
+    await member.getByLabel('Password').fill(secret('member password'))
     await member.getByRole('button', { name: 'Sign in' }).click()
     await expect(member.getByRole('heading', { level: 1 })).toContainText('Role-gated case')
     await expect(member.getByRole('button', { name: 'Edit' })).toBeVisible()

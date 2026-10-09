@@ -24,6 +24,8 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${webPort}`,
     viewport: { width: 1440, height: 900 },
+    // Dates show in the viewer's time zone: the screenshots read like Ed's browser (UYT).
+    timezoneId: 'America/Montevideo',
     colorScheme: 'light',
     launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined },
   },

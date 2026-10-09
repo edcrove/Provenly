@@ -223,6 +223,15 @@ func TestCatalogPersistence(t *testing.T) {
 		view, err := s.Catalog.IngestionView(ctx, catalog.DefaultProjectID, []int64{auto.Number, gone.Number, 987654})
 		require.NoError(t, err)
 		assert.Equal(t, []int64{auto.ID}, view.Expected)
+		// The list filters by the same flag (?automated=, deployed audit).
+		yes, no := true, false
+		autos, err := s.Catalog.List(ctx, catalog.ListFilter{Automated: &yes}, pagination.Default())
+		require.NoError(t, err)
+		manuals, err := s.Catalog.List(ctx, catalog.ListFilter{Automated: &no}, pagination.Default())
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), autos.Total, "automated, active or not")
+		assert.Equal(t, int64(1), manuals.Total)
+		assert.Equal(t, "manual", manuals.Items[0].Title)
 		assert.Equal(t, map[int64]catalog.IngestionEntry{
 			auto.Number: {ID: auto.ID, Status: catalog.StatusActive}, gone.Number: {ID: gone.ID, Status: catalog.StatusDeprecated},
 		}, view.Entries,

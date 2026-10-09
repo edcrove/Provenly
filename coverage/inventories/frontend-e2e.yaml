@@ -56,3 +56,21 @@ targets:
     description: with 105 test cases the requirement picker says "Showing 50 of 105, type to search.", finds the last one by its key typed in lower case and links it (shown by key, never by id); the suite picker finds one by title (DEC-78)
   - id: FE-E2E-028
     description: a person makes a personal access token on the account page for one project, sees it once with the MCP command, reads the project with it, sees its last use and revokes it (then 401) (card #62)
+  - id: FE-E2E-029
+    description: at phone width (390 px) the new manual run and new test case forms fit the screen - no input or select runs past the right edge, whatever the length of their options (deployed audit)
+  - id: FE-E2E-030
+    description: navigation (deployed audit) - the header puts the project switcher first and then the project's pages in working order (Dashboard, Test Runs, Test Cases, Suites, Requirements, Issues, and Settings once one project is chosen); the switcher finds a project by typing; list pages say their scope; on a phone the header is one row (at most 56 px) with the pages behind Menu
+  - id: FE-E2E-031
+    description: a project and its parts (deployed audit) - a project opens by its name from the projects page (current project, dashboard); its Settings page is titled with the project, its section index jumps to webhooks, shows how CI reports into it and opens its pages
+  - id: FE-E2E-032
+    description: filtering runs (deployed audit) - someone looking for their run types its branch in the runs list (the filter goes to the URL), sees only that run, narrows by execution status to an empty "No runs match these filters." and clears the filters
+  - id: FE-E2E-033
+    description: phone tables (deployed audit) - at 390 px a run's results table scrolls inside its card with its first column fixed and a "Scroll sideways for more columns" hint, and the page itself never scrolls sideways
+  - id: FE-E2E-034
+    description: automated or manual test cases (deployed audit) - a QA lead narrows a project's test cases to the manual ones (the filter goes to the URL) and the automated one disappears
+  - id: FE-E2E-035
+    description: a failed run (deployed audit) - a developer opening a run with a failure sees the Results section first and the failing result at the top, the passing one after it
+  - id: FE-E2E-036
+    description: did it pass on main lately (deployed audit) - a test case page says when it last passed and on which branch; filtered to a branch where it only failed it says it never passed there and lists that branch's results only
+  - id: FE-E2E-037
+    description: printing a report (deployed audit) - printed (print media), a run page hides the header, menu and buttons and shows its content with a caption naming the run and when it was printed

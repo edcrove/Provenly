@@ -2,6 +2,8 @@ import path from 'node:path'
 
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
+import { pickProject } from '../support/fixtures'
+
 /**
  * Walks every relevant UI flow on a freshly reset database and saves one
  * full-page screenshot per state in docs/screenshots (see its README.md).
@@ -388,7 +390,7 @@ test('UI flows', async ({ page }) => {
   await expect(page.getByTestId('taxonomy')).toContainText('Risk: Critical')
   await shot(page, 'test-case-classified')
   await page.goto('/test-cases')
-  await page.getByLabel('Current project').selectOption('CHK')
+  await pickProject(page, 'CHK')
   await page.getByLabel('Filter by classification').selectOption('risk:critical')
   await expect(page.getByText('Refund an order')).toBeHidden()
   await shot(page, 'test-cases-filtered-by-classification')
@@ -413,7 +415,9 @@ test('UI flows', async ({ page }) => {
   await expect(page.getByTestId('suite-badge')).toBeVisible()
   await shot(page, 'test-run-for-suite')
   // Manual execution (prototype feature 11, MVP D3): a tester starts a sign-off run and records results.
-  await createTC(request, 'Refund to a gift card', false, { project: 'CHK' })
+  const giftCardTC = await createTC(request, 'Refund to a gift card', false, { project: 'CHK' })
+  for (const action of ['Open the order', 'Refund to a gift card', 'Check the gift card balance'])
+    expect((await request.post(`${api}/test-cases/${giftCardTC}/steps`, { data: { action, expectedResult: '' } })).status()).toBe(201)
   await createTC(request, 'Receipt email looks right', false, { project: 'CHK' })
   await page.goto('/test-runs/manual')
   await page.getByLabel('What is being tested').fill('Release 2.4 sign-off')
@@ -422,7 +426,7 @@ test('UI flows', async ({ page }) => {
   await page.getByRole('button', { name: 'Start manual run' }).click()
   const giftCard = page.getByTestId('manual-CHK-4')
   await giftCard.getByLabel('Note for CHK-4').fill('Gift card balance not updated')
-  await giftCard.getByLabel('Failed step of CHK-4').fill('3')
+  await giftCard.getByLabel('Failed step of CHK-4').selectOption('3')
   await giftCard.getByRole('button', { name: 'Fail' }).click()
   await expect(giftCard.getByTestId('status-badge')).toHaveText('failed')
   await shot(page, 'manual-run-in-progress')
@@ -546,5 +550,16 @@ test('UI flows', async ({ page }) => {
   await tokens.getByRole('button', { name: 'Create token' }).click()
   await expect(tokens.getByTestId('token-secret')).toBeVisible()
   await shot(page, 'account-personal-access-tokens')
-  await page.getByLabel('Current project').selectOption('')
+  // Navigation (deployed audit): the project first, then its pages; the switcher finds a project by typing.
+  await page.goto('/dashboard')
+  await page.getByRole('button', { name: /^Current project: / }).click()
+  await page.getByRole('combobox', { name: 'Find a project' }).fill('ch')
+  await shot(page, 'header-project-switcher')
+  await page.keyboard.press('Escape')
+  // On a phone the header is one row and the pages sit behind Menu.
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: 'Menu' }).click()
+  await shot(page, 'phone-menu')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await pickProject(page, '')
 })

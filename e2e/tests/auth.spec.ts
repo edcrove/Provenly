@@ -1,9 +1,7 @@
 import { request as apiRequest } from '@playwright/test'
 
 import { adminPassword, adminUsername, apiURL } from '../playwright.config'
-import { expect, test } from '../support/fixtures'
-
-const unique = () => `u${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`
+import { expect, secret, test, uniqueUsername } from '../support/fixtures'
 
 test.describe('Accounts', () => {
   test('[BE-E2E-008] accounts through the API: 401 without a session, bearer sessions, invitations and admin-only routes', async ({ request }) => {
@@ -17,18 +15,18 @@ test.describe('Accounts', () => {
     // The admin (signed in through the saved cookie) invites someone; the token is shown once.
     const created = await (await request.post(`${apiURL}/api/v1/invitations`, { data: { note: 'e2e' } })).json()
     expect(created.invitation.status).toBe('pending')
-    const username = unique()
+    const username = uniqueUsername()
     const accept = await anon.post(`${apiURL}/api/v1/invitations/accept`, {
-      data: { token: created.token, username, displayName: 'E2E member', password: 'member password' },
+      data: { token: created.token, username, displayName: 'E2E member', password: secret('member password') },
     })
     expect(accept.status()).toBe(201)
     const again = await anon.post(`${apiURL}/api/v1/invitations/accept`, {
-      data: { token: created.token, username: unique(), displayName: 'x', password: 'member password' },
+      data: { token: created.token, username: uniqueUsername(), displayName: 'x', password: secret('member password') },
     })
     expect(again.status()).toBe(404)
 
     // A bearer token from sign-in opens the API; members cannot manage users.
-    const login = await (await anon.post(`${apiURL}/api/v1/auth/login`, { data: { username, password: 'member password' } })).json()
+    const login = await (await anon.post(`${apiURL}/api/v1/auth/login`, { data: { username, password: secret('member password') } })).json()
     const member = await apiRequest.newContext({ storageState: { cookies: [], origins: [] }, extraHTTPHeaders: { Authorization: `Bearer ${login.token}` } })
     expect((await (await member.get(`${apiURL}/api/v1/auth/me`)).json()).isAdmin).toBe(false)
     expect((await member.get(`${apiURL}/api/v1/test-cases`)).status()).toBe(200)
@@ -37,7 +35,7 @@ test.describe('Accounts', () => {
     expect(users.items.map((u: { username: string }) => u.username)).toEqual(expect.arrayContaining([adminUsername, username]))
 
     // Changing the password signs the old session out.
-    const changed = await member.post(`${apiURL}/api/v1/auth/password`, { data: { currentPassword: 'member password', newPassword: 'another member password' } })
+    const changed = await member.post(`${apiURL}/api/v1/auth/password`, { data: { currentPassword: secret('member password'), newPassword: secret('another member password') } })
     expect(changed.status()).toBe(200)
     expect((await member.get(`${apiURL}/api/v1/auth/me`)).status()).toBe(401)
     await member.dispose()
@@ -56,7 +54,7 @@ test.describe('Accounts', () => {
     await expect(admin).toHaveURL(/\/test-runs$/)
 
     await admin.getByRole('link', { name: 'Users' }).click()
-    await admin.getByLabel('Note (optional)').fill('FE-E2E-011')
+    await admin.getByLabel('Note (optional)').fill('e2e FE-E2E-011')
     await admin.getByRole('button', { name: 'Create invitation link' }).click()
     const link = (await admin.getByTestId('invitation-link').textContent())!
     expect(link).toContain('/accept-invite#token=')
@@ -64,17 +62,18 @@ test.describe('Accounts', () => {
     const guestCtx = await browser.newContext({ storageState: { cookies: [], origins: [] } })
     const guest = await guestCtx.newPage()
     await guest.goto(link)
-    const username = unique()
+    const username = uniqueUsername()
     await guest.getByLabel('Username').fill(username)
     await guest.getByLabel('Display name').fill('Guest Tester')
-    await guest.getByLabel('Password', { exact: true }).fill('guest password')
-    await guest.getByLabel('Repeat password').fill('guest password')
+    await guest.getByLabel('Password', { exact: true }).fill(secret('guest password'))
+    await guest.getByLabel('Repeat password').fill(secret('guest password'))
     await guest.getByRole('button', { name: 'Create account' }).click()
     await expect(guest.getByTestId('current-user')).toHaveText('Guest Tester')
     await expect(guest.getByRole('link', { name: 'Users' })).toHaveCount(0)
 
     await admin.reload()
     await expect(admin.getByTestId(`user-${username}`)).toContainText('Guest Tester')
+    await expect(admin.getByTestId(`user-${username}`)).toContainText('User')
     await expect(admin.getByRole('table', { name: 'Invitations' })).toContainText('accepted')
 
     await guest.getByRole('button', { name: 'Sign out' }).click()

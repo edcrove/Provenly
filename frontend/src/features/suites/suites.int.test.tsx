@@ -5,7 +5,7 @@ import { http, HttpResponse } from 'msw'
 
 import { project, testCase, testRun } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
-import { renderRoute } from '@/test/render'
+import { pickProject, renderRoute } from '@/test/render'
 import { server } from '@/test/server'
 
 const at = '2026-10-05T10:00:00Z'
@@ -20,9 +20,9 @@ describe('FE-INT-038 suites and partial runs', () => {
   it('FE-INT-038 asks for a project, then lists suites and creates a query suite', async () => {
     db.testCases[0] = testCase({ tags: ['smoke'] })
     const { user: u } = renderRoute('/suites')
-    expect(await screen.findByText('Choose a project (top right) to see its suites.')).toBeInTheDocument()
-    await screen.findByRole('option', { name: /^TC/ })
-    await u.selectOptions(screen.getByRole('combobox', { name: 'Current project' }), 'TC')
+    expect(await screen.findByText('Pick a project to see its suites.')).toBeInTheDocument()
+    await screen.findByRole('button', { name: /^TC · / })
+    await pickProject(u, 'TC')
     expect(await screen.findByText('No suites in TC yet.')).toBeInTheDocument()
 
     await u.type(screen.getByLabelText('Name'), 'Smoke')

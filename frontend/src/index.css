@@ -62,3 +62,41 @@
     overflow-wrap: normal;
   }
 }
+
+/*
+ * Printing a dashboard or a run (the Thursday report, deployed audit): only the content, without the header, the menu,
+ * filters or buttons; cards keep together and charts keep their colours.
+ */
+@media print {
+  header,
+  button,
+  form,
+  select,
+  [data-print='hide'] {
+    display: none !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  [data-slot='card'] {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+  [data-slot='table-container'] {
+    overflow: visible !important;
+  }
+  * {
+    print-color-adjust: exact;
+  }
+}
+
+/* What only a printout shows (which project, when it was printed). */
+.print-only {
+  display: none;
+}
+@media print {
+  .print-only {
+    display: block;
+  }
+}

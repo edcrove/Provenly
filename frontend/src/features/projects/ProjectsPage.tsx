@@ -77,6 +77,7 @@ function NewProjectForm() {
 
 function ProjectRow({ project }: { project: Project }) {
   const update = useUpdateProject(project.key)
+  const { setProject } = useCurrentProject()
   // null while not renaming.
   const [name, setName] = useState<string | null>(null)
   const save = (e: FormEvent, value: string) => {
@@ -89,7 +90,9 @@ function ProjectRow({ project }: { project: Project }) {
       <TableCell>
         {name === null ? (
           <span className="flex items-center gap-2">
-            {project.name}
+            <Link to="/dashboard" className="underline" onClick={() => setProject(project.key)}>
+              {project.name}
+            </Link>
             {can(project.myRole, 'maintainer') ? (
               <Button size="sm" variant="ghost" onClick={() => setName(project.name)}>
                 Rename
@@ -119,7 +122,7 @@ function ProjectRow({ project }: { project: Project }) {
       <TableCell className="whitespace-nowrap">{formatDateTime(project.createdAt)}</TableCell>
       <TableCell>
         <Link to={`/projects/${project.key}`} className="underline">
-          Members
+          Settings
         </Link>
       </TableCell>
     </TableRow>
@@ -141,8 +144,10 @@ export function ProjectsPage() {
             Projects
           </CardTitle>
           <CardDescription>
-            Each project numbers its test cases with its own key (e.g. CHK-12). Keys never change and projects
-            are never deleted. TC is the default project.
+            A project holds test cases, runs, suites, requirements and issues; each numbers its test cases
+            with its own key (e.g. CHK-12). Keys never change and projects are never deleted. TC is the
+            default project. Open a project by its name, or its settings for members, classification and
+            integrations.
           </CardDescription>
         </CardHeader>
         <CardContent>

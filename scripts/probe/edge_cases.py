@@ -152,6 +152,10 @@ def main():
             check(f"GET {path}?{qs}", call(base, "GET", f"{path}?{qs}")[0], exp)
     check("status= (empty enum)", call(base, "GET", "/test-cases?status=")[0], 400)
     check("status=bogus", call(base, "GET", "/test-cases?status=bogus")[0], 400)
+    for qs, exp in [("branch=main", 200), ("status=passed", 200), ("branch=", 400), ("branch=%00", 400), ("status=green", 400), ("status=", 400)]:
+        check(f"history ?{qs}", call(base, "GET", f"/test-cases/{a}/results?{qs}")[0], exp)
+    for qs, exp in [("automated=true", 200), ("automated=false", 200), ("automated=", 400), ("automated=1", 400), ("automated=%00", 400)]:
+        check(f"test cases ?{qs}", call(base, "GET", f"/test-cases?{qs}")[0], exp)
 
     for pid, exp in [("0", 400), ("-1", 400), ("abc", 400), ("1.5", 400), ("9223372036854775808", 400),
                      ("9223372036854775807", 404), ("%00", 400)]:
@@ -470,6 +474,13 @@ def main():
         check(f"test cases ?{qs[-40:]}", call(base, "GET", f"/test-cases?{qs}")[0], exp)
     for qs, exp in [("suite=probe-static", 200), ("suite=", 400), ("suite=Bad", 400), ("suite=%00", 400)]:
         check(f"runs ?{qs}", call(base, "GET", f"/test-runs?{qs}")[0], exp)
+    # Runs list filters (deployed audit): branch, execution status, mode and creation window.
+    for qs, exp in [("branch=main", 200), ("branch=", 400), ("branch=%00", 400), ("branch=%ff", 400), ("branch=" + "b" * 256, 400),
+                    ("executionStatus=running", 200), ("executionStatus=failed", 400), ("executionStatus=", 400),
+                    ("mode=manual", 200), ("mode=ci", 400), ("from=2026-10-01T00:00:00Z", 200), ("from=2026-10-01", 400),
+                    ("to=2026-10-01T00:00:00%2B05:30", 200), ("to=x", 400),
+                    ("from=2026-10-02T00:00:00Z&to=2026-10-01T00:00:00Z", 400), ("from=2026-10-01T00:00:00Z&to=2026-10-01T00:00:00Z", 200)]:
+        check(f"runs ?{qs[:60]}", call(base, "GET", f"/test-runs?{qs}")[0], exp)
     sq = "/ingestion/junit?project=" + key + "&" + q.format(60)
     for suite, exp in [("&suite=", 400), ("&suite=Bad", 400), ("&suite=nope", 404), ("&suite=" + "s" * 31, 400)]:
         check(f"ingest {suite}", call(base, "POST", sq + suite, raw=xml, ctype="application/xml")[0], exp)
@@ -682,7 +693,8 @@ def main():
                              ("PUT", "/github"), ("DELETE", "/github"), ("POST", "/github/sync")]:
             check(f"{method} /projects/{bad}{path}", call(base, method, f"/projects/{bad}{path}", {} if method in ("POST", "PUT") else None)[0], 400)
     gh = f"/projects/{key}/github"
-    check("no GitHub connection", call(base, "GET", gh)[0], 404)
+    check("no GitHub connection (a state)", call(base, "GET", gh)[0], 204)
+    check("GitHub of an unknown project", call(base, "GET", "/projects/NOPE404/github")[0], 404)
     check("sync without a connection", call(base, "POST", gh + "/sync")[0], 404)
     check("disconnect without a connection", call(base, "DELETE", gh)[0], 404)
     for body, exp in [({}, 400), ({"repository": "acme/shop"}, 400), ({"repository": "acme", "token": "t"}, 400),

@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
 import { db } from '@/test/mockApi'
-import { renderRoute } from '@/test/render'
+import { pickProject, renderRoute } from '@/test/render'
 import { server } from '@/test/server'
 
 const at = '2026-10-05T10:00:00Z'
@@ -29,11 +29,9 @@ describe('FE-INT-040 requirements and traceability', () => {
     db.requirements.push(jiraReq())
     db.latest[153] = 'failed'
     const { user: u } = renderRoute('/requirements')
-    expect(
-      await screen.findByText('Choose a project (top right) to see its requirements.'),
-    ).toBeInTheDocument()
-    await screen.findByRole('option', { name: /^TC/ })
-    await u.selectOptions(screen.getByRole('combobox', { name: 'Current project' }), 'TC')
+    expect(await screen.findByText('Pick a project to see its requirements.')).toBeInTheDocument()
+    await screen.findByRole('button', { name: /^TC · / })
+    await pickProject(u, 'TC')
     const row = await screen.findByTestId('requirement-PAY-12')
     expect(row).toHaveTextContent('Jira PAY-12')
     expect(row).toHaveTextContent('Failing')

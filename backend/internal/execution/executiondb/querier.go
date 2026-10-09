@@ -15,7 +15,7 @@ type Querier interface {
 	CompleteLiveRun(ctx context.Context, arg CompleteLiveRunParams) error
 	CountAmendments(ctx context.Context, testRunID int64) (int64, error)
 	CountParseErrors(ctx context.Context, testRunID int64) (int64, error)
-	CountResultsForTestCase(ctx context.Context, testCaseID pgtype.Int8) (int64, error)
+	CountResultsForTestCase(ctx context.Context, arg CountResultsForTestCaseParams) (int64, error)
 	CountRunEvents(ctx context.Context, testRunID int64) (int32, error)
 	CountRunResults(ctx context.Context, arg CountRunResultsParams) (int64, error)
 	CountTestRuns(ctx context.Context, arg CountTestRunsParams) (int64, error)
@@ -67,6 +67,8 @@ type Querier interface {
 	ListResultsForTestCase(ctx context.Context, arg ListResultsForTestCaseParams) ([]ListResultsForTestCaseRow, error)
 	ListRunEvents(ctx context.Context, testRunID int64) ([]TestRunEvent, error)
 	// retried: a later attempt of the same test exists in the run, so this one is not its logical result.
+	// What needs attention first (deployed audit): tests whose logical result (last attempt) failed, then errored, then
+	// the rest; attempts of one test keep their ingestion order next to each other.
 	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]ListRunResultsRow, error)
 	ListRunShards(ctx context.Context, testRunID int64) ([]ListRunShardsRow, error)
 	// Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status, the

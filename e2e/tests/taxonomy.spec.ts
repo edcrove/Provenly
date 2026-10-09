@@ -1,5 +1,5 @@
 import { apiURL } from '../playwright.config'
-import { expect, test, uniqueProjectKey } from '../support/fixtures'
+import { expect, pickProject, test, uniqueProjectKey } from '../support/fixtures'
 
 test.describe('Taxonomy', () => {
   test('[BE-E2E-015] dimensions, values, tags and classification through the API, and the list filters', async ({ request, provenly }) => {
@@ -64,7 +64,7 @@ test.describe('Taxonomy', () => {
     await expect(taxonomy).toContainText('Risk: High')
 
     await page.goto('/test-cases')
-    await page.getByLabel('Current project').selectOption(key)
+    await pickProject(page, key)
     await expect(page.getByText('Untagged case')).toBeVisible()
     await page.getByLabel('Tag', { exact: true }).fill('smoke')
     await page.getByLabel('Tag', { exact: true }).press('Enter')
@@ -75,6 +75,6 @@ test.describe('Taxonomy', () => {
     await page.getByLabel('Filter by classification').selectOption('feature:payments')
     await expect(page.getByText('Pay by card')).toBeVisible()
     await expect(page.getByText('Untagged case')).toBeHidden()
-    await page.getByLabel('Current project').selectOption('')
+    await pickProject(page, '')
   })
 })

@@ -148,12 +148,21 @@ func TestAudit(t *testing.T) {
 		assert.Equal(t, []string{
 			"finished run #" + id(run), "started a manual run", "set the test cases of suite smoke", "created a suite",
 			"deleted " + key + " step 2", "edited " + key + " step 3", "added a step to " + key, "added a step to " + key,
-			"added a step to " + key, "edited " + key, "created a test case",
+			"added a step to " + key, "edited " + key, "created a test case " + key,
 		}, got, "every change of the project is filed under it, newest first; the project itself was created before it existed")
+		all, err := s.Audit.Events(ctx, audit.Filter{}, pagination.Page{Number: 1, Size: 100})
+		require.NoError(t, err)
+		var created []string
+		for _, e := range all.Items {
+			if e.Action == "POST /api/v1/projects" {
+				created = append(created, e.Summary)
+			}
+		}
+		assert.Equal(t, []string{"created a project CHK"}, created, "a creation names what it made")
 
 		byCase, err := s.Audit.Events(ctx, audit.Filter{TestCaseKey: key}, pagination.Default())
 		require.NoError(t, err)
-		assert.Equal(t, int64(6), byCase.Total, "the edit and the step changes of the test case")
+		assert.Equal(t, int64(7), byCase.Total, "its creation, the edit and the step changes of the test case")
 		for _, e := range byCase.Items {
 			assert.Equal(t, key, e.TestCaseKey)
 			assert.Equal(t, "CHK", e.ProjectKey)

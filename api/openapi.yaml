@@ -1582,6 +1582,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GitHubConnection"
+        "204":
+          description: The project is not connected to GitHub (an unknown or invisible project is a 404)
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1877,6 +1879,13 @@ paths:
           schema:
             $ref: "#/components/schemas/TestCaseStatus"
         - $ref: "#/components/parameters/ProjectFilter"
+        - name: automated
+          in: query
+          required: false
+          description: Only automated (true) or manual (false) test cases.
+          schema:
+            type: string
+            enum: ["true", "false"]
         - name: tag
           in: query
           required: false
@@ -2276,6 +2285,21 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
+        - name: branch
+          in: query
+          required: false
+          description: Only results of runs of this branch, exactly as CI reported it.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+        - name: status
+          in: query
+          required: false
+          description: Only results with this status (e.g. the latest pass on main is status=passed&branch=main&pageSize=1).
+          schema:
+            type: string
+            enum: [passed, failed, error, skipped]
       responses:
         "200":
           description: Page of historical results
@@ -2310,6 +2334,41 @@ paths:
           schema:
             type: string
             pattern: "^[a-z][a-z0-9-]{0,29}$"
+        - name: branch
+          in: query
+          required: false
+          description: Only runs of this branch, exactly as CI reported it.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+        - name: executionStatus
+          in: query
+          required: false
+          description: Only runs with this execution status.
+          schema:
+            $ref: "#/components/schemas/RunExecutionStatus"
+        - name: mode
+          in: query
+          required: false
+          description: Only runs whose results arrive this way.
+          schema:
+            type: string
+            enum: [batch, live, manual, sharded]
+        - name: from
+          in: query
+          required: false
+          description: Only runs created at or after this instant (RFC 3339).
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          description: Only runs created at or before this instant (RFC 3339); not before from (400).
+          schema:
+            type: string
+            format: date-time
       responses:
         "200":
           description: Page of test runs

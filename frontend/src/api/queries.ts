@@ -8,12 +8,13 @@ import {
 import { useRef } from 'react'
 
 import { previousPage } from '@/lib/paging'
-import { ApiError, unwrap } from '@/lib/problem'
+import { unwrap } from '@/lib/problem'
 import type { MemberRole } from '@/lib/roles'
 import type { Correlation, ResultStatus } from '@/lib/status'
 
 import {
   api,
+  type RunListFilter,
   type TestCase,
   type AcceptInvitationRequest,
   type CreateInvitationRequest,
@@ -342,6 +343,8 @@ export function useUpdateProject(key: string) {
 /** Narrows the test case list: a tag and `dimension:value` pairs that must all hold. */
 export interface TestCaseFilter {
   status?: 'active' | 'deprecated'
+  /** Automated ('true') or manual ('false') test cases only. */
+  automated?: 'true' | 'false'
   project?: string
   tag?: string
   classification?: string
@@ -355,12 +358,13 @@ export interface TestCaseFilter {
 }
 
 export function useTestCases(page: number, filter: TestCaseFilter = {}) {
-  const { status, project, tag, classification, suite, key: tcKey, q, pageSize } = filter
+  const { status, automated, project, tag, classification, suite, key: tcKey, q, pageSize } = filter
   const key = [
     ...keys.testCases,
     'list',
     project,
     status,
+    automated,
     tag,
     classification,
     suite,
@@ -375,7 +379,9 @@ export function useTestCases(page: number, filter: TestCaseFilter = {}) {
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/test-cases', {
-          params: { query: { page, pageSize, status, project, tag, classification, suite, key: tcKey, q } },
+          params: {
+            query: { page, pageSize, status, automated, project, tag, classification, suite, key: tcKey, q },
+          },
         }),
       ),
   })
@@ -863,26 +869,34 @@ export function useStepMutations(id: number) {
   }
 }
 
-export function useTestCaseHistory(id: number, page: number) {
+/** A test case's history, optionally of one branch and one status (status=passed, pageSize=1: the latest pass). */
+export function useTestCaseHistory(
+  id: number,
+  page: number,
+  filter: { branch?: string; status?: ResultStatus; pageSize?: number } = {},
+) {
+  const { branch, status, pageSize } = filter
+  const key = [...keys.history(id), branch, status, pageSize, page]
   return useQuery({
-    queryKey: [...keys.history(id), page],
-    placeholderData: (prev, q) => previousPage([...keys.history(id), page], prev, q?.queryKey),
+    queryKey: key,
+    placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
       unwrap(
         await api.GET('/api/v1/test-cases/{testCaseId}/results', {
-          params: { path: { testCaseId: id }, query: { page } },
+          params: { path: { testCaseId: id }, query: { page, branch, status, pageSize } },
         }),
       ),
   })
 }
 
-export function useTestRuns(page: number, project?: string, suite?: string) {
-  const key = [...keys.testRuns, 'list', project, suite, page]
+export function useTestRuns(page: number, project?: string, suite?: string, filter: RunListFilter = {}) {
+  // The filter as text: keys compare element by element (previousPage), so an equal filter must be equal.
+  const key = [...keys.testRuns, 'list', project, suite, JSON.stringify(filter), page]
   return useQuery({
     queryKey: key,
     placeholderData: (prev, q) => previousPage(key, prev, q?.queryKey),
     queryFn: async () =>
-      unwrap(await api.GET('/api/v1/test-runs', { params: { query: { page, project, suite } } })),
+      unwrap(await api.GET('/api/v1/test-runs', { params: { query: { ...filter, page, project, suite } } })),
   })
 }
 
@@ -1086,15 +1100,10 @@ const githubKey = (projectKey: string) => [...keys.projects, projectKey, 'github
 export function useGitHubConnection(projectKey: string) {
   return useQuery({
     queryKey: githubKey(projectKey),
+    // 204: the project is not connected (null), as opposed to an unknown project (404, an error).
     queryFn: async () => {
-      try {
-        return unwrap(
-          await api.GET('/api/v1/projects/{projectKey}/github', { params: { path: { projectKey } } }),
-        )
-      } catch (e) {
-        if (e instanceof ApiError && e.status === 404) return null
-        throw e
-      }
+      const res = await api.GET('/api/v1/projects/{projectKey}/github', { params: { path: { projectKey } } })
+      return res.response.status === 204 ? null : unwrap(res)
     },
   })
 }

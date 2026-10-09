@@ -31,8 +31,8 @@ export const adminState = path.join(import.meta.dirname, '.auth/admin.json')
 export default defineConfig({
   testDir: './tests',
   globalSetup: './support/sign-in.ts',
-  // Coverage evidence only exists on the instrumented local stack.
-  globalTeardown: remoteURL ? undefined : './support/remap-coverage.ts',
+  // Sweeps what the journeys created (any instance) and, locally, remaps the coverage evidence.
+  globalTeardown: './support/teardown.ts',
   grepInvert: remoteURL ? /@local/ : undefined,
   fullyParallel: false,
   workers: 1,
@@ -51,6 +51,8 @@ export default defineConfig({
   ],
   use: {
     baseURL: remoteURL ?? `http://localhost:${webPort}`,
+    // Dates show in the browser's time zone: journeys read them in UTC.
+    timezoneId: 'UTC',
     // Every journey (browser and API request fixture) starts signed in as the administrator.
     storageState: adminState,
     trace: 'retain-on-failure',

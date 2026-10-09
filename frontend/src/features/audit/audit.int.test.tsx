@@ -57,7 +57,11 @@ describe('FE-INT-046 audit log', () => {
     db.users.push(user({ id: 2, username: 'ana', isAdmin: false }))
     db.session = 2
     renderRoute('/audit')
-    expect(await screen.findByText(/administrator/i)).toBeInTheDocument()
+    // A clear refusal about this page (not the users pages' message), and no filters that could only fail.
+    expect(await screen.findByText('Not allowed')).toBeInTheDocument()
+    expect(screen.getByText('Only administrators can read the audit log.')).toBeInTheDocument()
+    expect(screen.queryByText(/users and invitations/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: 'Filter the audit log' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Audit' })).not.toBeInTheDocument()
   })
 })
@@ -113,5 +117,24 @@ describe('FE-INT-055 sign-in events in the audit log (card #49)', () => {
     expect(row).toHaveTextContent('unknown198.51.100.7')
     expect(row).toHaveTextContent('failed to sign in/api/v1/auth/login')
     expect(within(row).getByText('198.51.100.7')).toHaveAttribute('title', 'Mozilla/5.0')
+  })
+})
+
+describe('FE-INT-065 the audit log of the current project', () => {
+  it('FE-INT-065 opens on the current project and widens to every project when the field is cleared', async () => {
+    db.audit.push(
+      event(1, { project: 'TC', summary: 'created a test case TC-9', testCase: 'TC-9' }),
+      event(2, { project: 'CHK' }),
+    )
+    localStorage.setItem('provenly.project', 'TC')
+    const { user: u, router } = renderRoute('/audit')
+    expect(await screen.findByTestId('audit-1')).toHaveTextContent('created a test case TC-9')
+    expect(screen.queryByTestId('audit-2')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Project')).toHaveValue('TC')
+
+    await u.clear(screen.getByLabelText('Project'))
+    await u.click(screen.getByRole('button', { name: 'Filter' }))
+    expect(await screen.findByTestId('audit-2')).toBeInTheDocument()
+    expect(router.state.location.search).toBe('?project=')
   })
 })

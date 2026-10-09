@@ -3,6 +3,7 @@ package integrations
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -236,6 +237,11 @@ func (h *Handler) deliveries(w http.ResponseWriter, r *http.Request, projectKey 
 
 func (h *Handler) getGitHub(w http.ResponseWriter, r *http.Request, projectKey string) {
 	v, err := h.api.GitHub(r.Context(), projectKey)
+	if errors.Is(err, errNoConnection) {
+		// Not connected is a normal state of a project, not a missing resource (no 404 noise in browsers).
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

@@ -222,7 +222,10 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 
 // ListTestRuns implements execution.Repository.
 func (s *Store) ListTestRuns(ctx context.Context, f execution.RunFilter, limit, offset int32) ([]execution.TestRun, error) {
-	rows, err := s.q.ListTestRuns(ctx, executiondb.ListTestRunsParams{ProjectIds: f.ProjectIDs, SuiteKey: filterText(f.SuiteKey), PageLimit: limit, PageOffset: offset})
+	rows, err := s.q.ListTestRuns(ctx, executiondb.ListTestRunsParams{
+		ProjectIds: f.ProjectIDs, SuiteKey: filterText(f.SuiteKey), Branch: filterText(f.Branch), Status: filterText(f.Status),
+		Mode: filterText(f.Mode), CreatedFrom: timestamptz(f.From), CreatedTo: timestamptz(f.To), PageLimit: limit, PageOffset: offset,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +238,10 @@ func (s *Store) ListTestRuns(ctx context.Context, f execution.RunFilter, limit, 
 
 // CountTestRuns implements execution.Repository.
 func (s *Store) CountTestRuns(ctx context.Context, f execution.RunFilter) (int64, error) {
-	return s.q.CountTestRuns(ctx, executiondb.CountTestRunsParams{ProjectIds: f.ProjectIDs, SuiteKey: filterText(f.SuiteKey)})
+	return s.q.CountTestRuns(ctx, executiondb.CountTestRunsParams{
+		ProjectIds: f.ProjectIDs, SuiteKey: filterText(f.SuiteKey), Branch: filterText(f.Branch), Status: filterText(f.Status),
+		Mode: filterText(f.Mode), CreatedFrom: timestamptz(f.From), CreatedTo: timestamptz(f.To),
+	})
 }
 
 // optionalText is NULL for an empty string.
@@ -304,9 +310,10 @@ func (s *Store) ListDiagnostics(ctx context.Context, runID int64) ([]execution.D
 }
 
 // ListResultsForTestCase implements execution.Repository.
-func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, limit, offset int32) ([]execution.HistoryEntry, error) {
+func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, f execution.HistoryFilter, limit, offset int32) ([]execution.HistoryEntry, error) {
 	rows, err := s.q.ListResultsForTestCase(ctx, executiondb.ListResultsForTestCaseParams{
-		TestCaseID: pgtype.Int8{Int64: testCaseID, Valid: true}, PageLimit: limit, PageOffset: offset,
+		TestCaseID: pgtype.Int8{Int64: testCaseID, Valid: true}, Status: filterText(f.Status), Branch: filterText(f.Branch),
+		PageLimit: limit, PageOffset: offset,
 	})
 	if err != nil {
 		return nil, err
@@ -332,8 +339,10 @@ func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, li
 }
 
 // CountResultsForTestCase implements execution.Repository.
-func (s *Store) CountResultsForTestCase(ctx context.Context, testCaseID int64) (int64, error) {
-	return s.q.CountResultsForTestCase(ctx, pgtype.Int8{Int64: testCaseID, Valid: true})
+func (s *Store) CountResultsForTestCase(ctx context.Context, testCaseID int64, f execution.HistoryFilter) (int64, error) {
+	return s.q.CountResultsForTestCase(ctx, executiondb.CountResultsForTestCaseParams{
+		TestCaseID: pgtype.Int8{Int64: testCaseID, Valid: true}, Status: filterText(f.Status), Branch: filterText(f.Branch),
+	})
 }
 
 func toAmendment(r executiondb.TestRunAmendment) execution.Amendment {

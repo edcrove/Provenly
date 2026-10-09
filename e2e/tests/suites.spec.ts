@@ -1,5 +1,5 @@
 import { apiURL } from '../playwright.config'
-import { byProperty, expect, junit, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
+import { byProperty, expect, junit, pickProject, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
 test.describe('Suites and partial runs (MVP D2)', () => {
   test('[BE-E2E-016] a run reported for a suite expects only the suite; the run names it and lists filter by it', async ({ request, provenly }) => {
@@ -42,7 +42,7 @@ test.describe('Suites and partial runs (MVP D2)', () => {
     await provenly.createTestCase({ title: 'Checkout works', project: key, automated: true })
 
     await page.goto('/suites')
-    await page.getByLabel('Current project').selectOption(key)
+    await pickProject(page, key)
     await page.getByLabel('Name', { exact: true }).fill('Release candidate')
     await page.getByLabel('Key', { exact: true }).fill('release')
     await page.getByLabel('Kind').selectOption('static')
@@ -65,6 +65,6 @@ test.describe('Suites and partial runs (MVP D2)', () => {
     await page.getByRole('link', { name: `#${(await res.json()).testRun.id}` }).click()
     await expect(page.getByTestId('suite-badge')).toHaveText('suite: Release candidate')
     await expect(page.getByTestId('verdict-badge').first()).toContainText('passed')
-    await page.getByLabel('Current project').selectOption('')
+    await pickProject(page, '')
   })
 })

@@ -139,10 +139,18 @@ func (s *Service) project(r *http.Request, note *auditnote.Note) string {
 
 // record stores the event of a successful change; a failure is logged, never returned (the change happened).
 func (s *Service) record(r *http.Request, action string, status int, note *auditnote.Note, t target) {
+	summary, testCase := t.summary(action), t.testCaseKey
+	// A creation names what it made (deployed audit: "created a test case" did not say which).
+	if created := note.Created(); created != "" && summary != "" {
+		summary += " " + created
+	}
+	if testCase == "" {
+		testCase = note.TestCaseKey()
+	}
 	e := Event{
 		Actor: actor(r.Context()), Action: action, Path: truncate(storable(r.URL.Path), 2000),
 		ProjectKey: truncate(storable(s.project(r, note)), 50), Status: int32(status),
-		Summary: truncate(storable(t.summary(action)), 300), TestCaseKey: t.testCaseKey,
+		Summary: truncate(storable(summary), 300), TestCaseKey: testCase,
 	}
 	client := clientinfo.From(r.Context())
 	e.IP, e.UserAgent = client.IP, truncate(storable(client.UserAgent), 500)

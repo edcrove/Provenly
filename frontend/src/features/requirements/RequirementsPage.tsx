@@ -17,6 +17,7 @@ import { useProjectRole } from '@/features/projects/useProjectRole'
 import { coverageLabel, coverageVariant, requirementRef } from '@/lib/requirements'
 import { can } from '@/lib/roles'
 import { usePage } from '@/lib/usePage'
+import { ProjectChooser, ScopeLabel } from '@/features/projects/ProjectScope'
 
 type Provider = 'provenly' | 'jira' | 'github' | 'azure_devops'
 
@@ -109,6 +110,7 @@ export function RequirementsPage() {
         <CardTitle as="h1" className="text-xl">
           Requirements
         </CardTitle>
+        <ScopeLabel />
         <CardDescription>
           What the product must do, written here or mirrored from Jira, GitHub or Azure DevOps (maintainers
           import them through the API). Coverage comes from the latest result of each test case that covers a
@@ -117,9 +119,7 @@ export function RequirementsPage() {
       </CardHeader>
       <CardContent className="grid gap-6">
         {!project ? (
-          <p className="text-muted-foreground text-sm">
-            Choose a project (top right) to see its requirements.
-          </p>
+          <ProjectChooser what="requirements" />
         ) : (
           <>
             <QueryState query={requirements}>

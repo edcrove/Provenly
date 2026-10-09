@@ -100,7 +100,12 @@ func TestProjectKeys(t *testing.T) {
 
 func TestSystem(t *testing.T) {
 	e := api(t, fresh(t), 1<<20)
-	e.GET("/healthz").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "ok")
+	healthz := e.GET("/healthz").Expect().Status(http.StatusOK)
+	healthz.JSON().Object().HasValue("status", "ok")
+	// Security headers on every API response (MIME sniffing, framing, referrer).
+	healthz.Header("X-Content-Type-Options").IsEqual("nosniff")
+	healthz.Header("X-Frame-Options").IsEqual("DENY")
+	healthz.Header("Referrer-Policy").IsEqual("no-referrer")
 	e.GET("/readyz").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "ok")
 
 	down := app.NewServicesWith(db.Pool, time.Now, identityConfig())
@@ -128,6 +133,8 @@ func TestTestCases(t *testing.T) {
 		WithQuery("automated", "true").WithQuery("limit", 1).Expect().Status(http.StatusOK).
 		JSON().Object().HasValue("totalItems", 0).HasValue("pageSize", 5)
 	e.GET("/api/v1/test-cases").WithQuery("pageSize", 0).WithQuery("foo", "bar").Expect().Status(http.StatusBadRequest)
+	e.GET("/api/v1/test-cases").WithQuery("automated", "false").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
+	e.GET("/api/v1/test-cases").WithQuery("automated", "yes").Expect().Status(http.StatusBadRequest)
 
 	path := "/api/v1/test-cases/" + strconv.FormatInt(id, 10)
 	e.GET(path).Expect().Status(http.StatusOK)
@@ -155,6 +162,10 @@ func TestTestCases(t *testing.T) {
 	e.GET("/api/v1/test-cases/xyz/results").Expect().Status(http.StatusBadRequest)
 	e.GET("/api/v1/test-cases/987654/results").Expect().Status(http.StatusNotFound)
 	e.GET(path+"/results").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
+	e.GET(path+"/results").WithQuery("branch", "main").WithQuery("status", "passed").Expect().Status(http.StatusOK).
+		JSON().Object().HasValue("totalItems", 0)
+	e.GET(path+"/results").WithQuery("status", "green").Expect().Status(http.StatusBadRequest)
+	e.GET(path+"/results").WithQuery("branch", "").Expect().Status(http.StatusBadRequest)
 }
 
 // TestKeyFilter: ?key=<PROJECT>-<number> finds a test case by its key, zero or one item (card #53).
@@ -302,6 +313,21 @@ func TestProjects(t *testing.T) {
 	e.GET("/api/v1/test-runs").WithQuery("project", "CHK").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
 	e.GET("/api/v1/test-runs").WithQuery("project", "TC").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
 	e.GET("/api/v1/test-runs").WithQuery("project", "NOPE").Expect().Status(http.StatusNotFound)
+	// Filters (deployed audit): branch, execution status, mode and the creation window; bad values are 400.
+	e.GET("/api/v1/test-runs").WithQuery("project", "CHK").WithQuery("branch", "main").WithQuery("executionStatus", "completed").
+		WithQuery("mode", "batch").WithQuery("from", "2000-01-01T00:00:00Z").WithQuery("to", "2999-01-01T00:00:00-03:00").
+		Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	e.GET("/api/v1/test-runs").WithQuery("branch", "nope").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
+	for _, q := range []map[string]string{
+		{"branch": ""}, {"executionStatus": "failed"}, {"mode": "ci"}, {"from": "2026-10-01"},
+		{"from": "2026-10-02T00:00:00Z", "to": "2026-10-01T00:00:00Z"},
+	} {
+		req := e.GET("/api/v1/test-runs")
+		for k, v := range q {
+			req = req.WithQuery(k, v)
+		}
+		req.Expect().Status(http.StatusBadRequest)
+	}
 }
 
 // TestAuthentication: every protected operation answers 401 without a session, sign-in and invitations

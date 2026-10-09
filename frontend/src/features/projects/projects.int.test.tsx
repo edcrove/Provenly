@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { project, testCase, testResult, testRun } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
-import { renderRoute } from '@/test/render'
+import { pickProject, projectSwitcher, renderRoute } from '@/test/render'
 import { server } from '@/test/server'
 
 const checkout = () => project({ id: 2, key: 'CHK', name: 'Checkout', description: '' })
@@ -23,7 +23,7 @@ describe('FE-INT-022 projects page', () => {
     expect(created).toHaveTextContent('Checkout')
     expect(created).toHaveTextContent('—')
     expect(screen.getByLabelText('Key')).toHaveValue('')
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Current project' })).toHaveValue('CHK'))
+    await waitFor(() => expect(projectSwitcher()).toHaveAccessibleName(/^Current project: CHK · /))
     expect(localStorage.getItem('provenly.project')).toBe('CHK')
   })
 
@@ -80,7 +80,7 @@ describe('FE-INT-023 current project', () => {
     expect(await screen.findByText('Pay by card')).toBeInTheDocument()
     expect(screen.getByText('Login works')).toBeInTheDocument()
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Current project' }), 'CHK')
+    await pickProject(user, 'CHK')
     await waitFor(() => expect(screen.queryByText('Login works')).not.toBeInTheDocument())
     expect(screen.getByRole('link', { name: 'CHK-1' })).toHaveAttribute('href', '/test-cases/200')
     expect(localStorage.getItem('provenly.project')).toBe('CHK')
@@ -92,7 +92,7 @@ describe('FE-INT-023 current project', () => {
     const projects = await screen.findAllByTestId('run-project')
     expect(projects.map((c) => c.textContent)).toEqual(['CHK'])
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Current project' }), '')
+    await pickProject(user, '')
     await waitFor(() => expect(screen.getAllByTestId('run-project')).toHaveLength(2))
     expect(screen.getAllByTestId('run-project').map((c) => c.textContent)).toEqual(['CHK', 'TC'])
     expect(localStorage.getItem('provenly.project')).toBeNull()
@@ -102,7 +102,7 @@ describe('FE-INT-023 current project', () => {
     localStorage.setItem('provenly.project', 'GONE')
     renderRoute('/test-cases')
     expect(await screen.findByText('Login works')).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Current project' })).toHaveValue('')
+    expect(projectSwitcher()).toHaveAccessibleName('Current project: All projects')
   })
 
   it('FE-INT-023 an empty list says which project is empty', async () => {

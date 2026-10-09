@@ -10,10 +10,15 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageTitle } from '@/components/PageTitle'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatDateTime, formatPercent, outcomeBreakdown, shortCommit } from '@/lib/format'
+import { executedLabel, formatDateTime, formatPercent, outcomeBreakdown, shortCommit } from '@/lib/format'
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { can } from '@/lib/roles'
 import { positiveInt } from '@/lib/status'
+import { ScopeLabel } from '@/features/projects/ProjectScope'
+
+import { hasRunFilters, readRunFilters, toApiFilter } from '@/lib/runFilters'
+
+import { RunFilters } from './RunFilters'
 
 export function TestRunListPage() {
   const [params, setParams] = useSearchParams()
@@ -23,7 +28,18 @@ export function TestRunListPage() {
   // the link's project wins over the one chosen in the header.
   const suite = params.get('suite') ?? ''
   const project = (suite && params.get('project')) || current
-  const query = useTestRuns(page, project || undefined, suite || undefined)
+  const filters = readRunFilters(params)
+  const query = useTestRuns(page, project || undefined, suite || undefined, toApiFilter(filters))
+  const filtering = hasRunFilters(filters)
+  const update = (next: Record<string, string>) => {
+    const merged = new URLSearchParams(params)
+    for (const [k, v] of Object.entries(next)) {
+      if (v) merged.set(k, v)
+      else merged.delete(k)
+    }
+    merged.delete('page')
+    setParams(merged)
+  }
   const projects = useProjects()
   const projectKey = (id: number) => projects.data?.items.find((p) => p.id === id)?.key ?? '—'
   return (
@@ -31,9 +47,12 @@ export function TestRunListPage() {
       <CardHeader>
         <PageTitle title="Test Runs" />
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle as="h1" className="text-xl">
-            Test Runs
-          </CardTitle>
+          <div className="grid gap-1">
+            <CardTitle as="h1" className="text-xl">
+              Test Runs
+            </CardTitle>
+            <ScopeLabel />
+          </div>
           {(projects.data?.items ?? []).some((p) => can(p.myRole, 'member')) ? (
             <Button asChild variant="outline">
               <Link to="/test-runs/manual">
@@ -55,6 +74,7 @@ export function TestRunListPage() {
             </Link>
           </p>
         ) : null}
+        <RunFilters key={params.get('branch') ?? ''} value={filters} onChange={update} />
       </CardHeader>
       <CardContent>
         <QueryState query={query}>
@@ -67,6 +87,7 @@ export function TestRunListPage() {
                     <TableHead>Project</TableHead>
                     <TableHead>Verdict</TableHead>
                     <TableHead>Pass rate</TableHead>
+                    <TableHead>Executed</TableHead>
                     <TableHead>Test cases</TableHead>
                     <TableHead>Execution</TableHead>
                     <TableHead>Branch</TableHead>
@@ -79,12 +100,14 @@ export function TestRunListPage() {
                 <TableBody>
                   {data.items.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-muted-foreground">
-                        {suite
-                          ? `No runs of suite ${suite} yet.`
-                          : project
-                            ? `No test runs in ${project} yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.`
-                            : 'No test runs yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.'}
+                      <TableCell colSpan={12} className="text-muted-foreground">
+                        {filtering
+                          ? 'No runs match these filters.'
+                          : suite
+                            ? `No runs of suite ${suite} yet.`
+                            : project
+                              ? `No test runs in ${project} yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.`
+                              : 'No test runs yet. CI sends JUnit reports to POST /api/v1/ingestion/junit.'}
                       </TableCell>
                     </TableRow>
                   )}
@@ -112,6 +135,9 @@ export function TestRunListPage() {
                       <TableCell className="tabular-nums" data-testid="pass-rate">
                         {run.outcome.executed > 0 ? formatPercent(run.outcome.passRate) : '—'}
                         {run.executionStatus === 'running' && run.outcome.executed > 0 ? ' so far' : ''}
+                      </TableCell>
+                      <TableCell className="tabular-nums whitespace-nowrap" data-testid="executed">
+                        {executedLabel(run.outcome.executed, run.expectedCount)}
                       </TableCell>
                       <TableCell data-testid="outcome-breakdown">
                         {outcomeBreakdown(run.outcome)

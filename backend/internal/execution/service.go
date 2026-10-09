@@ -387,7 +387,12 @@ func (s *Service) ListAmendments(ctx context.Context, runID int64, page paginati
 
 // History returns the results of a TC-ID across runs, newest first.
 func (s *Service) History(ctx context.Context, testCaseID int64, page pagination.Page) (pagination.Result[HistoryEntry], error) {
-	items, err := s.repo.ListResultsForTestCase(ctx, testCaseID, page.Limit(), page.Offset())
+	return s.HistoryOf(ctx, testCaseID, HistoryFilter{}, page)
+}
+
+// HistoryOf is History narrowed by branch and status ("did it pass on main lately?").
+func (s *Service) HistoryOf(ctx context.Context, testCaseID int64, f HistoryFilter, page pagination.Page) (pagination.Result[HistoryEntry], error) {
+	items, err := s.repo.ListResultsForTestCase(ctx, testCaseID, f, page.Limit(), page.Offset())
 	if err != nil {
 		return pagination.Result[HistoryEntry]{}, err
 	}
@@ -398,7 +403,7 @@ func (s *Service) History(ctx context.Context, testCaseID int64, page pagination
 	if err := attachOutcomes(ctx, s.repo, runs, func(i int, o RunOutcome) { items[i].Run.Outcome = o }); err != nil {
 		return pagination.Result[HistoryEntry]{}, err
 	}
-	total, err := s.repo.CountResultsForTestCase(ctx, testCaseID)
+	total, err := s.repo.CountResultsForTestCase(ctx, testCaseID, f)
 	if err != nil {
 		return pagination.Result[HistoryEntry]{}, err
 	}

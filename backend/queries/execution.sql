@@ -40,6 +40,11 @@ WHERE r.id IN (
     SELECT p.id FROM test_runs p
     WHERE (sqlc.narg('project_ids')::bigint[] IS NULL OR p.project_id = ANY(sqlc.narg('project_ids')::bigint[]))
       AND (sqlc.narg('suite_key')::text IS NULL OR p.suite_key = sqlc.narg('suite_key')::text)
+      AND (sqlc.narg('branch')::text IS NULL OR p.branch = sqlc.narg('branch')::text)
+      AND (sqlc.narg('status')::text IS NULL OR p.status = sqlc.narg('status')::text)
+      AND (sqlc.narg('mode')::text IS NULL OR p.mode = sqlc.narg('mode')::text)
+      AND (sqlc.narg('created_from')::timestamptz IS NULL OR p.created_at >= sqlc.narg('created_from')::timestamptz)
+      AND (sqlc.narg('created_to')::timestamptz IS NULL OR p.created_at <= sqlc.narg('created_to')::timestamptz)
     ORDER BY p.id DESC LIMIT @page_limit OFFSET @page_offset
 )
 ORDER BY r.id DESC;
@@ -47,7 +52,12 @@ ORDER BY r.id DESC;
 -- name: CountTestRuns :one
 SELECT count(*) FROM test_runs
 WHERE (sqlc.narg('project_ids')::bigint[] IS NULL OR project_id = ANY(sqlc.narg('project_ids')::bigint[]))
-  AND (sqlc.narg('suite_key')::text IS NULL OR suite_key = sqlc.narg('suite_key')::text);
+  AND (sqlc.narg('suite_key')::text IS NULL OR suite_key = sqlc.narg('suite_key')::text)
+  AND (sqlc.narg('branch')::text IS NULL OR branch = sqlc.narg('branch')::text)
+  AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status')::text)
+  AND (sqlc.narg('mode')::text IS NULL OR mode = sqlc.narg('mode')::text)
+  AND (sqlc.narg('created_from')::timestamptz IS NULL OR created_at >= sqlc.narg('created_from')::timestamptz)
+  AND (sqlc.narg('created_to')::timestamptz IS NULL OR created_at <= sqlc.narg('created_to')::timestamptz);
 
 -- name: ListRunResults :many
 -- retried: a later attempt of the same test exists in the run, so this one is not its logical result.
@@ -60,7 +70,12 @@ WHERE t.test_run_id = @test_run_id
   AND (sqlc.narg('status')::text IS NULL OR t.status = sqlc.narg('status')::text)
   AND (sqlc.narg('correlation')::text IS NULL OR t.correlation = sqlc.narg('correlation')::text)
   AND (sqlc.narg('shard')::int IS NULL OR t.shard = sqlc.narg('shard')::int)
-ORDER BY t.id
+-- What needs attention first (deployed audit): tests whose logical result (last attempt) failed, then errored, then
+-- the rest; attempts of one test keep their ingestion order next to each other.
+ORDER BY CASE (
+    SELECT x.status FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
+      AND x.class_name = t.class_name AND x.test_name = t.test_name ORDER BY x.attempt DESC, x.id DESC LIMIT 1
+) WHEN 'failed' THEN 0 WHEN 'error' THEN 1 ELSE 2 END, t.id
 LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountRunResults :one
@@ -95,6 +110,9 @@ ORDER BY id;
 -- are computed once, not for every row skipped by OFFSET or repeated per result.
 WITH page AS (
     SELECT p.id FROM test_results p WHERE p.test_case_id = @test_case_id
+      AND (sqlc.narg('status')::text IS NULL OR p.status = sqlc.narg('status')::text)
+      AND (sqlc.narg('branch')::text IS NULL OR EXISTS (
+          SELECT 1 FROM test_runs b WHERE b.id = p.test_run_id AND b.branch = sqlc.narg('branch')::text))
     ORDER BY p.id DESC LIMIT @page_limit OFFSET @page_offset
 ), counts AS (
     SELECT r.id,
@@ -121,7 +139,10 @@ WHERE t.id IN (SELECT id FROM page)
 ORDER BY t.id DESC;
 
 -- name: CountResultsForTestCase :one
-SELECT count(*) FROM test_results WHERE test_case_id = @test_case_id;
+SELECT count(*) FROM test_results p WHERE p.test_case_id = @test_case_id
+  AND (sqlc.narg('status')::text IS NULL OR p.status = sqlc.narg('status')::text)
+  AND (sqlc.narg('branch')::text IS NULL OR EXISTS (
+      SELECT 1 FROM test_runs b WHERE b.id = p.test_run_id AND b.branch = sqlc.narg('branch')::text));
 
 -- name: InsertParseErrors :copyfrom
 INSERT INTO test_run_parse_errors (test_run_id, case_index, test_name, message, persisted, severity, shard)

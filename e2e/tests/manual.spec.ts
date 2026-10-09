@@ -24,10 +24,12 @@ test.describe('Manual execution (MVP D3)', () => {
     expect(history.items.map((r: { result: { status: string } }) => r.result.status)).toEqual(['passed', 'failed'])
   })
 
-  test('[FE-E2E-019] a tester runs a manual run in the UI: records a failure, re-tests it and completes the run', async ({ page, provenly }) => {
+  test('[FE-E2E-019] a tester runs a manual run in the UI: records a failure, re-tests it and completes the run', async ({ page, provenly, request }) => {
     const key = uniqueProjectKey()
     await provenly.createProject(key, 'Sign-off UI')
     const tc = await provenly.createTestCase({ title: 'Refund by hand', project: key })
+    for (const action of ['Open the order', 'Refund it', 'Check the amount'])
+      expect((await request.post(`${apiURL}/api/v1/test-cases/${tc.id}/steps`, { data: { action, expectedResult: '' } })).status()).toBe(201)
 
     await page.goto('/test-runs')
     await page.getByRole('link', { name: 'Start manual run' }).click()
@@ -36,7 +38,9 @@ test.describe('Manual execution (MVP D3)', () => {
     await page.getByRole('button', { name: 'Start manual run' }).click()
     const row = page.getByTestId(`manual-${tc.key}`)
     await row.getByLabel(`Note for ${tc.key}`).fill('Refund amount wrong')
-    await row.getByLabel(`Failed step of ${tc.key}`).fill('3')
+    // The row says what it is; the failed step is one of its steps.
+    await expect(row).toContainText('Refund by hand')
+    await row.getByLabel(`Failed step of ${tc.key}`).selectOption('3')
     await row.getByRole('button', { name: 'Fail' }).click()
     await expect(row.getByTestId('status-badge')).toHaveText('failed')
     await expect(row.getByRole('status')).toHaveText('Saved · failed at step 3')

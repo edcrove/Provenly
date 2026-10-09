@@ -34,3 +34,6 @@ export function saveProject(key: string) {
     // Not remembered; the choice still applies to this page.
   }
 }
+
+/** The text of a project everywhere the current one is named. */
+export const projectLabel = (p: { key: string; name: string }) => `${p.key} · ${p.name}`

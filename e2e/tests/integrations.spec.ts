@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 
 import { apiURL, githubPort } from '../playwright.config'
-import { byProperty, expect, junit, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
+import { byProperty, expect, junit, pickProject, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
 interface Received {
   headers: IncomingMessage['headers']
@@ -69,7 +69,8 @@ test.describe('Integrations: webhooks and GitHub Issues (prototype feature 18)',
         .toBe('succeeded')
 
       expect((await request.post(`${base}/webhooks`, { data: { url: 'ftp://x', events: ['run.completed'] } })).status()).toBe(400)
-      expect((await request.get(`${base}/github`)).status()).toBe(404)
+      // Not connected yet: a state (204), not an error.
+      expect((await request.get(`${base}/github`)).status()).toBe(204)
       const connected = await request.put(`${base}/github`, { data: { repository: 'acme/shop', token: 'ghp_e2e_token_4321' } })
       expect(await connected.json()).toMatchObject({ repository: 'acme/shop', tokenHint: '…4321', lastSyncedAt: null })
       expect(await (await request.post(`${base}/github/sync`)).json()).toEqual({ created: 2, updated: 0 })
@@ -113,7 +114,7 @@ test.describe('Integrations: webhooks and GitHub Issues (prototype feature 18)',
       await page.getByRole('button', { name: 'Sync issues now' }).click()
       await expect(page.getByText('Synced: 2 created, 0 updated.')).toBeVisible()
       await page.goto('/issues')
-      await page.getByLabel('Current project').selectOption(key)
+      await pickProject(page, key)
       await expect(page.getByText('Checkout loses the cart')).toBeVisible()
     } finally {
       await receiver.close()

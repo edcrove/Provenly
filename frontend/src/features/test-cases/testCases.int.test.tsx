@@ -319,7 +319,9 @@ describe('FE-INT-007 execution history', () => {
     db.runs[0] = { ...db.runs[0], branch: '', completedAt: null }
     const { user } = renderRoute('/test-cases/153')
     expect(await screen.findByText('Page 1 of 2 · 21 items')).toBeInTheDocument()
-    const history = screen.getByRole('table', { name: 'Execution history' }).parentElement!.parentElement!
+    const history = screen
+      .getByRole('table', { name: 'Execution history' })
+      .closest('[data-slot="card"]') as HTMLElement
     await user.click(within(history).getByRole('button', { name: 'Next' }))
     expect(await screen.findByText('Page 2 of 2 · 21 items')).toBeInTheDocument()
   })

@@ -18,6 +18,7 @@ import { verificationLabel, verificationVariant } from '@/lib/issues'
 import { requirementRef as issueRef } from '@/lib/requirements'
 import { can } from '@/lib/roles'
 import { usePage } from '@/lib/usePage'
+import { ProjectChooser, ScopeLabel } from '@/features/projects/ProjectScope'
 
 type Provider = 'provenly' | 'jira' | 'github' | 'azure_devops'
 
@@ -111,6 +112,7 @@ export function IssuesPage() {
         <CardTitle as="h1" className="text-xl">
           Issues
         </CardTitle>
+        <ScopeLabel />
         <CardDescription>
           Defects reported here or mirrored from Jira, GitHub or Azure DevOps (maintainers import them with
           their state through the API). Link the test cases that reproduce an issue: its verification combines
@@ -119,7 +121,7 @@ export function IssuesPage() {
       </CardHeader>
       <CardContent className="grid gap-6">
         {!project ? (
-          <p className="text-muted-foreground text-sm">Choose a project (top right) to see its issues.</p>
+          <ProjectChooser what="issues" />
         ) : (
           <>
             <div className="flex items-center gap-2">

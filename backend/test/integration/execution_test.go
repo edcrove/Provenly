@@ -78,14 +78,15 @@ func TestExecutionPersistence(t *testing.T) {
 		res, err := s.Execution.ListRunResults(ctx, out.Run.ID, execution.ResultFilter{}, pagination.Default())
 		require.NoError(t, err)
 		assert.Equal(t, int64(7), res.Total)
-		first := res.Items[0]
+		// The failure comes first (deployed audit), then the rest in ingestion order.
+		assert.Equal(t, "boom", res.Items[0].ErrorMessage)
+		assert.Equal(t, "trace", res.Items[0].ErrorDetails)
+		first := res.Items[1]
 		assert.Equal(t, login.ID, *first.TestCaseID)
 		assert.Equal(t, itoa(login.ID), *first.RequestedTestCaseID)
 		assert.Equal(t, int64(250), *first.DurationMs)
 		assert.Equal(t, "suite", first.SuiteName)
 		assert.Equal(t, "c", first.ClassName)
-		assert.Equal(t, "boom", res.Items[1].ErrorMessage)
-		assert.Equal(t, "trace", res.Items[1].ErrorDetails)
 
 		sum, err := s.Execution.Summary(ctx, out.Run.ID)
 		require.NoError(t, err)
@@ -212,6 +213,77 @@ func TestExecutionPersistence(t *testing.T) {
 		sum, err := s.Execution.Summary(ctx, replay.Run.ID)
 		require.NoError(t, err)
 		assert.Equal(t, int32(1), sum.ExpectedTotal)
+	})
+
+	t.Run("BE-INT-074_runs_list_filters_by_branch_status_mode_and_creation_window", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Automated: true})
+		doc := junitFor(tcProp("a", itoa(tc.ID), ""))
+		ingest := func(id, branch string, status execution.RunStatus) int64 {
+			m := meta(id, 1)
+			m.Branch, m.Status = branch, status
+			res, err := s.Ingestion.IngestJUnit(ctx, m, strings.NewReader(doc))
+			require.NoError(t, err)
+			return res.Run.ID
+		}
+		mainRun := ingest("740", "main", "")
+		broken := ingest("741", "main", execution.RunInterrupted)
+		feature := ingest("742", "feature/x", "")
+		ids := func(f execution.RunFilter) []int64 {
+			page, err := s.Execution.ListRuns(ctx, f, pagination.Default())
+			require.NoError(t, err)
+			out := []int64{}
+			for _, r := range page.Items {
+				out = append(out, r.ID)
+			}
+			assert.Equal(t, int64(len(out)), page.Total, "the count follows the same filter")
+			return out
+		}
+		str := func(v string) *string { return &v }
+		assert.Equal(t, []int64{broken, mainRun}, ids(execution.RunFilter{Branch: str("main")}))
+		assert.Equal(t, []int64{}, ids(execution.RunFilter{Branch: str("Main")}), "branches match exactly")
+		assert.Equal(t, []int64{broken}, ids(execution.RunFilter{Status: str("interrupted")}))
+		assert.Equal(t, []int64{feature, mainRun}, ids(execution.RunFilter{Status: str("completed")}))
+		assert.Equal(t, []int64{feature, broken, mainRun}, ids(execution.RunFilter{Mode: str("batch")}))
+		assert.Equal(t, []int64{}, ids(execution.RunFilter{Mode: str("manual")}))
+		assert.Equal(t, []int64{mainRun}, ids(execution.RunFilter{Branch: str("main"), Status: str("completed")}), "filters combine")
+
+		run, err := s.Execution.GetRun(ctx, broken)
+		require.NoError(t, err)
+		at := run.CreatedAt
+		later := at.Add(time.Hour)
+		assert.Contains(t, ids(execution.RunFilter{From: &at, To: &at}), broken, "both bounds are inclusive")
+		assert.Equal(t, []int64{}, ids(execution.RunFilter{From: &later}))
+		earlier := at.Add(-time.Hour)
+		assert.Equal(t, []int64{}, ids(execution.RunFilter{To: &earlier}))
+		assert.Len(t, ids(execution.RunFilter{From: &earlier, To: &later}), 3)
+	})
+
+	t.Run("BE-INT-075_history_filters_by_branch_and_status", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Automated: true})
+		ingest := func(id, branch, inner string) {
+			m := meta(id, 1)
+			m.Branch = branch
+			_, err := s.Ingestion.IngestJUnit(ctx, m, strings.NewReader(junitFor(tcProp("a", itoa(tc.ID), inner))))
+			require.NoError(t, err)
+		}
+		ingest("750", "main", "")
+		ingest("751", "feature/x", "")
+		ingest("752", "main", `<failure/>`)
+		passed, failed := execution.Passed, execution.Failed
+		main := "main"
+		h, err := s.Execution.HistoryOf(ctx, tc.ID, execution.HistoryFilter{Branch: &main}, pagination.Default())
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), h.Total)
+		assert.Equal(t, failed, h.Items[0].Result.Status, "newest first")
+		last, err := s.Execution.HistoryOf(ctx, tc.ID, execution.HistoryFilter{Branch: &main, Status: &passed}, pagination.Page{Number: 1, Size: 1})
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), last.Total)
+		assert.Equal(t, "github:750:1", last.Items[0].Run.ExternalRunID, "the latest pass on main")
+		all, err := s.Execution.HistoryOf(ctx, tc.ID, execution.HistoryFilter{Status: &passed}, pagination.Default())
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), all.Total)
 	})
 
 	t.Run("BE-INT-009_rerun_attempt_creates_new_run_and_preserves_history", func(t *testing.T) {

@@ -27,9 +27,10 @@ test.describe('Retries and flaky tests (D1)', () => {
     const results = await (await request.get(`${runURL}/results`)).json()
     expect(results.items.map((r: { testName: string; attempt: number; retried: boolean; status: string }) =>
       `${r.testName.split(' ')[0]}#${r.attempt} ${r.status}${r.retried ? ' retried' : ''}`)).toEqual([
-      'checkout#1 failed retried', 'checkout#2 passed', 'voucher#1 failed retried', 'voucher#2 failed',
+      // The test whose last attempt failed comes first; attempts stay together (deployed audit).
+      'voucher#1 failed retried', 'voucher#2 failed', 'checkout#1 failed retried', 'checkout#2 passed',
     ])
-    expect(results.items[0].errorDetails).toBe('at page.goto')
+    expect(results.items[2].errorDetails).toBe('at page.goto')
   })
 
   test('[FE-E2E-016] a flaky run in the UI: flaky badge, flaky test case and retried attempts', async ({ page, provenly }) => {

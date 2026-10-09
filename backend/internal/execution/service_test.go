@@ -197,6 +197,22 @@ func TestHistory(t *testing.T) {
 		assert.Equal(t, RunOutcome{Verdict: VerdictFailed, Executed: 1, Failed: 1}, it.Run.Outcome)
 	}
 
+	// Narrowed by status and branch: the latest pass, on main or nowhere.
+	passed, main, other := Passed, "main", "nope"
+	h, err = svc.HistoryOf(ctx, 1, HistoryFilter{Status: &passed}, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), h.Total)
+	for _, it := range h.Items {
+		assert.Equal(t, Passed, it.Result.Status)
+	}
+	h, err = svc.HistoryOf(ctx, 1, HistoryFilter{Status: &passed, Branch: &main}, pagination.Page{Number: 1, Size: 1})
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), h.Total)
+	assert.Equal(t, "github:42:3", h.Items[0].Run.ExternalRunID, "the latest pass comes first")
+	h, err = svc.HistoryOf(ctx, 1, HistoryFilter{Status: &passed, Branch: &other}, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), h.Total)
+
 	repo.errs["CountResultsForTestCase"] = errBoom
 	_, err = svc.History(ctx, 1, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)

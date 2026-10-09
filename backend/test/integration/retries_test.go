@@ -49,9 +49,10 @@ func TestRetries(t *testing.T) {
 		for _, r := range results.Items {
 			got = append(got, r.TestName+"#"+strconv.Itoa(int(r.Attempt))+" "+string(r.Status)+" retried="+strconv.FormatBool(r.Retried))
 		}
+		// Tests whose last attempt failed come first; a test's attempts stay together (deployed audit).
 		assert.Equal(t, []string{
-			"login#1 failed retried=true", "login#2 passed retried=false",
 			"pay#1 failed retried=true", "pay#2 failed retried=false",
+			"login#1 failed retried=true", "login#2 passed retried=false",
 			"retry-by-property TC-" + id(flaky.ID) + "#2 passed retried=false",
 		}, got)
 		hist, err := s.Execution.History(ctx, flaky.ID, pagination.Default())

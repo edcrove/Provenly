@@ -22,6 +22,8 @@ type stubAPI struct {
 	getErr      error
 	gotFilter   ResultFilter
 	gotProjects []int64
+	gotRuns     RunFilter
+	gotHistory  HistoryFilter
 	gotSuite    *string
 	gotAmend    []any
 	// runErr fails GetRun alone (after the cheap RunProject authorized the request); runReads counts GetRun calls.
@@ -43,7 +45,7 @@ func (s *stubAPI) RunProject(context.Context, int64) (int64, error) {
 	return sampleRun.ProjectID, s.getErr
 }
 func (s *stubAPI) ListRuns(_ context.Context, f RunFilter, p pagination.Page) (pagination.Result[TestRun], error) {
-	s.gotProjects, s.gotSuite = f.ProjectIDs, f.SuiteKey
+	s.gotProjects, s.gotSuite, s.gotRuns = f.ProjectIDs, f.SuiteKey, f
 	return pagination.Result[TestRun]{Items: []TestRun{sampleRun}, Page: p, Total: 1}, s.err
 }
 func (s *stubAPI) ListRunResults(_ context.Context, _ int64, f ResultFilter, p pagination.Page) (pagination.Result[TestResult], error) {
@@ -62,7 +64,8 @@ func (s *stubAPI) Live(context.Context, int64) (Live, error) {
 func (s *stubAPI) ListParseErrors(_ context.Context, _ int64, p pagination.Page) (pagination.Result[ParseError], error) {
 	return pagination.Result[ParseError]{Items: []ParseError{{Index: 2, TestName: "t", Message: "m", Persisted: true, Severity: "warning"}}, Page: p, Total: 1}, s.err
 }
-func (s *stubAPI) History(_ context.Context, _ int64, p pagination.Page) (pagination.Result[HistoryEntry], error) {
+func (s *stubAPI) HistoryOf(_ context.Context, _ int64, f HistoryFilter, p pagination.Page) (pagination.Result[HistoryEntry], error) {
+	s.gotHistory = f
 	return pagination.Result[HistoryEntry]{Items: []HistoryEntry{{Result: sampleResult, Run: sampleRun}}, Page: p, Total: 1}, s.err
 }
 
@@ -143,6 +146,65 @@ func TestHandlerProjectFilter(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, serve(api, stubCatalog{projectErr: apperr.NotFound("project CHK not found")}, "/api/v1/test-runs?project=CHK").Code)
 	for _, target := range []string{"/api/v1/test-runs?project=", "/api/v1/test-runs?project=chk"} {
 		assert.Equal(t, http.StatusBadRequest, serve(api, stubCatalog{}, target).Code, target)
+	}
+}
+
+// The runs list filters by branch, execution status, mode and creation window; bad values are 400s.
+func TestHandlerRunFilters(t *testing.T) {
+	api := &stubAPI{}
+	q := "/api/v1/test-runs?branch=release%2F2.4&executionStatus=interrupted&mode=manual&from=2026-10-01T03:00:00Z&to=2026-10-08T02:59:59-03:00"
+	require.Equal(t, http.StatusOK, serve(api, stubCatalog{}, q).Code)
+	f := api.gotRuns
+	assert.Equal(t, "release/2.4", *f.Branch)
+	assert.Equal(t, "interrupted", *f.Status)
+	assert.Equal(t, "manual", *f.Mode)
+	assert.Equal(t, time.Date(2026, 10, 1, 3, 0, 0, 0, time.UTC), f.From.UTC())
+	assert.Equal(t, time.Date(2026, 10, 8, 5, 59, 59, 0, time.UTC), f.To.UTC())
+
+	serve(api, stubCatalog{}, "/api/v1/test-runs?from=2026-10-01T00:00:00Z&to=2026-10-01T00:00:00Z")
+	assert.Equal(t, api.gotRuns.From, api.gotRuns.To, "a one-instant window is valid")
+	serve(api, stubCatalog{}, "/api/v1/test-runs")
+	assert.Nil(t, api.gotRuns.Branch)
+	assert.Nil(t, api.gotRuns.Status)
+	assert.Nil(t, api.gotRuns.Mode)
+	assert.Nil(t, api.gotRuns.From)
+	assert.Nil(t, api.gotRuns.To)
+
+	for target, field := range map[string]string{
+		"/api/v1/test-runs?branch=":                                           "branch",
+		"/api/v1/test-runs?branch=a%00b":                                      "branch",
+		"/api/v1/test-runs?branch=%ff":                                        "branch",
+		"/api/v1/test-runs?branch=" + strings.Repeat("b", 256):                "branch",
+		"/api/v1/test-runs?executionStatus=failed":                            "executionStatus",
+		"/api/v1/test-runs?mode=ci":                                           "mode",
+		"/api/v1/test-runs?from=2026-10-01":                                   "from",
+		"/api/v1/test-runs?to=yesterday":                                      "to",
+		"/api/v1/test-runs?from=2026-10-02T00:00:00Z&to=2026-10-01T00:00:00Z": "from",
+	} {
+		rec := serve(api, stubCatalog{}, target)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, target)
+		assert.Contains(t, rec.Body.String(), `"field":"`+field+`"`, target)
+	}
+}
+
+// A test case's history filters by branch and status; bad values are 400s.
+func TestHandlerHistoryFilters(t *testing.T) {
+	api := &stubAPI{}
+	require.Equal(t, http.StatusOK, serve(api, stubCatalog{}, "/api/v1/test-cases/153/results?branch=main&status=passed").Code)
+	assert.Equal(t, "main", *api.gotHistory.Branch)
+	assert.Equal(t, Passed, *api.gotHistory.Status)
+	serve(api, stubCatalog{}, "/api/v1/test-cases/153/results")
+	assert.Nil(t, api.gotHistory.Branch)
+	assert.Nil(t, api.gotHistory.Status)
+	for target, field := range map[string]string{
+		"/api/v1/test-cases/153/results?branch=":      "branch",
+		"/api/v1/test-cases/153/results?branch=%00":   "branch",
+		"/api/v1/test-cases/153/results?status=green": "status",
+		"/api/v1/test-cases/153/results?status=":      "status",
+	} {
+		rec := serve(api, stubCatalog{}, target)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, target)
+		assert.Contains(t, rec.Body.String(), `"field":"`+field+`"`, target)
 	}
 }
 

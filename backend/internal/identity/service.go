@@ -257,11 +257,17 @@ func (s *Service) ChangePassword(ctx context.Context, u User, current, next stri
 }
 
 func requireAdmin(ctx context.Context, u User) error {
+	return requireAdminFor(ctx, u, "only administrators can manage users and invitations")
+}
+
+// requireAdminFor refuses personal access tokens and non-administrators; message says what needed an administrator
+// (the users routes say so, other modules ask through RequireAdmin and get a generic message).
+func requireAdminFor(ctx context.Context, u User, message string) error {
 	if _, ok := TokenFrom(ctx); ok {
 		return errTokenAdmin
 	}
 	if !u.IsAdmin {
-		return apperr.Forbidden("only administrators can manage users and invitations")
+		return apperr.Forbidden("%s", message)
 	}
 	return nil
 }

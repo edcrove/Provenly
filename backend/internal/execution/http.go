@@ -23,7 +23,7 @@ type API interface {
 	ListRunResults(ctx context.Context, runID int64, f ResultFilter, page pagination.Page) (pagination.Result[TestResult], error)
 	Summary(ctx context.Context, runID int64) (Summary, error)
 	ListParseErrors(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[ParseError], error)
-	History(ctx context.Context, testCaseID int64, page pagination.Page) (pagination.Result[HistoryEntry], error)
+	HistoryOf(ctx context.Context, testCaseID int64, f HistoryFilter, page pagination.Page) (pagination.Result[HistoryEntry], error)
 	Amend(ctx context.Context, runID, testCaseID int64, reason string, by authz.Actor) (Amendment, error)
 	ListAmendments(ctx context.Context, runID int64, page pagination.Page) (pagination.Result[Amendment], error)
 	Live(ctx context.Context, runID int64) (Live, error)
@@ -377,6 +377,10 @@ func (h *Handler) listRuns(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	if err = parseRunFilter(r, &f); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
 	if f.ProjectIDs, err = h.visibleProjects(r); err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -401,6 +405,37 @@ func (h *Handler) getRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, RunDTO(run))
+}
+
+// runStatuses and runModes are the values the runs list filters by.
+var (
+	runStatuses = []string{string(RunRunning), string(RunCompleted), string(RunInterrupted), string(RunCancelled)}
+	runModes    = []string{string(ModeBatch), string(ModeLive), string(ModeManual), string(ModeSharded)}
+)
+
+// parseRunFilter reads the runs list's filters: branch (exact, as CI reports it), executionStatus, mode and the
+// creation window [from, to] (RFC 3339; from after to is a 400).
+func parseRunFilter(r *http.Request, f *RunFilter) error {
+	var err error
+	if f.Branch, err = httpx.TextQuery(r, "branch", 255); err != nil {
+		return err
+	}
+	if f.Status, err = httpx.EnumQuery(r, "executionStatus", runStatuses...); err != nil {
+		return err
+	}
+	if f.Mode, err = httpx.EnumQuery(r, "mode", runModes...); err != nil {
+		return err
+	}
+	if f.From, err = httpx.TimeQuery(r, "from"); err != nil {
+		return err
+	}
+	if f.To, err = httpx.TimeQuery(r, "to"); err != nil {
+		return err
+	}
+	if f.From != nil && f.To != nil && f.From.After(*f.To) {
+		return apperr.Validation(apperr.ValidationFailed, apperr.FieldError{Field: "from", Message: "must not be after to"})
+	}
+	return nil
 }
 
 func enumStrings[T ~string](values []T) []string {
@@ -526,6 +561,20 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	var f HistoryFilter
+	if f.Branch, err = httpx.TextQuery(r, "branch", 255); err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	status, err := httpx.EnumQuery(r, "status", enumStrings(ResultStatuses)...)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	if status != nil {
+		s := ResultStatus(*status)
+		f.Status = &s
+	}
 	projectID, err := h.catalog.ProjectOf(r.Context(), id)
 	if err == nil {
 		err = h.guard.Require(r.Context(), projectID, authz.RoleViewer, apperr.NotFound("test case %d not found", id))
@@ -534,7 +583,7 @@ func (h *Handler) history(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	res, err := h.api.History(r.Context(), id, page)
+	res, err := h.api.HistoryOf(r.Context(), id, f, page)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

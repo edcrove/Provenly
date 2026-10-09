@@ -113,6 +113,17 @@ export function ApiKeysSection({ projectKey }: { projectKey: string }) {
         <CardDescription>
           CI reports runs into this project with a key. A key opens nothing else, and only this project.
         </CardDescription>
+        <details className="text-sm">
+          <summary className="cursor-pointer underline">How CI reports runs here</summary>
+          <p className="text-muted-foreground mt-2">
+            Store a key below as the CI secret <code>PROVENLY_API_KEY</code>, then after the tests (GitHub
+            Actions variables; the Playwright reporter does the same with <code>PROVENLY_URL</code> and{' '}
+            <code>PROVENLY_PROJECT={projectKey}</code>):
+          </p>
+          <pre className="bg-muted mt-2 overflow-x-auto rounded px-2 py-1 text-xs" data-testid="ci-snippet">
+            {ciSnippet(window.location.origin, projectKey)}
+          </pre>
+        </details>
       </CardHeader>
       <CardContent className="grid gap-6">
         <QueryState query={keys}>

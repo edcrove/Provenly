@@ -75,6 +75,6 @@ test.describe('CI API keys', () => {
     await expect(row).toContainText('revoked')
 
     await page.goto(`/test-cases/${tc.id}`)
-    await expect(page.getByText(`github:${runId}:1`)).toBeVisible()
+    await expect(page.getByRole('table', { name: 'Execution history' }).getByText(`github:${runId}:1`)).toBeVisible()
   })
 })

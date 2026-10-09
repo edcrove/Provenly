@@ -125,7 +125,7 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     exceptions, listed line by line in the report (backend 1357/1357 required, 1390 reachable; frontend 288/288).
     **Closed by Ed (2026-09-28) — option A.** Unit exceptions stay as they are (no DB mocks). Code no layer can
     execute is a consolidated exception and does not count as reachable; **100% of the reachable code is covered**
-    (Go 1.27.1: backend 1389/1389 reachable of 1422 instrumented statements, 33 excepted; frontend 288/288). The
+    (Go 1.27.1 at the time: backend 1389/1389 reachable of 1422 instrumented statements, 33 excepted; frontend 288/288). The
     report columns are *Instrumented / Excepted / Reachable / Covered / Coverage of reachable*.
 13. **Toolchain.** Go 1.26 (current `pgx`, `testcontainers-go` and `goose` releases require it); TypeScript 5.9
     (`openapi-typescript` does not support TypeScript 6 yet).
@@ -164,3 +164,26 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     **Status: Decided by Ed (2026-10-04) — optimistic locking in the MVP** (`docs/mvp-plan.md` D7, card 1.5): reads
     return an `ETag`, writes accept `If-Match` and answer 412 on a mismatch; `If-Match` stays optional in the API and
     the UI always sends it.
+
+19. **Navigation: the project first.** The header starts with the project switcher (a searchable combobox naming the
+    current project, or "All projects"), then the pages of that project in working order — Dashboard, Test Runs, Test
+    Cases, Suites, Requirements, Issues, and Settings (the project page) once one project is chosen; Projects, Users
+    and Audit sit apart on the right as the workspace. Lists say their scope under the title, pages of one project
+    offer the projects to pick while "All projects" is chosen, and detail pages show a breadcrumb with their project
+    and a "Switch to KEY" link (opening another project's item never changes the current project silently). Below
+    1280 px the items move into a Menu so the header stays one row. The current project stays in this browser's
+    storage (P1-9); project-scoped URLs are an Incubator item.
+    **Status: Asked by Ed (2026-10-08, deployed persona audit: "el orden de los ítems del menú y el acceso a la vista
+    de proyectos y la relación con sus partes no está clara"), refined by the PO agent.** FE-INT-059, FE-E2E-030.
+
+20. **Times in the viewer's zone.** Every date the UI shows is the viewer's local time with its UTC offset
+    ("2026-10-08 11:03:05 UTC−3"), computed per date so summer time is right; the API keeps sending UTC. Tests read
+    dates in UTC (`TZ=UTC` for Vitest, `timezoneId: 'UTC'` for Playwright); the screenshots use America/Montevideo.
+    **Status: Asked by Ed (2026-10-08, deployed persona audit: raw UTC everywhere), refined by the PO agent.**
+
+21. **E2E journeys leave the environment clean and are idempotent.** The suite sweeps, before and after every run and
+    on any instance, what journeys create: accounts deactivated, pending invitations, tokens over E2E projects only and
+    E2E projects' API keys revoked, webhooks paused, GitHub connections removed. Created data follows conventions
+    (usernames `e2e-…`, project keys `E2E…`); earlier runs' leftovers are recognized too. Projects, runs, results and
+    audit events are never deleted (P1-1, append-only results). `docs/testing-strategy.md`, BE-E2E-032.
+    **Status: Decided by Ed (2026-10-09).**

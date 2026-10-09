@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 
 import { useProjects, useStartManualRun, useSuites } from '@/api/queries'
+import { NotAllowed } from '@/components/NotAllowed'
 import { PageTitle } from '@/components/PageTitle'
 import { ErrorAlert } from '@/components/QueryState'
 import { Button } from '@/components/ui/button'
@@ -16,7 +17,8 @@ import { can } from '@/lib/roles'
 export function NewManualRunPage() {
   const navigate = useNavigate()
   const start = useStartManualRun()
-  const projects = (useProjects().data?.items ?? []).filter((p) => can(p.myRole, 'member'))
+  const all = useProjects()
+  const projects = (all.data?.items ?? []).filter((p) => can(p.myRole, 'member'))
   const { project: current } = useCurrentProject()
   const [chosen, setProject] = useState(current)
   // The select shows only projects the user can write to: send the one it shows (the current project, else the
@@ -40,6 +42,14 @@ export function NewManualRunPage() {
       { onSuccess: (run) => navigate(`/test-runs/${run.id}`) },
     )
   }
+  // A viewer everywhere (e.g. following a shared link) gets the reason, not a form whose project list is empty.
+  if (all.data && projects.length === 0)
+    return (
+      <NotAllowed
+        title="New manual run"
+        reason="Starting manual runs needs the member role (or higher) in a project."
+      />
+    )
   return (
     <Card className="max-w-2xl">
       <CardHeader>

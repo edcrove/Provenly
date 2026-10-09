@@ -126,7 +126,7 @@ func NewHandler(s Services, maxIngestBytes int64) http.Handler {
 	register(mux, s, maxIngestBytes, agents)
 	// MCP tools call the API in-process, as the caller (same routing, authorization and problem answers).
 	agents.Bind(httpx.Routes(mux))
-	return httpx.Recover(telemetry.Middleware(httpx.AccessLog(clientinfo.Middleware(s.TrustedProxies, httpx.Routes(mux)))))
+	return httpx.SecurityHeaders(httpx.Recover(telemetry.Middleware(httpx.AccessLog(clientinfo.Middleware(s.TrustedProxies, httpx.Routes(mux))))))
 }
 
 // RoutePatterns lists every route the API registers ("METHOD /path"), so tests

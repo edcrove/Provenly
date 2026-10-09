@@ -1,6 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, screen } from '@testing-library/react'
+import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 
 import { createQueryClient } from '@/api/queryClient'
@@ -17,4 +17,15 @@ export function renderRoute(path: string) {
     </QueryClientProvider>,
   )
   return { ...view, router, user }
+}
+
+/** The header's project switcher (its name says the current project). */
+export const projectSwitcher = () => screen.getByRole('button', { name: /^Current project: / })
+
+/** Chooses a project in the header's switcher ('' for every project). */
+export async function pickProject(user: UserEvent, key: string) {
+  await user.click(projectSwitcher())
+  await user.click(
+    await screen.findByRole('option', { name: key ? new RegExp(`^${key} · `) : 'All projects' }),
+  )
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  executedLabel,
   formatDateTime,
+  formatOffset,
   formatDuration,
   formatPercent,
   outcomeBreakdown,
@@ -48,6 +50,12 @@ describe('format', () => {
 
   it('formats timestamps in UTC', () => {
     expect(formatDateTime('2026-09-28T10:11:12.345Z')).toBe('2026-09-28 10:11:12 UTC')
+    // The viewer's local time with its offset (UYT, India, a crossing of midnight).
+    expect(formatDateTime('2026-10-08T14:03:05Z', -180)).toBe('2026-10-08 11:03:05 UTC−3')
+    expect(formatDateTime('2026-10-08T14:03:05Z', 330)).toBe('2026-10-08 19:33:05 UTC+5:30')
+    expect(formatDateTime('2026-10-08T01:00:00Z', -180)).toBe('2026-10-07 22:00:00 UTC−3')
+    expect(formatOffset(0)).toBe('UTC')
+    expect(formatOffset(-570)).toBe('UTC−9:30')
     expect(formatDateTime(null)).toBe('—')
     expect(formatDateTime(undefined)).toBe('—')
     expect(formatDateTime('not a date')).toBe('—')
@@ -72,5 +80,14 @@ describe('format', () => {
     expect(shortCommit('0123456789abcdef')).toBe('0123456789')
     expect(shortCommit('abc')).toBe('abc')
     expect(shortCommit('')).toBe('—')
+  })
+})
+
+describe('executedLabel', () => {
+  it('says how many expected test cases executed, with the share', () => {
+    expect(executedLabel(1, 10)).toBe('1 of 10 (10%)')
+    expect(executedLabel(2, 3)).toBe('2 of 3 (66.67%)')
+    expect(executedLabel(5, 5)).toBe('5 of 5 (100%)')
+    expect(executedLabel(0, 0)).toBe('0 of 0')
   })
 })

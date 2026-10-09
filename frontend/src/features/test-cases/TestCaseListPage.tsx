@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { can } from '@/lib/roles'
 import { pickEnum, positiveInt } from '@/lib/status'
+import { ScopeLabel } from '@/features/projects/ProjectScope'
 
 const statuses = ['active', 'deprecated'] as const
 
@@ -76,6 +77,7 @@ export function TestCaseListPage() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
   const status = pickEnum(params.get('status'), statuses)
+  const automated = pickEnum(params.get('automated'), ['true', 'false'] as const)
   const { project } = useCurrentProject()
   const projects = useProjects()
   // Members can create test cases in their projects (in the current one when a project is chosen).
@@ -89,6 +91,7 @@ export function TestCaseListPage() {
   const dimensions = useDimensions(project).data?.items ?? []
   const query = useTestCases(page, {
     status,
+    automated,
     project: project || undefined,
     tag: tag || undefined,
     classification: (project && classification) || undefined,
@@ -108,9 +111,12 @@ export function TestCaseListPage() {
     <Card>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
         <PageTitle title="Test Cases" />
-        <CardTitle as="h1" className="text-xl">
-          Test Cases
-        </CardTitle>
+        <div className="grid gap-1">
+          <CardTitle as="h1" className="text-xl">
+            Test Cases
+          </CardTitle>
+          <ScopeLabel />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <NativeSelect
             aria-label="Filter by status"
@@ -120,6 +126,15 @@ export function TestCaseListPage() {
             <option value="">All statuses</option>
             <option value="active">Active</option>
             <option value="deprecated">Deprecated</option>
+          </NativeSelect>
+          <NativeSelect
+            aria-label="Filter by execution"
+            value={automated ?? ''}
+            onChange={(e) => update({ automated: e.target.value || undefined, page: undefined })}
+          >
+            <option value="">Automated and manual</option>
+            <option value="true">Automated</option>
+            <option value="false">Manual</option>
           </NativeSelect>
           <KeyFilter
             key={`key-${tcKey}`}
@@ -182,7 +197,7 @@ export function TestCaseListPage() {
                       <TableCell colSpan={5} className="text-muted-foreground">
                         {tcKey
                           ? `No test case ${tcKey}`
-                          : tag || classification
+                          : tag || classification || automated
                             ? 'No test cases match the filters'
                             : status
                               ? `No ${status} test cases`

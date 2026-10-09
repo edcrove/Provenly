@@ -4533,6 +4533,13 @@ export interface operations {
                     "application/json": components["schemas"]["GitHubConnection"];
                 };
             };
+            /** @description The project is not connected to GitHub (an unknown or invisible project is a 404) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
@@ -4839,6 +4846,8 @@ export interface operations {
                  * @example CHK
                  */
                 project?: components["parameters"]["ProjectFilter"];
+                /** @description Only automated (true) or manual (false) test cases. */
+                automated?: "true" | "false";
                 /** @description Only test cases with this tag. */
                 tag?: components["schemas"]["Tag"];
                 /**
@@ -5248,6 +5257,10 @@ export interface operations {
             query?: {
                 page?: components["parameters"]["Page"];
                 pageSize?: components["parameters"]["PageSize"];
+                /** @description Only results of runs of this branch, exactly as CI reported it. */
+                branch?: string;
+                /** @description Only results with this status (e.g. the latest pass on main is status=passed&branch=main&pageSize=1). */
+                status?: "passed" | "failed" | "error" | "skipped";
             };
             header?: never;
             path: {
@@ -5286,6 +5299,16 @@ export interface operations {
                 project?: components["parameters"]["ProjectFilter"];
                 /** @description Only runs reported for the suite with this key. */
                 suite?: string;
+                /** @description Only runs of this branch, exactly as CI reported it. */
+                branch?: string;
+                /** @description Only runs with this execution status. */
+                executionStatus?: components["schemas"]["RunExecutionStatus"];
+                /** @description Only runs whose results arrive this way. */
+                mode?: "batch" | "live" | "manual" | "sharded";
+                /** @description Only runs created at or after this instant (RFC 3339). */
+                from?: string;
+                /** @description Only runs created at or before this instant (RFC 3339); not before from (400). */
+                to?: string;
             };
             header?: never;
             path?: never;

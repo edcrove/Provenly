@@ -180,3 +180,10 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     ("2026-10-08 11:03:05 UTC−3"), computed per date so summer time is right; the API keeps sending UTC. Tests read
     dates in UTC (`TZ=UTC` for Vitest, `timezoneId: 'UTC'` for Playwright); the screenshots use America/Montevideo.
     **Status: Asked by Ed (2026-10-08, deployed persona audit: raw UTC everywhere), refined by the PO agent.**
+
+21. **E2E journeys leave the environment clean and are idempotent.** The suite sweeps, before and after every run and
+    on any instance, what journeys create: accounts deactivated, pending invitations, tokens over E2E projects only and
+    E2E projects' API keys revoked, webhooks paused, GitHub connections removed. Created data follows conventions
+    (usernames `e2e-…`, project keys `E2E…`); earlier runs' leftovers are recognized too. Projects, runs, results and
+    audit events are never deleted (P1-1, append-only results). `docs/testing-strategy.md`, BE-E2E-032.
+    **Status: Decided by Ed (2026-10-09).**

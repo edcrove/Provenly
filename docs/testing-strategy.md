@@ -98,6 +98,14 @@ receivers, or deprecate every automated test case). The others create their own 
 instance. Locally: `make e2e-remote URL=https://… E2E_ADMIN_PASSWORD=…`; in CI: the **E2E on a deployed instance**
 workflow (Actions → Run workflow; the password comes from a repository secret, `RENDER_ADMIN_PASSWORD` by default).
 
+The journeys leave the instance clean and never depend on an earlier run (Ed, 2026-10-09). What they create follows
+conventions (usernames `e2e-…`, project keys `E2E…`) and `e2e/support/cleanup.ts` sweeps it before and after every run,
+locally and on a deployed instance: accounts deactivated, pending invitations, the administrator's tokens over E2E
+projects only and those projects' API keys revoked, their webhooks paused and GitHub connections removed; it also
+recognizes what runs made before the conventions. A run that crashed is cleaned by the next one, and a second sweep
+finds nothing (BE-E2E-032). Projects, runs, results and audit events stay: Provenly never deletes them. The job log
+says what each sweep did.
+
 ## Spike: unifying Go raw coverage (Go 1.26, re-verified on 1.27.1)
 
 Verified in this repository (not assumed):

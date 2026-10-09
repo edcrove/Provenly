@@ -1,9 +1,7 @@
 import { request as apiRequest } from '@playwright/test'
 
 import { adminPassword, adminUsername, apiURL } from '../playwright.config'
-import { expect, secret, test } from '../support/fixtures'
-
-const unique = () => `u${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`
+import { expect, secret, test, uniqueUsername } from '../support/fixtures'
 
 test.describe('Accounts', () => {
   test('[BE-E2E-008] accounts through the API: 401 without a session, bearer sessions, invitations and admin-only routes', async ({ request }) => {
@@ -17,13 +15,13 @@ test.describe('Accounts', () => {
     // The admin (signed in through the saved cookie) invites someone; the token is shown once.
     const created = await (await request.post(`${apiURL}/api/v1/invitations`, { data: { note: 'e2e' } })).json()
     expect(created.invitation.status).toBe('pending')
-    const username = unique()
+    const username = uniqueUsername()
     const accept = await anon.post(`${apiURL}/api/v1/invitations/accept`, {
       data: { token: created.token, username, displayName: 'E2E member', password: secret('member password') },
     })
     expect(accept.status()).toBe(201)
     const again = await anon.post(`${apiURL}/api/v1/invitations/accept`, {
-      data: { token: created.token, username: unique(), displayName: 'x', password: secret('member password') },
+      data: { token: created.token, username: uniqueUsername(), displayName: 'x', password: secret('member password') },
     })
     expect(again.status()).toBe(404)
 
@@ -56,7 +54,7 @@ test.describe('Accounts', () => {
     await expect(admin).toHaveURL(/\/test-runs$/)
 
     await admin.getByRole('link', { name: 'Users' }).click()
-    await admin.getByLabel('Note (optional)').fill('FE-E2E-011')
+    await admin.getByLabel('Note (optional)').fill('e2e FE-E2E-011')
     await admin.getByRole('button', { name: 'Create invitation link' }).click()
     const link = (await admin.getByTestId('invitation-link').textContent())!
     expect(link).toContain('/accept-invite#token=')
@@ -64,7 +62,7 @@ test.describe('Accounts', () => {
     const guestCtx = await browser.newContext({ storageState: { cookies: [], origins: [] } })
     const guest = await guestCtx.newPage()
     await guest.goto(link)
-    const username = unique()
+    const username = uniqueUsername()
     await guest.getByLabel('Username').fill(username)
     await guest.getByLabel('Display name').fill('Guest Tester')
     await guest.getByLabel('Password', { exact: true }).fill(secret('guest password'))

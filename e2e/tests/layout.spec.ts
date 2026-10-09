@@ -34,6 +34,8 @@ test.describe('Navigation (deployed audit)', () => {
     // The switcher finds a project by typing.
     await page.getByRole('button', { name: /^Current project: / }).click()
     await page.getByRole('combobox', { name: 'Find a project' }).fill('default')
+    // The switcher searches the server (any number of projects): Enter picks the first match once it is listed.
+    await expect(page.getByRole('listbox', { name: 'Projects' }).getByRole('option').first()).toHaveText('TC · Default')
     await page.keyboard.press('Enter')
     await expect(page.getByRole('button', { name: 'Current project: TC · Default' })).toBeVisible()
     await expect(page.getByTestId('scope-label')).toHaveText('TC · Default')
@@ -56,12 +58,15 @@ test.describe('Navigation (deployed audit)', () => {
 
 test.describe('A project and its parts (deployed audit)', () => {
   test('[FE-E2E-031] a project opens from the projects page; its settings link to its pages and sections', async ({ page }) => {
+    // Found by key or name: an instance (a deployed one) may have more projects than a page.
     await page.goto('/projects')
+    await page.getByLabel('Search projects').fill('default')
+    await page.getByRole('button', { name: 'Find' }).click()
     await page.getByTestId('project-TC').getByRole('link', { name: 'Default' }).click()
     await expect(page).toHaveURL(/\/dashboard$/)
     await expect(page.getByRole('button', { name: 'Current project: TC · Default' })).toBeVisible()
 
-    await page.goto('/projects')
+    await page.goto('/projects?q=TC')
     await page.getByTestId('project-TC').getByRole('link', { name: 'Settings' }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('TC · Default — Settings')
     await page.getByRole('navigation', { name: 'On this page' }).getByRole('link', { name: 'Webhooks' }).click()

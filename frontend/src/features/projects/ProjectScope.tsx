@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 
-import { useProjects } from '@/api/queries'
+import { useProject, useProjects } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 
 import { projectLabel, useCurrentProject } from './currentProject'
@@ -8,7 +8,7 @@ import { projectLabel, useCurrentProject } from './currentProject'
 /** Says which project a list shows ("TC · Default" or "All projects"): the lists follow the project switcher. */
 export function ScopeLabel() {
   const { project } = useCurrentProject()
-  const current = useProjects().data?.items.find((p) => p.key === project)
+  const current = useProject(project || undefined).data
   return (
     <span className="text-muted-foreground text-sm font-normal" data-testid="scope-label">
       {current ? projectLabel(current) : 'All projects'}
@@ -22,20 +22,23 @@ const CHOOSER_SIZE = 8
 /** For pages that belong to one project (dashboard, suites, requirements, issues) while "All projects" is chosen. */
 export function ProjectChooser({ what }: { what: string }) {
   const { setProject } = useCurrentProject()
-  const projects = useProjects().data?.items ?? []
+  // The first few projects, and how many there are: an instance may have more than one page of them.
+  const page = useProjects(1, CHOOSER_SIZE).data
+  const projects = page?.items ?? []
+  const more = (page?.totalItems ?? 0) - projects.length
   return (
     <div className="grid gap-3" data-testid="project-chooser">
       <p className="text-muted-foreground text-sm">Pick a project to see its {what}.</p>
       <div className="flex flex-wrap gap-2">
-        {projects.slice(0, CHOOSER_SIZE).map((p) => (
+        {projects.map((p) => (
           <Button key={p.key} size="sm" variant="outline" onClick={() => setProject(p.key)}>
             {projectLabel(p)}
           </Button>
         ))}
       </div>
-      {projects.length > CHOOSER_SIZE ? (
+      {more > 0 ? (
         <p className="text-sm">
-          {projects.length - CHOOSER_SIZE} more:{' '}
+          {more} more:{' '}
           <Link to="/projects" className="underline">
             view all projects
           </Link>{' '}
@@ -62,7 +65,7 @@ export function Breadcrumb({
   current: string
 }) {
   const { project, setProject } = useCurrentProject()
-  const owner = useProjects().data?.items.find((p) => p.key === projectKey)
+  const owner = useProject(projectKey || undefined).data
   return (
     <nav
       aria-label="Breadcrumb"

@@ -386,8 +386,9 @@ type Repository interface {
 	CreateProject(ctx context.Context, in CreateProjectInput) (Project, error)
 	GetProject(ctx context.Context, id int64) (Project, error)
 	GetProjectByKey(ctx context.Context, key string) (Project, error)
-	ListProjects(ctx context.Context, projectIDs []int64, limit, offset int32) ([]Project, error)
-	CountProjects(ctx context.Context, projectIDs []int64) (int64, error)
+	// ListProjects and CountProjects take a LIKE-escaped search (nil: none) matched against keys and names.
+	ListProjects(ctx context.Context, projectIDs []int64, search *string, limit, offset int32) ([]Project, error)
+	CountProjects(ctx context.Context, projectIDs []int64, search *string) (int64, error)
 	UpdateProject(ctx context.Context, key string, in UpdateProjectInput) (Project, error)
 
 	ListTestSteps(ctx context.Context, testCaseID int64, limit, offset int32) ([]TestStep, error)

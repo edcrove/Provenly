@@ -91,7 +91,7 @@ func TestRoles(t *testing.T) {
 			runs, err := s.Execution.ListRuns(ctx, execution.RunFilter{ProjectIDs: c.ids}, pagination.Default())
 			require.NoError(t, err)
 			assert.Equal(t, c.want, runs.Total, "runs %v", c.ids)
-			projects, err := s.Catalog.ListProjects(ctx, c.ids, pagination.Default())
+			projects, err := s.Catalog.ListProjects(ctx, c.ids, nil, pagination.Default())
 			require.NoError(t, err)
 			assert.Equal(t, c.want, projects.Total, "projects %v", c.ids)
 			assert.Len(t, projects.Items, int(c.want))

@@ -136,8 +136,8 @@ func TestPersistenceFailures(t *testing.T) {
 			},
 			"catalog.GetProject":      func() error { _, err := cat.GetProject(ctx, 1); return err },
 			"catalog.GetProjectByKey": func() error { _, err := cat.GetProjectByKey(ctx, "XX"); return err },
-			"catalog.ListProjects":    func() error { _, err := cat.ListProjects(ctx, nil, 10, 0); return err },
-			"catalog.CountProjects":   func() error { _, err := cat.CountProjects(ctx, nil); return err },
+			"catalog.ListProjects":    func() error { _, err := cat.ListProjects(ctx, nil, nil, 10, 0); return err },
+			"catalog.CountProjects":   func() error { _, err := cat.CountProjects(ctx, nil, nil); return err },
 			"catalog.UpdateProject": func() error {
 				_, err := cat.UpdateProject(ctx, "XX", catalog.UpdateProjectInput{Name: str("x")})
 				return err

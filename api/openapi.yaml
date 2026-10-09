@@ -515,6 +515,16 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
+        - name: q
+          in: query
+          required: false
+          description: >-
+            Text the key or the name contains, any case (`%` and `_` are literal): what the project switcher searches
+            with, so every project is found however many pages there are. At most 200 characters; blank is a 400.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
       responses:
         "200":
           description: Page of projects

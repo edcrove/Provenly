@@ -280,13 +280,13 @@ func (s *Service) ProjectByID(ctx context.Context, id int64) (Project, error) {
 	return p, err
 }
 
-// ListProjects returns a page of projects ordered by key.
-func (s *Service) ListProjects(ctx context.Context, projectIDs []int64, page pagination.Page) (pagination.Result[Project], error) {
-	items, err := s.repo.ListProjects(ctx, projectIDs, page.Limit(), page.Offset())
+// ListProjects returns a page of projects ordered by key, narrowed by a LIKE-escaped search (nil: none) on key or name.
+func (s *Service) ListProjects(ctx context.Context, projectIDs []int64, search *string, page pagination.Page) (pagination.Result[Project], error) {
+	items, err := s.repo.ListProjects(ctx, projectIDs, search, page.Limit(), page.Offset())
 	if err != nil {
 		return pagination.Result[Project]{}, err
 	}
-	total, err := s.repo.CountProjects(ctx, projectIDs)
+	total, err := s.repo.CountProjects(ctx, projectIDs, search)
 	if err != nil {
 		return pagination.Result[Project]{}, err
 	}

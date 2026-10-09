@@ -412,10 +412,15 @@ func TestProjectsLifecycle(t *testing.T) {
 	_, err = svc.ProjectByID(ctx, 99)
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 
-	res, err := svc.ListProjects(ctx, nil, pagination.Default())
+	res, err := svc.ListProjects(ctx, nil, nil, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), res.Total)
 	assert.Equal(t, []string{"CHK", "TC"}, []string{res.Items[0].Key, res.Items[1].Key})
+	search := "chk"
+	res, err = svc.ListProjects(ctx, nil, &search, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), res.Total)
+	assert.Equal(t, "CHK", res.Items[0].Key)
 
 	up, err := svc.UpdateProject(ctx, "CHK", UpdateProjectInput{Name: ptr(" Shop "), Description: ptr("")})
 	require.NoError(t, err)
@@ -436,10 +441,10 @@ func TestProjectsLifecycle(t *testing.T) {
 	_, err = svc.UpdateProject(ctx, "CHK", UpdateProjectInput{Name: ptr("x")})
 	assert.ErrorIs(t, err, errBoom)
 	repo.errs["CountProjects"] = errBoom
-	_, err = svc.ListProjects(ctx, nil, pagination.Default())
+	_, err = svc.ListProjects(ctx, nil, nil, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 	repo.errs["ListProjects"] = errBoom
-	_, err = svc.ListProjects(ctx, nil, pagination.Default())
+	_, err = svc.ListProjects(ctx, nil, nil, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 }
 

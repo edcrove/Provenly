@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 
 import type { Member } from '@/api/client'
-import { useMemberMutations, useProjectMembers, useProjects } from '@/api/queries'
+import { useMemberMutations, useProject, useProjectMembers } from '@/api/queries'
 import { PageTitle } from '@/components/PageTitle'
 import { Pagination } from '@/components/Pagination'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
@@ -134,7 +134,7 @@ export function ProjectMembersPage() {
   const members = useProjectMembers(projectKey, page)
   const manage = can(useProjectRole(projectKey), 'maintainer')
   const { setProject } = useCurrentProject()
-  const project = useProjects().data?.items.find((p) => p.key === projectKey)
+  const project = useProject(projectKey).data
   const sections = [
     { id: 'members', label: 'Members' },
     { id: 'classification', label: 'Classification' },

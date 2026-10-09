@@ -288,7 +288,7 @@ test.describe('Frontend UI journeys', { tag: '@local' }, () => {
   test('[FE-E2E-010] projects: create one, work inside it and read its run with its own keys', async ({ page, provenly }) => {
     const key = uniqueProjectKey()
     await page.goto('/projects')
-    await page.getByLabel('Key').fill(key)
+    await page.getByLabel('Key', { exact: true }).fill(key)
     await page.getByLabel('Name').fill('E2E UI project')
     await page.getByRole('button', { name: 'Create project' }).click()
     // The project list is paginated by key and other journeys create projects too: check the new one where it is

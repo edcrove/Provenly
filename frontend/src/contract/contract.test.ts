@@ -2627,6 +2627,10 @@ const tokenScenarios: Scenario[] = [
   ...(
     [
       [
+        'GET /api/v1/projects/{projectKey}',
+        (c) => c.GET('/api/v1/projects/{projectKey}', { params: { path: tcKey }, headers: PAT }),
+      ],
+      [
         'GET /api/v1/projects/{projectKey}/dimensions',
         (c) => c.GET('/api/v1/projects/{projectKey}/dimensions', { params: { path: tcKey }, headers: PAT }),
       ],
@@ -2802,6 +2806,34 @@ const scenarios: Scenario[] = [
     status: 500,
     setup: fail,
     call: (c) => c.POST('/api/v1/projects', { body: { key: 'CHK', name: 'x' } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}',
+    status: 200,
+    setup: addChk,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}', { params: { path: chk } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}',
+    status: 400,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey: 'chk' } } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}',
+    status: 404,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}', { params: { path: chk } }),
+  },
+  {
+    op: 'GET /api/v1/projects/{projectKey}',
+    status: 500,
+    setup: fail,
+    call: (c) => c.GET('/api/v1/projects/{projectKey}', { params: { path: tcKey } }),
+  },
+  {
+    op: 'GET /api/v1/projects',
+    status: 200,
+    setup: addChk,
+    call: (c) => c.GET('/api/v1/projects', { params: { query: { q: 'check' } } }),
   },
   {
     op: 'PATCH /api/v1/projects/{projectKey}',

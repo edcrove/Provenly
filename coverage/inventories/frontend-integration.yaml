@@ -216,3 +216,6 @@ targets:
   - id: FE-INT-067
     description: maintainer audit view (P20-5, Ed 2026-10-09) - a maintainer has the Audit link and reads only the changes to the projects they maintain (another project's and project-less events are not listed, addresses are not shown), the page says which projects those are, asking for another project shows the refusal, and a current project they do not maintain opens the log on all of theirs
     surfaces: [src/features/audit/AuditPage.tsx, src/features/audit/access.ts, src/app/Layout.tsx]
+  - id: FE-INT-068
+    description: an instance with more projects than a page (found by the E2E run on Render) - the switcher searches the server (?q=), says how many it shows and finds a project past the first page; a project past the first page keeps its role (an administrator edits its test case); the projects page finds a project by key or name and says when none matches; forms that list projects say how many they do not list
+    surfaces: [src/features/projects/ProjectSwitcher.tsx, src/features/projects/ProjectsPage.tsx, src/features/projects/useProjectRole.ts, src/features/projects/choices.ts, src/features/projects/ProjectProvider.tsx, src/features/projects/ProjectScope.tsx, src/api/queries.ts]

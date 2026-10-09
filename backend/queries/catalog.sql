@@ -165,14 +165,19 @@ SELECT * FROM projects WHERE id = @id;
 SELECT * FROM projects WHERE key = @key;
 
 -- name: ListProjects :many
--- project_ids NULL means every project (administrators); otherwise only those.
+-- project_ids NULL means every project (administrators); otherwise only those. search (LIKE-escaped) finds a key or a
+-- name containing it, any case.
 SELECT * FROM projects
-WHERE sqlc.narg('project_ids')::bigint[] IS NULL OR id = ANY(sqlc.narg('project_ids')::bigint[])
+WHERE (sqlc.narg('project_ids')::bigint[] IS NULL OR id = ANY(sqlc.narg('project_ids')::bigint[]))
+  AND (sqlc.narg('search')::text IS NULL OR key ILIKE '%' || sqlc.narg('search')::text || '%' ESCAPE '\'
+       OR name ILIKE '%' || sqlc.narg('search')::text || '%' ESCAPE '\')
 ORDER BY key LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountProjects :one
 SELECT count(*) FROM projects
-WHERE sqlc.narg('project_ids')::bigint[] IS NULL OR id = ANY(sqlc.narg('project_ids')::bigint[]);
+WHERE (sqlc.narg('project_ids')::bigint[] IS NULL OR id = ANY(sqlc.narg('project_ids')::bigint[]))
+  AND (sqlc.narg('search')::text IS NULL OR key ILIKE '%' || sqlc.narg('search')::text || '%' ESCAPE '\'
+       OR name ILIKE '%' || sqlc.narg('search')::text || '%' ESCAPE '\');
 
 -- name: UpdateProject :one
 UPDATE projects SET

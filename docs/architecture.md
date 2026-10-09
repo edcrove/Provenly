@@ -103,6 +103,10 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 - `GET /api/v1/test-cases?key=<PROJECT>-<number>` (card #53) finds a test case by its key: zero or one item, combinable
   with the other filters; a key of an unknown or invisible project gives no item (not a 404), anything that is not a
   key is a 400. The MCP `search_test_cases` tool takes it too.
+- `GET /api/v1/projects?q=` finds projects by key or name (any case, wildcards literal) on every page: the project
+  switcher and the projects page search the server, and a page of one project reads it with `GET /projects/{key}`
+  (its role included), so an instance with more projects than a page (a deployed demo keeps every E2E project) works
+  the same. Forms that list projects offer the first page plus the current project and say how many they leave out.
 - `GET /api/v1/test-cases?automated=true|false` lists only automated or only manual test cases (any other value is a
   400); the list's "Filter by execution" uses it.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,

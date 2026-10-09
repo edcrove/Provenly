@@ -1838,17 +1838,31 @@ export const handlers = [
   ),
   http.get(
     `${BASE}/projects`,
-    guard(({ request }) =>
-      respond(
+    guard(({ request }) => {
+      const url = new URL(request.url)
+      const q = url.searchParams.get('q')
+      if (q !== null && !q.trim()) return validation('q', 'must not be empty')
+      const text = q?.trim().toLowerCase() ?? ''
+      return respond(
         pageOf(
-          new URL(request.url),
+          url,
           db.projects
             .filter((p) => roleIn(p.id))
+            .filter((p) => !text || p.key.toLowerCase().includes(text) || p.name.toLowerCase().includes(text))
             .map((p) => ({ ...p, myRole: roleIn(p.id)! }))
             .sort((a, b) => a.key.localeCompare(b.key)),
         ),
-      ),
-    ),
+      )
+    }),
+  ),
+  http.get(
+    `${BASE}/projects/:projectKey`,
+    guard(({ params }) => {
+      if (!KEY.test(String(params.projectKey))) return validation('projectKey', PROJECT_KEY_MESSAGE)
+      const p = db.projects.find((x) => x.key === params.projectKey)
+      if (!p || !roleIn(p.id)) return notFound(`project ${String(params.projectKey)}`)
+      return respond({ ...p, myRole: roleIn(p.id)! })
+    }),
   ),
   http.post(
     `${BASE}/projects`,

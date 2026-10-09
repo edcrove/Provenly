@@ -3414,6 +3414,8 @@ export interface operations {
             query?: {
                 page?: components["parameters"]["Page"];
                 pageSize?: components["parameters"]["PageSize"];
+                /** @description Text the key or the name contains, any case (`%` and `_` are literal): what the project switcher searches with, so every project is found however many pages there are. At most 200 characters; blank is a 400. */
+                q?: string;
             };
             header?: never;
             path?: never;

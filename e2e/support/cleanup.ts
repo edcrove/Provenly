@@ -49,6 +49,15 @@ async function all<T>(api: APIRequestContext, path: string): Promise<T[]> {
   }
 }
 
+/** Runs fn over items, at most `width` at a time. */
+async function eachInParallel<T>(items: T[], width: number, fn: (item: T) => Promise<void>) {
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) await fn(items[next++])
+  }
+  await Promise.all(Array.from({ length: Math.min(width, items.length) }, worker))
+}
+
 /**
  * Deactivates the journeys' accounts (which also revokes their personal access tokens), revokes their pending
  * invitations, the administrator's tokens that only reach E2E projects and the API keys of E2E projects, pauses those
@@ -87,7 +96,8 @@ export async function sweep(api: APIRequestContext): Promise<CleanupReport> {
     }
   }
 
-  for (const { key } of e2eProjects) {
+  // A deployed instance keeps every project an earlier run made: check them a few at a time.
+  await eachInParallel(e2eProjects, 8, async ({ key }) => {
     const base = `/api/v1/projects/${key}`
     for (const k of await all<{ id: number; status: string }>(api, `${base}/api-keys`)) {
       if (k.status === 'active') {
@@ -107,7 +117,7 @@ export async function sweep(api: APIRequestContext): Promise<CleanupReport> {
       await ok(api.delete(`${apiURL}${base}/github`), `disconnect GitHub from ${key}`)
       report.github++
     }
-  }
+  })
   return report
 }
 

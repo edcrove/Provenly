@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
 
 import type { PersonalAccessToken } from '@/api/client'
-import { useProjects, useTokenMutations, useTokens } from '@/api/queries'
+import { useTokenMutations, useTokens } from '@/api/queries'
+import { moreProjectsHint, useProjectChoices } from '@/features/projects/choices'
 import { InlineConfirm } from '@/components/InlineConfirm'
 import { Pagination } from '@/components/Pagination'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
@@ -55,7 +56,8 @@ function TokenRow({ token }: { token: PersonalAccessToken }) {
 
 function NewToken() {
   const { create } = useTokenMutations()
-  const projects = useProjects()
+  const choices = useProjectChoices()
+  const projects = choices.query
   const [name, setName] = useState('')
   const [picked, setPicked] = useState<string[]>([])
   const [days, setDays] = useState(90)
@@ -106,12 +108,15 @@ function NewToken() {
         <QueryState query={projects}>
           {(data) => (
             <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {data.items.map((p) => (
+              {(data && choices.items).map((p) => (
                 <label key={p.key} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={picked.includes(p.key)} onChange={() => toggle(p.key)} />
                   {p.key} · {p.name}
                 </label>
               ))}
+              {choices.more > 0 ? (
+                <p className="text-muted-foreground w-full text-xs">{moreProjectsHint(choices.more)}</p>
+              ) : null}
             </div>
           )}
         </QueryState>

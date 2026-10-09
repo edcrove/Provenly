@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -46,7 +47,7 @@ func TestProjects(t *testing.T) {
 		e, _ = apperr.As(err)
 		assert.Equal(t, apperr.KindNotFound, e.Kind)
 
-		page, err := s.Catalog.ListProjects(ctx, nil, pagination.Page{Number: 1, Size: 1})
+		page, err := s.Catalog.ListProjects(ctx, nil, nil, pagination.Page{Number: 1, Size: 1})
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), page.Total)
 		assert.Equal(t, "CHK", page.Items[0].Key, "ordered by key")
@@ -77,6 +78,41 @@ func TestProjects(t *testing.T) {
 			_, err := db.Pool.Exec(ctx, stmt)
 			assert.Error(t, err, stmt)
 		}
+	})
+
+	t.Run("BE-INT-077_projects_are_found_by_key_or_name_beyond_the_first_page", func(t *testing.T) {
+		s, ctx := fresh(t)
+		for i := range 120 {
+			_, err := s.Catalog.CreateProject(ctx, catalog.CreateProjectInput{Key: fmt.Sprintf("A%03d", i), Name: fmt.Sprintf("Bulk %d", i)})
+			require.NoError(t, err)
+		}
+		pay, err := s.Catalog.CreateProject(ctx, catalog.CreateProjectInput{Key: "PAY", Name: "Payments 100%_done"})
+		require.NoError(t, err)
+		find := func(ids []int64, q string) (int64, []string) {
+			p, err := s.Catalog.ListProjects(ctx, ids, &q, pagination.Page{Number: 1, Size: 100})
+			require.NoError(t, err)
+			keys := make([]string, len(p.Items))
+			for i, it := range p.Items {
+				keys[i] = it.Key
+			}
+			return p.Total, keys
+		}
+		all, err := s.Catalog.ListProjects(ctx, nil, nil, pagination.Page{Number: 1, Size: 100})
+		require.NoError(t, err)
+		assert.Equal(t, int64(122), all.Total, "the default project, 120 and PAY")
+		n, keys := find(nil, "pay")
+		assert.Equal(t, int64(1), n, "by key, any case: past the first page")
+		assert.Equal(t, []string{"PAY"}, keys)
+		n, _ = find(nil, "PAYMENTS")
+		assert.Equal(t, int64(1), n, "by name, any case")
+		n, _ = find(nil, `100\%\_`)
+		assert.Equal(t, int64(1), n, "escaped wildcards are literal")
+		n, _ = find(nil, `1\_`)
+		assert.Equal(t, int64(0), n)
+		n, _ = find(nil, "bulk 11")
+		assert.Equal(t, int64(11), n, "Bulk 11 and Bulk 110..119")
+		n, _ = find([]int64{pay.ID}, "bulk")
+		assert.Equal(t, int64(0), n, "only within the caller's projects")
 	})
 
 	t.Run("BE-INT-032_numbers_are_per_project_contiguous_and_unique_under_concurrency", func(t *testing.T) {

@@ -258,13 +258,20 @@ func (f *fakeRepo) GetProjectByKey(_ context.Context, key string) (Project, erro
 	return Project{}, ErrNotFound
 }
 
-func (f *fakeRepo) ListProjects(_ context.Context, ids []int64, limit, offset int32) ([]Project, error) {
+func (f *fakeRepo) ListProjects(_ context.Context, ids []int64, search *string, limit, offset int32) ([]Project, error) {
 	if err := f.fail("ListProjects"); err != nil {
 		return nil, err
 	}
 	var all []Project
+	matches := func(p Project) bool {
+		if search == nil {
+			return true
+		}
+		s := strings.ToLower(*search)
+		return strings.Contains(strings.ToLower(p.Key), s) || strings.Contains(strings.ToLower(p.Name), s)
+	}
 	for _, p := range f.projects {
-		if ids == nil || slices.Contains(ids, p.ID) {
+		if (ids == nil || slices.Contains(ids, p.ID)) && matches(p) {
 			all = append(all, p)
 		}
 	}
@@ -275,11 +282,11 @@ func (f *fakeRepo) ListProjects(_ context.Context, ids []int64, limit, offset in
 	return all[offset:min(int(offset+limit), len(all))], nil
 }
 
-func (f *fakeRepo) CountProjects(ctx context.Context, ids []int64) (int64, error) {
+func (f *fakeRepo) CountProjects(ctx context.Context, ids []int64, search *string) (int64, error) {
 	if err := f.fail("CountProjects"); err != nil {
 		return 0, err
 	}
-	all, _ := f.ListProjects(ctx, ids, 1<<30, 0)
+	all, _ := f.ListProjects(ctx, ids, search, 1<<30, 0)
 	return int64(len(all)), nil
 }
 

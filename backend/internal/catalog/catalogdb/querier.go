@@ -15,7 +15,7 @@ type Querier interface {
 	AddTestCaseTags(ctx context.Context, arg AddTestCaseTagsParams) error
 	ClearTestCaseClassification(ctx context.Context, arg ClearTestCaseClassificationParams) error
 	CloseTestStepGap(ctx context.Context, arg CloseTestStepGapParams) error
-	CountProjects(ctx context.Context, projectIds []int64) (int64, error)
+	CountProjects(ctx context.Context, arg CountProjectsParams) (int64, error)
 	CountTestCases(ctx context.Context, arg CountTestCasesParams) (int64, error)
 	CountTestSteps(ctx context.Context, testCaseID int64) (int64, error)
 	CreateDimension(ctx context.Context, arg CreateDimensionParams) (ClassificationDimension, error)
@@ -55,7 +55,8 @@ type Querier interface {
 	ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListIssuesRow, error)
 	// Which of the given ids are test cases of the project.
 	ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDsParams) ([]int64, error)
-	// project_ids NULL means every project (administrators); otherwise only those.
+	// project_ids NULL means every project (administrators); otherwise only those. search (LIKE-escaped) finds a key or a
+	// name containing it, any case.
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
 	// A project's requirements (optionally only those a test case covers), newest first, with their linked test cases.
 	ListRequirements(ctx context.Context, arg ListRequirementsParams) ([]ListRequirementsRow, error)

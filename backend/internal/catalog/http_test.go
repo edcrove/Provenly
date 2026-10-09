@@ -21,19 +21,20 @@ import (
 
 // stubAPI answers every call with the configured error, or with canned data.
 type stubAPI struct {
-	err           error
-	getErr        error
-	projectErr    error
-	gotFilter     ListFilter
-	gotProjectIDs []int64
-	gotCreate     CreateInput
-	gotProject    CreateProjectInput
-	gotStatus     *Status
-	gotPage       pagination.Page
-	gotUpdate     UpdateInput
-	gotStep       CreateStepInput
-	gotOrder      []int64
-	gotMatch      etag.Match
+	err              error
+	getErr           error
+	projectErr       error
+	gotFilter        ListFilter
+	gotProjectSearch *string
+	gotProjectIDs    []int64
+	gotCreate        CreateInput
+	gotProject       CreateProjectInput
+	gotStatus        *Status
+	gotPage          pagination.Page
+	gotUpdate        UpdateInput
+	gotStep          CreateStepInput
+	gotOrder         []int64
+	gotMatch         etag.Match
 }
 
 var sample = TestCase{ID: 153, ProjectID: 1, ProjectKey: "TC", Number: 153, Title: "Login", Status: StatusActive, Automated: true,
@@ -59,8 +60,8 @@ func (s *stubAPI) ProjectByKey(_ context.Context, key string) (Project, error) {
 	p.Key = key
 	return p, s.projectErr
 }
-func (s *stubAPI) ListProjects(_ context.Context, ids []int64, p pagination.Page) (pagination.Result[Project], error) {
-	s.gotProjectIDs = ids
+func (s *stubAPI) ListProjects(_ context.Context, ids []int64, search *string, p pagination.Page) (pagination.Result[Project], error) {
+	s.gotProjectIDs, s.gotProjectSearch = ids, search
 	return pagination.Result[Project]{Items: []Project{sampleProject}, Page: p, Total: 1}, s.err
 }
 func (s *stubAPI) UpdateProject(context.Context, string, UpdateProjectInput) (Project, error) {
@@ -342,6 +343,12 @@ func TestHandlerAuthorization(t *testing.T) {
 	rec = serveAs(as(authz.RoleMember), api, "GET", "/api/v1/projects", "")
 	assert.Equal(t, []int64{1}, api.gotProjectIDs)
 	assert.Contains(t, rec.Body.String(), `"myRole":"member"`)
+	assert.Nil(t, api.gotProjectSearch)
+	// ?q= finds projects by key or name (more than one page of projects); wildcards are literal, blank is a 400.
+	serveAs(as(authz.RoleMember), api, "GET", "/api/v1/projects?q=+pay_1%25+", "")
+	require.NotNil(t, api.gotProjectSearch)
+	assert.Equal(t, `pay\_1\%`, *api.gotProjectSearch)
+	assert.Equal(t, http.StatusBadRequest, status(as(authz.RoleMember), "GET", "/api/v1/projects?q=", ""))
 	rec = serveAs(adminGuard, api, "GET", "/api/v1/projects/TC", "")
 	assert.Contains(t, rec.Body.String(), `"myRole":"admin"`)
 

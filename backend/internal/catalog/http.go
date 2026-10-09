@@ -35,7 +35,7 @@ type API interface {
 	ReorderSteps(ctx context.Context, testCaseID int64, stepIDs []int64, m etag.Match) ([]TestStep, int64, error)
 	CreateProject(ctx context.Context, in CreateProjectInput) (Project, error)
 	ProjectByKey(ctx context.Context, key string) (Project, error)
-	ListProjects(ctx context.Context, projectIDs []int64, page pagination.Page) (pagination.Result[Project], error)
+	ListProjects(ctx context.Context, projectIDs []int64, search *string, page pagination.Page) (pagination.Result[Project], error)
 	UpdateProject(ctx context.Context, key string, in UpdateProjectInput) (Project, error)
 	Dimensions(ctx context.Context, projectID int64) ([]Dimension, error)
 	CreateDimension(ctx context.Context, projectID int64, in DimensionInput) (Dimension, error)
@@ -414,6 +414,13 @@ func searchQuery(r *http.Request, f ListFilter) (ListFilter, error) {
 	return f, nil
 }
 
+// projectSearch reads ?q= of the projects list: a key or name containing the text, any case (the project switcher
+// searches the server, so an instance with more than one page of projects finds every one).
+func projectSearch(r *http.Request) (*string, error) {
+	f, err := searchQuery(r, ListFilter{})
+	return f.Search, err
+}
+
 // testCaseKeyPattern is a test case key: <PROJECT>-<number>.
 var testCaseKeyPattern = regexp.MustCompile(`^([A-Z][A-Z0-9]{1,9})-([1-9][0-9]{0,17})$`)
 
@@ -676,7 +683,12 @@ func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	res, err := h.api.ListProjects(r.Context(), scope.ProjectIDs(), page)
+	search, err := projectSearch(r)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	res, err := h.api.ListProjects(r.Context(), scope.ProjectIDs(), search, page)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

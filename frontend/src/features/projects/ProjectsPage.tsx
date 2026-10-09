@@ -133,8 +133,14 @@ function ProjectRow({ project }: { project: Project }) {
 export function ProjectsPage() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
-  const query = useProjects(page, PAGE_SIZE)
+  const q = params.get('q')?.trim() ?? ''
+  const query = useProjects(page, PAGE_SIZE, q)
   const me = useCurrentUser()
+  const [draft, setDraft] = useState(q)
+  const find = (e: FormEvent) => {
+    e.preventDefault()
+    setParams(draft.trim() ? { q: draft.trim() } : {})
+  }
   return (
     <div className="grid gap-6">
       <Card>
@@ -150,10 +156,25 @@ export function ProjectsPage() {
             integrations.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-4">
+          <form onSubmit={find} role="search" aria-label="Find a project" className="flex gap-2">
+            <Input
+              aria-label="Search projects"
+              placeholder="Key or name"
+              className="max-w-xs"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            <Button type="submit" variant="outline">
+              Find
+            </Button>
+          </form>
           <QueryState query={query}>
             {(data) => (
               <>
+                {data.items.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">No project matches “{q}”.</p>
+                ) : null}
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -175,7 +196,9 @@ export function ProjectsPage() {
                   page={data.page}
                   totalPages={data.totalPages}
                   totalItems={data.totalItems}
-                  onPageChange={(p, replace) => setParams({ page: String(p) }, { replace })}
+                  onPageChange={(p, replace) =>
+                    setParams({ ...(q ? { q } : {}), page: String(p) }, { replace })
+                  }
                 />
               </>
             )}

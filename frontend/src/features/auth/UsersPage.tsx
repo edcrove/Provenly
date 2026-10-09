@@ -11,6 +11,7 @@ import {
   useRevokeInvitation,
   useUsers,
 } from '@/api/queries'
+import { moreProjectsHint, useProjectChoices } from '@/features/projects/choices'
 import { NotAllowed } from '@/components/NotAllowed'
 import { PageTitle } from '@/components/PageTitle'
 import { Pagination } from '@/components/Pagination'
@@ -42,7 +43,7 @@ function NewInvitation() {
   const [note, setNote] = useState('')
   const [project, setProject] = useState('')
   const [role, setRole] = useState<MemberRole>('member')
-  const projects = useProjects()
+  const projects = useProjectChoices()
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const submit = (e: FormEvent) => {
@@ -91,12 +92,15 @@ function NewInvitation() {
           <Label htmlFor="invite-project">Joins project (optional)</Label>
           <NativeSelect id="invite-project" value={project} onChange={(e) => setProject(e.target.value)}>
             <option value="">No project</option>
-            {(projects.data?.items ?? []).map((p) => (
+            {projects.items.map((p) => (
               <option key={p.key} value={p.key}>
                 {p.key} · {p.name}
               </option>
             ))}
           </NativeSelect>
+          {projects.more > 0 ? (
+            <p className="text-muted-foreground max-w-xs text-xs">{moreProjectsHint(projects.more)}</p>
+          ) : null}
         </div>
         <div className="grid gap-2">
           <Label htmlFor="invite-role">As</Label>

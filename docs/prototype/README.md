@@ -403,6 +403,12 @@ after every run; the leftover accounts on Render are deactivated by the next run
 their projects' audit log (P20-5, implementation decision 22); per-project run numbers and test case versions are
 Incubator items. Still open: whether a run links to its CI job (`ciUrl`).
 
+The first E2E run on Render with the cleanup (2026-10-09) found that the UI only knew the first 100 projects: with the
+projects earlier runs left there, TC was missing from the switcher and the projects page, and an administrator saw no
+**Edit** on its test cases. Fixed: `GET /projects?q=`, server search in the switcher and the projects page, roles and
+labels read from the project itself (BE-INT-077, FE-INT-068, FE-E2E-030/031); the sweep checks projects eight at a
+time.
+
 ### 25. Refined follow-ups (2026-10-06)
 
 The audit's open decisions and cards were refined by the product owner and the six personas and recorded in the

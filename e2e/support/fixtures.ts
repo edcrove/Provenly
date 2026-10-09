@@ -5,6 +5,7 @@ import path from 'node:path'
 import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test'
 
 import { apiURL } from '../playwright.config'
+import { E2E_PROJECT_PREFIX, E2E_USER_PREFIX } from './cleanup'
 
 const coverageDir = path.join(import.meta.dirname, '../coverage/frontend')
 
@@ -80,8 +81,11 @@ export class ProvenlyApi {
   }
 }
 
-/** A project key no other execution uses (projects are never deleted). */
-export const uniqueProjectKey = () => `P${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`
+/** A project key no other execution uses (projects are never deleted); the E2E prefix lets the cleanup find it. */
+export const uniqueProjectKey = () => `${E2E_PROJECT_PREFIX}${randomUUID().replace(/-/g, '').slice(0, 7).toUpperCase()}`
+
+/** A username no other execution uses; the e2e- prefix lets the cleanup deactivate it. */
+export const uniqueUsername = () => `${E2E_USER_PREFIX}${randomUUID().replace(/-/g, '').slice(0, 12)}`
 
 /** A unique CI run id per test execution. */
 export const uniqueRunId = () => `${Date.now()}${Math.floor(Math.random() * 1000)}`

@@ -1,9 +1,8 @@
 import { request as apiRequest } from '@playwright/test'
 
 import { apiURL } from '../playwright.config'
-import { expect, secret, test, uniqueProjectKey } from '../support/fixtures'
+import { expect, secret, test, uniqueProjectKey, uniqueUsername } from '../support/fixtures'
 
-const unique = () => `r${Date.now().toString(36)}${Math.floor(Math.random() * 1000)}`
 const empty = { cookies: [], origins: [] }
 
 test.describe('Project roles', () => {
@@ -15,7 +14,7 @@ test.describe('Project roles', () => {
 
     // An invitation makes the new account a viewer of the project.
     const inv = await (await request.post(`${apiURL}/api/v1/invitations`, { data: { project: key, role: 'viewer' } })).json()
-    const username = unique()
+    const username = uniqueUsername()
     const anon = await apiRequest.newContext({ storageState: empty })
     const session = await (await anon.post(`${apiURL}/api/v1/invitations/accept`, {
       data: { token: inv.token, username, displayName: 'Viewer', password: secret('viewer password') },
@@ -48,8 +47,8 @@ test.describe('Project roles', () => {
     const key = uniqueProjectKey()
     await provenly.createProject(key, 'UI roles')
     const tc = await provenly.createTestCase({ title: 'Role-gated case', project: key })
-    const inv = await (await page.request.post(`${apiURL}/api/v1/invitations`, { data: {} })).json()
-    const username = unique()
+    const inv = await (await page.request.post(`${apiURL}/api/v1/invitations`, { data: { note: 'e2e' } })).json()
+    const username = uniqueUsername()
     const anon = await apiRequest.newContext({ storageState: empty })
     expect((await anon.post(`${apiURL}/api/v1/invitations/accept`, {
       data: { token: inv.token, username, displayName: 'UI Member', password: secret('member password') },

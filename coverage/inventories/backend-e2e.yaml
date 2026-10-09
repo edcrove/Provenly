@@ -63,3 +63,5 @@ targets:
     description: personal access tokens through the public API (card #62) - 366 days is refused, a 365-day token over one project reads its test cases through REST and MCP from a cookie-less client, gets 403 for another project, administration and any write ("read-only"), records its last use and is 401 once revoked
   - id: BE-E2E-031
     description: filtering runs (deployed audit) through the public API - runs of one branch, of one execution status and of a creation window are listed newest first; a window whose start is after its end is a 400
+  - id: BE-E2E-032
+    description: clean environment (Ed, 2026-10-09) - the sweep the suite runs before and after every run deactivates the journeys' accounts (they cannot sign in), revokes their pending invitations, the administrator's tokens over E2E projects only and the API keys of E2E projects, pauses those projects' webhooks and removes their GitHub connection, leaves the administrator and an ordinary token untouched, and a second sweep finds nothing

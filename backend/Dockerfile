@@ -2,7 +2,7 @@
 # Provenly API. Targets:
 #   dev     - Go toolchain + air: rebuilds and restarts on every source change (hot reload).
 #   runtime - small alpine image with the static binary (default).
-ARG GO_VERSION=1.27.1
+ARG GO_VERSION=1.27.2
 
 FROM golang:${GO_VERSION}-alpine AS base
 # Optional extra CA (corporate TLS-intercepting proxy): `--secret id=extra_ca,src=<pem>`.

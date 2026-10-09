@@ -2,7 +2,8 @@ name: E2E on a deployed instance
 
 # Runs the Playwright journeys against a deployed Provenly (for example the Render demo) on demand. Journeys tagged
 # @local (they need the local stack or would wipe data) are skipped; the others create their own projects, test
-# cases and runs on the instance. Results: the job summary and the playwright-report artifact.
+# cases and runs on the instance, and a sweep before and after the run deactivates their accounts and revokes their
+# credentials (docs/testing-strategy.md). Results: the job summary and the playwright-report artifact.
 on:
   workflow_dispatch:
     inputs:

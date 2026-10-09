@@ -1,4 +1,4 @@
-golang 1.27.1
+golang 1.27.2
 nodejs 22.22.2
 sqlc 1.31.1
 golangci-lint 2.14.0

@@ -1465,14 +1465,22 @@ export const handlers = [
       if (actor === '') return validation('actor', 'must not be empty')
       if (testCase !== null && !/^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,17}$/.test(testCase))
         return validation('testCase', 'must be a test case key (e.g. CHK-4)')
-      if (!currentUser().isAdmin) return forbidden()
+      // Administrators read everything; maintainers their projects' events, without addresses (P20-5).
+      const admin = currentUser().isAdmin
+      const maintained = db.projects.filter((p) => roleIn(p.id) === 'maintainer').map((p) => p.key)
+      if (!admin && maintained.length === 0)
+        return problem(403, 'forbidden', 'only administrators and project maintainers can read the audit log')
+      if (!admin && project !== null && !maintained.includes(project))
+        return problem(403, 'forbidden', 'you can read the audit log of the projects you maintain')
       const items = db.audit
         .filter(
           (e) =>
+            (admin || (e.project !== null && maintained.includes(e.project))) &&
             (project === null || e.project === project) &&
             (actor === null || e.actor === actor) &&
             (testCase === null || e.testCase === testCase),
         )
+        .map((e) => (admin ? e : { ...e, ip: null, userAgent: null }))
         .reverse()
       return respond(pageOf(url, items))
     }),

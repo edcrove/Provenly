@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/identity"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/auditnote"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/clientinfo"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 )
@@ -39,16 +41,26 @@ func (r *fakeRepo) Insert(_ context.Context, e Event) error {
 func (r *fakeRepo) List(_ context.Context, f Filter, limit, offset int32) ([]Event, error) {
 	r.filter = f
 	out := r.events[min(int(offset), len(r.events)):]
-	return out[:min(int(limit), len(out))], r.listErr
+	// A copy, as a database returns fresh rows each time.
+	return slices.Clone(out[:min(int(limit), len(out))]), r.listErr
 }
 
 func (r *fakeRepo) Count(_ context.Context, _ Filter) (int64, error) {
 	return int64(len(r.events)), r.countErr
 }
 
-type fakeAccess struct{ err error }
+// fakeAccess answers an administrator's scope unless scope is set.
+type fakeAccess struct {
+	err   error
+	scope *authz.Scope
+}
 
-func (a fakeAccess) RequireAdmin(context.Context) error { return a.err }
+func (a fakeAccess) Scope(context.Context) (authz.Scope, error) {
+	if a.scope != nil {
+		return *a.scope, a.err
+	}
+	return authz.Scope{All: true}, a.err
+}
 
 // mux serves routes registered through the audit Router, with ctx setting who calls.
 func mux(svc *Service, ctx func(context.Context) context.Context, status int) http.Handler {
@@ -303,4 +315,55 @@ func TestRouterKeepsTheClient(t *testing.T) {
 	require.Len(t, repo.events, 1)
 	assert.Equal(t, "198.51.100.7", repo.events[0].IP)
 	assert.Equal(t, "provenly-cli", repo.events[0].UserAgent)
+}
+
+// TestEventsForMaintainers covers P20-5 (Ed, 2026-10-09): a maintainer reads the events of the projects they maintain,
+// without where they came from; anyone else, or another project, is refused.
+func TestEventsForMaintainers(t *testing.T) {
+	ctx := context.Background()
+	repo := &fakeRepo{events: []Event{{ID: 1, ProjectKey: "CHK", IP: "203.0.113.9", UserAgent: "curl"}}}
+	maintainer := fakeAccess{scope: &authz.Scope{Roles: map[int64]authz.Role{2: authz.RoleMaintainer, 3: authz.RoleMember}}}
+	svc := NewService(repo, maintainer)
+	svc.SetResolver(fakeNames{})
+
+	page, err := svc.Events(ctx, Filter{}, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"CHK"}, repo.filter.ProjectKeys)
+	assert.Equal(t, "", page.Items[0].IP)
+	assert.Equal(t, "", page.Items[0].UserAgent)
+	_, err = svc.Events(ctx, Filter{ProjectKey: "CHK", Actor: "ana"}, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, Filter{ProjectKey: "CHK", Actor: "ana", ProjectKeys: []string{"CHK"}}, repo.filter)
+
+	forbidden := func(err error, detail string) {
+		t.Helper()
+		e, _ := apperr.As(err)
+		require.NotNil(t, e)
+		assert.Equal(t, apperr.KindForbidden, e.Kind)
+		assert.Contains(t, e.Error(), detail)
+	}
+	_, err = svc.Events(ctx, Filter{ProjectKey: "PAY"}, pagination.Default())
+	forbidden(err, "the projects you maintain")
+	member := NewService(repo, fakeAccess{scope: &authz.Scope{Roles: map[int64]authz.Role{3: authz.RoleMember}}})
+	member.SetResolver(fakeNames{})
+	_, err = member.Events(ctx, Filter{}, pagination.Default())
+	forbidden(err, "only administrators and project maintainers")
+	_, err = NewService(repo, maintainer).Events(ctx, Filter{}, pagination.Default())
+	forbidden(err, "only administrators and project maintainers")
+
+	broken := NewService(repo, maintainer)
+	broken.SetResolver(fakeNames{err: errBoom})
+	_, err = broken.Events(ctx, Filter{}, pagination.Default())
+	assert.ErrorIs(t, err, errBoom)
+	_, err = NewService(repo, fakeAccess{err: errBoom, scope: &authz.Scope{}}).Events(ctx, Filter{}, pagination.Default())
+	assert.ErrorIs(t, err, errBoom)
+
+	_, err = NewService(repo, fakeAccess{}).Events(identity.WithToken(ctx, identity.PersonalAccessToken{}), Filter{}, pagination.Default())
+	assert.ErrorIs(t, err, identity.ErrTokenAdmin)
+
+	// Administrators keep the whole log, addresses included.
+	page, err = NewService(repo, fakeAccess{}).Events(ctx, Filter{}, pagination.Default())
+	require.NoError(t, err)
+	assert.Nil(t, repo.filter.ProjectKeys)
+	assert.Equal(t, "203.0.113.9", page.Items[0].IP)
 }

@@ -187,3 +187,10 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     (usernames `e2e-…`, project keys `E2E…`); earlier runs' leftovers are recognized too. Projects, runs, results and
     audit events are never deleted (P1-1, append-only results). `docs/testing-strategy.md`, BE-E2E-032.
     **Status: Decided by Ed (2026-10-09).**
+
+22. **Maintainers read their projects' audit log (P20-5).** `GET /api/v1/audit` answers project maintainers with the
+    events filed under the projects they maintain, without `ip` and `userAgent`; another project is a 403 and events
+    without a project stay with administrators; personal access tokens never read it. The Audit link shows for
+    maintainers. BE-INT-076, FE-INT-067, BE-E2E-033, FE-E2E-038.
+    **Status: Decided by Ed (2026-10-09).** Per-project run numbers and test case versions went to the Incubator the
+    same day.

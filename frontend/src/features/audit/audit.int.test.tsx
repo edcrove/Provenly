@@ -59,7 +59,9 @@ describe('FE-INT-046 audit log', () => {
     renderRoute('/audit')
     // A clear refusal about this page (not the users pages' message), and no filters that could only fail.
     expect(await screen.findByText('Not allowed')).toBeInTheDocument()
-    expect(screen.getByText('Only administrators can read the audit log.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Only administrators and project maintainers can read the audit log.'),
+    ).toBeInTheDocument()
     expect(screen.queryByText(/users and invitations/)).not.toBeInTheDocument()
     expect(screen.queryByRole('form', { name: 'Filter the audit log' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Audit' })).not.toBeInTheDocument()
@@ -136,5 +138,48 @@ describe('FE-INT-065 the audit log of the current project', () => {
     await u.click(screen.getByRole('button', { name: 'Filter' }))
     expect(await screen.findByTestId('audit-2')).toBeInTheDocument()
     expect(router.state.location.search).toBe('?project=')
+  })
+})
+
+describe('FE-INT-067 the audit log of a maintainer (P20-5)', () => {
+  it('FE-INT-067 a maintainer has the Audit link and reads only the projects they maintain, without addresses', async () => {
+    db.users.push(user({ id: 2, username: 'mia', isAdmin: false }))
+    db.session = 2
+    db.projects.push({ ...db.projects[0], id: 2, key: 'PAY', name: 'Payments' })
+    db.members.push({ projectId: 1, userId: 2, role: 'maintainer', since: '2026-10-05T10:00:00Z' })
+    db.members.push({ projectId: 2, userId: 2, role: 'member', since: '2026-10-05T10:00:00Z' })
+    db.audit.push(
+      event(1, { project: 'TC', summary: 'edited TC-1', ip: '203.0.113.9', userAgent: 'curl/8' }),
+      event(2, { project: 'PAY', summary: 'edited PAY-1' }),
+      event(3, { project: null, summary: 'signed in' }),
+    )
+    const { user: u } = renderRoute('/audit')
+    expect(await screen.findByRole('link', { name: 'Audit' })).toBeInTheDocument()
+    expect(await screen.findByText('edited TC-1')).toBeInTheDocument()
+    expect(screen.getByText(/You see the changes to the projects you maintain: TC\./)).toBeInTheDocument()
+    expect(screen.queryByText('edited PAY-1')).not.toBeInTheDocument()
+    expect(screen.queryByText('signed in')).not.toBeInTheDocument()
+    expect(screen.queryByText('203.0.113.9')).not.toBeInTheDocument()
+
+    // Another project is refused with the reason.
+    await u.clear(screen.getByLabelText('Project'))
+    await u.type(screen.getByLabelText('Project'), 'PAY')
+    await u.click(screen.getByRole('button', { name: 'Filter' }))
+    expect(
+      await screen.findByText(/you can read the audit log of the projects you maintain/),
+    ).toBeInTheDocument()
+  })
+
+  it('FE-INT-067 a maintainer whose current project is not theirs opens on every project they maintain', async () => {
+    db.users.push(user({ id: 2, username: 'mia', isAdmin: false }))
+    db.session = 2
+    db.projects.push({ ...db.projects[0], id: 2, key: 'PAY', name: 'Payments' })
+    db.members.push({ projectId: 1, userId: 2, role: 'maintainer', since: '2026-10-05T10:00:00Z' })
+    db.members.push({ projectId: 2, userId: 2, role: 'member', since: '2026-10-05T10:00:00Z' })
+    db.audit.push(event(1, { project: 'TC', summary: 'edited TC-1' }))
+    localStorage.setItem('provenly.project', 'PAY')
+    renderRoute('/audit')
+    expect(await screen.findByText('edited TC-1')).toBeInTheDocument()
+    expect(screen.getByLabelText('Project')).toHaveValue('')
   })
 })

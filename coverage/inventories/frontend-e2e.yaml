@@ -74,3 +74,5 @@ targets:
     description: did it pass on main lately (deployed audit) - a test case page says when it last passed and on which branch; filtered to a branch where it only failed it says it never passed there and lists that branch's results only
   - id: FE-E2E-037
     description: printing a report (deployed audit) - printed (print media), a run page hides the header, menu and buttons and shows its content with a caption naming the run and when it was printed
+  - id: FE-E2E-038
+    description: maintainer audit view (P20-5, Ed 2026-10-09) - a maintainer signs in, opens Audit from the header, reads that the log shows the projects they maintain, sees the creation of a test case of their project and nothing of a project they do not maintain

@@ -29,7 +29,7 @@ func (s *Store) Insert(ctx context.Context, e audit.Event) error {
 
 // List implements audit.Repository.
 func (s *Store) List(ctx context.Context, f audit.Filter, limit, offset int32) ([]audit.Event, error) {
-	rows, err := s.q.ListAuditEvents(ctx, auditdb.ListAuditEventsParams{ProjectKey: text(f.ProjectKey), Actor: text(f.Actor), TestCaseKey: text(f.TestCaseKey), PageLimit: limit, PageOffset: offset})
+	rows, err := s.q.ListAuditEvents(ctx, auditdb.ListAuditEventsParams{ProjectKey: text(f.ProjectKey), Actor: text(f.Actor), TestCaseKey: text(f.TestCaseKey), ProjectKeys: f.ProjectKeys, PageLimit: limit, PageOffset: offset})
 	out := make([]audit.Event, len(rows))
 	for i, r := range rows {
 		out[i] = audit.Event{ID: r.ID, OccurredAt: r.OccurredAt.Time, Actor: r.Actor, Action: r.Action, Path: r.Path, ProjectKey: r.ProjectKey.String, Status: r.Status,
@@ -40,5 +40,5 @@ func (s *Store) List(ctx context.Context, f audit.Filter, limit, offset int32) (
 
 // Count implements audit.Repository.
 func (s *Store) Count(ctx context.Context, f audit.Filter) (int64, error) {
-	return s.q.CountAuditEvents(ctx, auditdb.CountAuditEventsParams{ProjectKey: text(f.ProjectKey), Actor: text(f.Actor), TestCaseKey: text(f.TestCaseKey)})
+	return s.q.CountAuditEvents(ctx, auditdb.CountAuditEventsParams{ProjectKey: text(f.ProjectKey), Actor: text(f.Actor), TestCaseKey: text(f.TestCaseKey), ProjectKeys: f.ProjectKeys})
 }

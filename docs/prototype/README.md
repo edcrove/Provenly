@@ -398,8 +398,10 @@ relation with their parts clear. Each item shipped in its own PR (#63–#78) wit
 - The API sends `nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer` itself (the web container
   already did).
 
-**Open for Ed:** deactivating the E2E accounts left on Render; whether a run links to its CI job (`ciUrl`), an audit
-view for maintainers (P20-5), per-project run numbers and test case versions (recommended for the Incubator).
+**Decided by Ed (2026-10-09):** the E2E journeys leave the environment clean and are idempotent (a sweep before and
+after every run; the leftover accounts on Render are deactivated by the next run there, PR #80); maintainers read
+their projects' audit log (P20-5, implementation decision 22); per-project run numbers and test case versions are
+Incubator items. Still open: whether a run links to its CI job (`ciUrl`).
 
 ### 25. Refined follow-ups (2026-10-06)
 

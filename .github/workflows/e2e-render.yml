@@ -56,12 +56,14 @@ jobs:
           fi
         env:
           SECRET: RENDER_ADMIN_PASSWORD
-      - name: Wait for the deployed API to answer ?q= on the projects list (the version under test)
+      - name: Wait for the version under test (its UI bundle has the project search)
         run: |
           for _ in $(seq 1 40); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${E2E_REMOTE_URL%/}/api/v1/projects?q=" || true)
-            case "$code" in 400|401) echo "API answered $code"; break ;; esac
-            echo "API answered '$code', waiting for the new version"; sleep 30
+            js=$(curl -s --max-time 30 "${E2E_REMOTE_URL%/}/" | grep -o 'assets/[^"]*\.js' | head -1 || true)
+            if [ -n "$js" ] && curl -s --max-time 30 "${E2E_REMOTE_URL%/}/$js" | grep -q 'Search projects'; then
+              echo "deployed: $js"; break
+            fi
+            echo "waiting for the new UI ($js)"; sleep 30
           done
       - name: Wake the instance (free tiers sleep)
         run: |

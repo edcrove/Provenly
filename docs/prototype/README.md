@@ -398,8 +398,16 @@ relation with their parts clear. Each item shipped in its own PR (#63–#78) wit
 - The API sends `nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer` itself (the web container
   already did).
 
-**Open for Ed:** deactivating the E2E accounts left on Render; whether a run links to its CI job (`ciUrl`), an audit
-view for maintainers (P20-5), per-project run numbers and test case versions (recommended for the Incubator).
+**Decided by Ed (2026-10-09):** the E2E journeys leave the environment clean and are idempotent (a sweep before and
+after every run; the leftover accounts on Render are deactivated by the next run there, PR #80); maintainers read
+their projects' audit log (P20-5, implementation decision 22); per-project run numbers and test case versions are
+Incubator items. Still open: whether a run links to its CI job (`ciUrl`).
+
+The first E2E run on Render with the cleanup (2026-10-09) found that the UI only knew the first 100 projects: with the
+projects earlier runs left there, TC was missing from the switcher and the projects page, and an administrator saw no
+**Edit** on its test cases. Fixed: `GET /projects?q=`, server search in the switcher and the projects page, roles and
+labels read from the project itself (BE-INT-077, FE-INT-068, FE-E2E-030/031); the sweep checks projects eight at a
+time.
 
 ### 25. Refined follow-ups (2026-10-06)
 

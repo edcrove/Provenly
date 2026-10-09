@@ -264,7 +264,7 @@ func requireAdmin(ctx context.Context, u User) error {
 // (the users routes say so, other modules ask through RequireAdmin and get a generic message).
 func requireAdminFor(ctx context.Context, u User, message string) error {
 	if _, ok := TokenFrom(ctx); ok {
-		return errTokenAdmin
+		return ErrTokenAdmin
 	}
 	if !u.IsAdmin {
 		return apperr.Forbidden("%s", message)

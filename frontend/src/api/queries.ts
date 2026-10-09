@@ -231,11 +231,30 @@ export function useRevokeInvitation() {
   })
 }
 
-export function useProjects(page = 1, pageSize = MAX_PAGE) {
+/** A page of the projects the user can see, by key; q finds a key or name containing it (any page). */
+export function useProjects(page = 1, pageSize = MAX_PAGE, q = '') {
   return useQuery({
-    queryKey: [...keys.projects, 'list', pageSize, page],
-    placeholderData: (prev, q) => previousPage([...keys.projects, 'list', pageSize, page], prev, q?.queryKey),
-    queryFn: async () => unwrap(await api.GET('/api/v1/projects', { params: { query: { page, pageSize } } })),
+    queryKey: [...keys.projects, 'list', pageSize, q, page],
+    placeholderData: (prev, qk) =>
+      previousPage([...keys.projects, 'list', pageSize, q, page], prev, qk?.queryKey),
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/projects', { params: { query: { page, pageSize, ...(q ? { q } : {}) } } }),
+      ),
+  })
+}
+
+/**
+ * One project by key, with the user's role in it: what a page of that project reads (not the first page of the
+ * projects list, which an instance with more projects than a page does not cover).
+ */
+export function useProject(key: string | undefined) {
+  return useQuery({
+    queryKey: [...keys.projects, 'one', key],
+    enabled: !!key,
+    retry: false,
+    queryFn: async () =>
+      unwrap(await api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey: key! } } })),
   })
 }
 

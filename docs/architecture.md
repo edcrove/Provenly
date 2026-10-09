@@ -103,6 +103,10 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 - `GET /api/v1/test-cases?key=<PROJECT>-<number>` (card #53) finds a test case by its key: zero or one item, combinable
   with the other filters; a key of an unknown or invisible project gives no item (not a 404), anything that is not a
   key is a 400. The MCP `search_test_cases` tool takes it too.
+- `GET /api/v1/projects?q=` finds projects by key or name (any case, wildcards literal) on every page: the project
+  switcher and the projects page search the server, and a page of one project reads it with `GET /projects/{key}`
+  (its role included), so an instance with more projects than a page (a deployed demo keeps every E2E project) works
+  the same. Forms that list projects offer the first page plus the current project and say how many they leave out.
 - `GET /api/v1/test-cases?automated=true|false` lists only automated or only manual test cases (any other value is a
   400); the list's "Filter by execution" uses it.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,
@@ -284,6 +288,12 @@ the route names, then stores a `summary` ("deleted CHK-4 step 3", from the `summ
 append-only. A creation names what it made: the handler writes the new key to the note (`auditnote.Created`), so the
 summary reads "created a test case CHK-21" or "created a project PAY", and a created test case is found by its key
 too. The audit page opens on the current project; clearing the field shows every project.
+
+Who reads it (P20-5, Ed 2026-10-09): administrators the whole log; a project maintainer only the events filed under
+the projects they maintain (`audit.Filter.ProjectKeys`, from identity's scope), without the client address and user
+agent, and a project they do not maintain is a 403; events without a project (sign-ins, accounts, invitations) stay
+with administrators. A personal access token never reads the log (administration, card #62). The header shows Audit to
+administrators and maintainers.
 
 Card #49 records sign-in events, which have no signed-in caller: `identity.Service` reports them through its
 `AuthLog` port (implemented by `audit.Service`) — a sign-in that succeeds, fails (401) or is locked out (429), a

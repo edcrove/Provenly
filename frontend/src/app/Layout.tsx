@@ -5,6 +5,7 @@ import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react
 import { useLogout, useMe } from '@/api/queries'
 import { ErrorAlert } from '@/components/QueryState'
 import { Button } from '@/components/ui/button'
+import { useAuditAccess } from '@/features/audit/access'
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { ProjectProvider } from '@/features/projects/ProjectProvider'
 import { ProjectSwitcher } from '@/features/projects/ProjectSwitcher'
@@ -68,8 +69,8 @@ export function Layout() {
 }
 
 /**
- * Left: the project switcher, then what belongs to the chosen project. Right: the workspace (every project, and for
- * administrators users and the audit log) and the account. Below xl (1280 px) the items move into a Menu so the header stays one
+ * Left: the project switcher, then what belongs to the chosen project. Right: the workspace (every project, users for
+ * administrators, the audit log for administrators and maintainers) and the account. Below xl (1280 px) the items move into a Menu so the header stays one
  * row on a phone.
  */
 function Header({ displayName, isAdmin }: { displayName: string; isAdmin: boolean }) {
@@ -78,14 +79,12 @@ function Header({ displayName, isAdmin }: { displayName: string; isAdmin: boolea
   const logout = useLogout()
   const [menu, setMenu] = useState(false)
   const items = projectItems(project)
+  const audit = useAuditAccess(isAdmin)
   const workspace: Item[] = [
     { to: '/projects', label: 'Projects' },
-    ...(isAdmin
-      ? [
-          { to: '/users', label: 'Users' },
-          { to: '/audit', label: 'Audit' },
-        ]
-      : []),
+    ...(isAdmin ? [{ to: '/users', label: 'Users' }] : []),
+    // Maintainers read their projects' audit log too (P20-5).
+    ...(audit.allowed ? [{ to: '/audit', label: 'Audit' }] : []),
   ]
   const signOut = () => logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })
   const close = () => setMenu(false)

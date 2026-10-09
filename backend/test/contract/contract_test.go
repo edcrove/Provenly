@@ -278,6 +278,11 @@ func TestProjects(t *testing.T) {
 	e.GET("/api/v1/projects").WithQuery("pageSize", 1).Expect().Status(http.StatusOK).JSON().Object().
 		HasValue("totalItems", 2).Value("items").Array().Value(0).Object().HasValue("key", "CHK")
 	e.GET("/api/v1/projects").WithQuery("page", 0).Expect().Status(http.StatusBadRequest)
+	e.GET("/api/v1/projects").WithQuery("q", "checkout").Expect().Status(http.StatusOK).JSON().Object().
+		HasValue("totalItems", 1).Value("items").Array().Value(0).Object().HasValue("key", "CHK")
+	e.GET("/api/v1/projects").WithQuery("q", "%").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 0)
+	e.GET("/api/v1/projects").WithQuery("q", " ").Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().
+		HasValue("code", "validation_error")
 	e.GET("/api/v1/projects/CHK").Expect().Status(http.StatusOK).JSON().Object().HasValue("description", "cart")
 	e.GET("/api/v1/projects/chk").Expect().Status(http.StatusBadRequest)
 	e.GET("/api/v1/projects/NOPE").Expect().Status(http.StatusNotFound).JSON(problemOpts).Object().HasValue("code", "not_found")

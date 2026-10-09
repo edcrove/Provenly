@@ -700,8 +700,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The audit log, newest first - every authenticated change made through the API (administrators)
-         * @description One event per successful POST, PUT, PATCH or DELETE, and one per sign-in event (a sign-in that succeeds, fails with 401 or is refused with 429, a sign-out, an accepted invitation, a password reset; the actor is the account, or `unknown` when the username matches none). Each keeps the client IP and user agent. Who (a username, or an API key by prefix and name), the operation (method and route) and in words ("edited CHK-4 step 3"), the request path, the project it changed and the test case it touched. Request bodies are never recorded. MCP calls (reads) and live run events are not audited. Events recorded before the summary existed have none, and only a project their path named.
+         * The audit log, newest first - every authenticated change made through the API (administrators; maintainers for their projects)
+         * @description One event per successful POST, PUT, PATCH or DELETE, and one per sign-in event (a sign-in that succeeds, fails with 401 or is refused with 429, a sign-out, an accepted invitation, a password reset; the actor is the account, or `unknown` when the username matches none). Each keeps the client IP and user agent. Who (a username, or an API key by prefix and name), the operation (method and route) and in words ("edited CHK-4 step 3"), the request path, the project it changed and the test case it touched. Request bodies are never recorded. MCP calls (reads) and live run events are not audited. Events recorded before the summary existed have none, and only a project their path named. Administrators read every event. A project maintainer reads only the events filed under the projects they maintain, without `ip` and `userAgent` (null); events without a project (sign-ins, accounts, invitations) are not theirs. Anyone else, or a maintainer asking for another project, gets 403.
          */
         get: operations["listAuditEvents"];
         put?: never;
@@ -3414,6 +3414,8 @@ export interface operations {
             query?: {
                 page?: components["parameters"]["Page"];
                 pageSize?: components["parameters"]["PageSize"];
+                /** @description Text the key or the name contains, any case (`%` and `_` are literal): what the project switcher searches with, so every project is found however many pages there are. At most 200 characters; blank is a 400. */
+                q?: string;
             };
             header?: never;
             path?: never;

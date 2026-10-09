@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 
-import { useProjects, useStartManualRun, useSuites } from '@/api/queries'
+import { useStartManualRun, useSuites } from '@/api/queries'
 import { NotAllowed } from '@/components/NotAllowed'
 import { PageTitle } from '@/components/PageTitle'
 import { ErrorAlert } from '@/components/QueryState'
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/select'
+import { moreProjectsHint, useProjectChoices } from '@/features/projects/choices'
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { can } from '@/lib/roles'
 
@@ -17,8 +18,9 @@ import { can } from '@/lib/roles'
 export function NewManualRunPage() {
   const navigate = useNavigate()
   const start = useStartManualRun()
-  const all = useProjects()
-  const projects = (all.data?.items ?? []).filter((p) => can(p.myRole, 'member'))
+  const choices = useProjectChoices()
+  const all = choices.query
+  const projects = choices.items.filter((p) => can(p.myRole, 'member'))
   const { project: current } = useCurrentProject()
   const [chosen, setProject] = useState(current)
   // The select shows only projects the user can write to: send the one it shows (the current project, else the
@@ -91,6 +93,9 @@ export function NewManualRunPage() {
                 </option>
               ))}
             </NativeSelect>
+            {choices.more > 0 ? (
+              <p className="text-muted-foreground max-w-xs text-xs">{moreProjectsHint(choices.more)}</p>
+            ) : null}
           </div>
           <div className="grid gap-2">
             <Label htmlFor="manual-suite">Suite</Label>

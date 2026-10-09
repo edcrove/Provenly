@@ -6,6 +6,8 @@ import { expect, secret, test, uniqueProjectKey, uniqueUsername } from '../suppo
 
 test.describe('Clean environment (Ed, 2026-10-09)', () => {
   test('[BE-E2E-032] the sweep removes what the journeys create and nothing else, and running it again finds nothing', async ({ request, provenly }) => {
+    // A sweep reads every E2E project an instance kept (hundreds on a deployed one).
+    test.setTimeout(10 * 60_000)
     // What it recognizes: the conventions and the names earlier runs used, never ordinary accounts or projects.
     expect([isE2EProject('E2E1A2B3C4'), isE2EProject('P1A2B3C4D'), isE2EProject('TC'), isE2EProject('PAYMENTS')]).toEqual([true, true, false, false])
     expect(isE2EUser({ username: 'e2e-1234abcd', displayName: 'Anyone' })).toBe(true)

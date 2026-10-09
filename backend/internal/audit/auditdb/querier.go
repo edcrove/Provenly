@@ -11,7 +11,7 @@ import (
 type Querier interface {
 	CountAuditEvents(ctx context.Context, arg CountAuditEventsParams) (int64, error)
 	InsertAuditEvent(ctx context.Context, arg InsertAuditEventParams) error
-	// Newest first, narrowed by project, actor and/or test case.
+	// Newest first, narrowed by project, actor and/or test case; project_keys limits a maintainer to their projects.
 	ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error)
 }
 

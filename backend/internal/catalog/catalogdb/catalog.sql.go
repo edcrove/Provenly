@@ -109,11 +109,18 @@ func (q *Queries) CloseTestStepGap(ctx context.Context, arg CloseTestStepGapPara
 
 const countProjects = `-- name: CountProjects :one
 SELECT count(*) FROM projects
-WHERE $1::bigint[] IS NULL OR id = ANY($1::bigint[])
+WHERE ($1::bigint[] IS NULL OR id = ANY($1::bigint[]))
+  AND ($2::text IS NULL OR key ILIKE '%' || $2::text || '%' ESCAPE '\'
+       OR name ILIKE '%' || $2::text || '%' ESCAPE '\')
 `
 
-func (q *Queries) CountProjects(ctx context.Context, projectIds []int64) (int64, error) {
-	row := q.db.QueryRow(ctx, countProjects, projectIds)
+type CountProjectsParams struct {
+	ProjectIds []int64
+	Search     pgtype.Text
+}
+
+func (q *Queries) CountProjects(ctx context.Context, arg CountProjectsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countProjects, arg.ProjectIds, arg.Search)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -939,19 +946,28 @@ func (q *Queries) ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDs
 
 const listProjects = `-- name: ListProjects :many
 SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number FROM projects
-WHERE $1::bigint[] IS NULL OR id = ANY($1::bigint[])
-ORDER BY key LIMIT $3 OFFSET $2
+WHERE ($1::bigint[] IS NULL OR id = ANY($1::bigint[]))
+  AND ($2::text IS NULL OR key ILIKE '%' || $2::text || '%' ESCAPE '\'
+       OR name ILIKE '%' || $2::text || '%' ESCAPE '\')
+ORDER BY key LIMIT $4 OFFSET $3
 `
 
 type ListProjectsParams struct {
 	ProjectIds []int64
+	Search     pgtype.Text
 	PageOffset int32
 	PageLimit  int32
 }
 
-// project_ids NULL means every project (administrators); otherwise only those.
+// project_ids NULL means every project (administrators); otherwise only those. search (LIKE-escaped) finds a key or a
+// name containing it, any case.
 func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error) {
-	rows, err := q.db.Query(ctx, listProjects, arg.ProjectIds, arg.PageOffset, arg.PageLimit)
+	rows, err := q.db.Query(ctx, listProjects,
+		arg.ProjectIds,
+		arg.Search,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

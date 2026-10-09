@@ -55,4 +55,15 @@ func TestAuditLog(t *testing.T) {
 	ana := as(e, e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "ana",
 		"displayName": "Ana", "password": "ana's password"}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
 	ana.GET("/api/v1/audit").Expect().Status(http.StatusForbidden)
+
+	// A maintainer reads their project's events, without addresses; another project is refused (P20-5).
+	inv = admin.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "AUD", "role": "maintainer"}).Expect().Status(http.StatusCreated).JSON().Object()
+	mia := as(e, e.POST("/api/v1/invitations/accept").WithJSON(map[string]any{"token": inv.Value("token").String().Raw(), "username": "mia",
+		"displayName": "Mia", "password": "mia's password"}).Expect().Status(http.StatusCreated).JSON().Object().Value("token").String().Raw())
+	own := mia.GET("/api/v1/audit").Expect().Status(http.StatusOK).JSON().Object()
+	own.Value("totalItems").Number().Gt(0)
+	for _, item := range own.Value("items").Array().Iter() {
+		item.Object().HasValue("project", "AUD").HasValue("ip", nil).HasValue("userAgent", nil)
+	}
+	mia.GET("/api/v1/audit").WithQuery("project", "TC").Expect().Status(http.StatusForbidden).JSON(problemOpts).Object().HasValue("code", "forbidden")
 }

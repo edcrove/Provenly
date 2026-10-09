@@ -4,15 +4,17 @@ VALUES (@actor, @action, @path, sqlc.narg('project_key'), @status, sqlc.narg('su
         sqlc.narg('ip'), sqlc.narg('user_agent'));
 
 -- name: ListAuditEvents :many
--- Newest first, narrowed by project, actor and/or test case.
+-- Newest first, narrowed by project, actor and/or test case; project_keys limits a maintainer to their projects.
 SELECT * FROM audit_events
 WHERE (sqlc.narg('project_key')::text IS NULL OR project_key = sqlc.narg('project_key'))
   AND (sqlc.narg('actor')::text IS NULL OR actor = sqlc.narg('actor'))
   AND (sqlc.narg('test_case_key')::text IS NULL OR test_case_key = sqlc.narg('test_case_key'))
+  AND (sqlc.narg('project_keys')::text[] IS NULL OR project_key = ANY(sqlc.narg('project_keys')::text[]))
 ORDER BY id DESC LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountAuditEvents :one
 SELECT count(*) FROM audit_events
 WHERE (sqlc.narg('project_key')::text IS NULL OR project_key = sqlc.narg('project_key'))
   AND (sqlc.narg('actor')::text IS NULL OR actor = sqlc.narg('actor'))
-  AND (sqlc.narg('test_case_key')::text IS NULL OR test_case_key = sqlc.narg('test_case_key'));
+  AND (sqlc.narg('test_case_key')::text IS NULL OR test_case_key = sqlc.narg('test_case_key'))
+  AND (sqlc.narg('project_keys')::text[] IS NULL OR project_key = ANY(sqlc.narg('project_keys')::text[]));

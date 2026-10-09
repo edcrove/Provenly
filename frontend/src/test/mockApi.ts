@@ -1465,14 +1465,22 @@ export const handlers = [
       if (actor === '') return validation('actor', 'must not be empty')
       if (testCase !== null && !/^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,17}$/.test(testCase))
         return validation('testCase', 'must be a test case key (e.g. CHK-4)')
-      if (!currentUser().isAdmin) return forbidden()
+      // Administrators read everything; maintainers their projects' events, without addresses (P20-5).
+      const admin = currentUser().isAdmin
+      const maintained = db.projects.filter((p) => roleIn(p.id) === 'maintainer').map((p) => p.key)
+      if (!admin && maintained.length === 0)
+        return problem(403, 'forbidden', 'only administrators and project maintainers can read the audit log')
+      if (!admin && project !== null && !maintained.includes(project))
+        return problem(403, 'forbidden', 'you can read the audit log of the projects you maintain')
       const items = db.audit
         .filter(
           (e) =>
+            (admin || (e.project !== null && maintained.includes(e.project))) &&
             (project === null || e.project === project) &&
             (actor === null || e.actor === actor) &&
             (testCase === null || e.testCase === testCase),
         )
+        .map((e) => (admin ? e : { ...e, ip: null, userAgent: null }))
         .reverse()
       return respond(pageOf(url, items))
     }),
@@ -1830,17 +1838,31 @@ export const handlers = [
   ),
   http.get(
     `${BASE}/projects`,
-    guard(({ request }) =>
-      respond(
+    guard(({ request }) => {
+      const url = new URL(request.url)
+      const q = url.searchParams.get('q')
+      if (q !== null && !q.trim()) return validation('q', 'must not be empty')
+      const text = q?.trim().toLowerCase() ?? ''
+      return respond(
         pageOf(
-          new URL(request.url),
+          url,
           db.projects
             .filter((p) => roleIn(p.id))
+            .filter((p) => !text || p.key.toLowerCase().includes(text) || p.name.toLowerCase().includes(text))
             .map((p) => ({ ...p, myRole: roleIn(p.id)! }))
             .sort((a, b) => a.key.localeCompare(b.key)),
         ),
-      ),
-    ),
+      )
+    }),
+  ),
+  http.get(
+    `${BASE}/projects/:projectKey`,
+    guard(({ params }) => {
+      if (!KEY.test(String(params.projectKey))) return validation('projectKey', PROJECT_KEY_MESSAGE)
+      const p = db.projects.find((x) => x.key === params.projectKey)
+      if (!p || !roleIn(p.id)) return notFound(`project ${String(params.projectKey)}`)
+      return respond({ ...p, myRole: roleIn(p.id)! })
+    }),
   ),
   http.post(
     `${BASE}/projects`,

@@ -186,9 +186,9 @@ func TestPersonalAccessTokenAccess(t *testing.T) {
 	scope, err = s.Scope(asAdminToken)
 	require.NoError(t, err)
 	assert.Equal(t, authz.Scope{Roles: map[int64]authz.Role{2: authz.RoleAdmin}}, scope)
-	assert.Equal(t, errTokenAdmin, s.RequireAdmin(asAdminToken))
+	assert.Equal(t, ErrTokenAdmin, s.RequireAdmin(asAdminToken))
 	_, err = s.ListUsers(asAdminToken, a, pagination.Default())
-	assert.Equal(t, errTokenAdmin, err)
+	assert.Equal(t, ErrTokenAdmin, err)
 	assert.Equal(t, errTokenProject, s.Require(asAdminToken, 1, authz.RoleViewer, gone))
 
 	repo.errs["ListUserMemberships"] = errBoom

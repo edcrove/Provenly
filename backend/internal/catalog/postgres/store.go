@@ -304,8 +304,8 @@ func project(r catalogdb.Project, err error) (catalog.Project, error) {
 }
 
 // ListProjects implements catalog.Repository.
-func (s *Store) ListProjects(ctx context.Context, projectIDs []int64, limit, offset int32) ([]catalog.Project, error) {
-	rows, err := s.q.ListProjects(ctx, catalogdb.ListProjectsParams{ProjectIds: projectIDs, PageLimit: limit, PageOffset: offset})
+func (s *Store) ListProjects(ctx context.Context, projectIDs []int64, search *string, limit, offset int32) ([]catalog.Project, error) {
+	rows, err := s.q.ListProjects(ctx, catalogdb.ListProjectsParams{ProjectIds: projectIDs, Search: text(search), PageLimit: limit, PageOffset: offset})
 	if err != nil {
 		return nil, err
 	}
@@ -317,8 +317,8 @@ func (s *Store) ListProjects(ctx context.Context, projectIDs []int64, limit, off
 }
 
 // CountProjects implements catalog.Repository.
-func (s *Store) CountProjects(ctx context.Context, projectIDs []int64) (int64, error) {
-	return s.q.CountProjects(ctx, projectIDs)
+func (s *Store) CountProjects(ctx context.Context, projectIDs []int64, search *string) (int64, error) {
+	return s.q.CountProjects(ctx, catalogdb.CountProjectsParams{ProjectIds: projectIDs, Search: text(search)})
 }
 
 // UpdateProject implements catalog.Repository.

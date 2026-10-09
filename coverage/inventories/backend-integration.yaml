@@ -154,3 +154,7 @@ targets:
     description: runs list filters (deployed audit) on a real database - runs are narrowed by branch (exact, case-sensitive), execution status, mode and an inclusive creation window, filters combine, and the total follows the same filter
   - id: BE-INT-075
     description: a test case's history filtered by branch and status (deployed audit) on a real database - results of one branch newest first, the latest pass on main as one item, and totals that follow the filter
+  - id: BE-INT-076
+    description: maintainer audit view (P20-5, Ed 2026-10-09) - the audit queries keep only the events of the given projects (page and count agree, never events without a project, an empty list is nothing); through the API a maintainer of one project reads only its events, without addresses, and another project is a 403
+  - id: BE-INT-077
+    description: projects are found by key or name beyond the first page (found by the E2E run on Render) - with 122 projects ?q finds one by key or name in any case, LIKE wildcards are literal, matches count across pages and the search stays within the caller's projects

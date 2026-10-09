@@ -1,8 +1,8 @@
 import { Check, ChevronDown } from 'lucide-react'
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useDeferredValue, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from 'react-router'
 
-import { useProjects } from '@/api/queries'
+import { useProject, useProjects } from '@/api/queries'
 import { cn } from '@/lib/utils'
 
 import { projectLabel, useCurrentProject } from './currentProject'
@@ -15,27 +15,30 @@ interface Option {
 /**
  * Picks the project every list, dashboard and settings page works on (remembered in this browser). A button naming the
  * current project opens a searchable list (combobox): type to filter by key or name, arrows to move, Enter to pick,
- * Escape to close. "All projects" widens the lists to every project the user can see.
+ * Escape to close. "All projects" widens the lists to every project the user can see. Typing searches the server, so
+ * every project is found however many there are (the list shows the first SHOWN).
  */
+const SHOWN = 50
+
 export function ProjectSwitcher({ onPicked }: { onPicked?: () => void }) {
   const { project, setProject } = useCurrentProject()
-  const projects = useProjects().data?.items ?? []
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const q = useDeferredValue(query.trim())
+  const found = useProjects(1, SHOWN, q).data
+  const projects = found?.items ?? []
+  const current = useProject(project || undefined).data
   const [active, setActive] = useState(0)
   const button = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const listId = useId()
 
-  const current = projects.find((p) => p.key === project)
   const label = current ? projectLabel(current) : 'All projects'
-  const q = query.trim().toLowerCase()
   const options: Option[] = [
     ...(q ? [] : [{ key: '', label: 'All projects' }]),
-    ...projects
-      .filter((p) => !q || p.key.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))
-      .map((p) => ({ key: p.key, label: projectLabel(p) })),
+    ...projects.map((p) => ({ key: p.key, label: projectLabel(p) })),
   ]
+  const hidden = (found?.totalItems ?? 0) - projects.length
 
   // A click anywhere else closes the list.
   useEffect(() => {
@@ -131,10 +134,15 @@ export function ProjectSwitcher({ onPicked }: { onPicked?: () => void }) {
                 <span className="truncate">{o.label}</span>
               </li>
             ))}
-            {options.length === 0 ? (
+            {options.length === 0 && found ? (
               <li className="text-muted-foreground px-2 py-1.5 text-sm">No project matches.</li>
             ) : null}
           </ul>
+          {hidden > 0 ? (
+            <p className="text-muted-foreground px-2 text-xs" data-testid="switcher-more">
+              Showing {projects.length} of {found!.totalItems}: type to find the others.
+            </p>
+          ) : null}
           <Link
             to="/projects"
             className="border-t px-2 pt-2 text-sm underline"

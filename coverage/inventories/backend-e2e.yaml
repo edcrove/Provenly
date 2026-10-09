@@ -65,3 +65,5 @@ targets:
     description: filtering runs (deployed audit) through the public API - runs of one branch, of one execution status and of a creation window are listed newest first; a window whose start is after its end is a 400
   - id: BE-E2E-032
     description: clean environment (Ed, 2026-10-09) - the sweep the suite runs before and after every run deactivates the journeys' accounts (they cannot sign in), revokes their pending invitations, the administrator's tokens over E2E projects only and the API keys of E2E projects, pauses those projects' webhooks and removes their GitHub connection, leaves the administrator and an ordinary token untouched, and a second sweep finds nothing
+  - id: BE-E2E-033
+    description: maintainer audit view through the public API (P20-5, Ed 2026-10-09) - a maintainer invited into one project signs in and reads the audit log - only that project's events, without ip and userAgent - and asking for another project is a 403

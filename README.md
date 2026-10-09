@@ -30,7 +30,7 @@ TC-153 created ──► automated test declares TC-153 ──► CI posts JUnit
 ## Prerequisites
 
 - To **run** Provenly: only Docker (Compose v2.24+).
-- To **develop and test** without containers: Go **1.27.1+**, Node.js **22+** (see `.tool-versions`) and Docker,
+- To **develop and test** without containers: Go **1.27.2+**, Node.js **22+** (see `.tool-versions`) and Docker,
   which the Integration and Contract suites also need (testcontainers-go). Optional: [`sqlc`](https://docs.sqlc.dev)
   1.31 to regenerate queries.
 

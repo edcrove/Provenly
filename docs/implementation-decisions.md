@@ -125,7 +125,7 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     exceptions, listed line by line in the report (backend 1357/1357 required, 1390 reachable; frontend 288/288).
     **Closed by Ed (2026-09-28) — option A.** Unit exceptions stay as they are (no DB mocks). Code no layer can
     execute is a consolidated exception and does not count as reachable; **100% of the reachable code is covered**
-    (Go 1.27.1: backend 1389/1389 reachable of 1422 instrumented statements, 33 excepted; frontend 288/288). The
+    (Go 1.27.1 at the time: backend 1389/1389 reachable of 1422 instrumented statements, 33 excepted; frontend 288/288). The
     report columns are *Instrumented / Excepted / Reachable / Covered / Coverage of reachable*.
 13. **Toolchain.** Go 1.26 (current `pgx`, `testcontainers-go` and `goose` releases require it); TypeScript 5.9
     (`openapi-typescript` does not support TypeScript 6 yet).

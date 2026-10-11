@@ -194,3 +194,12 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     maintainers. BE-INT-076, FE-INT-067, BE-E2E-033, FE-E2E-038.
     **Status: Decided by Ed (2026-10-09).** Per-project run numbers and test case versions went to the Incubator the
     same day.
+
+23. **Archived projects: hidden and read-only, never deleted.** An administrator archives a project nobody works on
+    (inline confirmation on the Projects page) and can unarchive it any time. Archived, it leaves the projects list,
+    the switcher and every list that spans projects ("Show archived projects instead" lists them); read by key it
+    still answers, and every change, report or setting of it is a `409` naming the reason; its pages say it is
+    archived and offer no changes. The default project `TC` cannot be archived (reports without `?project=` go to it).
+    The E2E sweep (decision 21) archives E2E projects after revoking their credentials, so a deployed instance shows
+    only real projects. BE-INT-078, FE-INT-069, BE-E2E-032, FE-E2E-039.
+    **Status: Decided by Ed (2026-10-11).**

@@ -258,20 +258,23 @@ func (f *fakeRepo) GetProjectByKey(_ context.Context, key string) (Project, erro
 	return Project{}, ErrNotFound
 }
 
-func (f *fakeRepo) ListProjects(_ context.Context, ids []int64, search *string, limit, offset int32) ([]Project, error) {
+func (f *fakeRepo) ListProjects(_ context.Context, pf ProjectFilter, limit, offset int32) ([]Project, error) {
 	if err := f.fail("ListProjects"); err != nil {
 		return nil, err
 	}
 	var all []Project
 	matches := func(p Project) bool {
-		if search == nil {
+		if (p.ArchivedAt != nil) != pf.Archived {
+			return false
+		}
+		if pf.Search == nil {
 			return true
 		}
-		s := strings.ToLower(*search)
+		s := strings.ToLower(*pf.Search)
 		return strings.Contains(strings.ToLower(p.Key), s) || strings.Contains(strings.ToLower(p.Name), s)
 	}
 	for _, p := range f.projects {
-		if (ids == nil || slices.Contains(ids, p.ID)) && matches(p) {
+		if (pf.IDs == nil || slices.Contains(pf.IDs, p.ID)) && matches(p) {
 			all = append(all, p)
 		}
 	}
@@ -282,12 +285,44 @@ func (f *fakeRepo) ListProjects(_ context.Context, ids []int64, search *string, 
 	return all[offset:min(int(offset+limit), len(all))], nil
 }
 
-func (f *fakeRepo) CountProjects(ctx context.Context, ids []int64, search *string) (int64, error) {
+func (f *fakeRepo) CountProjects(ctx context.Context, pf ProjectFilter) (int64, error) {
 	if err := f.fail("CountProjects"); err != nil {
 		return 0, err
 	}
-	all, _ := f.ListProjects(ctx, ids, search, 1<<30, 0)
+	all, _ := f.ListProjects(ctx, pf, 1<<30, 0)
 	return int64(len(all)), nil
+}
+
+func (f *fakeRepo) SetProjectArchived(_ context.Context, key string, archived bool) (Project, error) {
+	if err := f.fail("SetProjectArchived"); err != nil {
+		return Project{}, err
+	}
+	for id, p := range f.projects {
+		if p.Key == key && (p.ArchivedAt != nil) != archived {
+			p.ArchivedAt = nil
+			if archived {
+				at := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+				p.ArchivedAt = &at
+			}
+			f.projects[id] = p
+			return p, nil
+		}
+	}
+	return Project{}, ErrNotFound
+}
+
+func (f *fakeRepo) ProjectIDs(_ context.Context, archived bool) ([]int64, error) {
+	if err := f.fail("ProjectIDs"); err != nil {
+		return nil, err
+	}
+	var ids []int64
+	for _, p := range f.projects {
+		if (p.ArchivedAt != nil) == archived {
+			ids = append(ids, p.ID)
+		}
+	}
+	slices.Sort(ids)
+	return ids, nil
 }
 
 func (f *fakeRepo) UpdateProject(_ context.Context, key string, in UpdateProjectInput) (Project, error) {

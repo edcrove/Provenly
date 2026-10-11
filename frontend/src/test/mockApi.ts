@@ -306,11 +306,21 @@ const jsonGuard =
       : problem(415, 'unsupported_media_type', 'Content-Type must be application/json')
 
 const rank = { viewer: 1, member: 2, maintainer: 3, admin: 4 }
+/** Lists that span projects leave archived projects out, like the server; ?project= still reads one. */
+const archivedProject = (projectId: number) => !!db.projects.find((p) => p.id === projectId)?.archivedAt
 /** Like the server: invisible projects are 404, a role below min is 403. */
 function requireRole(projectId: number, min: MemberRole, missing: () => Response): Response | undefined {
   const role = roleIn(projectId)
   if (!role) return missing()
   if (rank[role] < rank[min]) return problem(403, 'forbidden', `this needs the ${min} role in the project`)
+  // An archived project is read-only for everyone (an administrator unarchives it first).
+  const p = db.projects.find((x) => x.id === projectId)
+  if (min !== 'viewer' && p?.archivedAt)
+    return problem(
+      409,
+      'conflict',
+      `project ${p.key} is archived: an administrator unarchives it to change it`,
+    )
   return undefined
 }
 
@@ -1842,12 +1852,16 @@ export const handlers = [
       const url = new URL(request.url)
       const q = url.searchParams.get('q')
       if (q !== null && !q.trim()) return validation('q', 'must not be empty')
+      const archived = url.searchParams.get('archived')
+      if (archived !== null && archived !== 'true' && archived !== 'false')
+        return validation('archived', 'must be true or false')
       const text = q?.trim().toLowerCase() ?? ''
       return respond(
         pageOf(
           url,
           db.projects
             .filter((p) => roleIn(p.id))
+            .filter((p) => (p.archivedAt !== null) === (archived === 'true'))
             .filter((p) => !text || p.key.toLowerCase().includes(text) || p.name.toLowerCase().includes(text))
             .map((p) => ({ ...p, myRole: roleIn(p.id)! }))
             .sort((a, b) => a.key.localeCompare(b.key)),
@@ -1889,6 +1903,28 @@ export const handlers = [
         db.projects.push(p)
         db.dimensions.push(...seedDimensions(p.id))
         return respond(p, 201)
+      }),
+    ),
+  ),
+  ...(['archive', 'unarchive'] as const).map((action) =>
+    http.post(
+      `${BASE}/projects/:projectKey/${action}`,
+      guard(({ params }) => {
+        if (!currentUser().isAdmin) return problem(403, 'forbidden', 'administrators only')
+        if (!KEY.test(String(params.projectKey))) return validation('projectKey', PROJECT_KEY_MESSAGE)
+        const p = db.projects.find((x) => x.key === params.projectKey)
+        if (!p) return notFound(`project ${String(params.projectKey)}`)
+        if (action === 'archive' && p.key === 'TC')
+          return problem(
+            409,
+            'conflict',
+            'the default project TC cannot be archived: reports without ?project= go to it',
+          )
+        if ((action === 'archive') !== (p.archivedAt !== null)) {
+          p.archivedAt = action === 'archive' ? now() : null
+          p.updatedAt = now()
+        }
+        return respond({ ...p, myRole: 'admin' })
       }),
     ),
   ),
@@ -1962,7 +1998,7 @@ export const handlers = [
             (tcKey === null || t.key === tcKey) &&
             (!status || t.status === status) &&
             (automated === null || String(t.automated) === automated) &&
-            (!p || t.projectId === p.id) &&
+            (p ? t.projectId === p.id : !archivedProject(t.projectId)) &&
             (tag === null || t.tags.includes(tag)) &&
             inSuite(t) &&
             pairs.every((pair) => `${pair.split(':')[0]}:${t.classification[pair.split(':')[0]]}` === pair),
@@ -2210,7 +2246,7 @@ export const handlers = [
           db.runs
             .filter(
               (r) =>
-                (!p || r.projectId === p.id) &&
+                (p ? r.projectId === p.id : !archivedProject(r.projectId)) &&
                 (suite === null || r.suite?.key === suite) &&
                 (branch === null || r.branch === branch) &&
                 (status === null || r.executionStatus === status) &&

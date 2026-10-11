@@ -774,6 +774,37 @@ def main():
     st, got = trace_of("/nope-route")
     check("unrouted requests are traced too", f"{st} {len(got)}", "404 32")
 
+    # Archived projects (Ed, 2026-10-11): hidden, read-only, idempotent under concurrency, never TC; ?archived= validated.
+    old = f"PA{int(time.time()) % 10**8}"
+    check("create a project to archive", call(base, "POST", "/projects", {"key": old, "name": "probe archive"})[0], 201)
+    otc = call(base, "POST", "/test-cases", {"title": "probe-archived", "project": old})[1]["id"]
+    for bad, exp in [("pa1", 400), ("NOPE9999", 404), ("A", 400), ("%00", 400)]:
+        check(f"archive key={bad!r}", call(base, "POST", f"/projects/{bad}/archive")[0], exp)
+    check("archive TC", call(base, "POST", "/projects/TC/archive")[0], 409)
+    codes = []
+    threads = [threading.Thread(target=lambda: codes.append(call(base, "POST", f"/projects/{old}/archive")[0])) for _ in range(10)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    check("10 parallel archives all answer 200", sorted(set(codes)), [200])
+    for q, exp in [("archived=", 400), ("archived=yes", 400), ("archived=1", 400), ("archived=true&archived=x", 200), ("archived=false", 200)]:
+        check(f"GET /projects?{q}", call(base, "GET", f"/projects?{q}")[0], exp)
+    listed = [p["key"] for p in call(base, "GET", f"/projects?q={old}")[1]["items"]]
+    check("an archived project leaves the list", listed, [])
+    listed = [p["key"] for p in call(base, "GET", f"/projects?archived=true&q={old}")[1]["items"]]
+    check("?archived=true lists it", listed, [old])
+    check("read by key", call(base, "GET", f"/test-cases?project={old}")[0], 200)
+    check("reads that need a maintainer stay allowed", call(base, "GET", f"/projects/{old}/webhooks")[0], 200)
+    for method, path, body, exp in [("POST", "/test-cases", {"title": "x", "project": old}, 409), ("PATCH", f"/test-cases/{otc}", {"title": "x"}, 409),
+                                    ("POST", f"/test-cases/{otc}/steps", {"action": "x"}, 409), ("PATCH", f"/projects/{old}", {"name": "x"}, 409),
+                                    ("POST", f"/projects/{old}/suites", {"key": "s", "name": "S", "kind": "static"}, 409)]:
+        check(f"{method} {path} on an archived project", call(base, method, path, body)[0], exp)
+    check("ingest into an archived project", call(base, "POST", f"/ingestion/junit?project={old}&provider=github&runId=probe-archived&runAttempt=1",
+                                                  raw=b'<testsuite name="s"><testcase name="t"/></testsuite>', ctype="application/xml")[0], 409)
+    check("unarchive", call(base, "POST", f"/projects/{old}/unarchive")[0], 200)
+    check("unarchive again", call(base, "POST", f"/projects/{old}/unarchive")[0], 200)
+    check("writable again", call(base, "PATCH", f"/test-cases/{otc}", {"title": "again"})[0], 200)
+    check("archive it for good (the probe leaves nothing listed)", call(base, "POST", f"/projects/{old}/archive")[0], 200)
+
     # Concurrency: 110 parallel step creations on a fresh TC -> exactly 100 created, positions 1..100.
     c = call(base, "POST", "/test-cases", {"title": "probe-c"})[1]["id"]
     codes = []

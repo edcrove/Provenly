@@ -11,6 +11,7 @@ sql:
       - migrations/00021_suites.sql
       - migrations/00024_requirements.sql
       - migrations/00025_issues.sql
+      - migrations/00038_project_archive.sql
     queries: queries/catalog.sql
     gen:
       go:

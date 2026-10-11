@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,8 @@ type stubAPI struct {
 	projectErr       error
 	gotFilter        ListFilter
 	gotProjectSearch *string
+	gotArchived      bool
+	activeErr        error
 	gotProjectIDs    []int64
 	gotCreate        CreateInput
 	gotProject       CreateProjectInput
@@ -60,9 +63,26 @@ func (s *stubAPI) ProjectByKey(_ context.Context, key string) (Project, error) {
 	p.Key = key
 	return p, s.projectErr
 }
-func (s *stubAPI) ListProjects(_ context.Context, ids []int64, search *string, p pagination.Page) (pagination.Result[Project], error) {
-	s.gotProjectIDs, s.gotProjectSearch = ids, search
+func (s *stubAPI) ListProjects(_ context.Context, f ProjectFilter, p pagination.Page) (pagination.Result[Project], error) {
+	s.gotProjectIDs, s.gotProjectSearch, s.gotArchived = f.IDs, f.Search, f.Archived
 	return pagination.Result[Project]{Items: []Project{sampleProject}, Page: p, Total: 1}, s.err
+}
+func (s *stubAPI) SetProjectArchived(_ context.Context, key string, archived bool) (Project, error) {
+	p := sampleProject
+	p.Key = key
+	if archived {
+		at := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+		p.ArchivedAt = &at
+	}
+	return p, s.err
+}
+
+// ActiveProjectIDs leaves out project 9, the archived one of the stub.
+func (s *stubAPI) ActiveProjectIDs(_ context.Context, ids []int64) ([]int64, error) {
+	if ids == nil {
+		return []int64{1, 2}, s.activeErr
+	}
+	return slices.DeleteFunc(slices.Clone(ids), func(id int64) bool { return id == 9 }), s.activeErr
 }
 func (s *stubAPI) UpdateProject(context.Context, string, UpdateProjectInput) (Project, error) {
 	return sampleProject, s.err
@@ -178,7 +198,7 @@ func TestHandlerPassesInputs(t *testing.T) {
 	serve(api, "GET", "/api/v1/test-cases?project=CHK", "")
 	assert.Equal(t, []int64{1}, api.gotFilter.ProjectIDs)
 	serve(api, "GET", "/api/v1/test-cases", "")
-	assert.Nil(t, api.gotFilter.ProjectIDs, "administrators: every project")
+	assert.Equal(t, []int64{1, 2}, api.gotFilter.ProjectIDs, "administrators: every active project")
 	serve(api, "POST", "/api/v1/test-cases", `{"title":"t","project":"CHK"}`)
 	assert.Equal(t, int64(1), api.gotCreate.ProjectID)
 	serve(api, "POST", "/api/v1/projects", `{"key":"web","name":"Web","description":"d"}`)
@@ -360,6 +380,35 @@ func TestHandlerAuthorization(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, status(broken, "GET", target, ""), target)
 	}
 	assert.Equal(t, http.StatusInternalServerError, status(broken, "POST", "/api/v1/projects", `{"key":"CHK","name":"n"}`))
+}
+
+// Archived projects (Ed, 2026-10-09): administrators archive and unarchive; ?archived=true lists them; lists that span
+// projects leave them out.
+func TestHandlerArchive(t *testing.T) {
+	api := &stubAPI{}
+	as := func(role authz.Role) authz.Guard { return memberOf(map[int64]authz.Role{1: role}) }
+	status := func(g authz.Guard, method, target, body string) int {
+		return serveAs(g, api, method, target, body).Code
+	}
+	rec := serve(api, "POST", "/api/v1/projects/OLD/archive", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"archivedAt":"2026-10-09T12:00:00Z"`)
+	rec = serve(api, "POST", "/api/v1/projects/OLD/unarchive", "")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"archivedAt":null`)
+	assert.Equal(t, http.StatusForbidden, status(as(authz.RoleMaintainer), "POST", "/api/v1/projects/OLD/archive", ""))
+	assert.Equal(t, http.StatusBadRequest, status(adminGuard, "POST", "/api/v1/projects/old/archive", ""))
+	assert.Equal(t, http.StatusConflict, serve(&stubAPI{err: apperr.Conflict("the default project")}, "POST", "/api/v1/projects/TC/archive", "").Code)
+
+	serve(api, "GET", "/api/v1/projects?archived=true", "")
+	assert.True(t, api.gotArchived)
+	serve(api, "GET", "/api/v1/projects", "")
+	assert.False(t, api.gotArchived)
+	assert.Equal(t, http.StatusBadRequest, serve(api, "GET", "/api/v1/projects?archived=yes", "").Code)
+
+	serveAs(as(authz.RoleViewer), api, "GET", "/api/v1/test-cases", "")
+	assert.Equal(t, []int64{1}, api.gotFilter.ProjectIDs)
+	assert.Equal(t, http.StatusInternalServerError, serve(&stubAPI{activeErr: errors.New("boom")}, "GET", "/api/v1/test-cases", "").Code)
 }
 
 // Optimistic locking over HTTP: reads and writes of a test case and its steps carry the version as the ETag,

@@ -412,12 +412,12 @@ func TestProjectsLifecycle(t *testing.T) {
 	_, err = svc.ProjectByID(ctx, 99)
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 
-	res, err := svc.ListProjects(ctx, nil, nil, pagination.Default())
+	res, err := svc.ListProjects(ctx, ProjectFilter{}, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), res.Total)
 	assert.Equal(t, []string{"CHK", "TC"}, []string{res.Items[0].Key, res.Items[1].Key})
 	search := "chk"
-	res, err = svc.ListProjects(ctx, nil, &search, pagination.Default())
+	res, err = svc.ListProjects(ctx, ProjectFilter{Search: &search}, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), res.Total)
 	assert.Equal(t, "CHK", res.Items[0].Key)
@@ -428,6 +428,46 @@ func TestProjectsLifecycle(t *testing.T) {
 	assert.Equal(t, "CHK", up.Key, "the key never changes")
 	_, err = svc.UpdateProject(ctx, "NOPE", UpdateProjectInput{Name: ptr("x")})
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
+
+	// Archiving (Ed, 2026-10-09): out of the active list, into the archived one; twice changes nothing; TC never.
+	old, err := svc.SetProjectArchived(ctx, "CHK", true)
+	require.NoError(t, err)
+	require.NotNil(t, old.ArchivedAt)
+	again, err := svc.SetProjectArchived(ctx, "CHK", true)
+	require.NoError(t, err)
+	assert.Equal(t, old.ArchivedAt, again.ArchivedAt)
+	res, err = svc.ListProjects(ctx, ProjectFilter{}, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), res.Total)
+	res, err = svc.ListProjects(ctx, ProjectFilter{Archived: true}, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, "CHK", res.Items[0].Key)
+	active, err := svc.ActiveProjectIDs(ctx, nil)
+	require.NoError(t, err)
+	assert.NotContains(t, active, old.ID)
+	active, err = svc.ActiveProjectIDs(ctx, []int64{old.ID, 1})
+	require.NoError(t, err)
+	assert.Equal(t, []int64{1}, active)
+	_, err = svc.SetProjectArchived(ctx, "TC", true)
+	assert.Equal(t, apperr.KindConflict, kindOf(t, err))
+	_, err = svc.SetProjectArchived(ctx, "NOPE", true)
+	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
+	back, err := svc.SetProjectArchived(ctx, "CHK", false)
+	require.NoError(t, err)
+	assert.Nil(t, back.ArchivedAt)
+	// Changed concurrently: the repository finds nothing to change and the state it is in now is answered.
+	repo.errs["SetProjectArchived"] = ErrNotFound
+	now, err := svc.SetProjectArchived(ctx, "CHK", true)
+	require.NoError(t, err)
+	assert.Nil(t, now.ArchivedAt)
+	repo.errs["SetProjectArchived"] = errBoom
+	_, err = svc.SetProjectArchived(ctx, "CHK", true)
+	assert.ErrorIs(t, err, errBoom)
+	repo.errs["ProjectIDs"] = errBoom
+	_, err = svc.ActiveProjectIDs(ctx, nil)
+	assert.ErrorIs(t, err, errBoom)
+	_, err = svc.ActiveProjectIDs(ctx, []int64{1})
+	assert.ErrorIs(t, err, errBoom)
 
 	for _, method := range []string{"CreateProject", "GetProjectByKey", "GetProject", "UpdateProject"} {
 		repo.errs[method] = errBoom
@@ -441,10 +481,10 @@ func TestProjectsLifecycle(t *testing.T) {
 	_, err = svc.UpdateProject(ctx, "CHK", UpdateProjectInput{Name: ptr("x")})
 	assert.ErrorIs(t, err, errBoom)
 	repo.errs["CountProjects"] = errBoom
-	_, err = svc.ListProjects(ctx, nil, nil, pagination.Default())
+	_, err = svc.ListProjects(ctx, ProjectFilter{}, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 	repo.errs["ListProjects"] = errBoom
-	_, err = svc.ListProjects(ctx, nil, nil, pagination.Default())
+	_, err = svc.ListProjects(ctx, ProjectFilter{}, pagination.Default())
 	assert.ErrorIs(t, err, errBoom)
 }
 

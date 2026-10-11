@@ -36,6 +36,8 @@ var summaries = map[string]string{
 	"POST /api/v1/ingestion/finalize":                                                 "finalized a sharded run",
 	"POST /api/v1/projects":                                                           "created a project",
 	"PATCH /api/v1/projects/{projectKey}":                                             "edited the project",
+	"POST /api/v1/projects/{projectKey}/archive":                                      "archived the project",
+	"POST /api/v1/projects/{projectKey}/unarchive":                                    "unarchived the project",
 	"PUT /api/v1/projects/{projectKey}/members/{username}":                            "set the role of {username}",
 	"DELETE /api/v1/projects/{projectKey}/members/{username}":                         "removed {username} from the project",
 	"POST /api/v1/projects/{projectKey}/api-keys":                                     "created an API key",

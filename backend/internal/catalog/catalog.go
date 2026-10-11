@@ -40,6 +40,17 @@ type Project struct {
 	Description string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	// ArchivedAt is when an administrator archived the project (nil: active). An archived project leaves the lists
+	// and is read-only until unarchived.
+	ArchivedAt *time.Time
+}
+
+// ProjectFilter narrows the projects list: IDs (nil: every project), a LIKE-escaped Search on key or name (nil: none),
+// and the archived projects instead of the active ones.
+type ProjectFilter struct {
+	IDs      []int64
+	Search   *string
+	Archived bool
 }
 
 // CreateProjectInput is the content of a new project.
@@ -386,9 +397,12 @@ type Repository interface {
 	CreateProject(ctx context.Context, in CreateProjectInput) (Project, error)
 	GetProject(ctx context.Context, id int64) (Project, error)
 	GetProjectByKey(ctx context.Context, key string) (Project, error)
-	// ListProjects and CountProjects take a LIKE-escaped search (nil: none) matched against keys and names.
-	ListProjects(ctx context.Context, projectIDs []int64, search *string, limit, offset int32) ([]Project, error)
-	CountProjects(ctx context.Context, projectIDs []int64, search *string) (int64, error)
+	ListProjects(ctx context.Context, f ProjectFilter, limit, offset int32) ([]Project, error)
+	CountProjects(ctx context.Context, f ProjectFilter) (int64, error)
+	// SetProjectArchived archives or unarchives a project: ErrNotFound when it does not exist or is already so.
+	SetProjectArchived(ctx context.Context, key string, archived bool) (Project, error)
+	// ProjectIDs lists the ids of the archived projects, or of the active ones.
+	ProjectIDs(ctx context.Context, archived bool) ([]int64, error)
 	UpdateProject(ctx context.Context, key string, in UpdateProjectInput) (Project, error)
 
 	ListTestSteps(ctx context.Context, testCaseID int64, limit, offset int32) ([]TestStep, error)

@@ -1,7 +1,9 @@
 import { Link } from 'react-router'
 
 import { useProject, useProjects } from '@/api/queries'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { formatDateTime } from '@/lib/format'
 
 import { projectLabel, useCurrentProject } from './currentProject'
 
@@ -86,5 +88,26 @@ export function Breadcrumb({
         </Button>
       ) : null}
     </nav>
+  )
+}
+
+/** Says that a project is archived: read-only and out of the lists until an administrator unarchives it. */
+export function ArchivedNotice({ projectKey }: { projectKey: string }) {
+  const project = useProject(projectKey || undefined).data
+  if (!project?.archivedAt) return null
+  return (
+    <Alert className="mb-4" data-testid="archived-notice">
+      <AlertTitle>
+        {projectLabel(project)} is archived ({formatDateTime(project.archivedAt)})
+      </AlertTitle>
+      <AlertDescription>
+        It is read-only and left out of every list and the project switcher; nothing in it was deleted. An
+        administrator can unarchive it from the{' '}
+        <Link to="/projects?archived=1" className="underline">
+          archived projects
+        </Link>
+        .
+      </AlertDescription>
+    </Alert>
   )
 }

@@ -2752,6 +2752,80 @@ const tokenScenarios: Scenario[] = [
   ).map(([op, call]) => ({ op, status: 403, setup: outsideToken, call })),
 ]
 
+/**
+ * An archived project is read-only: every change to it answers 409 (the mock archives TC directly; the server never
+ * lets TC be archived, which the archive scenarios check).
+ */
+const archiveTc = () => {
+  withWebhook()
+  db.projects[0].archivedAt = '2026-10-10T10:00:00Z'
+}
+const ids = { testCaseIds: [] }
+const archivedWrites: [string, object][] = [
+  ['PATCH /api/v1/projects/{projectKey}', { name: 'x' }],
+  ['PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}', { name: 'R' }],
+  ['PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}/values/{valueKey}', { name: 'C' }],
+  ['PATCH /api/v1/projects/{projectKey}/suites/{suiteKey}', { name: 'S' }],
+  ['PUT /api/v1/projects/{projectKey}/suites/{suiteKey}/cases', ids],
+  [
+    'POST /api/v1/projects/{projectKey}/requirements/import',
+    { provider: 'jira', items: [{ externalId: 'X-1', title: 'x' }] },
+  ],
+  ['PATCH /api/v1/projects/{projectKey}/requirements/{requirementId}', { title: 'x' }],
+  ['PUT /api/v1/projects/{projectKey}/requirements/{requirementId}/test-cases', ids],
+  ['POST /api/v1/projects/{projectKey}/webhooks', hookBody],
+  ['PATCH /api/v1/projects/{projectKey}/webhooks/{webhookId}', { active: false }],
+  ['POST /api/v1/projects/{projectKey}/webhooks/{webhookId}/ping', {}],
+  ['PUT /api/v1/projects/{projectKey}/github', { repository: 'acme/shop', token: 't' }],
+  ['DELETE /api/v1/projects/{projectKey}/github', {}],
+  [
+    'POST /api/v1/projects/{projectKey}/issues/import',
+    { provider: 'jira', items: [{ externalId: 'X-1', title: 'x', state: 'open' }] },
+  ],
+  ['PATCH /api/v1/projects/{projectKey}/issues/{issueId}', { title: 'x' }],
+  ['PUT /api/v1/projects/{projectKey}/issues/{issueId}/test-cases', ids],
+  ['POST /api/v1/test-cases', { title: 'x' }],
+  ['PATCH /api/v1/test-cases/{testCaseId}', { title: 'x' }],
+  ['POST /api/v1/test-cases/{testCaseId}/deprecate', {}],
+  ['POST /api/v1/test-cases/{testCaseId}/reactivate', {}],
+  ['POST /api/v1/test-cases/{testCaseId}/steps', { action: 'x' }],
+  ['PUT /api/v1/test-cases/{testCaseId}/steps/order', { stepIds: [2, 1] }],
+  ['PATCH /api/v1/test-cases/{testCaseId}/steps/{stepId}', { action: 'x' }],
+  ['DELETE /api/v1/test-cases/{testCaseId}/steps/{stepId}', {}],
+]
+const archivedScenarios = (): Scenario[] =>
+  archivedWrites
+    .filter(([key]) => consumedOperations().includes(key))
+    .map(([key, body]) => {
+      const [method, path] = key.split(' ') as [Method, string]
+      return {
+        op: key,
+        status: 409,
+        setup: archiveTc,
+        call: (c) =>
+          (c[method] as AnyCall)(path, {
+            params: { path: { ...anyPath, webhookId: 31 } },
+            ...(method === 'DELETE' || Object.keys(body).length === 0 ? {} : { body }),
+          }),
+      }
+    })
+
+const archiveScenarios: Scenario[] = (['archive', 'unarchive'] as const).flatMap((action) => {
+  const key = `POST /api/v1/projects/{projectKey}/${action}` as const
+  const call =
+    (projectKey: string) =>
+    (c: ApiClient): Promise<Result> =>
+      c.POST(key.slice(5) as '/api/v1/projects/{projectKey}/archive', { params: { path: { projectKey } } })
+  return [
+    { op: key, status: 200, setup: addChk, call: call('CHK') },
+    { op: key, status: 400, call: call('chk') },
+    { op: key, status: 403, setup: asMember, call: call('TC') },
+    { op: key, status: 404, call: call('NOPE') },
+    { op: key, status: 500, setup: fail, call: call('TC') },
+    ...(action === 'archive' ? [{ op: key, status: 409, call: call('TC') }] : []),
+  ]
+})
+
 const scenarios: Scenario[] = [
   ...tokenScenarios,
   ...auditScenarios,
@@ -2769,6 +2843,13 @@ const scenarios: Scenario[] = [
   ...liveScenarios,
   ...authScenarios,
   ...signedOutScenarios(),
+  ...archivedScenarios(),
+  ...archiveScenarios,
+  {
+    op: 'GET /api/v1/projects',
+    status: 400,
+    call: (c) => c.GET('/api/v1/projects', { params: { query: { archived: 'yes' as unknown as boolean } } }),
+  },
   // Projects
   {
     op: 'GET /api/v1/projects',

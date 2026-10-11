@@ -5,6 +5,9 @@ package integration
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/edcrove/provenly/backend/internal/app"
 	"github.com/edcrove/provenly/backend/internal/catalog"
 	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
@@ -47,7 +51,7 @@ func TestProjects(t *testing.T) {
 		e, _ = apperr.As(err)
 		assert.Equal(t, apperr.KindNotFound, e.Kind)
 
-		page, err := s.Catalog.ListProjects(ctx, nil, nil, pagination.Page{Number: 1, Size: 1})
+		page, err := s.Catalog.ListProjects(ctx, catalog.ProjectFilter{}, pagination.Page{Number: 1, Size: 1})
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), page.Total)
 		assert.Equal(t, "CHK", page.Items[0].Key, "ordered by key")
@@ -89,7 +93,7 @@ func TestProjects(t *testing.T) {
 		pay, err := s.Catalog.CreateProject(ctx, catalog.CreateProjectInput{Key: "PAY", Name: "Payments 100%_done"})
 		require.NoError(t, err)
 		find := func(ids []int64, q string) (int64, []string) {
-			p, err := s.Catalog.ListProjects(ctx, ids, &q, pagination.Page{Number: 1, Size: 100})
+			p, err := s.Catalog.ListProjects(ctx, catalog.ProjectFilter{IDs: ids, Search: &q}, pagination.Page{Number: 1, Size: 100})
 			require.NoError(t, err)
 			keys := make([]string, len(p.Items))
 			for i, it := range p.Items {
@@ -97,7 +101,7 @@ func TestProjects(t *testing.T) {
 			}
 			return p.Total, keys
 		}
-		all, err := s.Catalog.ListProjects(ctx, nil, nil, pagination.Page{Number: 1, Size: 100})
+		all, err := s.Catalog.ListProjects(ctx, catalog.ProjectFilter{}, pagination.Page{Number: 1, Size: 100})
 		require.NoError(t, err)
 		assert.Equal(t, int64(122), all.Total, "the default project, 120 and PAY")
 		n, keys := find(nil, "pay")
@@ -113,6 +117,76 @@ func TestProjects(t *testing.T) {
 		assert.Equal(t, int64(11), n, "Bulk 11 and Bulk 110..119")
 		n, _ = find([]int64{pay.ID}, "bulk")
 		assert.Equal(t, int64(0), n, "only within the caller's projects")
+	})
+
+	t.Run("BE-INT-078_an_archived_project_leaves_the_lists_and_is_read_only_until_unarchived", func(t *testing.T) {
+		s, ctx := fresh(t)
+		require.NoError(t, s.Identity.Bootstrap(context.Background(), "admin", "correct horse"))
+		sess, err := s.Identity.Login(context.Background(), "admin", "correct horse")
+		require.NoError(t, err)
+		srv := httptest.NewServer(app.NewHandler(s, 1<<20))
+		defer srv.Close()
+		do := func(method, path, body string) (int, string) {
+			req, _ := http.NewRequest(method, srv.URL+path, strings.NewReader(body))
+			req.Header.Set("Authorization", "Bearer "+sess.Token)
+			req.Header.Set("Content-Type", "application/json")
+			res, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer res.Body.Close()
+			b, _ := io.ReadAll(res.Body)
+			return res.StatusCode, string(b)
+		}
+		code, _ := do("POST", "/api/v1/projects", `{"key":"OLD","name":"Old product"}`)
+		require.Equal(t, 201, code)
+		code, _ = do("POST", "/api/v1/test-cases", `{"title":"kept","project":"OLD","automated":true}`)
+		require.Equal(t, 201, code)
+
+		code, body := do("POST", "/api/v1/projects/OLD/archive", "")
+		require.Equal(t, 200, code)
+		assert.Contains(t, body, `"archivedAt":"`)
+		_, body = do("GET", "/api/v1/projects", "")
+		assert.NotContains(t, body, `"OLD"`, "not in the projects list")
+		_, body = do("GET", "/api/v1/projects?archived=true", "")
+		assert.Contains(t, body, `"key":"OLD"`)
+		_, body = do("GET", "/api/v1/test-cases", "")
+		assert.NotContains(t, body, "OLD-1", "nor in lists that span projects")
+		_, body = do("GET", "/api/v1/test-cases?project=OLD", "")
+		assert.Contains(t, body, "OLD-1", "read by key")
+		code, _ = do("GET", "/api/v1/projects/OLD/webhooks", "")
+		assert.Equal(t, 200, code, "reads that need a maintainer stay allowed")
+
+		// Read-only: changes, reports and settings are a 409 that says why.
+		for _, c := range [][3]string{
+			{"POST", "/api/v1/test-cases", `{"title":"x","project":"OLD"}`},
+			{"PATCH", "/api/v1/projects/OLD", `{"name":"x"}`},
+			{"POST", "/api/v1/projects/OLD/suites", `{"key":"smoke","name":"Smoke","kind":"static"}`},
+			{"POST", "/api/v1/ingestion/junit?project=OLD&provider=github&runId=1&runAttempt=1", `<testsuite name="s"><testcase name="t"/></testsuite>`},
+		} {
+			req, _ := http.NewRequest(c[0], srv.URL+c[1], strings.NewReader(c[2]))
+			req.Header.Set("Authorization", "Bearer "+sess.Token)
+			req.Header.Set("Content-Type", map[bool]string{true: "application/xml", false: "application/json"}[strings.Contains(c[1], "junit")])
+			res, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			b, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			assert.Equal(t, 409, res.StatusCode, c[0]+" "+c[1])
+			assert.Contains(t, string(b), "project OLD is archived", c[0]+" "+c[1])
+		}
+
+		// TC never: the database refuses it too.
+		code, _ = do("POST", "/api/v1/projects/TC/archive", "")
+		assert.Equal(t, 409, code)
+		_, err = db.Pool.Exec(ctx, `UPDATE projects SET archived_at = now() WHERE key = 'TC'`)
+		assert.ErrorContains(t, err, "projects_default_never_archived")
+
+		code, body = do("POST", "/api/v1/projects/OLD/unarchive", "")
+		require.Equal(t, 200, code)
+		assert.Contains(t, body, `"archivedAt":null`)
+		code, _ = do("POST", "/api/v1/test-cases", `{"title":"again","project":"OLD"}`)
+		assert.Equal(t, 201, code, "writable again")
+		ids, err := s.Catalog.ActiveProjectIDs(ctx, nil)
+		require.NoError(t, err)
+		assert.Len(t, ids, 2)
 	})
 
 	t.Run("BE-INT-032_numbers_are_per_project_contiguous_and_unique_under_concurrency", func(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -280,17 +281,57 @@ func (s *Service) ProjectByID(ctx context.Context, id int64) (Project, error) {
 	return p, err
 }
 
-// ListProjects returns a page of projects ordered by key, narrowed by a LIKE-escaped search (nil: none) on key or name.
-func (s *Service) ListProjects(ctx context.Context, projectIDs []int64, search *string, page pagination.Page) (pagination.Result[Project], error) {
-	items, err := s.repo.ListProjects(ctx, projectIDs, search, page.Limit(), page.Offset())
+// ListProjects returns a page of projects ordered by key: the active ones, or the archived ones.
+func (s *Service) ListProjects(ctx context.Context, f ProjectFilter, page pagination.Page) (pagination.Result[Project], error) {
+	items, err := s.repo.ListProjects(ctx, f, page.Limit(), page.Offset())
 	if err != nil {
 		return pagination.Result[Project]{}, err
 	}
-	total, err := s.repo.CountProjects(ctx, projectIDs, search)
+	total, err := s.repo.CountProjects(ctx, f)
 	if err != nil {
 		return pagination.Result[Project]{}, err
 	}
 	return pagination.Result[Project]{Items: items, Page: page, Total: total}, nil
+}
+
+// SetProjectArchived archives a project (it leaves the lists and becomes read-only) or brings it back. The default
+// project, where reports without ?project= go, is never archived. Archiving twice changes nothing.
+func (s *Service) SetProjectArchived(ctx context.Context, key string, archived bool) (Project, error) {
+	p, err := s.ProjectByKey(ctx, key)
+	if err != nil {
+		return Project{}, err
+	}
+	if archived && p.Key == DefaultProjectKey {
+		return Project{}, apperr.Conflict("the default project %s cannot be archived: reports without ?project= go to it", DefaultProjectKey)
+	}
+	if (p.ArchivedAt != nil) == archived {
+		return p, nil
+	}
+	p, err = s.repo.SetProjectArchived(ctx, key, archived)
+	if errors.Is(err, ErrNotFound) {
+		// Archived or unarchived concurrently: answer the state it is in now.
+		return s.ProjectByKey(ctx, key)
+	}
+	return p, err
+}
+
+// ActiveProjectIDs narrows a list that spans projects (ids nil: every project) to the active ones: archived projects
+// are left out of lists unless asked for by key.
+func (s *Service) ActiveProjectIDs(ctx context.Context, ids []int64) ([]int64, error) {
+	if ids == nil {
+		return s.repo.ProjectIDs(ctx, false)
+	}
+	archived, err := s.repo.ProjectIDs(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if !slices.Contains(archived, id) {
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }
 
 // UpdateProject edits a project's name or description; its key never changes.

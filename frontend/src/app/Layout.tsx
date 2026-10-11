@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useAuditAccess } from '@/features/audit/access'
 import { useCurrentProject } from '@/features/projects/currentProject'
 import { ProjectProvider } from '@/features/projects/ProjectProvider'
+import { ArchivedNotice } from '@/features/projects/ProjectScope'
 import { ProjectSwitcher } from '@/features/projects/ProjectSwitcher'
 import { ApiError } from '@/lib/problem'
 import { cn } from '@/lib/utils'
@@ -61,6 +62,7 @@ export function Layout() {
       <div className="min-h-screen">
         <Header displayName={me.data.displayName} isAdmin={me.data.isAdmin} />
         <main className="mx-auto max-w-7xl px-4 py-6 xl:px-6">
+          <CurrentArchivedNotice />
           <Outlet context={me.data} />
         </main>
       </div>
@@ -166,4 +168,10 @@ function Header({ displayName, isAdmin }: { displayName: string; isAdmin: boolea
       ) : null}
     </header>
   )
+}
+
+/** The current project may be archived (chosen before, or remembered by this browser): say so on every page. */
+function CurrentArchivedNotice() {
+  const { project } = useCurrentProject()
+  return project ? <ArchivedNotice projectKey={project} /> : null
 }

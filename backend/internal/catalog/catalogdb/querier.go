@@ -42,7 +42,10 @@ type Querier interface {
 	GetRequirement(ctx context.Context, arg GetRequirementParams) (GetRequirementRow, error)
 	GetSuite(ctx context.Context, arg GetSuiteParams) (GetSuiteRow, error)
 	GetTestCase(ctx context.Context, id int64) (TestCase, error)
+	ListActiveProjectIDs(ctx context.Context) ([]int64, error)
 	ListAllTestSteps(ctx context.Context, testCaseID int64) ([]TestStep, error)
+	// Lists that span projects leave the archived ones out.
+	ListArchivedProjectIDs(ctx context.Context) ([]int64, error)
 	ListDimensionValues(ctx context.Context, projectID int64) ([]ClassificationValue, error)
 	// A project's classification dimensions: built-ins first in their seeded order, then the project's own by key.
 	ListDimensions(ctx context.Context, projectID int64) ([]ClassificationDimension, error)
@@ -56,7 +59,7 @@ type Querier interface {
 	// Which of the given ids are test cases of the project.
 	ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDsParams) ([]int64, error)
 	// project_ids NULL means every project (administrators); otherwise only those. search (LIKE-escaped) finds a key or a
-	// name containing it, any case.
+	// name containing it, any case. archived lists the archived projects instead of the active ones.
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)
 	// A project's requirements (optionally only those a test case covers), newest first, with their linked test cases.
 	ListRequirements(ctx context.Context, arg ListRequirementsParams) ([]ListRequirementsRow, error)
@@ -85,6 +88,8 @@ type Querier interface {
 	// creations; numbers are never reused).
 	NextNativeRequirementNumber(ctx context.Context, projectID int64) (int64, error)
 	ReactivateTestCase(ctx context.Context, id int64) (TestCase, error)
+	// Archives (archived = true) or unarchives a project; no row when it does not exist or is already in that state.
+	SetProjectArchived(ctx context.Context, arg SetProjectArchivedParams) (Project, error)
 	// Sets the value of one dimension; unchanged when it already has that value (so the version does not advance).
 	SetTestCaseClassification(ctx context.Context, arg SetTestCaseClassificationParams) error
 	SetTestStepPosition(ctx context.Context, arg SetTestStepPositionParams) error

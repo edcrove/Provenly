@@ -161,10 +161,15 @@ func statusText(s *catalog.Status) pgtype.Text {
 }
 
 func toProject(r catalogdb.Project) catalog.Project {
-	return catalog.Project{
+	p := catalog.Project{
 		ID: r.ID, Key: r.Key, Name: r.Name, Description: r.Description,
 		CreatedAt: r.CreatedAt.Time, UpdatedAt: r.UpdatedAt.Time,
 	}
+	if r.ArchivedAt.Valid {
+		at := r.ArchivedAt.Time
+		p.ArchivedAt = &at
+	}
+	return p
 }
 
 // CreateTestCase implements catalog.Repository.
@@ -304,8 +309,8 @@ func project(r catalogdb.Project, err error) (catalog.Project, error) {
 }
 
 // ListProjects implements catalog.Repository.
-func (s *Store) ListProjects(ctx context.Context, projectIDs []int64, search *string, limit, offset int32) ([]catalog.Project, error) {
-	rows, err := s.q.ListProjects(ctx, catalogdb.ListProjectsParams{ProjectIds: projectIDs, Search: text(search), PageLimit: limit, PageOffset: offset})
+func (s *Store) ListProjects(ctx context.Context, f catalog.ProjectFilter, limit, offset int32) ([]catalog.Project, error) {
+	rows, err := s.q.ListProjects(ctx, catalogdb.ListProjectsParams{ProjectIds: f.IDs, Search: text(f.Search), Archived: f.Archived, PageLimit: limit, PageOffset: offset})
 	if err != nil {
 		return nil, err
 	}
@@ -317,8 +322,25 @@ func (s *Store) ListProjects(ctx context.Context, projectIDs []int64, search *st
 }
 
 // CountProjects implements catalog.Repository.
-func (s *Store) CountProjects(ctx context.Context, projectIDs []int64, search *string) (int64, error) {
-	return s.q.CountProjects(ctx, catalogdb.CountProjectsParams{ProjectIds: projectIDs, Search: text(search)})
+func (s *Store) CountProjects(ctx context.Context, f catalog.ProjectFilter) (int64, error) {
+	return s.q.CountProjects(ctx, catalogdb.CountProjectsParams{ProjectIds: f.IDs, Search: text(f.Search), Archived: f.Archived})
+}
+
+// SetProjectArchived implements catalog.Repository.
+func (s *Store) SetProjectArchived(ctx context.Context, key string, archived bool) (catalog.Project, error) {
+	r, err := s.q.SetProjectArchived(ctx, catalogdb.SetProjectArchivedParams{Key: key, Archived: archived})
+	if err != nil {
+		return catalog.Project{}, notFound(err)
+	}
+	return toProject(r), nil
+}
+
+// ProjectIDs implements catalog.Repository.
+func (s *Store) ProjectIDs(ctx context.Context, archived bool) ([]int64, error) {
+	if archived {
+		return s.q.ListArchivedProjectIDs(ctx)
+	}
+	return s.q.ListActiveProjectIDs(ctx)
 }
 
 // UpdateProject implements catalog.Repository.

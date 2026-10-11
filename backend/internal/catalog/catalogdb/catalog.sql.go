@@ -112,15 +112,17 @@ SELECT count(*) FROM projects
 WHERE ($1::bigint[] IS NULL OR id = ANY($1::bigint[]))
   AND ($2::text IS NULL OR key ILIKE '%' || $2::text || '%' ESCAPE '\'
        OR name ILIKE '%' || $2::text || '%' ESCAPE '\')
+  AND (archived_at IS NOT NULL) = $3::boolean
 `
 
 type CountProjectsParams struct {
 	ProjectIds []int64
 	Search     pgtype.Text
+	Archived   bool
 }
 
 func (q *Queries) CountProjects(ctx context.Context, arg CountProjectsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countProjects, arg.ProjectIds, arg.Search)
+	row := q.db.QueryRow(ctx, countProjects, arg.ProjectIds, arg.Search, arg.Archived)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -245,7 +247,7 @@ const createProject = `-- name: CreateProject :one
 INSERT INTO projects (key, name, description)
 VALUES ($1, $2, $3)
 ON CONFLICT (key) DO NOTHING
-RETURNING id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number
+RETURNING id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number, archived_at
 `
 
 type CreateProjectParams struct {
@@ -267,6 +269,7 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) (P
 		&i.UpdatedAt,
 		&i.NextRequirementNumber,
 		&i.NextIssueNumber,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
@@ -538,7 +541,7 @@ func (q *Queries) GetIssue(ctx context.Context, arg GetIssueParams) (GetIssueRow
 }
 
 const getProject = `-- name: GetProject :one
-SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number FROM projects WHERE id = $1
+SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number, archived_at FROM projects WHERE id = $1
 `
 
 func (q *Queries) GetProject(ctx context.Context, id int64) (Project, error) {
@@ -554,12 +557,13 @@ func (q *Queries) GetProject(ctx context.Context, id int64) (Project, error) {
 		&i.UpdatedAt,
 		&i.NextRequirementNumber,
 		&i.NextIssueNumber,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
 
 const getProjectByKey = `-- name: GetProjectByKey :one
-SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number FROM projects WHERE key = $1
+SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number, archived_at FROM projects WHERE key = $1
 `
 
 func (q *Queries) GetProjectByKey(ctx context.Context, key string) (Project, error) {
@@ -575,6 +579,7 @@ func (q *Queries) GetProjectByKey(ctx context.Context, key string) (Project, err
 		&i.UpdatedAt,
 		&i.NextRequirementNumber,
 		&i.NextIssueNumber,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
@@ -695,6 +700,30 @@ func (q *Queries) GetTestCase(ctx context.Context, id int64) (TestCase, error) {
 	return i, err
 }
 
+const listActiveProjectIDs = `-- name: ListActiveProjectIDs :many
+SELECT id FROM projects WHERE archived_at IS NULL ORDER BY id
+`
+
+func (q *Queries) ListActiveProjectIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listActiveProjectIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllTestSteps = `-- name: ListAllTestSteps :many
 SELECT id, test_case_id, position, action, expected_result, created_at, updated_at FROM test_steps WHERE test_case_id = $1 ORDER BY position
 `
@@ -720,6 +749,31 @@ func (q *Queries) ListAllTestSteps(ctx context.Context, testCaseID int64) ([]Tes
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listArchivedProjectIDs = `-- name: ListArchivedProjectIDs :many
+SELECT id FROM projects WHERE archived_at IS NOT NULL ORDER BY id
+`
+
+// Lists that span projects leave the archived ones out.
+func (q *Queries) ListArchivedProjectIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listArchivedProjectIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -945,26 +999,29 @@ func (q *Queries) ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDs
 }
 
 const listProjects = `-- name: ListProjects :many
-SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number FROM projects
+SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number, archived_at FROM projects
 WHERE ($1::bigint[] IS NULL OR id = ANY($1::bigint[]))
   AND ($2::text IS NULL OR key ILIKE '%' || $2::text || '%' ESCAPE '\'
        OR name ILIKE '%' || $2::text || '%' ESCAPE '\')
-ORDER BY key LIMIT $4 OFFSET $3
+  AND (archived_at IS NOT NULL) = $3::boolean
+ORDER BY key LIMIT $5 OFFSET $4
 `
 
 type ListProjectsParams struct {
 	ProjectIds []int64
 	Search     pgtype.Text
+	Archived   bool
 	PageOffset int32
 	PageLimit  int32
 }
 
 // project_ids NULL means every project (administrators); otherwise only those. search (LIKE-escaped) finds a key or a
-// name containing it, any case.
+// name containing it, any case. archived lists the archived projects instead of the active ones.
 func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error) {
 	rows, err := q.db.Query(ctx, listProjects,
 		arg.ProjectIds,
 		arg.Search,
+		arg.Archived,
 		arg.PageOffset,
 		arg.PageLimit,
 	)
@@ -985,6 +1042,7 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 			&i.UpdatedAt,
 			&i.NextRequirementNumber,
 			&i.NextIssueNumber,
+			&i.ArchivedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1491,6 +1549,36 @@ func (q *Queries) ReactivateTestCase(ctx context.Context, id int64) (TestCase, e
 	return i, err
 }
 
+const setProjectArchived = `-- name: SetProjectArchived :one
+UPDATE projects SET archived_at = CASE WHEN $1::boolean THEN now() END, updated_at = now()
+WHERE key = $2 AND (archived_at IS NOT NULL) <> $1::boolean
+RETURNING id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number, archived_at
+`
+
+type SetProjectArchivedParams struct {
+	Archived bool
+	Key      string
+}
+
+// Archives (archived = true) or unarchives a project; no row when it does not exist or is already in that state.
+func (q *Queries) SetProjectArchived(ctx context.Context, arg SetProjectArchivedParams) (Project, error) {
+	row := q.db.QueryRow(ctx, setProjectArchived, arg.Archived, arg.Key)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Key,
+		&i.Name,
+		&i.Description,
+		&i.NextNumber,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.NextRequirementNumber,
+		&i.NextIssueNumber,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
 const setTestCaseClassification = `-- name: SetTestCaseClassification :exec
 INSERT INTO test_case_classifications (test_case_id, project_id, dimension_id, value_id)
 VALUES ($1, $2, $3, $4)
@@ -1665,7 +1753,7 @@ UPDATE projects SET
     description = coalesce($2, description),
     updated_at  = now()
 WHERE key = $3
-RETURNING id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number
+RETURNING id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number, archived_at
 `
 
 type UpdateProjectParams struct {
@@ -1687,6 +1775,7 @@ func (q *Queries) UpdateProject(ctx context.Context, arg UpdateProjectParams) (P
 		&i.UpdatedAt,
 		&i.NextRequirementNumber,
 		&i.NextIssueNumber,
+		&i.ArchivedAt,
 	)
 	return i, err
 }

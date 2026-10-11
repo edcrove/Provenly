@@ -562,4 +562,13 @@ test('UI flows', async ({ page }) => {
   await shot(page, 'phone-menu')
   await page.setViewportSize({ width: 1440, height: 900 })
   await pickProject(page, '')
+  // Archived projects (Ed, 2026-10-11): out of the lists, read-only, listed on request and unarchived by an administrator.
+  expect((await request.post(`${api}/projects`, { data: { key: 'LEGACY', name: 'Legacy checkout', description: 'Replaced by CHK' } })).status()).toBe(201)
+  expect((await request.post(`${api}/projects/LEGACY/archive`)).status()).toBe(200)
+  await page.goto('/projects?archived=1')
+  await expect(page.getByTestId('project-LEGACY').getByRole('button', { name: 'Unarchive' })).toBeVisible()
+  await shot(page, 'projects-archived')
+  await page.goto('/projects/LEGACY')
+  await expect(page.getByTestId('archived-notice')).toBeVisible()
+  await shot(page, 'archived-project-notice')
 })

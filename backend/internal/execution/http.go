@@ -37,6 +37,8 @@ type TestCaseChecker interface {
 	ProjectOf(ctx context.Context, id int64) (int64, error)
 	ProjectIDByKey(ctx context.Context, key string) (int64, error)
 	Keys(ctx context.Context, ids []int64) (map[int64]string, error)
+	// ActiveProjectIDs leaves archived projects out of a list that spans projects (nil: every project).
+	ActiveProjectIDs(ctx context.Context, ids []int64) ([]int64, error)
 }
 
 var suiteKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,29}$`)
@@ -349,7 +351,7 @@ func (h *Handler) Register(mux httpx.Router) {
 }
 
 // visibleProjects narrows the run list to ?project=<KEY> (which the user must see) or to every project the
-// user can see (nil: every project, for administrators).
+// user can see that is not archived.
 func (h *Handler) visibleProjects(r *http.Request) ([]int64, error) {
 	key, err := projectkey.Query(r)
 	if err != nil {
@@ -363,7 +365,10 @@ func (h *Handler) visibleProjects(r *http.Request) ([]int64, error) {
 		return []int64{id}, err
 	}
 	scope, err := h.guard.Scope(r.Context())
-	return scope.ProjectIDs(), err
+	if err != nil {
+		return nil, err
+	}
+	return h.catalog.ActiveProjectIDs(r.Context(), scope.ProjectIDs())
 }
 
 func (h *Handler) listRuns(w http.ResponseWriter, r *http.Request) {

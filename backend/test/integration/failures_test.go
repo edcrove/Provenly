@@ -134,10 +134,12 @@ func TestPersistenceFailures(t *testing.T) {
 				_, err := cat.CreateProject(ctx, catalog.CreateProjectInput{Key: "XX", Name: "x"})
 				return err
 			},
-			"catalog.GetProject":      func() error { _, err := cat.GetProject(ctx, 1); return err },
-			"catalog.GetProjectByKey": func() error { _, err := cat.GetProjectByKey(ctx, "XX"); return err },
-			"catalog.ListProjects":    func() error { _, err := cat.ListProjects(ctx, nil, nil, 10, 0); return err },
-			"catalog.CountProjects":   func() error { _, err := cat.CountProjects(ctx, nil, nil); return err },
+			"catalog.GetProject":         func() error { _, err := cat.GetProject(ctx, 1); return err },
+			"catalog.GetProjectByKey":    func() error { _, err := cat.GetProjectByKey(ctx, "XX"); return err },
+			"catalog.ListProjects":       func() error { _, err := cat.ListProjects(ctx, catalog.ProjectFilter{}, 10, 0); return err },
+			"catalog.CountProjects":      func() error { _, err := cat.CountProjects(ctx, catalog.ProjectFilter{}); return err },
+			"catalog.SetProjectArchived": func() error { _, err := cat.SetProjectArchived(ctx, "XX", true); return err },
+			"catalog.ProjectIDs":         func() error { _, err := cat.ProjectIDs(ctx, true); return err },
 			"catalog.UpdateProject": func() error {
 				_, err := cat.UpdateProject(ctx, "XX", catalog.UpdateProjectInput{Name: str("x")})
 				return err

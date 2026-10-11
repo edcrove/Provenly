@@ -18,6 +18,7 @@ import { positiveInt } from '@/lib/status'
 
 import { ApiKeysSection } from './ApiKeysSection'
 import { useCurrentProject } from './currentProject'
+import { ArchivedNotice } from './ProjectScope'
 import { ClassificationSection } from './ClassificationSection'
 import { GitHubSection } from './GitHubSection'
 import { useProjectRole } from './useProjectRole'
@@ -133,7 +134,7 @@ export function ProjectMembersPage() {
   const page = positiveInt(params.get('page'), 1)
   const members = useProjectMembers(projectKey, page)
   const manage = can(useProjectRole(projectKey), 'maintainer')
-  const { setProject } = useCurrentProject()
+  const { project: current, setProject } = useCurrentProject()
   const project = useProject(projectKey).data
   const sections = [
     { id: 'members', label: 'Members' },
@@ -148,6 +149,8 @@ export function ProjectMembersPage() {
   ]
   return (
     <div className="grid gap-6">
+      {/* The layout already says so for the current project. */}
+      {projectKey !== current ? <ArchivedNotice projectKey={projectKey} /> : null}
       <div className="grid gap-2">
         <PageTitle title={`${projectKey} · settings`} />
         <h1 className="text-2xl font-semibold">

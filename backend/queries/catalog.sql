@@ -166,18 +166,33 @@ SELECT * FROM projects WHERE key = @key;
 
 -- name: ListProjects :many
 -- project_ids NULL means every project (administrators); otherwise only those. search (LIKE-escaped) finds a key or a
--- name containing it, any case.
+-- name containing it, any case. archived lists the archived projects instead of the active ones.
 SELECT * FROM projects
 WHERE (sqlc.narg('project_ids')::bigint[] IS NULL OR id = ANY(sqlc.narg('project_ids')::bigint[]))
   AND (sqlc.narg('search')::text IS NULL OR key ILIKE '%' || sqlc.narg('search')::text || '%' ESCAPE '\'
        OR name ILIKE '%' || sqlc.narg('search')::text || '%' ESCAPE '\')
+  AND (archived_at IS NOT NULL) = @archived::boolean
 ORDER BY key LIMIT @page_limit OFFSET @page_offset;
 
 -- name: CountProjects :one
 SELECT count(*) FROM projects
 WHERE (sqlc.narg('project_ids')::bigint[] IS NULL OR id = ANY(sqlc.narg('project_ids')::bigint[]))
   AND (sqlc.narg('search')::text IS NULL OR key ILIKE '%' || sqlc.narg('search')::text || '%' ESCAPE '\'
-       OR name ILIKE '%' || sqlc.narg('search')::text || '%' ESCAPE '\');
+       OR name ILIKE '%' || sqlc.narg('search')::text || '%' ESCAPE '\')
+  AND (archived_at IS NOT NULL) = @archived::boolean;
+
+-- name: ListArchivedProjectIDs :many
+-- Lists that span projects leave the archived ones out.
+SELECT id FROM projects WHERE archived_at IS NOT NULL ORDER BY id;
+
+-- name: ListActiveProjectIDs :many
+SELECT id FROM projects WHERE archived_at IS NULL ORDER BY id;
+
+-- name: SetProjectArchived :one
+-- Archives (archived = true) or unarchives a project; no row when it does not exist or is already in that state.
+UPDATE projects SET archived_at = CASE WHEN @archived::boolean THEN now() END, updated_at = now()
+WHERE key = @key AND (archived_at IS NOT NULL) <> @archived::boolean
+RETURNING *;
 
 -- name: UpdateProject :one
 UPDATE projects SET

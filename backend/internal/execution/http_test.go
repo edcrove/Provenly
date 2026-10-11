@@ -80,7 +80,7 @@ func (s *stubAPI) ListAmendments(_ context.Context, _ int64, p pagination.Page) 
 	return pagination.Result[Amendment]{Items: []Amendment{sampleAmendment}, Page: p, Total: 1}, s.err
 }
 
-type stubCatalog struct{ err, projectErr, keysErr error }
+type stubCatalog struct{ err, projectErr, keysErr, activeErr error }
 
 // Keys knows TC-153 and CHK-4 (id 154); other ids have no key.
 func (c stubCatalog) Keys(_ context.Context, ids []int64) (map[int64]string, error) {
@@ -96,6 +96,12 @@ func (c stubCatalog) Keys(_ context.Context, ids []int64) (map[int64]string, err
 
 // ProjectOf puts every test case in project 7.
 func (c stubCatalog) ProjectOf(context.Context, int64) (int64, error) { return 7, c.err }
+func (c stubCatalog) ActiveProjectIDs(_ context.Context, ids []int64) ([]int64, error) {
+	if ids == nil {
+		return []int64{7}, c.activeErr
+	}
+	return ids, c.activeErr
+}
 func (c stubCatalog) ProjectIDByKey(context.Context, string) (int64, error) {
 	return 7, c.projectErr
 }
@@ -141,7 +147,8 @@ func TestHandlerProjectFilter(t *testing.T) {
 	assert.Equal(t, http.StatusOK, serve(api, stubCatalog{}, "/api/v1/test-runs?project=CHK").Code)
 	assert.Equal(t, []int64{7}, api.gotProjects)
 	serve(api, stubCatalog{}, "/api/v1/test-runs")
-	assert.Nil(t, api.gotProjects, "administrators: every project")
+	assert.Equal(t, []int64{7}, api.gotProjects, "administrators: every active project")
+	assert.Equal(t, http.StatusInternalServerError, serve(api, stubCatalog{activeErr: errors.New("boom")}, "/api/v1/test-runs").Code)
 
 	assert.Equal(t, http.StatusNotFound, serve(api, stubCatalog{projectErr: apperr.NotFound("project CHK not found")}, "/api/v1/test-runs?project=CHK").Code)
 	for _, target := range []string{"/api/v1/test-runs?project=", "/api/v1/test-runs?project=chk"} {

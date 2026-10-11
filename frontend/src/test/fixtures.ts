@@ -50,6 +50,7 @@ export function project(overrides: Partial<Project> = {}): Project {
     description: 'Test cases created before projects existed.',
     createdAt: at,
     updatedAt: at,
+    archivedAt: null,
     myRole: 'admin',
     ...overrides,
   }

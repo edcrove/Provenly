@@ -76,3 +76,5 @@ targets:
     description: printing a report (deployed audit) - printed (print media), a run page hides the header, menu and buttons and shows its content with a caption naming the run and when it was printed
   - id: FE-E2E-038
     description: maintainer audit view (P20-5, Ed 2026-10-09) - a maintainer signs in, opens Audit from the header, reads that the log shows the projects they maintain, sees the creation of a test case of their project and nothing of a project they do not maintain
+  - id: FE-E2E-039
+    description: archived projects (Ed, 2026-10-11) - an administrator archives a project from the projects page after confirming, it leaves the list, "Show archived projects instead" finds it, opening it says it is archived on its pages, its test case offers no Edit and the API refuses a change with 409; unarchiving from the archived list brings Edit back

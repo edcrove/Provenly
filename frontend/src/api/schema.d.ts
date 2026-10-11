@@ -345,6 +345,46 @@ export interface paths {
         patch: operations["updateProject"];
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a project (administrators): it leaves the lists and becomes read-only; nothing is deleted. Idempotent. The default project TC cannot be archived (409). */
+        post: operations["archiveProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unarchive a project (administrators); it is listed and writable again. Idempotent. */
+        post: operations["unarchiveProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/members": {
         parameters: {
             query?: never;
@@ -1683,6 +1723,11 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             /**
+             * Format: date-time
+             * @description When an administrator archived the project, or null. An archived project leaves every list and is read-only (changes, reports and settings answer 409) until it is unarchived; nothing in it is deleted.
+             */
+            archivedAt: string | null;
+            /**
              * @description What the signed-in user may do in this project
              * @enum {string}
              */
@@ -2827,7 +2872,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description The request conflicts with the current state (e.g. a project key already in use) */
+        /** @description The request conflicts with the current state (e.g. a project key already in use, or a change to an archived project: an administrator unarchives it first) */
         Conflict: {
             headers: {
                 [name: string]: unknown;
@@ -3416,6 +3461,8 @@ export interface operations {
                 pageSize?: components["parameters"]["PageSize"];
                 /** @description Text the key or the name contains, any case (`%` and `_` are literal): what the project switcher searches with, so every project is found however many pages there are. At most 200 characters; blank is a 400. */
                 q?: string;
+                /** @description `true` lists the archived projects instead of the active ones (the default). Lists that span projects (test cases, runs, the dashboard) never include archived projects; ask for one by key to read it. */
+                archived?: boolean;
             };
             header?: never;
             path?: never;
@@ -3524,7 +3571,65 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    archiveProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The archived project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    unarchiveProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @example CHK */
+                projectKey: components["parameters"]["ProjectKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The active project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -3813,6 +3918,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -3886,6 +3992,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4016,6 +4123,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4051,6 +4159,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4151,6 +4260,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4214,6 +4324,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4248,6 +4359,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4415,6 +4527,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4449,6 +4562,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4479,6 +4593,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4578,6 +4693,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4605,6 +4721,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -4736,6 +4853,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4799,6 +4917,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4833,6 +4952,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4917,6 +5037,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4986,6 +5107,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             412: components["responses"]["PreconditionFailed"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
@@ -5023,6 +5145,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             412: components["responses"]["PreconditionFailed"];
             500: components["responses"]["InternalError"];
         };
@@ -5059,6 +5182,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             412: components["responses"]["PreconditionFailed"];
             500: components["responses"]["InternalError"];
         };
@@ -5131,6 +5255,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             412: components["responses"]["PreconditionFailed"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
@@ -5172,6 +5297,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             412: components["responses"]["PreconditionFailed"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
@@ -5208,6 +5334,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             412: components["responses"]["PreconditionFailed"];
             500: components["responses"]["InternalError"];
         };
@@ -5249,6 +5376,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             412: components["responses"]["PreconditionFailed"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];

@@ -35,7 +35,9 @@ type API interface {
 	ReorderSteps(ctx context.Context, testCaseID int64, stepIDs []int64, m etag.Match) ([]TestStep, int64, error)
 	CreateProject(ctx context.Context, in CreateProjectInput) (Project, error)
 	ProjectByKey(ctx context.Context, key string) (Project, error)
-	ListProjects(ctx context.Context, projectIDs []int64, search *string, page pagination.Page) (pagination.Result[Project], error)
+	ListProjects(ctx context.Context, f ProjectFilter, page pagination.Page) (pagination.Result[Project], error)
+	SetProjectArchived(ctx context.Context, key string, archived bool) (Project, error)
+	ActiveProjectIDs(ctx context.Context, ids []int64) ([]int64, error)
 	UpdateProject(ctx context.Context, key string, in UpdateProjectInput) (Project, error)
 	Dimensions(ctx context.Context, projectID int64) ([]Dimension, error)
 	CreateDimension(ctx context.Context, projectID int64, in DimensionInput) (Dimension, error)
@@ -74,13 +76,15 @@ type ProjectDTO struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 	// MyRole is what the signed-in user may do in the project (admin, maintainer, member or viewer).
 	MyRole string `json:"myRole"`
+	// ArchivedAt is when the project was archived (null: active).
+	ArchivedAt *time.Time `json:"archivedAt"`
 }
 
 // ProjectToDTO converts a Project to its wire form, with the caller's role in it.
 func ProjectToDTO(p Project, role authz.Role) ProjectDTO {
 	return ProjectDTO{
 		ID: p.ID, Key: p.Key, Name: p.Name, Description: p.Description, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
-		MyRole: role.String(),
+		MyRole: role.String(), ArchivedAt: p.ArchivedAt,
 	}
 }
 
@@ -245,10 +249,16 @@ func (h *Handler) onTestCase(minRole authz.Role, next http.HandlerFunc) http.Han
 
 type testCaseKey struct{}
 
-// VisibleProjects narrows a list to ?project=<KEY> (which the user must see) or to every project the user can see
-// (nil: every project, for administrators).
-func VisibleProjects(r *http.Request, byKey func(context.Context, string) (Project, error), guard authz.Guard) ([]int64, error) {
-	id, err := ProjectQuery(r, byKey)
+// ProjectLister is what VisibleProjects reads from the catalog.
+type ProjectLister interface {
+	ProjectByKey(ctx context.Context, key string) (Project, error)
+	ActiveProjectIDs(ctx context.Context, ids []int64) ([]int64, error)
+}
+
+// VisibleProjects narrows a list to ?project=<KEY> (which the user must see, archived or not) or to every active
+// project the user can see: archived projects stay out of lists that span projects.
+func VisibleProjects(r *http.Request, projects ProjectLister, guard authz.Guard) ([]int64, error) {
+	id, err := ProjectQuery(r, projects.ProjectByKey)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +269,10 @@ func VisibleProjects(r *http.Request, byKey func(context.Context, string) (Proje
 		return []int64{*id}, nil
 	}
 	scope, err := guard.Scope(r.Context())
-	return scope.ProjectIDs(), err
+	if err != nil {
+		return nil, err
+	}
+	return projects.ActiveProjectIDs(r.Context(), scope.ProjectIDs())
 }
 
 // project resolves {projectKey} and checks the user's role in it; the role is returned for the DTO.
@@ -286,6 +299,8 @@ func (h *Handler) Register(mux httpx.Router) {
 	mux.HandleFunc("POST /api/v1/projects", h.createProject)
 	mux.HandleFunc("GET /api/v1/projects/{projectKey}", h.getProject)
 	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}", h.updateProject)
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/archive", h.archiveProject(true))
+	mux.HandleFunc("POST /api/v1/projects/{projectKey}/unarchive", h.archiveProject(false))
 	mux.HandleFunc("GET /api/v1/projects/{projectKey}/dimensions", h.listDimensions)
 	mux.HandleFunc("POST /api/v1/projects/{projectKey}/dimensions", h.createDimension)
 	mux.HandleFunc("PATCH /api/v1/projects/{projectKey}/dimensions/{dimensionKey}", h.updateDimension)
@@ -355,7 +370,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	if f.ProjectIDs, err = VisibleProjects(r, h.api.ProjectByKey, h.guard); err != nil {
+	if f.ProjectIDs, err = VisibleProjects(r, h.api, h.guard); err != nil {
 		httpx.WriteError(w, r, err)
 		return
 	}
@@ -688,7 +703,13 @@ func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	res, err := h.api.ListProjects(r.Context(), scope.ProjectIDs(), search, page)
+	archived, err := httpx.EnumQuery(r, "archived", "true", "false")
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	f := ProjectFilter{IDs: scope.ProjectIDs(), Search: search, Archived: archived != nil && *archived == "true"}
+	res, err := h.api.ListProjects(r.Context(), f, page)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -721,6 +742,27 @@ func (h *Handler) getProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, ProjectToDTO(p, role))
+}
+
+// archiveProject archives (or unarchives) a project: administrators only.
+func (h *Handler) archiveProject(archived bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := h.guard.RequireAdmin(r.Context()); err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		key, ok := h.projectKey(w, r)
+		if !ok {
+			return
+		}
+		p, err := h.api.SetProjectArchived(r.Context(), key, archived)
+		if err != nil {
+			httpx.WriteError(w, r, err)
+			return
+		}
+		auditnote.Project(r.Context(), p.ID)
+		httpx.WriteJSON(w, http.StatusOK, ProjectToDTO(p, authz.RoleAdmin))
+	}
 }
 
 func (h *Handler) updateProject(w http.ResponseWriter, r *http.Request) {

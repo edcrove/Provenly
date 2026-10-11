@@ -158,3 +158,5 @@ targets:
     description: maintainer audit view (P20-5, Ed 2026-10-09) - the audit queries keep only the events of the given projects (page and count agree, never events without a project, an empty list is nothing); through the API a maintainer of one project reads only its events, without addresses, and another project is a 403
   - id: BE-INT-077
     description: projects are found by key or name beyond the first page (found by the E2E run on Render) - with 122 projects ?q finds one by key or name in any case, LIKE wildcards are literal, matches count across pages and the search stays within the caller's projects
+  - id: BE-INT-078
+    description: archived projects (Ed, 2026-10-11) - an archived project leaves GET /projects and lists that span projects, ?archived=true lists it, read by key it answers (reads that need a maintainer too), every change (test case, project, suite, ingestion) is a 409 naming the reason, TC cannot be archived (409, and the database refuses it), and unarchiving makes it writable again

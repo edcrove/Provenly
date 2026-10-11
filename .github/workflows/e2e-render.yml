@@ -56,11 +56,11 @@ jobs:
           fi
         env:
           SECRET: RENDER_ADMIN_PASSWORD
-      - name: Wait for the version under test (its UI bundle has the project search)
+      - name: Wait for the version under test (its UI bundle has archived projects)
         run: |
           for _ in $(seq 1 40); do
             js=$(curl -s --max-time 30 "${E2E_REMOTE_URL%/}/" | grep -o 'assets/[^"]*\.js' | head -1 || true)
-            if [ -n "$js" ] && curl -s --max-time 30 "${E2E_REMOTE_URL%/}/$js" | grep -q 'Search projects'; then
+            if [ -n "$js" ] && curl -s --max-time 30 "${E2E_REMOTE_URL%/}/$js" | grep -q 'Show archived projects instead'; then
               echo "deployed: $js"; break
             fi
             echo "waiting for the new UI ($js)"; sleep 30

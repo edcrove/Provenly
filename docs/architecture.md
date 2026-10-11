@@ -107,6 +107,14 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   switcher and the projects page search the server, and a page of one project reads it with `GET /projects/{key}`
   (its role included), so an instance with more projects than a page (a deployed demo keeps every E2E project) works
   the same. Forms that list projects offer the first page plus the current project and say how many they leave out.
+- Archived projects (implementation decision 23): `projects.archived_at` (migration 00038; the default project `TC`
+  can never be archived, by check constraint). Administrators archive and unarchive (`POST /projects/{key}/archive`,
+  `/unarchive`, idempotent, audited). An archived project leaves `GET /projects` (`?archived=true` lists them instead)
+  and every list that spans projects (`VisibleProjects` narrows to `catalog.Service.ActiveProjectIDs`); asked for by
+  key it still reads. It is read-only: the guard the modules receive (`app.archiveGuard` around identity's) answers
+  `409 conflict` to any request that is not a GET or HEAD (`markReads`, which also marks MCP's in-process calls) and
+  needs a member or more in an archived project, after the access check (an invisible project is still `404`). The UI
+  shows its pages as to a viewer, with a notice. Nothing in it is deleted.
 - `GET /api/v1/test-cases?automated=true|false` lists only automated or only manual test cases (any other value is a
   400); the list's "Filter by execution" uses it.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,

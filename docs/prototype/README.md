@@ -49,7 +49,7 @@ Decisions taken in the prototype without Ed (to review). `MVP Dn` and `DEC-n` ar
 
 | Id | Topic | Decision | Why |
 |---|---|---|---|
-| P1-1 | Project key format | 2–10 upper-case letters/digits starting with a letter; trimmed and upper-cased on create; never changes; projects are never deleted | Keys are printed in test names and reports, so they must be stable and readable like Jira keys |
+| P1-1 | Project key format | 2–10 upper-case letters/digits starting with a letter; trimmed and upper-cased on create; never changes; projects are never deleted (administrators archive them: hidden and read-only, implementation decision 23) | Keys are printed in test names and reports, so they must be stable and readable like Jira keys |
 | P1-2 | Existing data | Default project `TC` (id 1) holds every test case created before projects; existing ids become numbers (`TC-153` stays `TC-153`); its counter continues after the highest id | No reference already written in a test or report breaks |
 | P1-3 | URLs and internal ids | REST paths keep the numeric internal id (`/test-cases/{id}`); `key`, `projectKey` and `number` are added to the payload | Smallest change to the contract; the key is for humans and reports, the id for links |
 | P1-4 | Numbering | Per-project counter incremented in the same statement as the insert (row lock); contiguous under concurrency, never reused | Same guarantees as the old identity column, now per project |

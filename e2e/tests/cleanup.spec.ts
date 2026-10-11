@@ -5,7 +5,7 @@ import { emptyReport, isE2EProject, isE2EUser, sweep } from '../support/cleanup'
 import { expect, secret, test, uniqueProjectKey, uniqueUsername } from '../support/fixtures'
 
 test.describe('Clean environment (Ed, 2026-10-09)', () => {
-  test('[BE-E2E-032] the sweep removes what the journeys create and nothing else, and running it again finds nothing', async ({ request, provenly }) => {
+  test('[BE-E2E-032] the sweep removes what the journeys create, archives their projects and nothing else, and running it again finds nothing', async ({ request, provenly }) => {
     // A sweep reads every E2E project an instance kept (hundreds on a deployed one).
     test.setTimeout(10 * 60_000)
     // What it recognizes: the conventions and the names earlier runs used, never ordinary accounts or projects.
@@ -40,12 +40,21 @@ test.describe('Clean environment (Ed, 2026-10-09)', () => {
     expect(first.github).toBeGreaterThanOrEqual(1)
     expect(first.tokens).toBeGreaterThanOrEqual(1)
     expect(first.invitations).toBeGreaterThanOrEqual(1)
+    expect(first.projects).toBeGreaterThanOrEqual(1)
 
     const users = (await (await request.get(`${apiURL}/api/v1/users?pageSize=100`)).json()).items as { username: string; deactivatedAt: string | null }[]
     expect(users.find((u) => u.username === username)!.deactivatedAt).not.toBeNull()
     expect(users.find((u) => u.username === adminUsername)!.deactivatedAt).toBeNull()
     expect((await anon.post(`${apiURL}/api/v1/auth/login`, { data: { username, password: secret('cleanup password') } })).status()).toBe(401)
     await anon.dispose()
+    // The project is archived: out of the list, read by key, and read-only.
+    const listed = (await (await request.get(`${apiURL}/api/v1/projects?q=${key}`)).json()).items as { key: string }[]
+    expect(listed.map((p) => p.key)).not.toContain(key)
+    expect((await (await request.get(base)).json()).archivedAt).not.toBeNull()
+    const archived = (await (await request.get(`${apiURL}/api/v1/projects?archived=true&q=${key}`)).json()).items as { key: string }[]
+    expect(archived.map((p) => p.key)).toEqual([key])
+    expect((await request.patch(base, { data: { name: 'changed' } })).status()).toBe(409)
+    expect((await (await request.get(`${apiURL}/api/v1/projects/TC`)).json()).archivedAt).toBeNull()
     const keys = (await (await request.get(`${base}/api-keys`)).json()).items as { id: number; status: string }[]
     expect(keys.find((k) => k.id === apiKey.id)!.status).toBe('revoked')
     expect((await (await request.get(`${base}/webhooks`)).json()).items.map((w: { active: boolean }) => w.active)).toEqual([false])

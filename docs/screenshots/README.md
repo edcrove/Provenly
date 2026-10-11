@@ -78,3 +78,5 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 71 | Account: a read-only personal access token for an MCP client over one project, shown once with its MCP command (card #62) | `71-account-personal-access-tokens.png` |
 | 72 | Navigation: the project switcher first in the header (searchable), then the project's pages in working order and Settings; Projects, Users and Audit apart | `72-header-project-switcher.png` |
 | 73 | On a phone the header is one row (logo, project, Menu) and the pages sit behind Menu | `73-phone-menu.png` |
+| 74 | Archived projects (administrators): listed on request with when they were archived, and Unarchive | `74-projects-archived.png` |
+| 75 | An archived project's settings: the notice that it is read-only and out of the lists, and no editing actions | `75-archived-project-notice.png` |

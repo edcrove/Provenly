@@ -26,9 +26,10 @@ export interface CleanupReport {
   apiKeys: number
   webhooks: number
   github: number
+  projects: number
 }
 
-export const emptyReport = (): CleanupReport => ({ users: 0, invitations: 0, tokens: 0, apiKeys: 0, webhooks: 0, github: 0 })
+export const emptyReport = (): CleanupReport => ({ users: 0, invitations: 0, tokens: 0, apiKeys: 0, webhooks: 0, github: 0, projects: 0 })
 
 async function ok(res: Promise<import('@playwright/test').APIResponse>, what: string, accepted = [200, 204]) {
   const r = await res
@@ -61,15 +62,17 @@ async function eachInParallel<T>(items: T[], width: number, fn: (item: T) => Pro
 /**
  * Deactivates the journeys' accounts (which also revokes their personal access tokens), revokes their pending
  * invitations, the administrator's tokens that only reach E2E projects and the API keys of E2E projects, pauses those
- * projects' webhooks and removes their GitHub connections. Projects, runs, results and audit events stay: Provenly
- * never deletes them (P1-1, append-only results). Safe to run any number of times.
+ * projects' webhooks, removes their GitHub connections and then archives them, so they leave every list (Ed,
+ * 2026-10-11). Projects, runs, results and audit events stay: Provenly never deletes them (P1-1, append-only
+ * results). Safe to run any number of times: an archived project is read-only and was already swept.
  */
 export async function sweep(api: APIRequestContext): Promise<CleanupReport> {
   const report = emptyReport()
-  const projects = await all<{ id: number; key: string }>(api, '/api/v1/projects')
-  const e2eProjects = projects.filter((p) => isE2EProject(p.key))
-  const e2eProjectIds = new Set(e2eProjects.map((p) => p.id))
-  const e2eProjectKeys = new Set(e2eProjects.map((p) => p.key))
+  const e2eProjects = (await all<{ id: number; key: string }>(api, '/api/v1/projects')).filter((p) => isE2EProject(p.key))
+  // Invitations and tokens may name a project an earlier sweep archived.
+  const archived = (await all<{ id: number; key: string }>(api, '/api/v1/projects?archived=true')).filter((p) => isE2EProject(p.key))
+  const e2eProjectIds = new Set([...e2eProjects, ...archived].map((p) => p.id))
+  const e2eProjectKeys = new Set([...e2eProjects, ...archived].map((p) => p.key))
 
   const users = await all<{ username: string; displayName: string; deactivatedAt: string | null }>(api, '/api/v1/users')
   for (const u of users) {
@@ -117,6 +120,9 @@ export async function sweep(api: APIRequestContext): Promise<CleanupReport> {
       await ok(api.delete(`${apiURL}${base}/github`), `disconnect GitHub from ${key}`)
       report.github++
     }
+    // Last: an archived project refuses every change.
+    await ok(api.post(`${apiURL}${base}/archive`), `archive ${key}`)
+    report.projects++
   })
   return report
 }
@@ -128,7 +134,8 @@ export async function sweepAsAdmin(when: string) {
     const r = await sweep(api)
     console.log(
       `E2E cleanup (${when}): ${r.users} accounts deactivated, ${r.invitations} invitations, ${r.tokens} tokens and ` +
-        `${r.apiKeys} API keys revoked, ${r.webhooks} webhooks paused, ${r.github} GitHub connections removed`,
+        `${r.apiKeys} API keys revoked, ${r.webhooks} webhooks paused, ${r.github} GitHub connections removed, ` +
+        `${r.projects} projects archived`,
     )
   } finally {
     await api.dispose()

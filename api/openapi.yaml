@@ -525,6 +525,14 @@ paths:
             type: string
             minLength: 1
             maxLength: 200
+        - name: archived
+          in: query
+          required: false
+          description: >-
+            `true` lists the archived projects instead of the active ones (the default). Lists that span projects
+            (test cases, runs, the dashboard) never include archived projects; ask for one by key to read it.
+          schema:
+            type: boolean
       responses:
         "200":
           description: Page of projects
@@ -603,6 +611,8 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateProjectRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: Updated project
           content:
@@ -619,6 +629,60 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/archive:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    post:
+      tags: [projects]
+      operationId: archiveProject
+      summary: >-
+        Archive a project (administrators): it leaves the lists and becomes read-only; nothing is deleted. Idempotent.
+        The default project TC cannot be archived (409).
+      responses:
+        "200":
+          description: The archived project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/projects/{projectKey}/unarchive:
+    parameters:
+      - $ref: "#/components/parameters/ProjectKey"
+    post:
+      tags: [projects]
+      operationId: unarchiveProject
+      summary: Unarchive a project (administrators); it is listed and writable again. Idempotent.
+      responses:
+        "200":
+          description: The active project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -869,6 +933,8 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateDimensionRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The dimension
           content:
@@ -940,6 +1006,8 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateDimensionRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The dimension
           content:
@@ -1054,6 +1122,8 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateSuiteRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The suite
           content:
@@ -1088,6 +1158,8 @@ paths:
             schema:
               $ref: "#/components/schemas/SuiteCasesRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The suite
           content:
@@ -1188,6 +1260,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ImportRequirementsRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: What the import created and updated
           content:
@@ -1243,6 +1317,8 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateRequirementRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The requirement
           content:
@@ -1277,6 +1353,8 @@ paths:
             schema:
               $ref: "#/components/schemas/RequirementLinksRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The requirement
           content:
@@ -1472,6 +1550,8 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateWebhookRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "201":
           description: The webhook and its signing secret
           content:
@@ -1506,6 +1586,8 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateWebhookRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The webhook
           content:
@@ -1534,6 +1616,8 @@ paths:
       operationId: pingWebhook
       summary: Queue a ping delivery, to check the endpoint and its signature verification (maintainers)
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "202":
           description: The queued delivery
           content:
@@ -1617,6 +1701,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ConnectGitHubRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The connection
           content:
@@ -1640,6 +1726,8 @@ paths:
       operationId: disconnectGitHub
       summary: Remove the connection and its token; the mirrored issues stay (maintainers)
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "204":
           description: Disconnected
         "400":
@@ -1769,6 +1857,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ImportIssuesRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: What the import created and updated
           content:
@@ -1824,6 +1914,8 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateIssueRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The issue
           content:
@@ -1858,6 +1950,8 @@ paths:
             schema:
               $ref: "#/components/schemas/IssueLinksRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: The issue
           content:
@@ -1968,6 +2062,8 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateTestCaseRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "201":
           description: Created
           content:
@@ -2027,6 +2123,8 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateTestCaseRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: Updated test case
           headers:
@@ -2061,6 +2159,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: Deprecated test case
           headers:
@@ -2093,6 +2193,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: Active test case
           headers:
@@ -2158,6 +2260,8 @@ paths:
             schema:
               $ref: "#/components/schemas/CreateTestStepRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "201":
           description: Created step
           headers:
@@ -2198,6 +2302,8 @@ paths:
             schema:
               $ref: "#/components/schemas/ReorderTestStepsRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: Steps in their new order
           headers:
@@ -2239,6 +2345,8 @@ paths:
             schema:
               $ref: "#/components/schemas/UpdateTestStepRequest"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "200":
           description: Updated step
           headers:
@@ -2269,6 +2377,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/IfMatch"
       responses:
+        "409":
+          $ref: "#/components/responses/Conflict"
         "204":
           description: Deleted
           headers:
@@ -3224,7 +3334,9 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
     Conflict:
-      description: The request conflicts with the current state (e.g. a project key already in use)
+      description: >-
+        The request conflicts with the current state (e.g. a project key already in use, or a change to an archived
+        project: an administrator unarchives it first)
       content:
         application/problem+json:
           schema:
@@ -3811,7 +3923,7 @@ components:
     Project:
       type: object
       additionalProperties: false
-      required: [id, key, name, description, createdAt, updatedAt, myRole]
+      required: [id, key, name, description, createdAt, updatedAt, archivedAt, myRole]
       properties:
         id:
           type: integer
@@ -3831,6 +3943,13 @@ components:
         updatedAt:
           type: string
           format: date-time
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            When an administrator archived the project, or null. An archived project leaves every list and is
+            read-only (changes, reports and settings answer 409) until it is unarchived; nothing in it is deleted.
         myRole:
           type: string
           enum: [admin, maintainer, member, viewer]

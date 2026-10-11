@@ -2,12 +2,14 @@ import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
 import type { Project } from '@/api/client'
-import { useCreateProject, useProjects, useUpdateProject } from '@/api/queries'
+import { useArchiveProject, useCreateProject, useProjects, useUpdateProject } from '@/api/queries'
+import { InlineConfirm } from '@/components/InlineConfirm'
 import { PageTitle } from '@/components/PageTitle'
 import { Pagination } from '@/components/Pagination'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -75,7 +77,53 @@ function NewProjectForm() {
   )
 }
 
-function ProjectRow({ project }: { project: Project }) {
+/**
+ * Administrators archive a project (after confirming) or unarchive it. The default project TC is never archived:
+ * reports without ?project= go to it.
+ */
+function ArchiveControl({ project }: { project: Project }) {
+  const archive = useArchiveProject(project.key)
+  const error = archive.error ? (
+    <ErrorAlert
+      error={archive.error}
+      title={`Could not ${project.archivedAt ? 'unarchive' : 'archive'} the project`}
+    />
+  ) : null
+  if (project.archivedAt)
+    return (
+      <>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={archive.isPending}
+          onClick={() => archive.mutate(false)}
+        >
+          Unarchive
+        </Button>
+        {error}
+      </>
+    )
+  if (project.key === 'TC') return null
+  return (
+    <>
+      <InlineConfirm
+        label={`Archive ${project.key}`}
+        question={`Archive ${project.key}? It leaves every list and becomes read-only; nothing is deleted.`}
+        confirmLabel="Archive"
+        pending={archive.isPending}
+        onConfirm={(close) => archive.mutate(true, { onSettled: close })}
+        trigger={(open) => (
+          <Button size="sm" variant="ghost" onClick={open}>
+            Archive…
+          </Button>
+        )}
+      />
+      {error}
+    </>
+  )
+}
+
+function ProjectRow({ project, isAdmin }: { project: Project; isAdmin: boolean }) {
   const update = useUpdateProject(project.key)
   const { setProject } = useCurrentProject()
   // null while not renaming.
@@ -93,7 +141,7 @@ function ProjectRow({ project }: { project: Project }) {
             <Link to="/dashboard" className="underline" onClick={() => setProject(project.key)}>
               {project.name}
             </Link>
-            {can(project.myRole, 'maintainer') ? (
+            {can(project.myRole, 'maintainer') && !project.archivedAt ? (
               <Button size="sm" variant="ghost" onClick={() => setName(project.name)}>
                 Rename
               </Button>
@@ -119,11 +167,16 @@ function ProjectRow({ project }: { project: Project }) {
       </TableCell>
       <TableCell className="text-muted-foreground">{project.description || '—'}</TableCell>
       <TableCell data-testid="my-role">{project.myRole}</TableCell>
-      <TableCell className="whitespace-nowrap">{formatDateTime(project.createdAt)}</TableCell>
+      <TableCell className="whitespace-nowrap">
+        {formatDateTime(project.archivedAt ?? project.createdAt)}
+      </TableCell>
       <TableCell>
-        <Link to={`/projects/${project.key}`} className="underline">
-          Settings
-        </Link>
+        <span className="flex flex-wrap items-center gap-2">
+          <Link to={`/projects/${project.key}`} className="underline">
+            Settings
+          </Link>
+          {isAdmin ? <ArchiveControl project={project} /> : null}
+        </span>
       </TableCell>
     </TableRow>
   )
@@ -134,12 +187,16 @@ export function ProjectsPage() {
   const [params, setParams] = useSearchParams()
   const page = positiveInt(params.get('page'), 1)
   const q = params.get('q')?.trim() ?? ''
-  const query = useProjects(page, PAGE_SIZE, q)
+  const archived = params.get('archived') === '1'
+  const query = useProjects(page, PAGE_SIZE, q, archived)
   const me = useCurrentUser()
   const [draft, setDraft] = useState(q)
+  // The search and the archived view travel together in the address; a new one starts on page 1.
+  const show = (next: { q: string; archived: boolean }) =>
+    setParams({ ...(next.q ? { q: next.q } : {}), ...(next.archived ? { archived: '1' } : {}) })
   const find = (e: FormEvent) => {
     e.preventDefault()
-    setParams(draft.trim() ? { q: draft.trim() } : {})
+    show({ q: draft.trim(), archived })
   }
   return (
     <div className="grid gap-6">
@@ -153,7 +210,8 @@ export function ProjectsPage() {
             A project holds test cases, runs, suites, requirements and issues; each numbers its test cases
             with its own key (e.g. CHK-12). Keys never change and projects are never deleted. TC is the
             default project. Open a project by its name, or its settings for members, classification and
-            integrations.
+            integrations. Administrators archive the projects nobody works on: they leave the lists and become
+            read-only.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -169,11 +227,17 @@ export function ProjectsPage() {
               Find
             </Button>
           </form>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={archived} onChange={(e) => show({ q, archived: e.target.checked })} />
+            Show archived projects instead
+          </label>
           <QueryState query={query}>
             {(data) => (
               <>
                 {data.items.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">No project matches “{q}”.</p>
+                  <p className="text-muted-foreground text-sm">
+                    {q ? `No ${archived ? 'archived ' : ''}project matches “${q}”.` : 'No archived projects.'}
+                  </p>
                 ) : null}
                 <Table>
                   <TableHeader>
@@ -182,13 +246,13 @@ export function ProjectsPage() {
                       <TableHead>Name</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead>Your role</TableHead>
-                      <TableHead>Created</TableHead>
+                      <TableHead>{archived ? 'Archived' : 'Created'}</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {data.items.map((p) => (
-                      <ProjectRow key={p.key} project={p} />
+                      <ProjectRow key={p.key} project={p} isAdmin={me.isAdmin} />
                     ))}
                   </TableBody>
                 </Table>
@@ -197,7 +261,10 @@ export function ProjectsPage() {
                   totalPages={data.totalPages}
                   totalItems={data.totalItems}
                   onPageChange={(p, replace) =>
-                    setParams({ ...(q ? { q } : {}), page: String(p) }, { replace })
+                    setParams(
+                      { ...(q ? { q } : {}), ...(archived ? { archived: '1' } : {}), page: String(p) },
+                      { replace },
+                    )
                   }
                 />
               </>

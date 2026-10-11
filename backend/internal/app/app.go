@@ -23,6 +23,7 @@ import (
 	"github.com/edcrove/provenly/backend/internal/integrations"
 	integrationspg "github.com/edcrove/provenly/backend/internal/integrations/postgres"
 	"github.com/edcrove/provenly/backend/internal/mcp"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/clientinfo"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/secrets"
@@ -43,6 +44,8 @@ type Services struct {
 	// Audit records every authenticated change made through the API.
 	Audit    *audit.Service
 	Identity *identity.Service
+	// Guard authorizes the modules' requests: identity's roles, and archived projects read-only.
+	Guard authz.Guard
 	// Now is the clock of the services (session and invitation expiry).
 	Now func() time.Time
 	// Ready reports whether the dependencies needed to serve requests (the
@@ -87,19 +90,20 @@ func NewServicesConfig(pool *pgxpool.Pool, now func() time.Time, cfg Config) Ser
 	exe := execution.NewService(executionpg.NewStore(pool), now)
 	// Requirement coverage reads the latest results through the catalog's port.
 	cat.SetResults(exe)
-	ing := ingestion.NewService(cat, exe, ids)
-	manual := ingestion.NewManual(cat, exe, ids)
+	guard := archiveGuard{accessGuard: ids, projects: cat}
+	ing := ingestion.NewService(cat, exe, guard)
+	manual := ingestion.NewManual(cat, exe, guard)
 	box, _ := secrets.New(cfg.SecretsKey) // config.Load only accepts a 32-byte key (or none)
-	integ := integrations.NewService(integrationspg.NewStore(pool), cat, ids, box, cfg.Integrations, now)
+	integ := integrations.NewService(integrationspg.NewStore(pool), cat, guard, box, cfg.Integrations, now)
 	// Completed runs (reports, live runs, manual runs) are exported to the project's webhooks.
 	ing.SetNotifier(integ)
 	manual.SetNotifier(integ)
 	return Services{
 		Catalog: cat, Execution: exe, Ingestion: ing, Live: ingestion.NewLive(ing, exe, now), Manual: manual,
-		Insights:     insights.NewService(cat, exe, ids, now),
+		Insights:     insights.NewService(cat, exe, guard, now),
 		Integrations: integ,
 		Audit:        auditLog(auditpg.NewStore(pool), ids, cat),
-		Identity:     ids, Now: now, Ready: pool.Ping, TrustedProxies: cfg.TrustedProxies,
+		Identity:     ids, Guard: guard, Now: now, Ready: pool.Ping, TrustedProxies: cfg.TrustedProxies,
 	}
 }
 
@@ -125,8 +129,9 @@ func NewHandler(s Services, maxIngestBytes int64) http.Handler {
 	agents := mcp.NewHandler(Version)
 	register(mux, s, maxIngestBytes, agents)
 	// MCP tools call the API in-process, as the caller (same routing, authorization and problem answers).
-	agents.Bind(httpx.Routes(mux))
-	return httpx.SecurityHeaders(httpx.Recover(telemetry.Middleware(httpx.AccessLog(clientinfo.Middleware(s.TrustedProxies, httpx.Routes(mux))))))
+	routes := markReads(httpx.Routes(mux))
+	agents.Bind(routes)
+	return httpx.SecurityHeaders(httpx.Recover(telemetry.Middleware(httpx.AccessLog(clientinfo.Middleware(s.TrustedProxies, routes)))))
 }
 
 // RoutePatterns lists every route the API registers ("METHOD /path"), so tests
@@ -161,8 +166,8 @@ func register(r httpx.Router, s Services, maxIngestBytes int64, agents *mcp.Hand
 	// Every other API route needs a session.
 	p := audit.Wrap(identity.Protect(r, s.Identity), s.Audit)
 	ids.RegisterProtected(p)
-	catalog.NewHandler(s.Catalog, s.Identity).Register(p)
-	execution.NewHandler(s.Execution, s.Catalog, s.Identity).Register(p)
+	catalog.NewHandler(s.Catalog, s.Guard).Register(p)
+	execution.NewHandler(s.Execution, s.Catalog, s.Guard).Register(p)
 	ingestion.NewManualHandler(s.Manual).Register(p)
 	insights.NewHandler(s.Insights).Register(p)
 	integrations.NewHandler(s.Integrations).Register(p)

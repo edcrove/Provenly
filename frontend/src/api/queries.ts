@@ -232,14 +232,17 @@ export function useRevokeInvitation() {
 }
 
 /** A page of the projects the user can see, by key; q finds a key or name containing it (any page). */
-export function useProjects(page = 1, pageSize = MAX_PAGE, q = '') {
+/** Active projects by default; `archived` lists the archived ones instead (never both). */
+export function useProjects(page = 1, pageSize = MAX_PAGE, q = '', archived = false) {
   return useQuery({
-    queryKey: [...keys.projects, 'list', pageSize, q, page],
+    queryKey: [...keys.projects, 'list', pageSize, q, archived, page],
     placeholderData: (prev, qk) =>
-      previousPage([...keys.projects, 'list', pageSize, q, page], prev, qk?.queryKey),
+      previousPage([...keys.projects, 'list', pageSize, q, archived, page], prev, qk?.queryKey),
     queryFn: async () =>
       unwrap(
-        await api.GET('/api/v1/projects', { params: { query: { page, pageSize, ...(q ? { q } : {}) } } }),
+        await api.GET('/api/v1/projects', {
+          params: { query: { page, pageSize, ...(q ? { q } : {}), ...(archived ? { archived } : {}) } },
+        }),
       ),
   })
 }
@@ -356,6 +359,25 @@ export function useUpdateProject(key: string) {
         await api.PATCH('/api/v1/projects/{projectKey}', { params: { path: { projectKey: key } }, body }),
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
+  })
+}
+
+/**
+ * Archives (true) or unarchives (false) a project, administrators only. Every cached list may change: an archived
+ * project leaves the lists that span projects.
+ */
+export function useArchiveProject(key: string) {
+  const qc = useQueryClient()
+  return useExclusiveMutation({
+    mutationFn: async (archived: boolean) => {
+      const params = { path: { projectKey: key } }
+      return unwrap(
+        archived
+          ? await api.POST('/api/v1/projects/{projectKey}/archive', { params })
+          : await api.POST('/api/v1/projects/{projectKey}/unarchive', { params }),
+      )
+    },
+    onSuccess: () => qc.invalidateQueries(),
   })
 }
 

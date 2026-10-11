@@ -60,6 +60,7 @@ type Project struct {
 	UpdatedAt             pgtype.Timestamptz
 	NextRequirementNumber int64
 	NextIssueNumber       int64
+	ArchivedAt            pgtype.Timestamptz
 }
 
 type Requirement struct {

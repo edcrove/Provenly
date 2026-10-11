@@ -353,7 +353,7 @@ func TestAuthentication(t *testing.T) {
 				Status(http.StatusUnauthorized).JSON(problemOpts).Object().HasValue("code", "unauthorized")
 		}
 	}
-	assert.Equal(t, 83, protected, "every operation except health, readiness, sign-in, sign-out, accept and password reset")
+	assert.Equal(t, 85, protected, "every operation except health, readiness, sign-in, sign-out, accept and password reset")
 	e.GET("/api/v1/auth/me").WithHeader("Authorization", "Bearer not-a-token").Expect().Status(http.StatusUnauthorized)
 
 	e.POST("/api/v1/auth/login").WithJSON(map[string]any{"username": adminUser, "password": "wrong password"}).
@@ -399,6 +399,8 @@ func TestAuthentication(t *testing.T) {
 	anaAPI.GET("/api/v1/invitations").Expect().Status(http.StatusForbidden)
 	anaAPI.POST("/api/v1/invitations").WithJSON(map[string]any{}).Expect().Status(http.StatusForbidden)
 	anaAPI.POST("/api/v1/invitations/1/revoke").Expect().Status(http.StatusForbidden)
+	anaAPI.POST("/api/v1/projects/TC/archive").Expect().Status(http.StatusForbidden)
+	anaAPI.POST("/api/v1/projects/TC/unarchive").Expect().Status(http.StatusForbidden)
 	anaAPI.GET("/api/v1/test-cases").Expect().Status(http.StatusOK)
 
 	admin.GET("/api/v1/users").WithQuery("pageSize", 1).Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 2)
@@ -721,6 +723,8 @@ func TestInternalErrors(t *testing.T) {
 	problem(e.POST("/api/v1/projects").WithJSON(map[string]any{"key": "CHK", "name": "x"}).Expect())
 	problem(e.GET("/api/v1/projects/CHK").Expect())
 	problem(e.PATCH("/api/v1/projects/CHK").WithJSON(map[string]any{"name": "x"}).Expect())
+	problem(e.POST("/api/v1/projects/CHK/archive").Expect())
+	problem(e.POST("/api/v1/projects/CHK/unarchive").Expect())
 	problem(e.GET("/api/v1/test-cases").Expect())
 	problem(e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "x"}).Expect())
 	problem(e.GET("/api/v1/test-cases/1").Expect())
@@ -1540,4 +1544,77 @@ func TestTraceIDs(t *testing.T) {
 	e.GET("/healthz").WithHeader("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01").
 		Expect().Status(http.StatusOK).Header(telemetry.TraceHeader).IsEqual("4bf92f3577b34da6a3ce929d0e0e4736")
 	e.GET("/api/v1/test-cases").Expect().Status(http.StatusUnauthorized).Header(telemetry.TraceHeader).Length().IsEqual(32)
+}
+
+// TestArchivedProjects: archive and unarchive (administrators, idempotent, never TC), ?archived=true lists them,
+// and every change to an archived project is a 409 until it is unarchived.
+func TestArchivedProjects(t *testing.T) {
+	e := api(t, fresh(t), 1<<20)
+	e.POST("/api/v1/projects").WithJSON(map[string]any{"key": "OLD", "name": "Old"}).Expect().Status(http.StatusCreated)
+	tc := "/api/v1/test-cases/" + strconv.FormatInt(int64(e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "kept", "project": "OLD"}).
+		Expect().Status(http.StatusCreated).JSON().Object().Value("id").Number().Raw()), 10)
+	step := tc + "/steps/" + strconv.FormatInt(int64(e.POST(tc+"/steps").WithJSON(map[string]any{"action": "a"}).
+		Expect().Status(http.StatusCreated).JSON().Object().Value("id").Number().Raw()), 10)
+	p := "/api/v1/projects/OLD"
+	e.POST(p + "/dimensions").WithJSON(map[string]any{"key": "os", "name": "OS"}).Expect().Status(http.StatusCreated)
+	e.POST(p + "/dimensions/os/values").WithJSON(map[string]any{"key": "mac", "name": "Mac"}).Expect().Status(http.StatusCreated)
+	e.POST(p + "/suites").WithJSON(map[string]any{"key": "smoke", "name": "Smoke", "kind": "static"}).Expect().Status(http.StatusCreated)
+	req := p + "/requirements/" + strconv.FormatInt(int64(e.POST(p+"/requirements").WithJSON(map[string]any{"title": "r"}).
+		Expect().Status(http.StatusCreated).JSON().Object().Value("id").Number().Raw()), 10)
+	issue := p + "/issues/" + strconv.FormatInt(int64(e.POST(p+"/issues").WithJSON(map[string]any{"title": "i"}).
+		Expect().Status(http.StatusCreated).JSON().Object().Value("id").Number().Raw()), 10)
+	hook := p + "/webhooks/" + strconv.FormatInt(int64(e.POST(p+"/webhooks").WithJSON(map[string]any{"url": "https://x.test", "events": []string{"run.completed"}}).
+		Expect().Status(http.StatusCreated).JSON().Object().Value("webhook").Object().Value("id").Number().Raw()), 10)
+
+	e.POST(p + "/archive").Expect().Status(http.StatusOK).JSON().Object().Value("archivedAt").String().NotEmpty()
+	e.POST(p + "/archive").Expect().Status(http.StatusOK).JSON().Object().Value("archivedAt").String().NotEmpty()
+	e.GET("/api/v1/projects").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	e.GET("/api/v1/projects").WithQuery("archived", "true").Expect().Status(http.StatusOK).JSON().Object().
+		HasValue("totalItems", 1).Value("items").Array().Value(0).Object().HasValue("key", "OLD")
+	e.GET("/api/v1/projects").WithQuery("archived", "yes").Expect().Status(http.StatusBadRequest)
+	e.GET(p).Expect().Status(http.StatusOK).JSON().Object().Value("archivedAt").String().NotEmpty()
+	e.POST("/api/v1/projects/TC/archive").Expect().Status(http.StatusConflict).JSON(problemOpts).Object().HasValue("code", "conflict")
+	e.POST("/api/v1/projects/NOPE/archive").Expect().Status(http.StatusNotFound)
+	e.POST("/api/v1/projects/nope/archive").Expect().Status(http.StatusBadRequest)
+	e.POST("/api/v1/projects/NOPE/unarchive").Expect().Status(http.StatusNotFound)
+	e.POST("/api/v1/projects/nope/unarchive").Expect().Status(http.StatusBadRequest)
+
+	archived := func(r *httpexpect.Request) {
+		r.Expect().Status(http.StatusConflict).JSON(problemOpts).Object().HasValue("code", "conflict").
+			Value("detail").String().Contains("project OLD is archived")
+	}
+	// Reads stay allowed, those that need a maintainer too.
+	e.GET(p + "/webhooks").Expect().Status(http.StatusOK).JSON().Object().Value("items").Array().Length().IsEqual(1)
+	e.GET(p + "/github").Expect().Status(http.StatusNoContent)
+	e.GET(tc + "/steps").Expect().Status(http.StatusOK)
+	ids := map[string]any{"testCaseIds": []int{}}
+	archived(e.PATCH(p).WithJSON(map[string]any{"name": "x"}))
+	archived(e.PATCH(p + "/dimensions/os").WithJSON(map[string]any{"name": "O"}))
+	archived(e.PATCH(p + "/dimensions/os/values/mac").WithJSON(map[string]any{"name": "M"}))
+	archived(e.PATCH(p + "/suites/smoke").WithJSON(map[string]any{"name": "S"}))
+	archived(e.PUT(p + "/suites/smoke/cases").WithJSON(ids))
+	archived(e.POST(p + "/requirements/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "X-1", "title": "x"}}}))
+	archived(e.PATCH(req).WithJSON(map[string]any{"title": "x"}))
+	archived(e.PUT(req + "/test-cases").WithJSON(ids))
+	archived(e.POST(p + "/webhooks").WithJSON(map[string]any{"url": "https://x.test", "events": []string{"run.completed"}}))
+	archived(e.PATCH(hook).WithJSON(map[string]any{"active": false}))
+	archived(e.POST(hook + "/ping"))
+	archived(e.PUT(p + "/github").WithJSON(map[string]any{"repository": "acme/shop", "token": "t"}))
+	archived(e.DELETE(p + "/github"))
+	archived(e.POST(p + "/issues/import").WithJSON(map[string]any{"provider": "jira", "items": []map[string]any{{"externalId": "X-1", "title": "x", "state": "open"}}}))
+	archived(e.PATCH(issue).WithJSON(map[string]any{"title": "x"}))
+	archived(e.PUT(issue + "/test-cases").WithJSON(ids))
+	archived(e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "x", "project": "OLD"}))
+	archived(e.PATCH(tc).WithJSON(map[string]any{"title": "x"}))
+	archived(e.POST(tc + "/deprecate"))
+	archived(e.POST(tc + "/reactivate"))
+	archived(e.POST(tc + "/steps").WithJSON(map[string]any{"action": "b"}))
+	archived(e.PUT(tc + "/steps/order").WithJSON(map[string]any{"stepIds": []int{}}))
+	archived(e.PATCH(step).WithJSON(map[string]any{"action": "b"}))
+	archived(e.DELETE(step))
+	archived(ingest(e, "1", 1, strings.ReplaceAll(report(1), "\n", "")).WithQuery("project", "OLD"))
+
+	e.POST(p + "/unarchive").Expect().Status(http.StatusOK).JSON().Object().Value("archivedAt").IsNull()
+	e.POST(p + "/unarchive").Expect().Status(http.StatusOK).JSON().Object().Value("archivedAt").IsNull()
+	e.PATCH(p).WithJSON(map[string]any{"name": "Back"}).Expect().Status(http.StatusOK)
 }

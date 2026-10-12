@@ -1,7 +1,7 @@
 # Provenly — agent guide
 
 Provenly links test cases, CI results and history through a stable `TC-<id>` identity. Go modular monolith
-(`catalog`, `execution`, `ingestion`) + React 19 frontend, contract-first REST (`api/openapi.yaml`), PostgreSQL.
+(`catalog`, `execution`, `ingestion`, `identity`, `insights`, `audit`, `integrations`, `mcp`) + React 19 frontend, contract-first REST (`api/openapi.yaml`), PostgreSQL.
 Owner: **Ed** (product owner and approver). Read `README.md`, `CONTRIBUTING.md` and `docs/architecture.md` before
 changing code; this file holds the working rules that are not obvious from the code.
 

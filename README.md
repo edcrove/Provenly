@@ -20,7 +20,7 @@ TC-153 created ──► automated test declares TC-153 ──► CI posts JUnit
 | Path | What |
 |---|---|
 | `api/openapi.yaml` | **The REST contract** (OpenAPI 3.0). Source of truth for the backend Contract gate and the generated frontend client. |
-| `backend/` | Go service (`net/http`, PostgreSQL via `sqlc` + `pgx`, `goose` migrations). Modular monolith: `catalog`, `execution`, `ingestion`. |
+| `backend/` | Go service (`net/http`, PostgreSQL via `sqlc` + `pgx`, `goose` migrations). Modular monolith: `catalog`, `execution`, `ingestion`, `identity`, `insights`, `audit`, `integrations`, `mcp` (see `docs/architecture.md`). |
 | `frontend/` | React 19 + Vite + shadcn/ui. API client generated with `openapi-typescript` (never hand-written). |
 | `e2e/` | Playwright journeys shared by the backend and frontend E2E gates. |
 | `coverage/` | Gate inventories and the versioned exception registry. |

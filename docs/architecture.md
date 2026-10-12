@@ -12,7 +12,7 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 | `identity` | `users`, `invitations`, `project_members`, `api_keys`, `personal_access_tokens` | `identity.Service`, `identity.Protect` | `catalog` (project keys) |
 | `insights` | none | `insights.Service` (quality indicators) | `catalog`, `execution` |
 | `audit` | `audit_events` (append-only) | `audit.Service`, `audit.Wrap` (router) | `identity` (who called, admin check) |
-| `integrations` | `webhooks`, `webhook_deliveries`, `github_connections` | `integrations.Service` | `catalog` (`ProjectByKey`, `ProjectByID`, `ImportIssues`), `identity` (access); hears completed runs from `ingestion` through `RunNotifier` |
+| `integrations` | `webhooks`, `webhook_deliveries`, `github_connections` | `integrations.Service` | `catalog` (`ProjectByKey`, `ProjectByID`, `ImportIssues`), `identity` (access), `execution` (`TestRun` and `RunDTO`: the webhook payload is the run as `getTestRun` returns it); hears completed runs from `ingestion` through `RunNotifier` |
 | `mcp` | none | `POST /api/v1/mcp` | the REST API in-process, with the caller's credentials |
 
 - A module never reads another module's tables and there are **no cross-module foreign keys**: execution stores
@@ -41,7 +41,7 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 | Step text: action 1..2000 non-blank characters, expected result ≤ 2000 | service validation (400) backed by `CHECK`s (`test_steps_action_not_blank`, `test_steps_expected_result_length`, migration 00008) |
 | Ingested results and parse errors are the source of truth | written by the transaction that creates their run, and while a manual or live run is running (recorded results, the final report completing a live run); triggers forbid inserts into finished runs, any `UPDATE` and `DELETE` (migrations 00010, 00023, 00026) |
 | `untested` is never persisted | `CHECK` on `test_results.status`; derived in `execution.ComputeSummary` |
-| A run's outcome is derived on read, cheaply | routes on a run authorize it by `GetRunProject` (project only); only `GET /test-runs/{id}` loads the run and computes its outcome; a live poll reads the run and its summary inputs once (BE-INT-066, card #44) |
+| A run's outcome is derived on read, cheaply | routes on a run authorize it by `GetRunProject` (project only); only `GET /test-runs/{id}` loads the run and computes its outcome; a live poll reads the run and its summary inputs once (BE-INT-066, card #44). Known debt (plan 1.0 §4.2): list, history and trend pages still compute the outcome of every run on the page from its result and snapshot rows (`attachOutcomes` → `ListSummaryInputs`); persisted outcomes are the planned fix |
 | `testCaseId` only for valid or deprecated correlations (deprecated results stay in history) | `CHECK ((correlation IN ('valid','deprecated')) = (test_case_id IS NOT NULL))` |
 
 ## Identity and sessions (module `identity`)
@@ -120,7 +120,9 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,
   `totalItems`, `totalPages`. Every list is paged, the project's suites, requirements, issues, dimensions and webhooks
   included (DEC-78); counts a screen needs over the whole list come with the page (`coverageCounts`,
-  `verificationCounts`) instead of fetching every page. Pickers search on the server: `GET /api/v1/test-cases?q=`
+  `verificationCounts`) instead of fetching every page. Known debt (plan 1.0 §4.2): suites, requirements, issues and
+  dimensions are read whole and sliced in the HTTP adapter (`pagination.Slice`), with their counts computed in Go;
+  the other lists page in SQL. Pickers search on the server: `GET /api/v1/test-cases?q=`
   matches the title (case-insensitive, `%` and `_` literal) or a key or number (`chk-12`, `12`); blank or over 200
   characters is a 400.
 - `GET /api/v1/test-cases/{id}/results` (history) filters by `branch` (exact) and `status`; the test case page asks for

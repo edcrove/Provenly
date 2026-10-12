@@ -36,7 +36,7 @@ feature's section (behavior, API, code, tests).
 | 13 | Issues, known issues and issue verification | Incubator, Planning #8 | ✅ | proto/13-issues |
 | 14 | Quality dashboard (trends, flaky, coverage) | Incubator (Quality Intelligence) | ✅ | proto/14-dashboard |
 | 15 | Live runs: execution sessions, live events, reconciliation | Trello Live Streaming, Planning #9 | ✅ | proto/15-live-runs |
-| 16 | Playwright reporter (`@provenly/playwright-reporter`) | Trello, DEC-15 | ✅ | proto/16-playwright-reporter |
+| 16 | Playwright reporter (`provenly-playwright-reporter`, card #64) | Trello, DEC-15 | ✅ | proto/16-playwright-reporter |
 | 17 | OpenTelemetry basic instrumentation | Trello, DEC-11 | ✅ | proto/17-otel |
 | 18 | Export sink (webhooks) and GitHub connector, secrets at rest | Planning #3, #21, Incubator, MVP D4 | ✅ | proto/18-integrations |
 | 19 | MCP server (agent interface) | Incubator, DEC-10 | ✅ | proto/19-mcp |
@@ -685,7 +685,7 @@ that fails without the fix.
 
 ### 16. Playwright reporter (DEC-15)
 
-- **Behavior**: add `['@provenly/playwright-reporter']` to `playwright.config.ts` and set `PROVENLY_URL` and
+- **Behavior**: add `['provenly-playwright-reporter']` to `playwright.config.ts` and set `PROVENLY_URL` and
   `PROVENLY_API_KEY` in CI: each run appears in Provenly as a live run while it executes and is completed by the
   reporter's JUnit report (retries as attempts, flaky detection, TC-IDs from annotations, tags or titles).
 - **Code**: `reporters/playwright` (README, unit tests at 100%), CI job "Playwright reporter", `make test-reporter`.

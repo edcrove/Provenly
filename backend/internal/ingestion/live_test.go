@@ -49,9 +49,10 @@ func TestLiveStart(t *testing.T) {
 	cat, rec := &fakeCatalog{universe: []int64{1, 2, 3}, selection: []int64{2, 3, 9}}, &liveRecorder{}
 	l := newLive(cat, rec, fakeAccess{})
 	ctx := context.Background()
-	run, err := l.Start(ctx, RunMeta{ProjectKey: "CHK", Provider: "github", ProviderRunID: "7", RunAttempt: 1, Pipeline: "ci", SuiteKey: "smoke"})
+	run, err := l.Start(ctx, RunMeta{ProjectKey: "CHK", Provider: "github", ProviderRunID: "7", RunAttempt: 1, Pipeline: "ci", SuiteKey: "smoke", CIURL: "https://ci.example.com/jobs/7"})
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), run.ID)
+	assert.Equal(t, "https://ci.example.com/jobs/7", rec.started.CIURL, "a live run links to its CI job too")
 	assert.Equal(t, execution.ModeLive, rec.started.Mode)
 	assert.Equal(t, int64(2), rec.started.ProjectID)
 	assert.Equal(t, "smoke", rec.started.SuiteKey)
@@ -173,10 +174,10 @@ func TestLiveHandler(t *testing.T) {
 		return rec
 	}
 	api := &stubLive{}
-	rec := serve(api, "/api/v1/test-runs/live", `{"project":"CHK","suite":"smoke","provider":"github","runId":"7","runAttempt":2,"pipeline":"ci","branch":"main","commit":"abc"}`)
+	rec := serve(api, "/api/v1/test-runs/live", `{"project":"CHK","suite":"smoke","provider":"github","runId":"7","runAttempt":2,"pipeline":"ci","branch":"main","commit":"abc","ciUrl":"https://ci.example.com/jobs/7"}`)
 	assert.Equal(t, http.StatusCreated, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"mode":"live"`)
-	assert.Equal(t, RunMeta{ProjectKey: "CHK", SuiteKey: "smoke", Provider: "github", ProviderRunID: "7", RunAttempt: 2, Pipeline: "ci", Branch: "main", Commit: "abc"}, api.meta)
+	assert.Equal(t, RunMeta{ProjectKey: "CHK", SuiteKey: "smoke", Provider: "github", ProviderRunID: "7", RunAttempt: 2, Pipeline: "ci", Branch: "main", Commit: "abc", CIURL: "https://ci.example.com/jobs/7"}, api.meta)
 	rec = serve(api, "/api/v1/test-runs/5/events", `{"events":[{"eventId":"a","sequence":1,"type":"test.finished","testName":"t","testCase":"CHK-1","status":"passed","occurredAt":"2026-10-05T12:00:00Z"}]}`)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"accepted":1,"duplicates":1}`, rec.Body.String())

@@ -99,8 +99,8 @@ type fakeRecorder struct {
 	storedDigest string
 	// storedStatus simulates the status recorded for an existing run.
 	storedStatus execution.RunStatus
-	// storedMeta simulates the pipeline, branch and commit recorded for an existing run.
-	storedMeta *[3]string
+	// storedMeta simulates the pipeline, branch, commit and ciUrl recorded for an existing run.
+	storedMeta *[4]string
 	// storedStart simulates the startedAt the execution module kept.
 	storedStart *time.Time
 	// storedSuite simulates the suite recorded for an existing run.
@@ -128,7 +128,7 @@ func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []
 		digest = f.storedDigest
 	}
 	status := cmp.Or(f.storedStatus, run.Status, execution.RunCompleted)
-	recorded := [3]string{run.Pipeline, run.Branch, run.Commit}
+	recorded := [4]string{run.Pipeline, run.Branch, run.Commit, run.CIURL}
 	if f.storedMeta != nil {
 		recorded = *f.storedMeta
 	}
@@ -137,7 +137,7 @@ func (f *fakeRecorder) RecordRun(_ context.Context, run execution.NewRun, exp []
 		suite = *f.storedSuite
 	}
 	return execution.TestRun{ID: 1, ExternalRunID: execution.ExternalRunID(run.Provider, run.ProviderRunID, run.RunAttempt),
-		Pipeline: recorded[0], Branch: recorded[1], Commit: recorded[2], StartedAt: f.storedStart,
+		Pipeline: recorded[0], Branch: recorded[1], Commit: recorded[2], CIURL: recorded[3], StartedAt: f.storedStart,
 		ResultCount: int32(len(rs)), ReportSHA256: digest, Status: status, SuiteKey: suite}, f.created, f.recordErr
 }
 
@@ -149,7 +149,7 @@ func (f *fakeRecorder) ParseErrors(context.Context, int64) ([]execution.ParseErr
 	return f.storedPE, f.parseErr
 }
 
-var meta = RunMeta{Provider: "github", ProviderRunID: "99", RunAttempt: 1, Pipeline: "ci", Branch: "main", Commit: "abc"}
+var meta = RunMeta{Provider: "github", ProviderRunID: "99", RunAttempt: 1, Pipeline: "ci", Branch: "main", Commit: "abc", CIURL: "https://ci.example.com/jobs/99"}
 
 const report = `<testsuites><testsuite name="s" timestamp="2026-09-28T10:00:00">
 <testcase name="valid"><properties><property name="tc-id" value="153"/></properties></testcase>
@@ -230,12 +230,13 @@ func TestIngestReplayAndEmptyParseErrors(t *testing.T) {
 }
 
 func TestIngestWarnsWhenAReplayCarriesOtherMetadata(t *testing.T) {
-	rec := &fakeRecorder{created: false, storedMeta: &[3]string{"ci", "release", "def"}}
+	rec := &fakeRecorder{created: false, storedMeta: &[4]string{"ci", "release", "def", ""}}
 	out, err := NewService(&fakeCatalog{}, rec, fakeAccess{}).IngestJUnit(context.Background(), meta, strings.NewReader(`<testsuite name="s"/>`))
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		`branch "main" differs from "release", recorded for this attempt; it was not applied`,
 		`commit "abc" differs from "def", recorded for this attempt; it was not applied`,
+		`ciUrl "https://ci.example.com/jobs/99" differs from "", recorded for this attempt; it was not applied`,
 	}, out.Warnings)
 
 	rec.created = true
@@ -299,9 +300,20 @@ func TestValidateMeta(t *testing.T) {
 		{Provider: "GitHub", ProviderRunID: "1", RunAttempt: 1},
 		{Provider: strings.Repeat("p", 51), ProviderRunID: "1", RunAttempt: 1},
 		{Provider: "github", ProviderRunID: strings.Repeat("9", 101), RunAttempt: 1},
+		// ciUrl (Ed, 2026-10-12): absolute http(s) URL with a host, no credentials or whitespace, at most 2000 characters.
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "ftp://ci.example.com/job"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "javascript:alert(1)"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "ci.example.com/job"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "https:///job"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "https://user:pw@ci.example.com/job"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "https://ci.example.com/a job"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "https://ci.example.com/a\nb"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "https://[::1"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "https://ci.example.com/" + strings.Repeat("x", 1978)},
 	}
-	require.NoError(t, ValidateMeta(RunMeta{Provider: strings.Repeat("p", 50), ProviderRunID: strings.Repeat("9", 100), RunAttempt: 1}),
-		"the limits themselves are valid")
+	require.NoError(t, ValidateMeta(RunMeta{Provider: strings.Repeat("p", 50), ProviderRunID: strings.Repeat("9", 100), RunAttempt: 1,
+		CIURL: "https://ci.example.com/" + strings.Repeat("x", 1977)}), "the limits themselves are valid")
+	require.NoError(t, ValidateMeta(RunMeta{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "http://ci.internal:8080/job/7?x=1#step"}))
 	for _, m := range bad {
 		e, ok := apperr.As(ValidateMeta(m))
 		require.True(t, ok, "%+v", m)

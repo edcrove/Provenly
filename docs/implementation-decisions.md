@@ -203,3 +203,12 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     The E2E sweep (decision 21) archives E2E projects after revoking their credentials, so a deployed instance shows
     only real projects. BE-INT-078, FE-INT-069, BE-E2E-032, FE-E2E-039.
     **Status: Decided by Ed (2026-10-11).**
+
+24. **A run links to its CI job (`ciUrl`).** CI sends the job's URL with the report (`?ciUrl=`) or when it starts a
+    live run; the Playwright reporter fills it in on GitHub Actions (`GITHUB_SERVER_URL/GITHUB_REPOSITORY/actions/runs/
+    GITHUB_RUN_ID/attempts/GITHUB_RUN_ATTEMPT`). Only absolute http(s) URLs of at most 2000 characters (the UI renders
+    the value as a link; the database checks it too); empty is the same as absent, like `pipeline`; a replay with
+    another value warns and keeps the recorded one. The run page shows "Open the CI job" (new tab) and the runs list
+    links the pipeline name to the job. The developer's first click from a red run (deployed persona audit, 2026-10-08).
+    BE-INT-079, FE-INT-070, FE-E2E-040, BE-E2E-021/022, probe.
+    **Status: Decided by Ed (2026-10-12).**

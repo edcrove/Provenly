@@ -1,6 +1,6 @@
 -- name: InsertTestRun :one
-INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256, suite_key, suite_name, mode, started_by, shard_total)
-VALUES (@project_id, @external_run_id, @provider, @provider_run_id, @run_attempt, @pipeline, @branch, @commit_sha, @status, @started_at, @completed_at, @report_sha256, sqlc.narg('suite_key'), sqlc.narg('suite_name'), @mode, sqlc.narg('started_by'), sqlc.narg('shard_total'))
+INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, ci_url, status, started_at, completed_at, report_sha256, suite_key, suite_name, mode, started_by, shard_total)
+VALUES (@project_id, @external_run_id, @provider, @provider_run_id, @run_attempt, @pipeline, @branch, @commit_sha, @ci_url, @status, @started_at, @completed_at, @report_sha256, sqlc.narg('suite_key'), sqlc.narg('suite_name'), @mode, sqlc.narg('started_by'), sqlc.narg('shard_total'))
 ON CONFLICT (project_id, external_run_id) DO NOTHING
 RETURNING id;
 
@@ -127,7 +127,7 @@ SELECT sqlc.embed(t), EXISTS (
         SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
           AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
     ) AS retried,
-    r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
+    r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.ci_url,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
     r.report_sha256, r.suite_key, r.suite_name, r.mode AS run_mode, r.started_by AS run_started_by,
     r.shard_total AS run_shard_total, c.expected_count AS run_expected_count, c.result_count AS run_result_count,

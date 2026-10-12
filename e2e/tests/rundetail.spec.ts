@@ -17,6 +17,24 @@ test.describe('A failed run (deployed audit)', () => {
     await expect(rows.first()).toContainText('Refund total is 0.00')
     await expect(rows.nth(1)).toContainText(ok.key)
   })
+
+  test('[FE-E2E-040] a developer opens the CI job from a run that came with its link; a run without one shows none', async ({ page, provenly }) => {
+    const tc = await provenly.createTestCase({ title: 'pay by card', automated: true })
+    const ciUrl = `https://github.com/acme/shop/actions/runs/${uniqueRunId()}/attempts/1`
+    const linked = ((await (await provenly.ingest(uniqueRunId(), 1, junit(byProperty('pay by card', tc.key)), { ciUrl })).json()) as { testRun: { id: number } }).testRun.id
+    const plain = ((await (await provenly.ingest(uniqueRunId(), 1, junit(byProperty('pay by card', tc.key)))).json()) as { testRun: { id: number } }).testRun.id
+
+    await page.goto(`/test-runs/${linked}`)
+    const link = page.getByRole('link', { name: 'Open the CI job' })
+    await expect(link).toHaveAttribute('href', ciUrl)
+    await expect(link).toHaveAttribute('target', '_blank')
+    await page.goto(`/test-runs/${plain}`)
+    await expect(page.getByRole('heading', { name: `Test run #${plain}` })).toBeVisible()
+    await expect(page.getByTestId('ci-job-link')).toHaveCount(0)
+
+    await page.goto('/test-runs')
+    await expect(page.getByRole('link', { name: 'ci' }).first()).toHaveAttribute('href', ciUrl)
+  })
 })
 
 test.describe('Did it pass on main lately? (deployed audit)', () => {

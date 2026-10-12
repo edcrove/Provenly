@@ -25,7 +25,11 @@ async function createTC(request: APIRequestContext, title: string, automated: bo
 }
 
 async function ingest(request: APIRequestContext, runId: string, xml: string, status = 'completed', branch = 'main') {
-  const params = new URLSearchParams({ provider: 'github', runId, runAttempt: '1', pipeline: 'e2e-nightly', branch, commit: '9f3c2a1e7b', status })
+  // Every CI run links to its job (Ed, 2026-10-12), as the reporter does on GitHub Actions.
+  const params = new URLSearchParams({
+    provider: 'github', runId, runAttempt: '1', pipeline: 'e2e-nightly', branch, commit: '9f3c2a1e7b', status,
+    ciUrl: `https://github.com/acme/shop/actions/runs/${runId}/attempts/1`,
+  })
   const res = await request.post(`${api}/ingestion/junit?${params}`, { headers: { 'Content-Type': 'application/xml' }, data: xml })
   expect(res.status()).toBe(201)
   return ((await res.json()) as { testRun: { id: number } }).testRun.id

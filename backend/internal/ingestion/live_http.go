@@ -36,6 +36,7 @@ type liveStartRequest struct {
 	Pipeline   string `json:"pipeline"`
 	Branch     string `json:"branch"`
 	Commit     string `json:"commit"`
+	CIURL      string `json:"ciUrl"`
 }
 
 type eventRequest struct {
@@ -66,7 +67,7 @@ func (h *LiveHandler) start(w http.ResponseWriter, r *http.Request) {
 	}
 	run, err := h.api.Start(r.Context(), RunMeta{
 		ProjectKey: req.Project, SuiteKey: req.Suite, Provider: req.Provider, ProviderRunID: req.RunID, RunAttempt: req.RunAttempt,
-		Pipeline: req.Pipeline, Branch: req.Branch, Commit: req.Commit,
+		Pipeline: req.Pipeline, Branch: req.Branch, Commit: req.Commit, CIURL: req.CIURL,
 	})
 	if err != nil {
 		httpx.WriteError(w, r, err)

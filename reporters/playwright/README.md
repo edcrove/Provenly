@@ -25,7 +25,8 @@ export default defineConfig({
 ```
 
 Environment (CI): `PROVENLY_URL`, `PROVENLY_API_KEY` (a project API key), optional `PROVENLY_PROJECT` and
-`PROVENLY_SUITE`. On GitHub Actions the run id, attempt, workflow, branch and commit come from `GITHUB_*`. On any other
+`PROVENLY_SUITE`. On GitHub Actions the run id, attempt, workflow, branch, commit and the link to the run page (`ciUrl`)
+come from `GITHUB_*`. On any other
 CI pass them as options from its own variables (for example GitLab:
 `{ provider: 'gitlab', runId: process.env.CI_PIPELINE_ID, runAttempt: 1, branch: process.env.CI_COMMIT_REF_NAME,
 commit: process.env.CI_COMMIT_SHA }`): otherwise the run id is a timestamp, so a re-sent report is a new run instead of
@@ -60,7 +61,8 @@ test('pays by card CHK-12', async () => {})
 
 ## Options
 
-`url`, `apiKey`, `project`, `suite`, `provider`, `runId`, `runAttempt`, `pipeline`, `branch`, `commit`, `shard` override
+`url`, `apiKey`, `project`, `suite`, `provider`, `runId`, `runAttempt`, `pipeline`, `branch`, `commit`, `ciUrl` (the CI
+job's URL, shown on the run), `shard` override
 the environment; `live: false` only sends the final report; `flushEvery` (default 50) sets the event batch size.
 
 ## Develop

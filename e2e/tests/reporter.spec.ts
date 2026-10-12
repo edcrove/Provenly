@@ -28,7 +28,9 @@ test.describe('Playwright reporter (DEC-15)', () => {
     const token = (await (await request.post(`${apiURL}/api/v1/projects/${key}/api-keys`, { data: { name: 'Playwright' } })).json()).token as string
     const logs: string[] = []
     const reporter = new ProvenlyReporter({
-      url: apiURL, apiKey: token, provider: 'github', runId: uniqueRunId(), runAttempt: 1, pipeline: 'e2e', branch: 'main', env: {},
+      url: apiURL, apiKey: token, provider: 'github', runId: uniqueRunId(), runAttempt: 1, pipeline: 'e2e', branch: 'main',
+      // On GitHub Actions the reporter links the run to its run page (Ed, 2026-10-12).
+      env: { GITHUB_ACTIONS: 'true', GITHUB_REPOSITORY: 'acme/shop', GITHUB_RUN_ID: '4242', GITHUB_RUN_ATTEMPT: '1' },
       log: (m) => logs.push(m),
     })
 
@@ -47,7 +49,10 @@ test.describe('Playwright reporter (DEC-15)', () => {
     const runs = await (await request.get(`${apiURL}/api/v1/test-runs?project=${key}`)).json()
     expect(runs.items).toHaveLength(1)
     const run = runs.items[0]
-    expect(run).toMatchObject({ mode: 'live', executionStatus: 'completed', pipeline: 'e2e', outcome: { verdict: 'passed', flaky: 1, passed: 2 } })
+    expect(run).toMatchObject({
+      mode: 'live', executionStatus: 'completed', pipeline: 'e2e', outcome: { verdict: 'passed', flaky: 1, passed: 2 },
+      ciUrl: 'https://github.com/acme/shop/actions/runs/4242/attempts/1',
+    })
     const live = await (await request.get(`${apiURL}/api/v1/test-runs/${run.id}/live`)).json()
     expect(live).toMatchObject({ reconciliation: 'consistent', runFinished: true, events: 7, finished: 2 })
     const results = await (await request.get(`${apiURL}/api/v1/test-runs/${run.id}/results`)).json()

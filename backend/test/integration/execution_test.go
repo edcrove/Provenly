@@ -369,6 +369,46 @@ func TestExecutionPersistence(t *testing.T) {
 		assert.Equal(t, "main", replay.Run.Branch, "a replay never changes the recorded metadata")
 	})
 
+	t.Run("BE-INT-079_a_run_links_to_its_ci_job", func(t *testing.T) {
+		s, ctx := fresh(t)
+		tc, err := s.Catalog.Create(ctx, catalog.CreateInput{Title: "pay", Automated: true})
+		require.NoError(t, err)
+		m := meta("600", 1)
+		m.CIURL = "https://github.com/acme/shop/actions/runs/600/attempts/1"
+		out, err := s.Ingestion.IngestJUnit(ctx, m, strings.NewReader(junitFor(tcProp("pay", itoa(tc.ID), ""))))
+		require.NoError(t, err)
+		assert.Equal(t, m.CIURL, out.Run.CIURL)
+		got, err := s.Execution.GetRun(ctx, out.Run.ID)
+		require.NoError(t, err)
+		assert.Equal(t, m.CIURL, got.CIURL, "stored with the run")
+		h, err := s.Execution.History(ctx, tc.ID, pagination.Default())
+		require.NoError(t, err)
+		assert.Equal(t, m.CIURL, h.Items[0].Run.CIURL, "the history carries the run's link")
+
+		// A replay with another link warns and keeps the recorded one; without one it is a difference too.
+		m.CIURL = "https://ci.example.com/other"
+		replay, err := s.Ingestion.IngestJUnit(ctx, m, strings.NewReader(junitFor(tcProp("pay", itoa(tc.ID), ""))))
+		require.NoError(t, err)
+		assert.Equal(t, []string{`ciUrl "https://ci.example.com/other" differs from "https://github.com/acme/shop/actions/runs/600/attempts/1", recorded for this attempt; it was not applied`}, replay.Warnings)
+		assert.Equal(t, "https://github.com/acme/shop/actions/runs/600/attempts/1", replay.Run.CIURL)
+
+		// Without a link the run has none; a live run takes it at its start.
+		plain, err := s.Ingestion.IngestJUnit(ctx, meta("601", 1), strings.NewReader(junitFor(tcProp("pay", itoa(tc.ID), ""))))
+		require.NoError(t, err)
+		assert.Equal(t, "", plain.Run.CIURL)
+		lm := meta("602", 1)
+		lm.CIURL = "https://ci.example.com/jobs/602"
+		live, err := s.Live.Start(ctx, lm)
+		require.NoError(t, err)
+		assert.Equal(t, lm.CIURL, live.CIURL)
+
+		// The database refuses what the service refuses: only http(s), at most 2000 characters.
+		for _, bad := range []string{"javascript:alert(1)", "ftp://x/y", "https://x/" + strings.Repeat("a", 1991)} {
+			_, err = db.Pool.Exec(ctx, `UPDATE test_runs SET ci_url = $1 WHERE id = $2`, bad, plain.Run.ID)
+			assert.ErrorContains(t, err, "test_runs_ci_url_http", bad)
+		}
+	})
+
 	t.Run("BE-INT-025_ingested_results_and_parse_errors_are_immutable", func(t *testing.T) {
 		s, ctx := fresh(t)
 		a, _ := s.Catalog.Create(ctx, catalog.CreateInput{Title: "a", Automated: true})

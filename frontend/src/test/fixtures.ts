@@ -109,6 +109,7 @@ export function testRun(overrides: Partial<TestRun> = {}): TestRun {
     pipeline: 'ci',
     branch: 'main',
     commit: '0123456789abcdef',
+    ciUrl: '',
     executionStatus: 'completed',
     outcome: {
       verdict: 'failed',

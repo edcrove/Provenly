@@ -106,7 +106,7 @@ cat > report.xml <<'XML'
 </testsuite></testsuites>
 XML
 curl -s -X POST -H "Authorization: Bearer $KEY" -H 'Content-Type: application/xml' --data-binary @report.xml \
-  'localhost:8080/api/v1/ingestion/junit?provider=github&runId=42&runAttempt=1&branch=main&commit=abc123'
+  'localhost:8080/api/v1/ingestion/junit?provider=github&runId=42&runAttempt=1&branch=main&commit=abc123&ciUrl=https://github.com/acme/shop/actions/runs/42'
 # => 201, created=true, testRun.id=6, diagnostics=[missing TC-ID]. Re-sending the same attempt returns 200.
 # The key's project is the default; it can only report runs, and only into its project.
 

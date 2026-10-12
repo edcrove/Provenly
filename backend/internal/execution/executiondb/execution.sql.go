@@ -186,7 +186,7 @@ func (q *Queries) GetRunProject(ctx context.Context, id int64) (int64, error) {
 }
 
 const getTestRun = `-- name: GetTestRun :one
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total, r.ci_url,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count,
@@ -225,6 +225,7 @@ func (q *Queries) GetTestRun(ctx context.Context, id int64) (GetTestRunRow, erro
 		&i.TestRun.Mode,
 		&i.TestRun.StartedBy,
 		&i.TestRun.ShardTotal,
+		&i.TestRun.CiUrl,
 		&i.ExpectedCount,
 		&i.ResultCount,
 		&i.AmendmentCount,
@@ -456,8 +457,8 @@ type InsertTestResultsParams struct {
 }
 
 const insertTestRun = `-- name: InsertTestRun :one
-INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, status, started_at, completed_at, report_sha256, suite_key, suite_name, mode, started_by, shard_total)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+INSERT INTO test_runs (project_id, external_run_id, provider, provider_run_id, run_attempt, pipeline, branch, commit_sha, ci_url, status, started_at, completed_at, report_sha256, suite_key, suite_name, mode, started_by, shard_total)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 ON CONFLICT (project_id, external_run_id) DO NOTHING
 RETURNING id
 `
@@ -471,6 +472,7 @@ type InsertTestRunParams struct {
 	Pipeline      string
 	Branch        string
 	CommitSha     string
+	CiUrl         string
 	Status        string
 	StartedAt     pgtype.Timestamptz
 	CompletedAt   pgtype.Timestamptz
@@ -492,6 +494,7 @@ func (q *Queries) InsertTestRun(ctx context.Context, arg InsertTestRunParams) (i
 		arg.Pipeline,
 		arg.Branch,
 		arg.CommitSha,
+		arg.CiUrl,
 		arg.Status,
 		arg.StartedAt,
 		arg.CompletedAt,
@@ -869,7 +872,7 @@ SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlat
         SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
           AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
     ) AS retried,
-    r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha,
+    r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.ci_url,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
     r.report_sha256, r.suite_key, r.suite_name, r.mode AS run_mode, r.started_by AS run_started_by,
     r.shard_total AS run_shard_total, c.expected_count AS run_expected_count, c.result_count AS run_result_count,
@@ -900,6 +903,7 @@ type ListResultsForTestCaseRow struct {
 	Pipeline          string
 	Branch            string
 	CommitSha         string
+	CiUrl             string
 	RunStatus         string
 	RunCreatedAt      pgtype.Timestamptz
 	RunStartedAt      pgtype.Timestamptz
@@ -960,6 +964,7 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 			&i.Pipeline,
 			&i.Branch,
 			&i.CommitSha,
+			&i.CiUrl,
 			&i.RunStatus,
 			&i.RunCreatedAt,
 			&i.RunStartedAt,
@@ -1193,7 +1198,7 @@ func (q *Queries) ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]
 }
 
 const listTestRuns = `-- name: ListTestRuns :many
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total, r.ci_url,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count,
@@ -1274,6 +1279,7 @@ func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]L
 			&i.TestRun.Mode,
 			&i.TestRun.StartedBy,
 			&i.TestRun.ShardTotal,
+			&i.TestRun.CiUrl,
 			&i.ExpectedCount,
 			&i.ResultCount,
 			&i.AmendmentCount,

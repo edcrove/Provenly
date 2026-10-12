@@ -8,11 +8,11 @@ test.describe('Live runs', () => {
     const login = await provenly.createTestCase({ title: 'login', project: key, automated: true })
     const pay = await provenly.createTestCase({ title: 'pay', project: key, automated: true })
     const runId = uniqueRunId()
-    const start = { project: key, provider: 'github', runId, runAttempt: 1, pipeline: 'ci' }
+    const start = { project: key, provider: 'github', runId, runAttempt: 1, pipeline: 'ci', ciUrl: `https://ci.example.com/jobs/${runId}` }
     const started = await request.post(`${apiURL}/api/v1/test-runs/live`, { data: start })
     expect(started.status()).toBe(201)
     const run = await started.json()
-    expect(run).toMatchObject({ mode: 'live', executionStatus: 'running', expectedCount: 2 })
+    expect(run).toMatchObject({ mode: 'live', executionStatus: 'running', expectedCount: 2, ciUrl: start.ciUrl })
     expect((await (await request.post(`${apiURL}/api/v1/test-runs/live`, { data: start })).json()).id).toBe(run.id)
 
     const events = (list: object[]) => request.post(`${apiURL}/api/v1/test-runs/${run.id}/events`, { data: { events: list } })

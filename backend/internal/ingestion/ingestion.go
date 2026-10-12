@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
@@ -76,6 +77,8 @@ type RunMeta struct {
 	Pipeline      string
 	Branch        string
 	Commit        string
+	// CIURL is the CI job's URL (Ed, 2026-10-12): http(s), at most 2000 characters; empty when CI has none.
+	CIURL string
 	// Status is how the CI execution ended (completed when empty).
 	Status execution.RunStatus
 	// Charset is the Content-Type charset of the report, if any: it overrides the XML declaration.
@@ -90,6 +93,18 @@ type RunMeta struct {
 
 // MaxShards bounds how many reports one run may be split into.
 const MaxShards = 100
+
+// MaxCIURLLength bounds the CI job URL a run links to.
+const MaxCIURLLength = 2000
+
+// CIURLMessage is the field error for a ciUrl that is not an absolute http(s) URL.
+const CIURLMessage = "must be an absolute http(s) URL of at most 2000 characters"
+
+// validCIURL accepts absolute http(s) URLs with a host (the UI renders the value as a link, so no other scheme).
+func validCIURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && !strings.ContainsAny(raw, " \t\r\n")
+}
 
 // ShardsPendingWarning tells which shards a sharded run still waits for.
 const ShardsPendingWarning = "shard %d/%d recorded; the run completes when shards %s arrive (or when CI finalizes it)"
@@ -133,7 +148,7 @@ type Outcome struct {
 const StatusDiffersWarning = "status %q differs from %q, recorded for this attempt; it was not applied"
 
 // MetadataDiffersWarning is returned when a replay reports another pipeline,
-// branch or commit than the ones recorded for the attempt; they are never applied.
+// branch, commit, suite or ciUrl than the ones recorded for the attempt; they are never applied.
 const MetadataDiffersWarning = "%s %q differs from %q, recorded for this attempt; it was not applied"
 
 // FutureStartWarning is returned when the report's suite timestamp is later than
@@ -188,6 +203,7 @@ func ValidateMeta(m RunMeta) error {
 	v.CheckText("pipeline", m.Pipeline)
 	v.CheckText("branch", m.Branch)
 	v.CheckText("commit", m.Commit)
+	v.Check(m.CIURL == "" || (utf8.RuneCountInString(m.CIURL) <= MaxCIURLLength && validCIURL(m.CIURL)), "ciUrl", CIURLMessage)
 	v.Check(m.Status == "" || slices.Contains(execution.ExecutionStatuses, m.Status), "status", "must be one of completed, interrupted, cancelled")
 	v.Check(m.ProjectKey == "" || projectkey.Valid(m.ProjectKey), "project", projectkey.Message)
 	v.Check((m.Shard == 0 && m.ShardTotal == 0) || (m.ShardTotal >= 2 && m.ShardTotal <= MaxShards && m.Shard >= 1 && m.Shard <= m.ShardTotal),
@@ -264,7 +280,7 @@ func (s *Service) ingestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	}
 	run, created, err := s.recorder.RecordRun(ctx, execution.NewRun{
 		ProjectID: project.ID, Provider: meta.Provider, ProviderRunID: meta.ProviderRunID, RunAttempt: meta.RunAttempt,
-		Pipeline: meta.Pipeline, Branch: meta.Branch, Commit: meta.Commit, StartedAt: report.StartedAt,
+		Pipeline: meta.Pipeline, Branch: meta.Branch, Commit: meta.Commit, CIURL: meta.CIURL, StartedAt: report.StartedAt,
 		ReportSHA256: reportSHA, Status: meta.Status, SuiteKey: suite.Key, SuiteName: suite.Name,
 		Shard: meta.Shard, ShardTotal: meta.ShardTotal,
 	}, expected, results, parseErrors)
@@ -311,7 +327,7 @@ func (s *Service) ingestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 		out.Warnings = append(out.Warnings, fmt.Sprintf(StatusDiffersWarning, requested, recordedStatus))
 	}
 	if !created {
-		for _, f := range [][3]string{{"pipeline", meta.Pipeline, run.Pipeline}, {"branch", meta.Branch, run.Branch}, {"commit", meta.Commit, run.Commit}, {"suite", meta.SuiteKey, run.SuiteKey}} {
+		for _, f := range [][3]string{{"pipeline", meta.Pipeline, run.Pipeline}, {"branch", meta.Branch, run.Branch}, {"commit", meta.Commit, run.Commit}, {"suite", meta.SuiteKey, run.SuiteKey}, {"ciUrl", meta.CIURL, run.CIURL}} {
 			if f[1] != f[2] {
 				out.Warnings = append(out.Warnings, fmt.Sprintf(MetadataDiffersWarning, f[0], f[1], f[2]))
 			}

@@ -37,6 +37,14 @@ export interface PwFullResult {
   status: 'passed' | 'failed' | 'timedout' | 'interrupted'
 }
 
+/** The GitHub Actions run page (this attempt), when the reporter runs there; undefined elsewhere. */
+function githubRunUrl(env: Record<string, string | undefined>): string | undefined {
+  if (!env.GITHUB_ACTIONS || !env.GITHUB_REPOSITORY || !env.GITHUB_RUN_ID) return undefined
+  const server = (env.GITHUB_SERVER_URL ?? 'https://github.com').replace(/\/+$/, '')
+  const attempt = env.GITHUB_RUN_ATTEMPT ? `/attempts/${env.GITHUB_RUN_ATTEMPT}` : ''
+  return `${server}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}${attempt}`
+}
+
 export interface ProvenlyReporterOptions {
   /** Base URL of Provenly (default PROVENLY_URL). Without it the reporter does nothing. */
   url?: string
@@ -52,6 +60,8 @@ export interface ProvenlyReporterOptions {
   pipeline?: string
   branch?: string
   commit?: string
+  /** The CI job's URL, shown on the run (default: the GitHub Actions run URL from `GITHUB_*`). */
+  ciUrl?: string
   /** Stream live events while tests run (default true; off for a sharded run). */
   live?: boolean
   /**
@@ -202,6 +212,7 @@ export default class ProvenlyReporter {
       pipeline: options.pipeline ?? env.GITHUB_WORKFLOW,
       branch: options.branch ?? env.GITHUB_REF_NAME,
       commit: options.commit ?? env.GITHUB_SHA,
+      ciUrl: options.ciUrl ?? githubRunUrl(env),
       live: options.live ?? true,
       flushEvery: options.flushEvery ?? 50,
     }
@@ -240,6 +251,7 @@ export default class ProvenlyReporter {
       pipeline: this.opts.pipeline,
       branch: this.opts.branch,
       commit: this.opts.commit,
+      ciUrl: this.opts.ciUrl,
     })
     this.liveStart = this.call('POST', '/api/v1/test-runs/live', body, 'application/json')
       .then(async (res) => {
@@ -316,6 +328,7 @@ export default class ProvenlyReporter {
       pipeline: this.opts.pipeline,
       branch: this.opts.branch,
       commit: this.opts.commit,
+      ciUrl: this.opts.ciUrl,
     })) {
       if (v) query.set(k, v)
     }

@@ -81,7 +81,7 @@ system of record and runs for a year. Two kinds of gaps, from the product-owner 
 |---|---|---|---|
 | Published, versioned images and an upgrade rehearsed once from the previous tag | DevOps | MVP exit 1; Notion 07 | S/M |
 | A durable instance (not Render's 30-day free DB) and one pilot team's feedback loop | EM | MVP D8 / DEC-66 | M (infra) + Ed |
-| `ciUrl`, commit and PR links on runs (the developer's first click from a red run) | Developer | prototype README §26, still open | S |
+| ~~`ciUrl`~~ (decided and built 2026-10-12, implementation decision 24); commit and PR links on runs | Developer | prototype README §26 | S |
 | Failure triage basics: failures grouped by message across runs, "first failed in run N", run comparison | SDET, QA lead | Notion 21, 27 | M + M |
 | A live run cannot stay "running" forever (abandoned-run timeout / finalize) | SDET | P15-6 | S |
 | Export of runs, results and history (CSV/JSON) | EM | Notion 02 "open data by design"; Incubator ExportSink | S/M |
@@ -168,7 +168,7 @@ hand-written MSW mock is the testing cost that grows with contributors (mock-par
    The Trello card asks for multi-arch and SBOM; `release.yml` has neither.
 6. **Durable dogfood / pilot instance**: a small paid host with the compose `backup` profile, CI secrets set so the
    suite reports itself. Recommendation: now, it is the cheapest way to meet D8.
-7. **`ciUrl`** (open since the deployed audit). Recommendation: yes, S.
+7. ~~**`ciUrl`**~~ — decided yes (2026-10-12), implementation decision 24.
 8. **Storage policy** for live events and old attempts (§4.2 item 8), and whether "single replica" is a 1.0 statement
    or HA is a 1.0 claim (items 4–5).
 9. **Trello**: reconcile the 15 built *Por hacer* cards (link each to its prototype PR and evidence, approve or
@@ -208,7 +208,7 @@ what hurts.
 
 | # | Item | Size | Depends on |
 |---|---|---|---|
-| C.1 | `ciUrl`, commit and PR links on runs | S | decision 7 |
+| C.1 | ~~`ciUrl`~~ (done 2026-10-12); commit and PR links on runs | S | — |
 | C.2 | Abandoned live run timeout / finalize | S | decision 4 (P15-6) |
 | C.3 | Persisted run outcomes (+ verdict filter) | M | — |
 | C.4 | SQL paging and grouped counts for issues, requirements, suites, dimensions | M | — |

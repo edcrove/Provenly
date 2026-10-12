@@ -401,7 +401,7 @@ relation with their parts clear. Each item shipped in its own PR (#63–#78) wit
 **Decided by Ed (2026-10-09):** the E2E journeys leave the environment clean and are idempotent (a sweep before and
 after every run; the leftover accounts on Render are deactivated by the next run there, PR #80); maintainers read
 their projects' audit log (P20-5, implementation decision 22); per-project run numbers and test case versions are
-Incubator items. Still open: whether a run links to its CI job (`ciUrl`).
+Incubator items. **Decided by Ed (2026-10-12):** a run links to its CI job (`ciUrl`, implementation decision 24).
 
 The first E2E run on Render with the cleanup (2026-10-09) found that the UI only knew the first 100 projects: with the
 projects earlier runs left there, TC was missing from the switcher and the projects page, and an administrator saw no

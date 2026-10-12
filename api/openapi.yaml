@@ -3,7 +3,7 @@ info:
   title: Provenly API
   version: 0.1.0
   description: |
-    Public REST contract of the Provenly POC. This file is the authoritative
+    Public REST contract of Provenly. This file is the authoritative
     inventory of public operations: backend Contract coverage and the frontend
     generated client are both derived from it.
 

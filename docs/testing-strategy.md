@@ -1,4 +1,4 @@
-# Testing & coverage strategy (POC)
+# Testing & coverage strategy
 
 Backend and frontend each have Unit, Integration, Contract and E2E layers: **8 independent gates**. Each gate must
 reach 100% of *its own* denominator; `covgate` evaluates them one by one and a consolidated number never replaces a

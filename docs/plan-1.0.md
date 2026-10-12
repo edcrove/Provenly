@@ -239,3 +239,39 @@ split out of `catalog` (M, with the Jira connector) · `rotate-secrets-key` (S).
 Test case versions (L) · MCP write tools behind explicit grants (M) · SSO/OIDC (M/L) · connector SDK and event
 catalogue (L) · quality intelligence v2: durations, releases/environments, clustering (L) · multi-tenancy only on
 demonstrated demand (XL) · AI-assisted journeys after the surfaces above stabilise (L).
+
+## 8. Feature parity: what Provenly lacks against existing tools (2026-10-12)
+
+Asked by Ed: "qué le falta con respecto a otros sistemas que existen para feature parity, en orden de prioridad".
+Compared against TestRail, Xray, Zephyr Scale, Qase, Testomat.io, Kiwi TCMS, TestLink (test management) and
+ReportPortal, Allure TestOps (test reporting), using the Notion *Capability Matrix* (67 capabilities, 2026-09-25, with
+its Importance and Phase) and a web survey of each tool's current feature pages. Ordered by: how many competitors
+have it, the matrix's importance, and which persona is blocked without it. Differentiators Provenly already has and
+competitors mostly lack are listed at the end; they are not gaps.
+
+| # | Gap | Who has it | Matrix | State in Provenly | Size |
+|---|---|---|---|---|---|
+| 1 | **Test plans / cycles**: group executions by release, sprint or environment, assign test cases to people, track progress and sign-off | every TCM (TestRail plans+milestones, Xray plans, Zephyr cycles, Qase plans, Kiwi plans, TestLink plans) | Test Plans: CRITICAL, Core | a manual run is one person's session; no plan, assignment or progress per release (Incubator "Manual testing") | L |
+| 2 | **Attachments and evidence**: screenshots, logs, traces on manual results and CI artifacts on automated ones | every TCM; ReportPortal and Allure keep logs/attachments per test | Attachments: HIGH, Core · Execution Logs & Artifacts: HIGH, Core | only `errorDetails` text; no file storage (object storage decision needed) | L |
+| 3 | **Jira connector**: issues and requirements pulled and kept in sync, defects created from a failed result | all TCMs are Jira-first (Xray and Zephyr live inside Jira); ReportPortal and Allure post defects to Jira | Jira/GitHub/GitLab/Azure: CRITICAL, Core · Defect creation from run: HIGH · Bidirectional sync: HIGH | GitHub Issues mirror (manual sync) + push import for any provider; no Jira, no write-back | L |
+| 4 | **Import / export / migration**: CSV/XLS import of test cases, export of cases, runs and results | TestRail CSV/XML, Testomat CSV/XLS/Google Docs and from code, Zephyr, Qase, Kiwi | Import/Export: HIGH, Core | push import of requirements and issues only; no test case import, no export | M |
+| 5 | **Failure triage**: group failures by error across runs, classify (product bug / automation bug / system issue), "first failed in run N", compare two runs | ReportPortal (ML auto-analysis, clustering), Allure (AQL, flaky attribute), Testomat analytics | Failure Classification: HIGH, Core · Failure Triage Workflow: HIGH · Quarantine: MEDIUM | failures first, known-issue links, flaky counter; no grouping, classification or comparison | M + M |
+| 6 | **Shared steps / preconditions and parameters**: reuse step blocks, data-driven cases | Xray preconditions + parameterization, Zephyr call-to-test + parameters, TestRail and Qase shared steps | Parameters & Test Data: HIGH | steps belong to one test case; no reuse, no parameters | M + M |
+| 7 | **Environments and milestones on runs**: which environment/platform/build a run executed on, grouped under a release | TestRail configurations + milestones, Xray environments, Zephyr environments + versions | Environments & Platforms: HIGH, Core · Milestones & Releases: MEDIUM | platform is a test-case dimension; runs carry branch/commit/pipeline only | M + M |
+| 8 | **Test case versioning**: a result points to the version it ran against | Zephyr (on by default, comparable), Xray, Kiwi history | Test Case Versioning: HIGH | edits are in place; only the run snapshot freezes membership (Incubator) | L |
+| 9 | **Notifications**: Slack/email/Teams on run completion, failures, assignments | all (TestRail email, Qase, Allure, ReportPortal, Testomat) | Notifications: MEDIUM | webhooks only | M |
+| 10 | **Standard reports and saved filters**: exportable reports (PDF/XLS), per-release and per-milestone, saved views, a query language | TestRail reports, Zephyr 70+ reports, Testomat PDF/XLS, Allure AQL | Standard Reports: HIGH · Saved Filters & Query Language: HIGH · Dashboards: HIGH | dashboard with trend, coverage, flaky; print of a run; URL filters | M |
+| 11 | **Collaboration**: comments and mentions on test cases, runs and results; bulk edit | all TCMs | Comments: MEDIUM · Bulk edit: MEDIUM | none | M + M |
+| 12 | **Framework coverage**: native reporters or recipes beyond Playwright (pytest, Jest/Vitest, JUnit 5, Cypress, Cucumber) | Allure 100+ integrations, ReportPortal agents per framework, Testomat importers | Framework Reporters: CRITICAL, Core | Playwright reporter + JUnit XML for the rest (batch only) | M each |
+| 13 | **SSO / OIDC / SAML**, approval workflows | TestRail, Zephyr, Qase, Allure (enterprise), Kiwi (social/OIDC) | SSO: HIGH, Expansion · Approval: MEDIUM | local accounts and invitations | M/L |
+| 14 | **AI**: failure-reason detection, test generation from requirements, agent write access | ReportPortal ML analyzer (OSS), Qase AI Designer + MCP, Testomat AI analytics + MCP | AI Failure Analysis: EXPERIMENTAL · MCP: MEDIUM | MCP read tools (ahead of most); no generation or analysis | L |
+| 15 | **Folders / hierarchy** for test cases | every TCM organises cases in trees or sections | — | by design, flat catalog with dimensions and tags (P9); migration tooling matters more than mimicking folders | — (decision) |
+| 16 | **Helm / Kubernetes, managed cloud, multi-tenancy** | ReportPortal and Kiwi ship Helm; all SaaS tools are multi-tenant | Self-hosting: CRITICAL (Helm) · Multi-tenancy: CRITICAL, Core · Managed: HIGH | Docker Compose only; one instance per team | L / XL |
+
+Where Provenly is ahead (keep, do not dilute): stable `TC-<id>` correlation with diagnostics, expected-universe
+snapshot (`untested`), live run reconciliation against the final report, derived issue verification, requirement
+federation without migration, audit log with CI-key attribution, PATs and a read MCP server, 100%-gated open source.
+
+Recommendation: parity work follows the 1.0 plan (§7). Items 1–5 are the ones a team evaluating Provenly against
+TestRail or ReportPortal will ask about first; 1–3 need the Incubator designs (manual testing, connector port, storage)
+before cards. Items 6–11 are M-sized and can go one per card after 1.0. 12–16 are 1.x/advanced. Nothing here is decided.

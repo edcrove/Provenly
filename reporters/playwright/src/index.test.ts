@@ -115,6 +115,8 @@ describe('ProvenlyReporter', () => {
         GITHUB_WORKFLOW: 'e2e',
         GITHUB_REF_NAME: 'main',
         GITHUB_SHA: 'abc',
+        GITHUB_REPOSITORY: 'acme/shop',
+        GITHUB_SERVER_URL: 'https://github.com/',
       },
     })
     r.onBegin()
@@ -132,6 +134,7 @@ describe('ProvenlyReporter', () => {
     expect(start.headers.Authorization).toBe('Bearer pk_1')
     expect(JSON.parse(start.body)).toEqual({
       project: 'CHK', suite: 'smoke', provider: 'github', runId: '77', runAttempt: 2, pipeline: 'e2e', branch: 'main', commit: 'abc',
+      ciUrl: 'https://github.com/acme/shop/actions/runs/77/attempts/2',
     })
     expect(batch1.url).toBe('https://provenly.test/api/v1/test-runs/42/events')
     const events1 = JSON.parse(batch1.body).events
@@ -142,7 +145,7 @@ describe('ProvenlyReporter', () => {
     expect(events2.map((e: { type: string }) => e.type)).toEqual(['test.finished', 'test.finished', 'run.finished'])
     expect(events2[1].testCase).toBeUndefined()
     expect(report.url).toBe(
-      'https://provenly.test/api/v1/ingestion/junit?provider=github&runId=77&runAttempt=2&project=CHK&suite=smoke&pipeline=e2e&branch=main&commit=abc',
+      'https://provenly.test/api/v1/ingestion/junit?provider=github&runId=77&runAttempt=2&project=CHK&suite=smoke&pipeline=e2e&branch=main&commit=abc&ciUrl=https%3A%2F%2Fgithub.com%2Facme%2Fshop%2Factions%2Fruns%2F77%2Fattempts%2F2',
     )
     expect(report.headers['Content-Type']).toBe('application/xml')
     expect(report.body).toContain('<property name="tc-id" value="CHK-3"/><property name="attempt" value="1"/></properties><failure message="expected 1">Error: expected 1</failure>')
@@ -239,6 +242,35 @@ describe('sharded runs', () => {
     const log = vi.fn()
     new ProvenlyReporter({ log, env: {} }).onBegin({ shard: { current: 1, total: 2 } })
     expect(log).not.toHaveBeenCalled()
+  })
+})
+
+describe('ciUrl (Ed, 2026-10-12)', () => {
+  it('links the run to the GitHub Actions run page, without an attempt when the env lacks one, and never off GitHub', async () => {
+    const f = fakeFetch([json({ id: 1 })])
+    const r = new ProvenlyReporter({
+      fetch: f.fn, log: vi.fn(), now: () => now, live: false,
+      env: { PROVENLY_URL: 'https://p.test', GITHUB_ACTIONS: 'true', GITHUB_REPOSITORY: 'acme/shop', GITHUB_RUN_ID: '9' },
+    })
+    r.onBegin()
+    await r.onEnd({ status: 'passed' })
+    expect(f.calls[0].url).toContain('&ciUrl=https%3A%2F%2Fgithub.com%2Facme%2Fshop%2Factions%2Fruns%2F9')
+    expect(f.calls[0].url).not.toContain('attempts')
+
+    const g = fakeFetch([json({ id: 1 })])
+    const local = new ProvenlyReporter({ fetch: g.fn, log: vi.fn(), now: () => now, live: false, runId: '1', env: { PROVENLY_URL: 'https://p.test' } })
+    local.onBegin()
+    await local.onEnd({ status: 'passed' })
+    expect(g.calls[0].url).not.toContain('ciUrl')
+
+    const h = fakeFetch([json({ id: 1 })])
+    const explicit = new ProvenlyReporter({
+      fetch: h.fn, log: vi.fn(), now: () => now, live: false, runId: '1', ciUrl: 'https://ci.example.com/jobs/1',
+      env: { PROVENLY_URL: 'https://p.test', GITHUB_ACTIONS: 'true', GITHUB_REPOSITORY: 'acme/shop', GITHUB_RUN_ID: '9' },
+    })
+    explicit.onBegin()
+    await explicit.onEnd({ status: 'passed' })
+    expect(h.calls[0].url).toContain('&ciUrl=https%3A%2F%2Fci.example.com%2Fjobs%2F1')
   })
 })
 

@@ -774,6 +774,18 @@ def main():
     st, got = trace_of("/nope-route")
     check("unrouted requests are traced too", f"{st} {len(got)}", "404 32")
 
+    # ciUrl (Ed, 2026-10-12): a run links to its CI job; only absolute http(s) URLs of at most 2000 characters.
+    ok_url = "https://github.com/acme/shop/actions/runs/1/attempts/1"
+    xml = b'<testsuite name="probe-ci"><testcase name="ok" time="1"/></testsuite>'
+    q = f"provider=github&runId=probeci{int(time.time())}x{{}}&runAttempt=1"  # q was rebound by the loops above
+    st, body = call(base, "POST", "/ingestion/junit?" + q.format(80) + "&ciUrl=" + urllib.parse.quote(ok_url, safe=""), raw=xml, ctype="application/xml")
+    check("ingest with ciUrl", [st, (body or {}).get("testRun", {}).get("ciUrl")], [201, ok_url])
+    st, body = call(base, "POST", "/ingestion/junit?" + q.format(80) + "&ciUrl=https://ci.example.com/other", raw=xml, ctype="application/xml")
+    check("replay with another ciUrl warns and keeps the recorded one", [st, "ciUrl" in str((body or {}).get("warnings")), (body or {}).get("testRun", {}).get("ciUrl")], [200, True, ok_url])
+    for i, bad in enumerate(["javascript:alert(1)", "ftp://x/y", "example.com/job", "https://user:pw@x/y", "https://x/a%20b", "https://x/" + "a" * 1995, "https://x/%00", "%FF"]):
+        check(f"ingest with ciUrl {bad[:25]!r}", call(base, "POST", "/ingestion/junit?" + q.format(81 + i) + "&ciUrl=" + urllib.parse.quote(bad, safe=":/@%"), raw=xml, ctype="application/xml")[0], 400)
+    check("ingest with empty ciUrl", call(base, "POST", "/ingestion/junit?" + q.format(90) + "&ciUrl=", raw=xml, ctype="application/xml")[0], 201)
+
     # Archived projects (Ed, 2026-10-11): hidden, read-only, idempotent under concurrency, never TC; ?archived= validated.
     old = f"PA{int(time.time()) % 10**8}"
     check("create a project to archive", call(base, "POST", "/projects", {"key": old, "name": "probe archive"})[0], 201)

@@ -92,7 +92,7 @@ type runRow struct {
 func toRun(r runRow) execution.TestRun {
 	return execution.TestRun{
 		ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
-		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.CommitSha,
+		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.CommitSha, CIURL: r.CiUrl,
 		Status: execution.RunStatus(r.Status), ExpectedCount: r.ExpectedCount + r.AmendmentCount, ResultCount: r.ResultCount,
 		AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt.Time, StartedAt: timePtr(r.StartedAt), CompletedAt: timePtr(r.CompletedAt),
 		ReportSHA256: r.ReportSha256, SuiteKey: r.SuiteKey.String, SuiteName: r.SuiteName.String,
@@ -132,7 +132,7 @@ func int4Arg(v *int32) pgtype.Int4 {
 func (s *Store) InsertTestRun(ctx context.Context, p execution.InsertRunParams) (int64, bool, error) {
 	id, err := s.q.InsertTestRun(ctx, executiondb.InsertTestRunParams{
 		ProjectID: p.ProjectID, ExternalRunID: p.ExternalRunID, Provider: p.Provider, ProviderRunID: p.ProviderRunID, RunAttempt: p.RunAttempt,
-		Pipeline: p.Pipeline, Branch: p.Branch, CommitSha: p.Commit, Status: string(p.Status),
+		Pipeline: p.Pipeline, Branch: p.Branch, CommitSha: p.Commit, CiUrl: p.CIURL, Status: string(p.Status),
 		StartedAt: timestamptz(p.StartedAt), CompletedAt: timestamptz(p.CompletedAt), ReportSha256: p.ReportSHA256,
 		SuiteKey: optionalText(p.SuiteKey), SuiteName: optionalText(p.SuiteName),
 		Mode: string(cmp.Or(p.Mode, execution.ModeBatch)), StartedBy: optionalText(p.StartedBy), ShardTotal: optionalInt4(p.ShardTotal),
@@ -325,7 +325,7 @@ func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, f 
 			Run: toRun(runRow{
 				TestRun: executiondb.TestRun{
 					ID: r.TestResult.TestRunID, ProjectID: r.RunProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
-					RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, Status: r.RunStatus,
+					RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, CommitSha: r.CommitSha, CiUrl: r.CiUrl, Status: r.RunStatus,
 					CreatedAt: r.RunCreatedAt, StartedAt: r.RunStartedAt, CompletedAt: r.RunCompletedAt,
 					ReportSha256: r.ReportSha256, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName, Mode: r.RunMode, StartedBy: r.RunStartedBy,
 					ShardTotal: r.RunShardTotal,

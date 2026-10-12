@@ -116,10 +116,16 @@ func TestIngestHandlerReportsEveryParameterError(t *testing.T) {
 		assert.Contains(t, rec.Body.String(), field)
 	}
 	assert.Equal(t, 1, strings.Count(rec.Body.String(), `"field":"runAttempt"`), "runAttempt is reported once")
-	rec = post(&stubAPI{}, 1024, "provider=Bad&runId=7&runAttempt=x&status=&suite=", "application/xml", "<x/>")
-	for _, field := range []string{`"field":"provider"`, `"field":"runAttempt"`, `"field":"status"`, `"field":"suite"`} {
+	rec = post(&stubAPI{}, 1024, "provider=Bad&runId=7&runAttempt=x&status=&suite=&ciUrl=ftp://x", "application/xml", "<x/>")
+	for _, field := range []string{`"field":"provider"`, `"field":"runAttempt"`, `"field":"status"`, `"field":"suite"`, `"field":"ciUrl"`} {
 		assert.Contains(t, rec.Body.String(), field)
 	}
+	// ?ciUrl= reaches the service as sent (Ed, 2026-10-12); empty is the same as absent, like pipeline.
+	api := &stubAPI{}
+	rec = post(api, 1024, q+"&ciUrl=https://ci.example.com/jobs/7", "application/xml", "<x/>")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "https://ci.example.com/jobs/7", api.gotMeta.CIURL)
+	assert.Equal(t, http.StatusOK, post(&stubAPI{}, 1024, q+"&ciUrl=", "application/xml", "<x/>").Code)
 }
 
 func TestIngestHandlerMediaTypes(t *testing.T) {

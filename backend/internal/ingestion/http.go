@@ -78,7 +78,7 @@ func parseShard(q url.Values, meta *RunMeta) {
 func runMeta(q url.Values, charset string) (RunMeta, error) {
 	meta := RunMeta{
 		ProjectKey: q.Get("project"), Provider: q.Get("provider"), ProviderRunID: q.Get("runId"),
-		Pipeline: q.Get("pipeline"), Branch: q.Get("branch"), Commit: q.Get("commit"), SuiteKey: q.Get("suite"),
+		Pipeline: q.Get("pipeline"), Branch: q.Get("branch"), Commit: q.Get("commit"), CIURL: q.Get("ciUrl"), SuiteKey: q.Get("suite"),
 		Status: execution.RunStatus(q.Get("status")), Charset: charset,
 	}
 	var fields []apperr.FieldError

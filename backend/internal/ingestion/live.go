@@ -84,7 +84,7 @@ func (l *Live) Start(ctx context.Context, meta RunMeta) (execution.TestRun, erro
 	}
 	return l.recorder.StartRun(ctx, execution.NewRun{
 		ProjectID: project.ID, Provider: meta.Provider, ProviderRunID: meta.ProviderRunID, RunAttempt: meta.RunAttempt,
-		Pipeline: meta.Pipeline, Branch: meta.Branch, Commit: meta.Commit, SuiteKey: suite.Key, SuiteName: suite.Name,
+		Pipeline: meta.Pipeline, Branch: meta.Branch, Commit: meta.Commit, CIURL: meta.CIURL, SuiteKey: suite.Key, SuiteName: suite.Name,
 		Mode: execution.ModeLive,
 	}, expected)
 }

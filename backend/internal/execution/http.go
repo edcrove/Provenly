@@ -45,15 +45,17 @@ var suiteKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,29}$`)
 
 // TestRunDTO is the wire form of TestRun.
 type TestRunDTO struct {
-	ID            int64      `json:"id"`
-	ProjectID     int64      `json:"projectId"`
-	ExternalRunID string     `json:"externalRunId"`
-	Provider      string     `json:"provider"`
-	ProviderRunID string     `json:"providerRunId"`
-	RunAttempt    int32      `json:"runAttempt"`
-	Pipeline      string     `json:"pipeline"`
-	Branch        string     `json:"branch"`
-	Commit        string     `json:"commit"`
+	ID            int64  `json:"id"`
+	ProjectID     int64  `json:"projectId"`
+	ExternalRunID string `json:"externalRunId"`
+	Provider      string `json:"provider"`
+	ProviderRunID string `json:"providerRunId"`
+	RunAttempt    int32  `json:"runAttempt"`
+	Pipeline      string `json:"pipeline"`
+	Branch        string `json:"branch"`
+	Commit        string `json:"commit"`
+	// CIURL links to the CI job ("" when CI did not send one).
+	CIURL         string     `json:"ciUrl"`
 	Status        RunStatus  `json:"executionStatus"`
 	Outcome       outcomeDTO `json:"outcome"`
 	ExpectedCount int32      `json:"expectedCount"`
@@ -101,7 +103,7 @@ type outcomeDTO struct {
 func RunDTO(r TestRun) TestRunDTO {
 	dto := TestRunDTO{
 		ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
-		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.Commit, Status: r.Status,
+		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.Commit, CIURL: r.CIURL, Status: r.Status,
 		Outcome:       outcomeDTO(r.Outcome),
 		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt,
 		StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,

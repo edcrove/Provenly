@@ -646,6 +646,14 @@ func TestRunsAndIngestion(t *testing.T) {
 	ingest(e, "2", 1, `<testsuite name="no timestamp"/>`).Expect().Status(http.StatusCreated)
 
 	ingest(e, "1", 0, report(id)).Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().HasValue("code", "validation_error")
+	// ?ciUrl= links the run to its CI job (Ed, 2026-10-12): stored and returned; not an http(s) URL is a 400.
+	ingest(e, "6", 1, report(id)).WithQuery("ciUrl", "https://github.com/acme/shop/actions/runs/6/attempts/1").Expect().Status(http.StatusCreated).
+		JSON().Object().Value("testRun").Object().HasValue("ciUrl", "https://github.com/acme/shop/actions/runs/6/attempts/1")
+	ingest(e, "6", 1, report(id)).WithQuery("ciUrl", "https://ci.example.com/other").Expect().Status(http.StatusOK).JSON().Object().
+		Value("warnings").Array().Value(0).String().Contains(`ciUrl "https://ci.example.com/other" differs from`)
+	ingest(e, "7", 1, report(id)).WithQuery("ciUrl", "javascript:alert(1)").Expect().Status(http.StatusBadRequest).JSON(problemOpts).Object().
+		Value("errors").Array().Value(0).Object().HasValue("field", "ciUrl")
+	ingest(e, "7", 1, report(id)).WithQuery("ciUrl", "").Expect().Status(http.StatusCreated).JSON().Object().Value("testRun").Object().HasValue("ciUrl", "")
 	ingest(e, "3", 1, report(id)).WithQuery("status", "cancelled").Expect().Status(http.StatusCreated).
 		JSON().Object().Value("testRun").Object().HasValue("executionStatus", "cancelled")
 	ingest(e, "5", 1, report(id)).WithQuery("status", "interrupted").Expect().Status(http.StatusCreated).
@@ -658,7 +666,7 @@ func TestRunsAndIngestion(t *testing.T) {
 	small := api(t, app.NewServicesWith(db.Pool, time.Now, identityConfig()), 64)
 	ingest(small, "9", 1, report(id)).Expect().Status(http.StatusRequestEntityTooLarge).JSON(problemOpts).Object().HasValue("code", "payload_too_large")
 
-	e.GET("/api/v1/test-runs").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 4)
+	e.GET("/api/v1/test-runs").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 6)
 	e.GET("/api/v1/test-runs").WithQuery("pageSize", 0).Expect().Status(http.StatusBadRequest)
 
 	run := e.GET("/api/v1/test-runs/" + runID).Expect().Status(http.StatusOK).JSON().Object()
@@ -684,7 +692,7 @@ func TestRunsAndIngestion(t *testing.T) {
 	e.GET("/api/v1/test-runs/987654/summary").Expect().Status(http.StatusNotFound)
 
 	e.GET("/api/v1/test-cases/"+strconv.FormatInt(id, 10)+"/results").Expect().Status(http.StatusOK).
-		JSON().Object().HasValue("totalItems", 6)
+		JSON().Object().HasValue("totalItems", 10)
 }
 
 // TestInternalErrors covers the 500 variant of every operation that declares

@@ -105,8 +105,10 @@ type TestRun struct {
 	Pipeline      string
 	Branch        string
 	Commit        string
-	Status        RunStatus
-	Outcome       RunOutcome
+	// CIURL links the run to its CI job (empty when CI did not send one).
+	CIURL   string
+	Status  RunStatus
+	Outcome RunOutcome
 	// ExpectedCount is the size of the universe: the snapshot plus its amendments.
 	ExpectedCount int32
 	ResultCount   int32
@@ -188,7 +190,9 @@ type NewRun struct {
 	Pipeline      string
 	Branch        string
 	Commit        string
-	StartedAt     *time.Time
+	// CIURL is the CI job's URL (empty: none).
+	CIURL     string
+	StartedAt *time.Time
 	// ReportSHA256 is the digest of the ingested report.
 	ReportSHA256 string
 	// Status is how the execution ended; empty means completed.

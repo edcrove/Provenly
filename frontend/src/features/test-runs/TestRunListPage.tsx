@@ -19,6 +19,7 @@ import { ScopeLabel } from '@/features/projects/ProjectScope'
 import { hasRunFilters, readRunFilters, toApiFilter } from '@/lib/runFilters'
 
 import { RunFilters } from './RunFilters'
+import { CiJobLink } from './CiJobLink'
 
 export function TestRunListPage() {
   const [params, setParams] = useSearchParams()
@@ -112,7 +113,7 @@ export function TestRunListPage() {
                     </TableRow>
                   )}
                   {data.items.map((run) => (
-                    <TableRow key={run.id}>
+                    <TableRow key={run.id} data-testid="run-row">
                       <TableCell>
                         <Link to={`/test-runs/${run.id}`} className="underline">
                           #{run.id}
@@ -162,7 +163,13 @@ export function TestRunListPage() {
                       </TableCell>
                       <TableCell>{run.branch || '—'}</TableCell>
                       <TableCell className="font-mono">{shortCommit(run.commit)}</TableCell>
-                      <TableCell>{run.pipeline || '—'}</TableCell>
+                      <TableCell>
+                        {run.ciUrl ? (
+                          <CiJobLink href={run.ciUrl} label={run.pipeline || 'CI job'} />
+                        ) : (
+                          run.pipeline || '—'
+                        )}
+                      </TableCell>
                       <TableCell className="font-mono">{run.externalRunId}</TableCell>
                       <TableCell className="whitespace-nowrap">{formatDateTime(run.createdAt)}</TableCell>
                     </TableRow>

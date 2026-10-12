@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useParams } from 'react-router'
 
 import type { TestRun } from '@/api/client'
@@ -22,15 +23,18 @@ import { RunParseErrors } from './RunParseErrors'
 import { PrintButton } from '@/components/PrintButton'
 
 import { RunResults } from './RunResults'
+import { CiJobLink } from './CiJobLink'
 import { RunSummary } from './RunSummary'
 import { Breadcrumb } from '@/features/projects/ProjectScope'
 
 function Metadata({ run }: { run: TestRun }) {
-  const rows: [string, string][] = [
+  const rows: [string, ReactNode][] = [
     ['External run id', run.externalRunId],
     ['Provider', run.provider],
     ['Run id', run.providerRunId],
     ['Attempt', String(run.runAttempt)],
+    // The developer's first click from a red run (Ed, 2026-10-12): the CI job, when CI sent its link.
+    ['CI job', run.ciUrl ? <CiJobLink href={run.ciUrl} /> : '—'],
     ['Pipeline', run.pipeline || '—'],
     ['Branch', run.branch || '—'],
     ['Commit', run.commit || '—'],

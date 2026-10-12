@@ -1971,6 +1971,8 @@ export interface components {
             pipeline: string;
             branch: string;
             commit: string;
+            /** @description The CI job's URL sent with the report or the live start; "" when CI sent none. */
+            ciUrl: string;
             executionStatus: components["schemas"]["RunExecutionStatus"];
             outcome: components["schemas"]["RunOutcome"];
             /**
@@ -2503,6 +2505,8 @@ export interface components {
             pipeline?: string;
             branch?: string;
             commit?: string;
+            /** @description The CI job's URL (absolute http(s)), as on the ingestion; empty is the same as absent. */
+            ciUrl?: string;
         };
         LiveEventsRequest: {
             events: {
@@ -5868,6 +5872,12 @@ export interface operations {
                  *     unset variables to empty, e.g. `branch=${GITHUB_HEAD_REF}` on a push build.
                  */
                 commit?: string;
+                /**
+                 * @description The CI job's URL, so a run links to its logs (e.g. the GitHub Actions run; the Playwright reporter fills
+                 *     it in there). An absolute http(s) URL of at most 2000 characters; anything else is a 400. Empty is the same
+                 *     as absent, like `pipeline`. A replay with another value warns and keeps the recorded one.
+                 */
+                ciUrl?: string;
                 /**
                  * @description How the CI execution ended (the run's `executionStatus`). `interrupted` or
                  *     `cancelled` mark a run whose pipeline broke or was stopped, so its report may

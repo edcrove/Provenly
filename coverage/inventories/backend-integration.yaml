@@ -160,3 +160,5 @@ targets:
     description: projects are found by key or name beyond the first page (found by the E2E run on Render) - with 122 projects ?q finds one by key or name in any case, LIKE wildcards are literal, matches count across pages and the search stays within the caller's projects
   - id: BE-INT-078
     description: archived projects (Ed, 2026-10-11) - an archived project leaves GET /projects and lists that span projects, ?archived=true lists it, read by key it answers (reads that need a maintainer too), every change (test case, project, suite, ingestion) is a 409 naming the reason, TC cannot be archived (409, and the database refuses it), and unarchiving makes it writable again
+  - id: BE-INT-079
+    description: a run links to its CI job (Ed, 2026-10-12) - ?ciUrl= is stored with the run, read back on the run and in the history, a replay with another value warns and keeps the recorded one, a run without one has none, a live run takes it at its start, and the database refuses anything but an http(s) URL of at most 2000 characters

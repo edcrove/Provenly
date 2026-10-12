@@ -48,6 +48,7 @@ type TestRun struct {
 	Mode          string
 	StartedBy     pgtype.Text
 	ShardTotal    pgtype.Int4
+	CiUrl         string
 }
 
 type TestRunAmendment struct {

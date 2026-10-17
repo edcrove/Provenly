@@ -13,7 +13,7 @@ INSERT INTO test_results (test_run_id, test_case_id, requested_test_case_id, cor
 VALUES (@test_run_id, @test_case_id, @requested_test_case_id, @correlation, @test_name, @class_name, @suite_name, @status, @duration_ms, @error_message, @error_details, @attempt, @shard);
 
 -- name: GetTestRun :one
-SELECT sqlc.embed(r),
+SELECT sqlc.embed(r), (SELECT p.key FROM projects p WHERE p.id = r.project_id)::text AS project_key,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count,
@@ -30,7 +30,7 @@ SELECT id FROM test_runs WHERE project_id = @project_id AND external_run_id = @e
 -- name: ListTestRuns :many
 -- The page is chosen first: the per-run counts are only computed for its rows,
 -- not for every row skipped by OFFSET.
-SELECT sqlc.embed(r),
+SELECT sqlc.embed(r), (SELECT p.key FROM projects p WHERE p.id = r.project_id)::text AS project_key,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count,
@@ -127,7 +127,7 @@ SELECT sqlc.embed(t), EXISTS (
         SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
           AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
     ) AS retried,
-    r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.ci_url,
+    r.project_id AS run_project_id, (SELECT p.key FROM projects p WHERE p.id = r.project_id)::text AS run_project_key, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.ci_url,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
     r.report_sha256, r.suite_key, r.suite_name, r.mode AS run_mode, r.started_by AS run_started_by,
     r.shard_total AS run_shard_total, c.expected_count AS run_expected_count, c.result_count AS run_result_count,

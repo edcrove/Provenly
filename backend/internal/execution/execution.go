@@ -98,6 +98,7 @@ func ExternalRunID(provider, providerRunID string, attempt int32) string {
 type TestRun struct {
 	ID            int64
 	ProjectID     int64
+	ProjectKey    string
 	ExternalRunID string
 	Provider      string
 	ProviderRunID string

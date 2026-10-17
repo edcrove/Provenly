@@ -11,6 +11,15 @@ func (s *Service) ProjectKey(ctx context.Context, id int64) (string, error) {
 	return p.Key, err
 }
 
+// ProjectKeys returns the keys of several projects in one read (a page of the audit log names the projects a
+// maintainer maintains without one lookup per project; audit 2026-10-17).
+func (s *Service) ProjectKeys(ctx context.Context, ids []int64) (map[int64]string, error) {
+	if len(ids) == 0 {
+		return map[int64]string{}, nil
+	}
+	return s.repo.ProjectKeys(ctx, ids)
+}
+
 // TestCaseKey returns the key of a test case (CHK-4).
 func (s *Service) TestCaseKey(ctx context.Context, id int64) (string, error) {
 	tc, err := s.Get(ctx, id)

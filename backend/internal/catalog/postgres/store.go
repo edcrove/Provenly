@@ -343,6 +343,19 @@ func (s *Store) ProjectIDs(ctx context.Context, archived bool) ([]int64, error) 
 	return s.q.ListActiveProjectIDs(ctx)
 }
 
+// ProjectKeys implements catalog.Repository.
+func (s *Store) ProjectKeys(ctx context.Context, ids []int64) (map[int64]string, error) {
+	rows, err := s.q.ListProjectKeys(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]string, len(rows))
+	for _, r := range rows {
+		out[r.ID] = r.Key
+	}
+	return out, nil
+}
+
 // UpdateProject implements catalog.Repository.
 func (s *Store) UpdateProject(ctx context.Context, key string, in catalog.UpdateProjectInput) (catalog.Project, error) {
 	return project(s.q.UpdateProject(ctx, catalogdb.UpdateProjectParams{Key: key, Name: text(in.Name), Description: text(in.Description)}))

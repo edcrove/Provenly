@@ -1966,6 +1966,11 @@ export interface components {
             id: number;
             /** Format: int64 */
             projectId: number;
+            /**
+             * @description The run's project, by key: a page shows it (and whether it is archived) without the projects list.
+             * @example CHK
+             */
+            projectKey: string;
             /** @example github:9876543210:1 */
             externalRunId: string;
             provider: string;

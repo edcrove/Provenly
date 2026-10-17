@@ -1041,6 +1041,7 @@ export const handlers = [
         const run = testRun({
           id,
           projectId: p.id,
+          projectKey: p.key,
           externalRunId: `manual:${id}:1`,
           provider: 'manual',
           providerRunId: String(id),

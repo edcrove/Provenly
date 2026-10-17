@@ -99,6 +99,7 @@ export function testRun(overrides: Partial<TestRun> = {}): TestRun {
   return {
     id: 7,
     projectId: 1,
+    projectKey: 'TC',
     externalRunId: 'github:9876:1',
     suite: null,
     mode: 'batch',

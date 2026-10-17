@@ -75,7 +75,7 @@ describe('FE-INT-023 current project', () => {
   it('FE-INT-023 narrows test cases and runs to the chosen project and remembers it', async () => {
     db.projects.push(checkout())
     db.testCases.push(testCase({ id: 200, projectId: 2, projectKey: 'CHK', number: 1, title: 'Pay by card' }))
-    db.runs.push(testRun({ id: 9, projectId: 2, externalRunId: 'github:1:1' }))
+    db.runs.push(testRun({ id: 9, projectId: 2, projectKey: 'CHK', externalRunId: 'github:1:1' }))
     const { user } = renderRoute('/test-cases')
     expect(await screen.findByText('Pay by card')).toBeInTheDocument()
     expect(screen.getByText('Login works')).toBeInTheDocument()
@@ -112,10 +112,10 @@ describe('FE-INT-023 current project', () => {
     expect(await screen.findByText('No test cases yet in CHK.')).toBeInTheDocument()
   })
 
-  it('FE-INT-023 a run of a project not listed shows no key', async () => {
-    db.runs = [testRun({ projectId: 99 })]
+  it('FE-INT-023 a run of a project not in the projects list still shows its key (the run carries it)', async () => {
+    db.runs = [testRun({ projectId: 99, projectKey: 'FAR' })]
     renderRoute('/test-runs')
-    expect(await screen.findByTestId('run-project')).toHaveTextContent('—')
+    expect(await screen.findByTestId('run-project')).toHaveTextContent('FAR')
   })
 })
 

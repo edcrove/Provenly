@@ -22,12 +22,15 @@ sql:
         emit_json_tags: false
   - engine: postgresql
     schema:
+      # 00001 and 00012 only so the run queries can read each run's project key (projects alters test_cases).
+      - migrations/00001_catalog.sql
       - migrations/00002_execution.sql
       - migrations/00003_deprecated_results_link.sql
       - migrations/00004_parse_errors_and_nullable_duration.sql
       - migrations/00005_parse_error_severity.sql
       - migrations/00006_run_report_digest.sql
       - migrations/00007_run_execution_status.sql
+      - migrations/00012_projects.sql
       - migrations/00013_run_projects.sql
       - migrations/00018_run_amendments.sql
       - migrations/00019_result_attempts.sql

@@ -163,7 +163,7 @@ describe('FE-INT-059 navigation: the project first, then what it holds', () => {
 
   it('FE-INT-059 detail pages show where they sit and offer to switch to their project', async () => {
     db.projects.push(project({ id: 2, key: 'CHK', name: 'Checkout', description: '' }))
-    db.runs.push(testRun({ id: 8, projectId: 2 }))
+    db.runs.push(testRun({ id: 8, projectId: 2, projectKey: 'CHK' }))
     const { user: u, router } = renderRoute('/test-runs/8')
     const trail = await screen.findByRole('navigation', { name: 'Breadcrumb' })
     await waitFor(() => expect(trail).toHaveTextContent('CHK · Checkout/Test Runs/Run #8'))

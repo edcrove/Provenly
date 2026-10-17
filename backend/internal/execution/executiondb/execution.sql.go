@@ -186,7 +186,7 @@ func (q *Queries) GetRunProject(ctx context.Context, id int64) (int64, error) {
 }
 
 const getTestRun = `-- name: GetTestRun :one
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total, r.ci_url,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total, r.ci_url, (SELECT p.key FROM projects p WHERE p.id = r.project_id)::text AS project_key,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count,
@@ -196,6 +196,7 @@ FROM test_runs r WHERE r.id = $1
 
 type GetTestRunRow struct {
 	TestRun        TestRun
+	ProjectKey     string
 	ExpectedCount  int32
 	ResultCount    int32
 	AmendmentCount int32
@@ -226,6 +227,7 @@ func (q *Queries) GetTestRun(ctx context.Context, id int64) (GetTestRunRow, erro
 		&i.TestRun.StartedBy,
 		&i.TestRun.ShardTotal,
 		&i.TestRun.CiUrl,
+		&i.ProjectKey,
 		&i.ExpectedCount,
 		&i.ResultCount,
 		&i.AmendmentCount,
@@ -872,7 +874,7 @@ SELECT t.id, t.test_run_id, t.test_case_id, t.requested_test_case_id, t.correlat
         SELECT 1 FROM test_results x WHERE x.test_run_id = t.test_run_id AND x.suite_name = t.suite_name
           AND x.class_name = t.class_name AND x.test_name = t.test_name AND x.attempt > t.attempt
     ) AS retried,
-    r.project_id AS run_project_id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.ci_url,
+    r.project_id AS run_project_id, (SELECT p.key FROM projects p WHERE p.id = r.project_id)::text AS run_project_key, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.ci_url,
     r.status AS run_status, r.created_at AS run_created_at, r.started_at AS run_started_at, r.completed_at AS run_completed_at,
     r.report_sha256, r.suite_key, r.suite_name, r.mode AS run_mode, r.started_by AS run_started_by,
     r.shard_total AS run_shard_total, c.expected_count AS run_expected_count, c.result_count AS run_result_count,
@@ -896,6 +898,7 @@ type ListResultsForTestCaseRow struct {
 	TestResult        TestResult
 	Retried           bool
 	RunProjectID      int64
+	RunProjectKey     string
 	ExternalRunID     string
 	Provider          string
 	ProviderRunID     string
@@ -957,6 +960,7 @@ func (q *Queries) ListResultsForTestCase(ctx context.Context, arg ListResultsFor
 			&i.TestResult.Shard,
 			&i.Retried,
 			&i.RunProjectID,
+			&i.RunProjectKey,
 			&i.ExternalRunID,
 			&i.Provider,
 			&i.ProviderRunID,
@@ -1198,7 +1202,7 @@ func (q *Queries) ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]
 }
 
 const listTestRuns = `-- name: ListTestRuns :many
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total, r.ci_url,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total, r.ci_url, (SELECT p.key FROM projects p WHERE p.id = r.project_id)::text AS project_key,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count,
@@ -1232,6 +1236,7 @@ type ListTestRunsParams struct {
 
 type ListTestRunsRow struct {
 	TestRun        TestRun
+	ProjectKey     string
 	ExpectedCount  int32
 	ResultCount    int32
 	AmendmentCount int32
@@ -1280,6 +1285,7 @@ func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]L
 			&i.TestRun.StartedBy,
 			&i.TestRun.ShardTotal,
 			&i.TestRun.CiUrl,
+			&i.ProjectKey,
 			&i.ExpectedCount,
 			&i.ResultCount,
 			&i.AmendmentCount,

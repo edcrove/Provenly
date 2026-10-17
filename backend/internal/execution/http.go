@@ -47,6 +47,7 @@ var suiteKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,29}$`)
 type TestRunDTO struct {
 	ID            int64  `json:"id"`
 	ProjectID     int64  `json:"projectId"`
+	ProjectKey    string `json:"projectKey"`
 	ExternalRunID string `json:"externalRunId"`
 	Provider      string `json:"provider"`
 	ProviderRunID string `json:"providerRunId"`
@@ -102,7 +103,7 @@ type outcomeDTO struct {
 // RunDTO converts a TestRun to its wire form.
 func RunDTO(r TestRun) TestRunDTO {
 	dto := TestRunDTO{
-		ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
+		ID: r.ID, ProjectID: r.ProjectID, ProjectKey: r.ProjectKey, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.Commit, CIURL: r.CIURL, Status: r.Status,
 		Outcome:       outcomeDTO(r.Outcome),
 		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt,

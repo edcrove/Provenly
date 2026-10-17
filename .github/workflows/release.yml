@@ -79,6 +79,8 @@ jobs:
     name: Playwright reporter (npm)
     needs: ci-green
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.publish.outcome == 'success' }}
     permissions:
       contents: read
       id-token: write # npm provenance
@@ -98,6 +100,7 @@ jobs:
         run: npm version --no-git-tag-version "${GITHUB_REF_NAME#v}"
         working-directory: reporters/playwright
       - name: Publish (skipped without the NPM_TOKEN secret)
+        id: publish
         if: env.NODE_AUTH_TOKEN != ''
         run: npm publish
         working-directory: reporters/playwright
@@ -112,6 +115,14 @@ jobs:
       - name: Create the release with generated notes
         env:
           GH_TOKEN: ${{ github.token }}
+          REPORTER_PUBLISHED: ${{ needs.reporter.outputs.published }}
         run: |
+          notes="Images: ghcr.io/${{ github.repository_owner }}/provenly-api:${GITHUB_REF_NAME} and provenly-web:${GITHUB_REF_NAME}."
+          # The npm line only when the reporter job published (it is skipped without the NPM_TOKEN secret).
+          if [ "$REPORTER_PUBLISHED" = "true" ]; then
+            notes="$notes Playwright reporter: npm i -D provenly-playwright-reporter@${GITHUB_REF_NAME#v}."
+          else
+            notes="$notes Playwright reporter: not published to npm for this tag; install it from this tag's checkout (reporters/playwright/README.md)."
+          fi
           gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --generate-notes --verify-tag \
-            --notes "Images: ghcr.io/${{ github.repository_owner }}/provenly-api:${GITHUB_REF_NAME} and provenly-web:${GITHUB_REF_NAME}. Playwright reporter: npm i -D provenly-playwright-reporter@${GITHUB_REF_NAME#v}. Self-hosting: docs/self-hosting.md."
+            --notes "$notes Self-hosting: docs/self-hosting.md."

@@ -106,6 +106,9 @@ services:
       args: { EXTRA_CA_ID: "${EXTRA_CA_ID:-none}" }
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-3000}:80"
+    environment:
+      # The proxy's body limit follows the API's ingest limit (docs/self-hosting.md).
+      PROVENLY_MAX_INGEST_BYTES: ${PROVENLY_MAX_INGEST_BYTES:-10485760}
     depends_on:
       api:
         condition: service_healthy

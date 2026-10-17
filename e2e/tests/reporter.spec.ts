@@ -44,7 +44,8 @@ test.describe('Playwright reporter (DEC-15)', () => {
     reporter.onTestBegin(refundTest, pwResult(1, 'passed'))
     reporter.onTestEnd(refundTest, pwResult(1, 'passed'))
     await reporter.onEnd({ status: 'passed' })
-    expect(logs).toEqual([])
+    // On success the reporter says where the run is and what was recorded (audit 2026-10-17).
+    expect(logs).toEqual([expect.stringMatching(new RegExp(`^run #\\d+ recorded \\(${apiURL}/test-runs/\\d+\\): 3 results received, 3 persisted$`))])
 
     const runs = await (await request.get(`${apiURL}/api/v1/test-runs?project=${key}`)).json()
     expect(runs.items).toHaveLength(1)
@@ -73,7 +74,12 @@ test.describe('Playwright reporter (DEC-15)', () => {
       const t = pwTest(`s${current}`, title)
       reporter.onTestEnd(t, pwResult(0, status, status === 'failed' ? 'boom' : ''))
       await reporter.onEnd({ status: 'passed' })
-      expect(logs).toEqual([`shard ${current}/2: live streaming is off for sharded runs; the report is sent when this shard ends`])
+      // The first shard is told the run waits for the other; the shard that completes it gets no warning.
+      expect(logs).toEqual([
+        `shard ${current}/2: live streaming is off for sharded runs; the report is sent when this shard ends`,
+        expect.stringMatching(/^run #\d+ recorded .*: 1 results received, 1 persisted$/),
+        ...(current === 1 ? ['warning: shard 1/2 recorded; the run completes when shards 2 arrive (or when CI finalizes it)'] : []),
+      ])
       return (await (await request.get(`${apiURL}/api/v1/test-runs?project=${key}`)).json()).items
     }
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
 	"github.com/edcrove/provenly/backend/internal/platform/pagination"
 	"github.com/edcrove/provenly/backend/internal/platform/projectkey"
@@ -170,11 +171,30 @@ type Handler struct {
 	api      API
 	projects Projects
 	now      func() time.Time
+	// guard, when set, is the application's guard (identity's roles plus archived projects being read-only): the
+	// routes that add access to a project (a member, a CI key, an invitation) ask it before the service, so an
+	// archived project answers 409. Revoking a key or removing a member only reduces access and stays allowed.
+	guard authz.Guard
 }
 
 // NewHandler builds a Handler.
 func NewHandler(api API, projects Projects, now func() time.Time) *Handler {
 	return &Handler{api: api, projects: projects, now: now}
+}
+
+// SetGuard installs the application's guard for the routes that add access to a project (audit 2026-10-17).
+func (h *Handler) SetGuard(g authz.Guard) { h.guard = g }
+
+// changeable answers the guard's refusal (403, 404 or 409 for an archived project) for a change that adds access.
+func (h *Handler) changeable(w http.ResponseWriter, r *http.Request, projectID int64) bool {
+	if h.guard == nil {
+		return true
+	}
+	if err := h.guard.Require(r.Context(), projectID, authz.RoleMaintainer, projectNotFound(projectID)); err != nil {
+		writeProjectError(w, r, err)
+		return false
+	}
+	return true
 }
 
 // RegisterPublic mounts the routes that work without a session.
@@ -385,7 +405,7 @@ func (h *Handler) setMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, ok := h.projectID(w, r)
-	if !ok {
+	if !ok || !h.changeable(w, r, id) {
 		return
 	}
 	username, ok := pathUsername(w, r)
@@ -512,6 +532,9 @@ func (h *Handler) createInvitation(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, r, err)
 			return
 		}
+		if !h.changeable(w, r, id) {
+			return
+		}
 		in.ProjectID = &id
 	}
 	inv, token, err := h.api.CreateInvitation(r.Context(), u, in)
@@ -577,7 +600,7 @@ func (h *Handler) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, ok := h.projectID(w, r)
-	if !ok {
+	if !ok || !h.changeable(w, r, id) {
 		return
 	}
 	k, token, err := h.api.CreateAPIKey(r.Context(), id, req.Name)

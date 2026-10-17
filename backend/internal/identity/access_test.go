@@ -195,3 +195,35 @@ func TestMemberRoutes(t *testing.T) {
 		"a non-admin learns nothing about project keys")
 	assert.Equal(t, http.StatusNotFound, h.do("GET", "/api/v1/projects/CHK/members", "", bearer(anaToken)).Code, "not a member: invisible")
 }
+
+// Audit 2026-10-17 (D2): the routes that add access to a project (a member, an API key, an invitation with a
+// project role) go through the application's guard, so an archived project answers 409 and a hidden one 404; TC is
+// untouched, and the identity service alone (no guard installed) keeps allowing, as the unit tests above rely on.
+func TestAccessChangesFollowTheProjectGuard(t *testing.T) {
+	h := newHarness(t)
+	token, _ := h.login("admin", "correct horse")
+	auth := bearer(token)
+	_, err := h.svc.repo.CreateUser(context.Background(), NewUser{Username: "ana", DisplayName: "Ana", PasswordHash: "$2a$x"})
+	require.NoError(t, err)
+	h.h.SetGuard(stubGuard{denied: map[int64]error{2: apperr.Conflict("project CHK is archived")}})
+
+	for _, c := range []struct{ method, target, body string }{
+		{"PUT", "/api/v1/projects/CHK/members/ana", `{"role":"member"}`},
+		{"POST", "/api/v1/projects/CHK/api-keys", `{"name":"GitHub Actions"}`},
+		{"POST", "/api/v1/invitations", `{"project":"CHK","role":"viewer"}`},
+	} {
+		rec := h.do(c.method, c.target, c.body, auth)
+		assert.Equal(t, http.StatusConflict, rec.Code, c.method+" "+c.target)
+		assert.Contains(t, rec.Body.String(), `"code":"conflict"`, c.method+" "+c.target)
+	}
+	assert.Equal(t, http.StatusOK, h.do("PUT", "/api/v1/projects/TC/members/ana", `{"role":"member"}`, auth).Code)
+	assert.Equal(t, http.StatusCreated, h.do("POST", "/api/v1/projects/TC/api-keys", `{"name":"GitHub Actions"}`, auth).Code)
+	assert.Equal(t, http.StatusCreated, h.do("POST", "/api/v1/invitations", `{"project":"TC","role":"viewer"}`, auth).Code)
+	// Reads and removals of an archived project keep working: it is read-only, not gone.
+	assert.Equal(t, http.StatusOK, h.do("GET", "/api/v1/projects/CHK/members", "", auth).Code)
+	assert.Equal(t, http.StatusOK, h.do("GET", "/api/v1/projects/CHK/api-keys", "", auth).Code)
+
+	h.h.SetGuard(stubGuard{denied: map[int64]error{2: nil}})
+	assert.Equal(t, http.StatusNotFound, h.do("PUT", "/api/v1/projects/CHK/members/ana", `{"role":"member"}`, auth).Code, "hidden: not found")
+	assert.Equal(t, http.StatusNotFound, h.do("POST", "/api/v1/invitations", `{"project":"CHK","role":"viewer"}`, auth).Code)
+}

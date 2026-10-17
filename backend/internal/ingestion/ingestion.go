@@ -100,10 +100,13 @@ const MaxCIURLLength = 2000
 // CIURLMessage is the field error for a ciUrl that is not an absolute http(s) URL.
 const CIURLMessage = "must be an absolute http(s) URL of at most 2000 characters"
 
-// validCIURL accepts absolute http(s) URLs with a host (the UI renders the value as a link, so no other scheme).
+// validCIURL accepts absolute http(s) URLs with a host (the UI renders the value as a link, so no other scheme). The
+// scheme must be lower-case as written: url.Parse lowercases it, but the stored value is the raw one and the database
+// checks `^https?://`.
 func validCIURL(raw string) bool {
 	u, err := url.Parse(raw)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && !strings.ContainsAny(raw, " \t\r\n")
+	return err == nil && (strings.HasPrefix(raw, "http://") || strings.HasPrefix(raw, "https://")) &&
+		u.Host != "" && u.User == nil && !strings.ContainsAny(raw, " \t\r\n")
 }
 
 // ShardsPendingWarning tells which shards a sharded run still waits for.
@@ -185,7 +188,15 @@ func (s *Service) SetNotifier(n RunNotifier) { s.notify = n }
 // see is "not found", like an unknown one.
 func (s *Service) project(ctx context.Context, key string) (catalog.Project, error) {
 	if id, ok := s.access.KeyProject(ctx); ok && key == "" {
-		return s.catalog.ProjectByID(ctx, id)
+		// The key's own project: the guard still runs, so an archived project answers 409 to CI too (audit 2026-10-17).
+		p, err := s.catalog.ProjectByID(ctx, id)
+		if err != nil {
+			return catalog.Project{}, err
+		}
+		if err := s.access.Require(ctx, p.ID, authz.RoleMember, projectkey.NotFound(p.Key)); err != nil {
+			return catalog.Project{}, err
+		}
+		return p, nil
 	}
 	key = cmp.Or(key, catalog.DefaultProjectKey)
 	return projectkey.Resolve(ctx, "project", key, s.catalog.ProjectByKey, catalog.ProjectID, s.access, authz.RoleMember)
@@ -203,6 +214,7 @@ func ValidateMeta(m RunMeta) error {
 	v.CheckText("pipeline", m.Pipeline)
 	v.CheckText("branch", m.Branch)
 	v.CheckText("commit", m.Commit)
+	v.CheckText("ciUrl", m.CIURL)
 	v.Check(m.CIURL == "" || (utf8.RuneCountInString(m.CIURL) <= MaxCIURLLength && validCIURL(m.CIURL)), "ciUrl", CIURLMessage)
 	v.Check(m.Status == "" || slices.Contains(execution.ExecutionStatuses, m.Status), "status", "must be one of completed, interrupted, cancelled")
 	v.Check(m.ProjectKey == "" || projectkey.Valid(m.ProjectKey), "project", projectkey.Message)

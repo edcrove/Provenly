@@ -157,6 +157,7 @@ func register(r httpx.Router, s Services, maxIngestBytes int64, agents *mcp.Hand
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	ids := identity.NewHandler(s.Identity, s.Catalog, s.Now)
+	ids.SetGuard(s.Guard) // members, CI keys and invitations of an archived project are a 409 (decision 23)
 	ids.RegisterPublic(r)
 	// CI reports with a project API key; people with a session.
 	// Every authenticated change is audited (the audit router wraps the handlers, inside authentication).

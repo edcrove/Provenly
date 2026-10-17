@@ -1307,7 +1307,11 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Individual results of a run, optionally filtered by status and/or TC-ID correlation */
+        /**
+         * Individual results of a run, optionally filtered by status and/or TC-ID correlation
+         * @description Failures first: results are ordered by the logical status of their last attempt (failed, then error, then the
+         *     rest), then by their order in the report. Within a run the order is stable across pages.
+         */
         get: operations["listTestRunResults"];
         put?: never;
         post?: never;
@@ -3397,6 +3401,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -3792,6 +3797,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };

@@ -445,6 +445,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
         "500":
@@ -820,6 +822,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
         "500":
@@ -2751,6 +2755,9 @@ paths:
       tags: [test-runs]
       operationId: listTestRunResults
       summary: Individual results of a run, optionally filtered by status and/or TC-ID correlation
+      description: |
+        Failures first: results are ordered by the logical status of their last attempt (failed, then error, then the
+        rest), then by their order in the report. Within a run the order is stable across pages.
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
@@ -3010,6 +3017,7 @@ paths:
           schema:
             type: string
             maxLength: 2000
+            pattern: "^$|^https?://"
         - name: status
           in: query
           required: false
@@ -5478,6 +5486,7 @@ components:
         ciUrl:
           type: string
           maxLength: 2000
+          pattern: "^$|^https?://"
           description: The CI job's URL (absolute http(s)), as on the ingestion; empty is the same as absent.
 
     LiveEventsRequest:

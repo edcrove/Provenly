@@ -71,9 +71,16 @@ test.describe('Accounts', () => {
     await expect(guest.getByTestId('current-user')).toHaveText('Guest Tester')
     await expect(guest.getByRole('link', { name: 'Users' })).toHaveCount(0)
 
-    await admin.reload()
-    await expect(admin.getByTestId(`user-${username}`)).toContainText('Guest Tester')
-    await expect(admin.getByTestId(`user-${username}`)).toContainText('User')
+    // The list is ordered by username and a deployed instance accumulates (deactivated) E2E accounts: the new one
+    // may sit on a later page. Page through until it shows (the last page is "Page N of N").
+    const row = admin.getByTestId(`user-${username}`)
+    for (let page = 1; ; page++) {
+      await admin.goto(`/users?page=${page}`)
+      const pages = await admin.getByText(/^Page \d+ of \d+/).first().textContent()
+      if ((await row.count()) > 0 || Number(/of (\d+)/.exec(pages ?? '')?.[1] ?? page) <= page) break
+    }
+    await expect(row).toContainText('Guest Tester')
+    await expect(row).toContainText('User')
     await expect(admin.getByRole('table', { name: 'Invitations' })).toContainText('accepted')
 
     await guest.getByRole('button', { name: 'Sign out' }).click()

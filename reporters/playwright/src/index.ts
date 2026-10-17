@@ -114,16 +114,30 @@ export function clip(s: string, max: number): string {
 
 const TC_ID = /\b([A-Z][A-Z0-9]{1,9}-\d+)\b/g
 
-/** The TC-ID a test declares: a `tc-id` annotation, a `@KEY-n` tag, or the last KEY-n in its title. */
-export function tcIdOf(test: PwTestCase): string {
+/**
+ * The TC-ID a test declares: a `tc-id` annotation, a `@KEY-n` tag, or the last KEY-n in its title. When the project is
+ * known, only its own `KEY-n` counts in a title: `UTF-8`, `ISO-8601` or `HTTP-2` are words, not test cases (audit
+ * 2026-10-17); without a project any KEY-n does.
+ */
+export function tcIdOf(test: PwTestCase, project?: string): string {
   const annotation = test.annotations.find((a) => a.type.toLowerCase() === 'tc-id' && a.description)
   if (annotation) return annotation.description!.trim()
   for (const tag of test.tags ?? []) {
     const m = /^@([A-Z][A-Z0-9]{1,9}-\d+)$/.exec(tag)
     if (m) return m[1]
   }
-  const matches = [...test.title.matchAll(TC_ID)]
+  const pattern = project ? new RegExp(`\\b(${project}-\\d+)\\b`, 'g') : TC_ID
+  const matches = [...test.title.matchAll(pattern)]
   return matches.length ? matches[matches.length - 1][1] : ''
+}
+
+/** What the ingestion answers (the fields the summary logs; older servers may send less). */
+interface IngestionSummary {
+  testRun?: { id: number }
+  received?: number
+  persisted?: number
+  diagnostics?: unknown[]
+  warnings?: string[]
 }
 
 /** A TC-ID for a live event: none when empty or too long to be one (the final report still carries it). */
@@ -210,7 +224,8 @@ export default class ProvenlyReporter {
       runId: options.runId ?? env.GITHUB_RUN_ID ?? String(this.now().getTime()),
       runAttempt: options.runAttempt ?? Number(env.GITHUB_RUN_ATTEMPT ?? 1),
       pipeline: options.pipeline ?? env.GITHUB_WORKFLOW,
-      branch: options.branch ?? env.GITHUB_REF_NAME,
+      // On pull_request builds GITHUB_REF_NAME is "123/merge"; GITHUB_HEAD_REF names the branch (empty on push builds).
+      branch: options.branch ?? (env.GITHUB_HEAD_REF || env.GITHUB_REF_NAME),
       commit: options.commit ?? env.GITHUB_SHA,
       ciUrl: options.ciUrl ?? githubRunUrl(env),
       live: options.live ?? true,
@@ -303,7 +318,7 @@ export default class ProvenlyReporter {
     this.attempts.push({
       name: test.titlePath().slice(1).join(' › ') || test.title,
       className: test.location.file,
-      tcId: tcIdOf(test),
+      tcId: tcIdOf(test, this.opts.project),
       attempt: result.retry + 1,
       status,
       seconds: result.duration / 1000,
@@ -338,7 +353,10 @@ export default class ProvenlyReporter {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const res = await this.call('POST', `/api/v1/ingestion/junit?${query}`, xml, 'application/xml')
-        if (res.ok) return
+        if (res.ok) {
+          await this.summarize(res)
+          return
+        }
         if (res.status < 500) {
           this.log(`report rejected (HTTP ${res.status}): ${await res.text()}`)
           return
@@ -348,5 +366,27 @@ export default class ProvenlyReporter {
         this.log(`report not sent, attempt ${attempt} of 3 (${(err as Error).message})`)
       }
     }
+  }
+
+  /** Says where the run is and what the server made of the report: results without a valid TC-ID and warnings (a
+   * replay whose `ciUrl` or browser-matrix shard was not applied) used to vanish silently (audit 2026-10-17). */
+  private async summarize(res: Response): Promise<void> {
+    let body: IngestionSummary
+    try {
+      body = (await res.json()) as IngestionSummary
+    } catch {
+      body = {}
+    }
+    const id = body.testRun?.id
+    if (id === undefined) {
+      this.log('report accepted')
+      return
+    }
+    const unlinked = body.diagnostics?.length ?? 0
+    this.log(
+      `run #${id} recorded (${this.url}/test-runs/${id}): ${body.received ?? 0} results received, ${body.persisted ?? 0} persisted` +
+        (unlinked ? `; ${unlinked} without a valid TC-ID (see the run's diagnostics)` : ''),
+    )
+    for (const w of body.warnings ?? []) this.log(`warning: ${w}`)
   }
 }

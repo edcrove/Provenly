@@ -175,5 +175,5 @@ func TestResetPassword(t *testing.T) {
 	}
 	assert.Equal(t, 0, Run(context.Background(), []string{"reset-password", "ana"}, d))
 	assert.Equal(t, "ana", got)
-	assert.Contains(t, stderr.String(), "password reset link for ana (single use, until 2026-10-07T12:00:00Z):\n  <web address>/reset-password?token=tok\n")
+	assert.Contains(t, stderr.String(), "password reset link for ana (single use, until 2026-10-07T12:00:00Z):\n  <web address>/reset-password#token=tok\n")
 }

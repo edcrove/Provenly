@@ -146,7 +146,7 @@ func resetPassword(ctx context.Context, pool *pgxpool.Pool, username string, d D
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(d.Stderr, "password reset link for %s (single use, until %s):\n  <web address>/reset-password?token=%s\n",
+	fmt.Fprintf(d.Stderr, "password reset link for %s (single use, until %s):\n  <web address>/reset-password#token=%s\n",
 		username, reset.ExpiresAt.UTC().Format(time.RFC3339), token)
 	return nil
 }

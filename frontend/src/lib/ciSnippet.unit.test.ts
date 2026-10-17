@@ -12,5 +12,10 @@ describe('ciSnippet', () => {
     expect(s).toContain('gzip -c junit.xml | curl')
     expect(s).toContain('-H "Content-Encoding: gzip"')
     expect(s).toContain('--data-binary @-')
+    // Audit 2026-10-17: the branch of a pull_request build and the link to the job.
+    expect(s).toContain('&branch=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}&commit=$GITHUB_SHA')
+    expect(s).toContain(
+      '&ciUrl=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"',
+    )
   })
 })

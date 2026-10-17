@@ -18,7 +18,8 @@ postgres (healthy) ──► seed (once, only into an EMPTY database) ──► 
 | `api` | `provenly-api` (`backend/Dockerfile`, alpine) | REST API; container healthcheck on `/readyz` (database reachable). `/healthz` is liveness only. |
 | `web` | `provenly-web` (`frontend/Dockerfile`, nginx) | Production UI build; proxies `/api`, `/healthz` and `/readyz` to `api`, SPA fallback. |
 
-Ports are bound to `127.0.0.1` (`BIND_ADDR`) because the POC has no authentication.
+Ports are bound to `127.0.0.1` (`BIND_ADDR`): the stack is meant to sit behind your TLS proxy (`docs/self-hosting.md`),
+never directly on a public interface.
 
 ## The environments
 

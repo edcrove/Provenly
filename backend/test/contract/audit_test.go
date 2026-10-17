@@ -36,7 +36,7 @@ func TestAuditLog(t *testing.T) {
 	failed := admin.GET("/api/v1/audit").WithQuery("actor", "unknown").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1).
 		Value("items").Array().Value(0).Object()
 	failed.HasValue("status", 401).HasValue("summary", "failed to sign in").HasValue("action", "POST /api/v1/auth/login").HasValue("userAgent", "contract-agent")
-	failed.Value("ip").String().NotEmpty()
+	failed.HasValue("ip", "127.0.0.1")
 
 	// A change without a project in its path is filed under the project it changed, in words, with its test case
 	// (card #48).

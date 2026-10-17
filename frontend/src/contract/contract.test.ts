@@ -1336,14 +1336,14 @@ const suiteScenarios: Scenario[] = [
   {
     op: 'GET /api/v1/test-cases',
     status: 200,
-    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { automated: 'false' } } }),
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { automated: false } } }),
   },
   {
     op: 'GET /api/v1/test-cases',
     status: 400,
     call: (c) =>
       c.GET('/api/v1/test-cases', {
-        params: { query: { automated: 'yes' as 'true' } },
+        params: { query: { automated: 'yes' as unknown as boolean } },
       }),
   },
   // Filters (deployed audit): branch, execution status, mode and the creation window.

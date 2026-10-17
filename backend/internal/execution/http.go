@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/edcrove/provenly/backend/internal/platform/auditnote"
+
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
@@ -663,5 +665,8 @@ func (h *Handler) amend(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	// The audit entry names the test case included, and is found by its key (audit 2026-10-17, D19).
+	auditnote.TestCase(r.Context(), keys[a.TestCaseID])
+	auditnote.Detail(r.Context(), keys[a.TestCaseID])
 	httpx.WriteJSON(w, http.StatusCreated, toAmendmentDTO(a, keys))
 }

@@ -219,7 +219,7 @@ func TestAudit(t *testing.T) {
 		code, page := as(mia.Token, "GET", "/api/v1/audit?pageSize=100", "")
 		require.Equal(t, 200, code)
 		items := page["items"].([]any)
-		require.NotEmpty(t, items)
+		require.Len(t, items, int(count(audit.Filter{ProjectKeys: []string{"AUD"}})), "every AUD event, exactly")
 		for _, it := range items {
 			e := it.(map[string]any)
 			assert.Equal(t, "AUD", e["project"])

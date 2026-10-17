@@ -258,6 +258,13 @@ func (t tool) target(args map[string]any) (string, error) {
 }
 
 func (p param) format(v any) (string, error) {
+	if p.kind == "boolean" {
+		b, ok := v.(bool)
+		if !ok {
+			return "", fmt.Errorf("%w: %s must be true or false", errArguments, p.name)
+		}
+		return strconv.FormatBool(b), nil
+	}
 	if p.kind == "integer" {
 		n, ok := v.(float64)
 		if !ok || n != float64(int64(n)) || n < 1 || n > 1<<53 {
@@ -285,8 +292,10 @@ var (
 )
 
 var tools = []tool{
-	{name: "list_projects", title: "List projects", path: "/api/v1/projects", params: []param{page},
-		description: "Projects you can see, with their keys (the prefix of their test case ids)."},
+	{name: "list_projects", title: "List projects", path: "/api/v1/projects",
+		description: "Projects you can see, with their keys (the prefix of their test case ids); archived ones only on request.",
+		params: []param{{name: "q", kind: "string", description: "Text the key or name contains."},
+			{name: "archived", kind: "boolean", description: "true lists the archived projects instead of the active ones."}, page}},
 	{name: "search_test_cases", title: "Search test cases", path: "/api/v1/test-cases",
 		description: "Test cases, newest first, narrowed by project, status (active, deprecated), tag, classification (dimension:value) or suite.",
 		params: []param{projectArg, {name: "status", kind: "string", description: "active or deprecated."},
@@ -299,11 +308,18 @@ var tools = []tool{
 		description: "A test case with its key, status, automation, tags and classification."},
 	{name: "list_test_steps", title: "List test steps", path: "/api/v1/test-cases/{testCaseId}/steps", params: []param{testCaseID, page},
 		description: "The ordered steps (action and expected result) of a test case."},
-	{name: "get_test_case_history", title: "Test case history", path: "/api/v1/test-cases/{testCaseId}/results", params: []param{testCaseID, page},
-		description: "The results of a test case across runs, newest first (status, attempt, run, failure message)."},
+	{name: "get_test_case_history", title: "Test case history", path: "/api/v1/test-cases/{testCaseId}/results",
+		description: "The results of a test case across runs, newest first (status, attempt, run, failure message).",
+		params: []param{testCaseID, {name: "branch", kind: "string", description: "Only results of runs on this branch."},
+			{name: "status", kind: "string", description: "passed, failed, error or skipped."}, page}},
 	{name: "list_test_runs", title: "List test runs", path: "/api/v1/test-runs",
 		description: "Test runs, newest first, with their execution status and outcome (verdict, pass rate, flaky).",
-		params:      []param{projectArg, {name: "suite", kind: "string", description: "Only runs reported for this suite key."}, page}},
+		params: []param{projectArg, {name: "suite", kind: "string", description: "Only runs reported for this suite key."},
+			{name: "branch", kind: "string", description: "Only runs on this branch (exact)."},
+			{name: "executionStatus", kind: "string", description: "running, completed, interrupted or cancelled."},
+			{name: "mode", kind: "string", description: "batch, manual, live or sharded."},
+			{name: "from", kind: "string", description: "Only runs created at or after this RFC 3339 instant."},
+			{name: "to", kind: "string", description: "Only runs created at or before this RFC 3339 instant."}, page}},
 	{name: "get_test_run", title: "Get a test run", path: "/api/v1/test-runs/{testRunId}", params: []param{testRunID},
 		description: "A test run: CI metadata, execution status and outcome."},
 	{name: "get_test_run_summary", title: "Test run summary", path: "/api/v1/test-runs/{testRunId}/summary", params: []param{testRunID},

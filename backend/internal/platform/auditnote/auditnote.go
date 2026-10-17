@@ -12,6 +12,7 @@ type Note struct {
 	projectID   int64
 	created     string
 	testCaseKey string
+	detail      string
 }
 
 // Open returns a context carrying an empty note.
@@ -46,3 +47,22 @@ func (n *Note) Created() string { return n.created }
 
 // TestCaseKey is the key of a test case the request created, empty when none.
 func (n *Note) TestCaseKey() string { return n.testCaseKey }
+
+// TestCase records the key of the test case a change touched (a manual result, an amendment), so the entry is found
+// by it (audit 2026-10-17). Without a note it does nothing.
+func TestCase(ctx context.Context, testCaseKey string) {
+	if n, ok := ctx.Value(key{}).(*Note); ok {
+		n.testCaseKey = testCaseKey
+	}
+}
+
+// Detail records what the summary should say in place of its generic object ("CHK-4 failed (step 3)" instead of "a
+// manual result"). Without a note it does nothing.
+func Detail(ctx context.Context, detail string) {
+	if n, ok := ctx.Value(key{}).(*Note); ok {
+		n.detail = detail
+	}
+}
+
+// Detail is the text recorded by Detail, empty when none.
+func (n *Note) Detail() string { return n.detail }

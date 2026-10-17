@@ -325,6 +325,19 @@ func (f *fakeRepo) ProjectIDs(_ context.Context, archived bool) ([]int64, error)
 	return ids, nil
 }
 
+func (f *fakeRepo) ProjectKeys(_ context.Context, ids []int64) (map[int64]string, error) {
+	if err := f.fail("ProjectKeys"); err != nil {
+		return nil, err
+	}
+	out := map[int64]string{}
+	for _, id := range ids {
+		if p, ok := f.projects[id]; ok {
+			out[id] = p.Key
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeRepo) UpdateProject(_ context.Context, key string, in UpdateProjectInput) (Project, error) {
 	if err := f.fail("UpdateProject"); err != nil {
 		return Project{}, err

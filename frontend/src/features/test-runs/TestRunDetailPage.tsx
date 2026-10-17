@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { useParams } from 'react-router'
 
 import type { TestRun } from '@/api/client'
-import { useProjects, useTestRun, useTestRunSummary } from '@/api/queries'
+import { useTestRun, useTestRunSummary } from '@/api/queries'
 import { NotFoundPage } from '@/app/NotFoundPage'
 import { QueryState } from '@/components/QueryState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -25,7 +25,9 @@ import { PrintButton } from '@/components/PrintButton'
 import { RunResults } from './RunResults'
 import { CiJobLink } from './CiJobLink'
 import { RunSummary } from './RunSummary'
-import { Breadcrumb } from '@/features/projects/ProjectScope'
+import { ArchivedNotice, Breadcrumb } from '@/features/projects/ProjectScope'
+import { useCurrentProject } from '@/features/projects/currentProject'
+import { useProjectRole } from '@/features/projects/useProjectRole'
 
 function Metadata({ run }: { run: TestRun }) {
   const rows: [string, ReactNode][] = [
@@ -80,7 +82,10 @@ export function TestRunDetailPage() {
   const run = useTestRun(id)
   const running = run.data?.executionStatus === 'running'
   const summary = useTestRunSummary(id, running)
-  const projects = useProjects().data?.items ?? []
+  // The run names its project: an archived one, or one past the first page of projects, is still named (audit
+  // 2026-10-17, D5). The role comes from that project (a viewer's on an archived one).
+  const role = useProjectRole(run.data?.projectKey)
+  const { project: current } = useCurrentProject()
   if (!id) return <NotFoundPage />
   return (
     <QueryState page query={run}>
@@ -104,11 +109,12 @@ export function TestRunDetailPage() {
         return (
           <div className="grid gap-4">
             <Breadcrumb
-              projectKey={projects.find((p) => p.id === r.projectId)?.key ?? ''}
+              projectKey={r.projectKey}
               section="Test Runs"
               to="/test-runs"
               current={`Run #${r.id}`}
             />
+            {r.projectKey !== current ? <ArchivedNotice projectKey={r.projectKey} /> : null}
             <div className="flex flex-wrap items-center gap-3">
               <PageTitle title={`Test run #${r.id}`} />
               <h1 className="text-2xl font-semibold">Test run #{r.id}</h1>
@@ -158,10 +164,7 @@ export function TestRunDetailPage() {
                     </CardHeader>
                     <CardContent>
                       <RunSummary summary={s} running={running} manual={r.mode === 'manual'} />
-                      <RunKnownIssues
-                        projectKey={projects.find((p) => p.id === r.projectId)?.key ?? ''}
-                        summary={s}
-                      />
+                      <RunKnownIssues projectKey={r.projectKey} summary={s} />
                     </CardContent>
                   </Card>
                   <Card>
@@ -174,9 +177,7 @@ export function TestRunDetailPage() {
                     </CardContent>
                   </Card>
                   {r.mode === 'live' ? <LivePanel run={r} /> : null}
-                  {r.mode === 'manual' &&
-                  r.executionStatus === 'running' &&
-                  can(projects.find((p) => p.id === r.projectId)?.myRole, 'member') ? (
+                  {r.mode === 'manual' && r.executionStatus === 'running' && can(role, 'member') ? (
                     <ManualExecution run={r} summary={s} />
                   ) : null}
                   {r.amendmentCount > 0 ? (

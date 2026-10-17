@@ -4359,6 +4359,7 @@ components:
       required:
         - id
         - projectId
+        - projectKey
         - externalRunId
         - provider
         - providerRunId
@@ -4435,6 +4436,11 @@ components:
         projectId:
           type: integer
           format: int64
+        projectKey:
+          type: string
+          minLength: 1
+          example: CHK
+          description: "The run's project, by key: a page shows it (and whether it is archived) without the projects list."
         externalRunId:
           type: string
           example: github:9876543210:1

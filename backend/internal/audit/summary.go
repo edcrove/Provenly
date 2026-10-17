@@ -12,6 +12,8 @@ import (
 // step positions). Lookups that fail fall back to the ids in the path.
 type Resolver interface {
 	ProjectKey(ctx context.Context, id int64) (string, error)
+	// ProjectKeys resolves several projects in one read (unknown ids are left out).
+	ProjectKeys(ctx context.Context, ids []int64) (map[int64]string, error)
 	TestCaseKey(ctx context.Context, id int64) (string, error)
 	StepPosition(ctx context.Context, testCaseID, stepID int64) (int32, error)
 }

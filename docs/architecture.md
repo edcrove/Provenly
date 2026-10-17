@@ -119,6 +119,9 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   do revoking a key and removing a member (they reduce access). The
   guard is application-level: a report already past it when the project is archived still lands (a window of one
   request). The UI shows its pages as to a viewer, with a notice. Nothing in it is deleted.
+- A run carries its project's key (`TestRun.projectKey`, read with the run by the execution queries), so a run page or
+  the runs list names the project without the projects list (which leaves out archived projects and, past a page,
+  the rest); the page's role and archived notice come from `GET /projects/{key}`.
 - `GET /api/v1/test-cases?automated=true|false` lists only automated or only manual test cases (any other value is a
   400); the list's "Filter by execution" uses it.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,

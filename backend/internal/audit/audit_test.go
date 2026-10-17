@@ -191,8 +191,34 @@ func TestHandler(t *testing.T) {
 
 type fakeNames struct{ err error }
 
+// countingNames counts the project lookups: a page of the log resolves the maintained projects in one read (D25).
+type countingNames struct {
+	fakeNames
+	single, batch *int
+}
+
+func (n countingNames) ProjectKey(ctx context.Context, id int64) (string, error) {
+	*n.single++
+	return n.fakeNames.ProjectKey(ctx, id)
+}
+
+func (n countingNames) ProjectKeys(ctx context.Context, ids []int64) (map[int64]string, error) {
+	*n.batch++
+	return n.fakeNames.ProjectKeys(ctx, ids)
+}
+
 func (n fakeNames) ProjectKey(_ context.Context, id int64) (string, error) {
 	return map[int64]string{2: "CHK"}[id], n.err
+}
+
+func (n fakeNames) ProjectKeys(_ context.Context, ids []int64) (map[int64]string, error) {
+	out := map[int64]string{}
+	for _, id := range ids {
+		if key := map[int64]string{2: "CHK"}[id]; key != "" {
+			out[id] = key
+		}
+	}
+	return out, n.err
 }
 
 func (n fakeNames) TestCaseKey(_ context.Context, id int64) (string, error) {
@@ -334,6 +360,18 @@ func TestEventsForMaintainers(t *testing.T) {
 	_, err = svc.Events(ctx, Filter{ProjectKey: "CHK", Actor: "ana"}, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, Filter{ProjectKey: "CHK", Actor: "ana", ProjectKeys: []string{"CHK"}}, repo.filter)
+
+	// Audit 2026-10-17 (D25): the maintained projects are named in one read, never one per project.
+	single, batch := 0, 0
+	counted := NewService(repo, fakeAccess{scope: &authz.Scope{Roles: map[int64]authz.Role{2: authz.RoleMaintainer, 5: authz.RoleMaintainer, 3: authz.RoleMember}}})
+	counted.SetResolver(countingNames{single: &single, batch: &batch})
+	_, err = counted.Events(ctx, Filter{}, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, []int{0, 1}, []int{single, batch})
+	assert.Equal(t, []string{"CHK"}, repo.filter.ProjectKeys, "an unknown project is simply left out")
+	counted.SetResolver(countingNames{fakeNames: fakeNames{err: errBoom}, single: &single, batch: &batch})
+	_, err = counted.Events(ctx, Filter{}, pagination.Default())
+	assert.ErrorIs(t, err, errBoom)
 
 	forbidden := func(err error, detail string) {
 		t.Helper()

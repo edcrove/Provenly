@@ -140,6 +140,7 @@ func TestPersistenceFailures(t *testing.T) {
 			"catalog.CountProjects":      func() error { _, err := cat.CountProjects(ctx, catalog.ProjectFilter{}); return err },
 			"catalog.SetProjectArchived": func() error { _, err := cat.SetProjectArchived(ctx, "XX", true); return err },
 			"catalog.ProjectIDs":         func() error { _, err := cat.ProjectIDs(ctx, true); return err },
+			"catalog.ProjectKeys":        func() error { _, err := cat.ProjectKeys(ctx, []int64{1}); return err },
 			"catalog.UpdateProject": func() error {
 				_, err := cat.UpdateProject(ctx, "XX", catalog.UpdateProjectInput{Name: str("x")})
 				return err

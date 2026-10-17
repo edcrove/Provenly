@@ -83,6 +83,7 @@ func filterText[T ~string](v *T) pgtype.Text {
 
 type runRow struct {
 	executiondb.TestRun
+	ProjectKey     string
 	ExpectedCount  int32
 	ResultCount    int32
 	AmendmentCount int32
@@ -91,7 +92,7 @@ type runRow struct {
 
 func toRun(r runRow) execution.TestRun {
 	return execution.TestRun{
-		ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
+		ID: r.ID, ProjectID: r.ProjectID, ProjectKey: r.ProjectKey, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.CommitSha, CIURL: r.CiUrl,
 		Status: execution.RunStatus(r.Status), ExpectedCount: r.ExpectedCount + r.AmendmentCount, ResultCount: r.ResultCount,
 		AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt.Time, StartedAt: timePtr(r.StartedAt), CompletedAt: timePtr(r.CompletedAt),
@@ -217,7 +218,7 @@ func (s *Store) GetTestRun(ctx context.Context, id int64) (execution.TestRun, er
 		return execution.TestRun{}, notFound(err)
 	}
 	// sqlc.embed: the run's every column, so the mapping cannot drift from the table (audit F12).
-	return toRun(runRow{TestRun: r.TestRun, ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, ShardsReceived: r.ShardsReceived}), nil
+	return toRun(runRow{TestRun: r.TestRun, ProjectKey: r.ProjectKey, ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, ShardsReceived: r.ShardsReceived}), nil
 }
 
 // ListTestRuns implements execution.Repository.
@@ -231,7 +232,7 @@ func (s *Store) ListTestRuns(ctx context.Context, f execution.RunFilter, limit, 
 	}
 	out := make([]execution.TestRun, len(rows))
 	for i, r := range rows {
-		out[i] = toRun(runRow{TestRun: r.TestRun, ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, ShardsReceived: r.ShardsReceived})
+		out[i] = toRun(runRow{TestRun: r.TestRun, ProjectKey: r.ProjectKey, ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, ShardsReceived: r.ShardsReceived})
 	}
 	return out, nil
 }
@@ -330,8 +331,8 @@ func (s *Store) ListResultsForTestCase(ctx context.Context, testCaseID int64, f 
 					ReportSha256: r.ReportSha256, SuiteKey: r.SuiteKey, SuiteName: r.SuiteName, Mode: r.RunMode, StartedBy: r.RunStartedBy,
 					ShardTotal: r.RunShardTotal,
 				},
-				ExpectedCount: r.RunExpectedCount, ResultCount: r.RunResultCount, AmendmentCount: r.RunAmendmentCount,
-				ShardsReceived: r.RunShardsReceived,
+				ProjectKey: r.RunProjectKey, ExpectedCount: r.RunExpectedCount, ResultCount: r.RunResultCount,
+				AmendmentCount: r.RunAmendmentCount, ShardsReceived: r.RunShardsReceived,
 			}),
 		}
 	}

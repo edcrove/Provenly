@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
-import { project, testCase, user } from '@/test/fixtures'
+import { project, testCase, testRun, user } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { projectSwitcher, renderRoute } from '@/test/render'
 import { server } from '@/test/server'
@@ -117,5 +117,26 @@ describe('FE-INT-069 archived projects (Ed, 2026-10-11)', () => {
     await u.click(within(row).getByRole('button', { name: 'Archive' }))
     expect(await within(row).findByText('Could not archive the project')).toBeInTheDocument()
     expect(within(row).getByText(/try again later/)).toBeInTheDocument()
+  })
+
+  it('FE-INT-071 a run of an archived project (not in the projects list) still names it: breadcrumb and archived notice', async () => {
+    addOld('2026-10-10T10:00:00Z')
+    db.runs.push(testRun({ id: 70, projectId: 2, projectKey: 'OLD', externalRunId: 'github:70:1' }))
+    // Another project's run (the current one is TC): named, and said to be archived, exactly once.
+    renderRoute('/test-runs/70')
+    expect(await screen.findByRole('heading', { name: 'Test run #70' })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent(/OLD/)
+    expect(await screen.findAllByTestId('archived-notice')).toHaveLength(1)
+  })
+
+  it('FE-INT-071 the runs list of an archived current project names it (it used to read "—", from the active projects list)', async () => {
+    addOld('2026-10-10T10:00:00Z')
+    db.runs.push(testRun({ id: 70, projectId: 2, projectKey: 'OLD', externalRunId: 'github:70:1' }))
+    localStorage.setItem('provenly.project', 'OLD')
+    const { router } = renderRoute('/test-runs')
+    expect(await screen.findByTestId('run-project')).toHaveTextContent('OLD')
+    await router.navigate('/test-runs/70')
+    expect(await screen.findByRole('heading', { name: 'Test run #70' })).toBeInTheDocument()
+    expect(await screen.findAllByTestId('archived-notice')).toHaveLength(1)
   })
 })

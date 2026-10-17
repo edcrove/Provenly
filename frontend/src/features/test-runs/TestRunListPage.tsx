@@ -42,7 +42,6 @@ export function TestRunListPage() {
     setParams(merged)
   }
   const projects = useProjects()
-  const projectKey = (id: number) => projects.data?.items.find((p) => p.id === id)?.key ?? '—'
   return (
     <Card>
       <CardHeader>
@@ -120,7 +119,7 @@ export function TestRunListPage() {
                         </Link>
                       </TableCell>
                       <TableCell className="font-mono" data-testid="run-project">
-                        {projectKey(run.projectId)}
+                        {run.projectKey}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">

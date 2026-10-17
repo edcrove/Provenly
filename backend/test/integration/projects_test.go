@@ -193,6 +193,7 @@ func TestProjects(t *testing.T) {
 		assert.NotContains(t, body, fmt.Sprintf(`"projectId":%d`, created.ID), "its runs leave the runs list")
 		_, body = do("GET", "/api/v1/test-runs?project=OLD", "")
 		assert.Contains(t, body, fmt.Sprintf(`"projectId":%d`, created.ID), "read by key")
+		assert.Contains(t, body, `"projectKey":"OLD"`, "a run names its project (audit 2026-10-17, D5)")
 		code, body = report(apiKey, "runId=key-after")
 		assert.Equal(t, 409, code, "its CI key cannot report (audit 2026-10-17, D1)")
 		assert.Contains(t, body, "project OLD is archived")

@@ -225,3 +225,6 @@ targets:
   - id: FE-INT-070
     description: a run links to its CI job (Ed, 2026-10-12) - the run page shows "Open the CI job" (new tab, noopener) when CI sent its link and — otherwise; the runs list links the pipeline name (or "CI job" when nameless) to the job
     surfaces: [src/features/test-runs/CiJobLink.tsx, src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/TestRunListPage.tsx]
+  - id: FE-INT-071
+    description: runs name their project (audit 2026-10-17, D5) - a run carries its projectKey, so the runs list, the breadcrumb and the archived notice of a run whose project is archived (or past the first page of projects) still name it, and the manual panel follows that project's role
+    surfaces: [src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/TestRunListPage.tsx, src/features/projects/useProjectRole.ts]

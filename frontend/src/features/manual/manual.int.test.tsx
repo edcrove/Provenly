@@ -208,4 +208,45 @@ describe('FE-INT-039 manual execution', () => {
     expect(panel).toHaveTextContent('This run expects no test case.')
     expect(panel).toHaveTextContent('Started by —')
   })
+
+  it('FE-INT-072 what was recorded stays on the row after a reload, and the Results table says the note, the failed step and who recorded it', async () => {
+    db.testCases.push(testCase({ id: 160, title: 'Checkout by hand', automated: false }))
+    db.steps.push(
+      testStep({
+        id: 60,
+        testCaseId: 160,
+        position: 1,
+        action: 'Add a book to the cart',
+        expectedResult: '',
+      }),
+      testStep({ id: 61, testCaseId: 160, position: 2, action: 'Pay', expectedResult: 'The order is paid' }),
+    )
+    const { user: u, router } = renderRoute('/test-runs/manual')
+    await u.type(await screen.findByLabelText('What is being tested'), 'Sign-off')
+    await u.click(screen.getByRole('button', { name: 'Start manual run' }))
+    const panel = await screen.findByTestId('manual-execution')
+    const row = within(panel).getByTestId('manual-TC-160')
+    expect(within(row).queryByTestId('recorded-TC-160')).not.toBeInTheDocument()
+    // A note spans lines (the API takes 10,000 characters): a textarea, not a single-line input.
+    await u.type(within(row).getByLabelText('Note for TC-160'), 'Pay button missing{enter}on Safari too')
+    await u.selectOptions(await within(row).findByLabelText('Failed step of TC-160'), '2')
+    await u.click(within(row).getByRole('button', { name: 'Fail' }))
+    const recorded = await within(row).findByTestId('recorded-TC-160')
+    expect(recorded).toHaveTextContent('Pay button missing on Safari too')
+    expect(recorded).toHaveTextContent('failed step 2')
+    expect(recorded).toHaveTextContent('recorded by admin')
+    expect(db.results.at(-1)!.errorMessage).toBe('Pay button missing\non Safari too')
+
+    // Away and back (a reload): the row still shows it; the Results table names the manual fields.
+    const runId = db.runs.at(-1)!.id
+    await router.navigate('/test-runs')
+    await router.navigate(`/test-runs/${runId}`)
+    const again = within(await screen.findByTestId('manual-execution')).getByTestId('manual-TC-160')
+    expect(await within(again).findByTestId('recorded-TC-160')).toHaveTextContent('failed step 2')
+    const results = screen.getByRole('table', { name: 'Results' })
+    expect(within(results).getByRole('columnheader', { name: 'Note' })).toBeInTheDocument()
+    expect(within(results).queryByRole('columnheader', { name: 'Error' })).not.toBeInTheDocument()
+    expect(within(results).getByTestId('result-failed-step')).toHaveTextContent('2')
+    expect(within(results).getByTestId('result-recorded-by')).toHaveTextContent('admin')
+  })
 })

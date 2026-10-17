@@ -100,7 +100,22 @@ export function TestCaseHistory({ testCaseId }: { testCaseId: number }) {
                           ) : null}
                         </span>
                       </TableCell>
-                      <TableCell>{result.testName}</TableCell>
+                      <TableCell>
+                        {result.testName}
+                        {run.mode === 'manual' ? (
+                          <div className="text-muted-foreground text-xs" data-testid="manual-record">
+                            {result.errorMessage ? (
+                              <div className="whitespace-pre-wrap">{result.errorMessage}</div>
+                            ) : null}
+                            {[
+                              result.failedStep ? `failed step ${result.failedStep}` : '',
+                              result.recordedBy ? `recorded by ${result.recordedBy}` : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </div>
+                        ) : null}
+                      </TableCell>
                       <TableCell className="font-mono">
                         <Link to={`/test-runs/${run.id}`} className="underline">
                           {run.externalRunId}

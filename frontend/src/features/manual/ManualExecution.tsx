@@ -1,16 +1,16 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 
-import type { TestRun, TestRunSummary } from '@/api/client'
-import { useManualRun, useTestCase, useTestSteps } from '@/api/queries'
+import type { TestResult, TestRun, TestRunSummary } from '@/api/client'
+import { useManualRun, useRunRecords, useTestCase, useTestSteps } from '@/api/queries'
 import { InlineConfirm } from '@/components/InlineConfirm'
 import { ErrorAlert } from '@/components/QueryState'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
 import { plural } from '@/lib/format'
 
 type Outcome = TestRunSummary['testCases'][number]
@@ -54,7 +54,7 @@ function saveDraft(key: string, d: Draft) {
  * One expected test case of a running manual run: what it is (title, steps on demand), its current result and the
  * buttons that record the next one. The failed step is picked from the test case's own steps.
  */
-function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
+function CaseRow({ runId, outcome, last }: { runId: number; outcome: Outcome; last?: TestResult }) {
   const { record } = useManualRun(runId)
   const storeKey = draftKey(runId, outcome.testCaseId)
   const [draft, setDraftState] = useState<Draft>(() => loadDraft(storeKey))
@@ -76,7 +76,7 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
           to={`/test-cases/${outcome.testCaseId}`}
           target="_blank"
           rel="noopener"
-          className="font-mono underline"
+          className="relative font-mono underline"
         >
           {key}
           <span aria-hidden="true"> ↗</span>
@@ -101,14 +101,25 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
       </TableCell>
       <TableCell className="align-top">
         <StatusBadge status={outcome.status} manual />
+        {last ? (
+          // What was recorded survives a reload: the note, the failed step and who recorded it (audit 2026-10-17).
+          <div className="text-muted-foreground mt-1 grid gap-0.5 text-xs" data-testid={`recorded-${key}`}>
+            {last.errorMessage ? (
+              <div className="whitespace-pre-wrap break-words">{last.errorMessage}</div>
+            ) : null}
+            {last.failedStep ? <div>failed step {last.failedStep}</div> : null}
+            {last.recordedBy ? <div>recorded by {last.recordedBy}</div> : null}
+          </div>
+        ) : null}
       </TableCell>
       <TableCell className="align-top">
         <div className="grid gap-1">
           <div className="flex flex-wrap gap-1">
-            <Input
+            <Textarea
               aria-label={`Note for ${key}`}
               placeholder="Note (optional)"
-              className="h-8 w-48"
+              rows={1}
+              className="field-sizing-content max-h-48 min-h-8 w-48 py-1 text-sm md:text-sm"
               value={note}
               onChange={(e) => setDraft({ note: e.target.value, step })}
             />
@@ -186,6 +197,12 @@ function CaseRow({ runId, outcome }: { runId: number; outcome: Outcome }) {
 export function ManualExecution({ run, summary }: { run: TestRun; summary: TestRunSummary }) {
   const { finish } = useManualRun(run.id)
   const left = summary.testCases.filter((c) => c.status === 'untested').length
+  // The last recorded result of each test case (the one that counts), to show what a reload would otherwise lose.
+  const lastByCase = new Map<number, TestResult>()
+  for (const r of useRunRecords(run.id).data ?? []) {
+    const prev = r.testCaseId === null ? undefined : lastByCase.get(r.testCaseId)
+    if (r.testCaseId !== null && (!prev || r.attempt > prev.attempt)) lastByCase.set(r.testCaseId, r)
+  }
   return (
     <Card data-testid="manual-execution">
       <CardHeader>
@@ -215,7 +232,7 @@ export function ManualExecution({ run, summary }: { run: TestRun; summary: TestR
               </TableRow>
             )}
             {summary.testCases.map((c) => (
-              <CaseRow key={c.testCaseId} runId={run.id} outcome={c} />
+              <CaseRow key={c.testCaseId} runId={run.id} outcome={c} last={lastByCase.get(c.testCaseId)} />
             ))}
           </TableBody>
         </Table>

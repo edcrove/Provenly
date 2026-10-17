@@ -149,4 +149,15 @@ describe('FE-INT-020 step editor at the limits', () => {
     expect(db.steps.find((st) => st.id === 1)?.expectedResult).toBe('')
     // 100 rows of controls under coverage on a loaded CI runner take several seconds: the default 5 s is too tight.
   }, 20_000)
+
+  it('FE-INT-073 a step action and its expected result span lines (textareas, not single-line inputs)', async () => {
+    const { user } = renderRoute('/test-cases/153')
+    await screen.findByRole('list', { name: 'Steps' })
+    const add = screen.getByRole('form', { name: 'Add step' })
+    await user.type(within(add).getByLabelText('Step action'), 'Pay{enter}with a saved card')
+    await user.type(within(add).getByLabelText('Step expected result'), 'Receipt shown{enter}and mailed')
+    await user.click(within(add).getByRole('button', { name: 'Add step' }))
+    await waitFor(() => expect(screen.getByText(/Expected: Receipt shown\s+and mailed/)).toBeInTheDocument())
+    expect(screen.getByText(/3\. Pay\s+with a saved card/)).toBeInTheDocument()
+  })
 })

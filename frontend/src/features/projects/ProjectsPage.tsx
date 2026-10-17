@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
 import type { Project } from '@/api/client'
@@ -81,8 +81,12 @@ function NewProjectForm() {
  * Administrators archive a project (after confirming) or unarchive it. The default project TC is never archived:
  * reports without ?project= go to it.
  */
-function ArchiveControl({ project }: { project: Project }) {
+function ArchiveControl({ project, onDone }: { project: Project; onDone: (message: string) => void }) {
   const archive = useArchiveProject(project.key)
+  const done = (archived: boolean) => () =>
+    onDone(
+      `${project.key} ${archived ? 'archived: it left the lists and is read-only' : 'unarchived: it is listed and writable again'}.`,
+    )
   const error = archive.error ? (
     <ErrorAlert
       error={archive.error}
@@ -96,7 +100,7 @@ function ArchiveControl({ project }: { project: Project }) {
           size="sm"
           variant="outline"
           disabled={archive.isPending}
-          onClick={() => archive.mutate(false)}
+          onClick={() => archive.mutate(false, { onSuccess: done(false) })}
         >
           Unarchive
         </Button>
@@ -111,7 +115,7 @@ function ArchiveControl({ project }: { project: Project }) {
         question={`Archive ${project.key}? It leaves every list and becomes read-only; nothing is deleted.`}
         confirmLabel="Archive"
         pending={archive.isPending}
-        onConfirm={(close) => archive.mutate(true, { onSettled: close })}
+        onConfirm={(close) => archive.mutate(true, { onSettled: close, onSuccess: done(true) })}
         trigger={(open) => (
           <Button size="sm" variant="ghost" onClick={open}>
             Archive…
@@ -123,7 +127,15 @@ function ArchiveControl({ project }: { project: Project }) {
   )
 }
 
-function ProjectRow({ project, isAdmin }: { project: Project; isAdmin: boolean }) {
+function ProjectRow({
+  project,
+  isAdmin,
+  onArchived,
+}: {
+  project: Project
+  isAdmin: boolean
+  onArchived: (message: string) => void
+}) {
   const update = useUpdateProject(project.key)
   const { setProject } = useCurrentProject()
   // null while not renaming.
@@ -175,7 +187,7 @@ function ProjectRow({ project, isAdmin }: { project: Project; isAdmin: boolean }
           <Link to={`/projects/${project.key}`} className="underline">
             Settings
           </Link>
-          {isAdmin ? <ArchiveControl project={project} /> : null}
+          {isAdmin ? <ArchiveControl project={project} onDone={onArchived} /> : null}
         </span>
       </TableCell>
     </TableRow>
@@ -191,6 +203,18 @@ export function ProjectsPage() {
   const query = useProjects(page, PAGE_SIZE, q, archived)
   const me = useCurrentUser()
   const [draft, setDraft] = useState(q)
+  // Back/forward changes the address without retyping: the box follows it (state adjusted while rendering).
+  const [seenQ, setSeenQ] = useState(q)
+  if (seenQ !== q) {
+    setSeenQ(q)
+    setDraft(q)
+  }
+  // Archiving removes the row (and the focused button with it): say what happened where focus lands.
+  const [notice, setNotice] = useState('')
+  const noticeRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    if (notice) noticeRef.current?.focus()
+  }, [notice])
   // The search and the archived view travel together in the address; a new one starts on page 1.
   const show = (next: { q: string; archived: boolean }) =>
     setParams({ ...(next.q ? { q: next.q } : {}), ...(next.archived ? { archived: '1' } : {}) })
@@ -231,6 +255,17 @@ export function ProjectsPage() {
             <Checkbox checked={archived} onChange={(e) => show({ q, archived: e.target.checked })} />
             Show archived projects instead
           </label>
+          {notice ? (
+            <p
+              role="status"
+              tabIndex={-1}
+              ref={noticeRef}
+              className="text-sm outline-none"
+              data-testid="archive-notice"
+            >
+              {notice}
+            </p>
+          ) : null}
           <QueryState query={query}>
             {(data) => (
               <>
@@ -252,7 +287,7 @@ export function ProjectsPage() {
                   </TableHeader>
                   <TableBody>
                     {data.items.map((p) => (
-                      <ProjectRow key={p.key} project={p} isAdmin={me.isAdmin} />
+                      <ProjectRow key={p.key} project={p} isAdmin={me.isAdmin} onArchived={setNotice} />
                     ))}
                   </TableBody>
                 </Table>

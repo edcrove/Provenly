@@ -318,12 +318,15 @@ func (s *Service) SetProjectArchived(ctx context.Context, key string, archived b
 // ActiveProjectIDs narrows a list that spans projects (ids nil: every project) to the active ones: archived projects
 // are left out of lists unless asked for by key.
 func (s *Service) ActiveProjectIDs(ctx context.Context, ids []int64) ([]int64, error) {
-	if ids == nil {
-		return s.repo.ProjectIDs(ctx, false)
-	}
 	archived, err := s.repo.ProjectIDs(ctx, true)
 	if err != nil {
 		return nil, err
+	}
+	if len(archived) == 0 {
+		return ids, nil // the common case keeps the lists' "every project" fast path (nil stays nil)
+	}
+	if ids == nil {
+		return s.repo.ProjectIDs(ctx, false)
 	}
 	out := make([]int64, 0, len(ids))
 	for _, id := range ids {

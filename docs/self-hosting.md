@@ -108,6 +108,9 @@ is healthy while its last success is under 26 hours old (`docker compose ps`, or
   (open `<web address>/reset-password?token=...`) and reactivates the account.
 - **Agents**: MCP clients connect to `/api/v1/mcp` with a user's session token (Account page).
 - **Security reports**: see `SECURITY.md`.
+- **Known limits**: archiving a project is read-only at the application, not the database: a report already being
+  processed when the archive happens still lands. Revoking its CI keys and removing its members stay possible
+  (they reduce access); anything else waits for an unarchive.
 
 ## 7. Try it on Render (free, temporary)
 

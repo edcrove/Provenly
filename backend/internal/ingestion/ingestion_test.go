@@ -310,6 +310,11 @@ func TestValidateMeta(t *testing.T) {
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "https://ci.example.com/a\nb"},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "https://[::1"},
 		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "https://ci.example.com/" + strings.Repeat("x", 1978)},
+		// Audit 2026-10-17 (D6, D7): the database constraint wants a lowercase scheme and valid text; both were 500s.
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "HTTPS://ci.example.com/job"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "Http://ci.example.com/job"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "https://ci.example.com/\xff"},
+		{Provider: "github", ProviderRunID: "1", RunAttempt: 1, CIURL: "https://ci.example.com/a\x00b"},
 	}
 	require.NoError(t, ValidateMeta(RunMeta{Provider: strings.Repeat("p", 50), ProviderRunID: strings.Repeat("9", 100), RunAttempt: 1,
 		CIURL: "https://ci.example.com/" + strings.Repeat("x", 1977)}), "the limits themselves are valid")
@@ -424,6 +429,16 @@ func TestIngestAccess(t *testing.T) {
 	forbidden := apperr.Forbidden("needs member")
 	_, err = NewService(cat, rec, fakeAccess{denied: map[int64]error{1: forbidden}}).IngestJUnit(ctx, meta, strings.NewReader(report))
 	assert.Equal(t, forbidden, err, "a viewer cannot report")
+
+	// Audit 2026-10-17 (D1): the key's own project goes through the guard too, so CI reporting into an archived
+	// project gets the guard's refusal instead of a new run; a hidden one is "not found" by the key's project.
+	archived := apperr.Conflict("project CHK is archived")
+	_, err = NewService(cat, rec, fakeAccess{key: 2, denied: map[int64]error{2: archived}}).IngestJUnit(ctx, meta, strings.NewReader(report))
+	assert.Equal(t, archived, err, "an API key cannot report into an archived project")
+	_, err = NewService(cat, rec, fakeAccess{key: 2, denied: map[int64]error{2: nil}}).IngestJUnit(ctx, meta, strings.NewReader(report))
+	e, ok = apperr.As(err)
+	require.True(t, ok)
+	assert.Equal(t, "project CHK not found", e.Message)
 
 	cat.projectErr = errBoom
 	_, err = NewService(cat, rec, fakeAccess{key: 2}).IngestJUnit(ctx, meta, strings.NewReader(report))

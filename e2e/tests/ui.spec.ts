@@ -1,4 +1,4 @@
-import { byName, byProperty, expect, junit, pickProject, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
+import { byName, byProperty, expect, junit, junitExecutedText, pickProject, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
 // @local: isolateUniverse deprecates every automated test case, which would wipe a deployed instance's data.
 test.describe('Frontend UI journeys', { tag: '@local' }, () => {
@@ -102,7 +102,7 @@ test.describe('Frontend UI journeys', { tag: '@local' }, () => {
     await expect(history.getByRole('row')).toHaveCount(4)
     await expect(history.getByTestId('status-badge')).toHaveText(['passed', 'failed', 'passed'])
     // Executed is when the report says the tests ran (suite timestamp); Reported is when Provenly received it.
-    await expect(history.getByText('2026-09-28 10:00:00 UTC')).toHaveCount(3)
+    await expect(history.getByText(junitExecutedText)).toHaveCount(3)
     await expect(history.getByRole('columnheader', { name: 'Reported' })).toBeVisible()
     await expect(history.getByText('login chrome (renamed later)')).toBeVisible()
     await expect(page.getByText('Current definition')).toBeVisible()

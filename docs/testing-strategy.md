@@ -66,6 +66,14 @@ exception check).
 - New `.tsx` UI surface → gap until an `FE-INT` target references it.
 - New integration behavior / journey → add it to the matching inventory (reviewed like code), then tag the test.
 
+## Dates in tests
+
+Generated reports and fixtures say *when* their tests ran relative to **now** (an hour or a day ago, to the second),
+never on a fixed calendar date: a fixed `2026-09-28` aged past the dashboard's 14-day "stale" threshold on 2026-10-12 and
+turned three gates red at once (E2E, backend and frontend integration). Assertions on a rendered instant derive the
+expected text from the same value (`junitStartedAt`, `junitExecutedText` in `e2e/support/fixtures.ts`). Fixed dates
+stay only where the test needs an instant in the far past or future (a stale execution, an expired token).
+
 ## Exceptions
 
 `coverage/exceptions.yaml` is the only way to remove elements from a required denominator. Fields: `id, gate, layer,
@@ -89,14 +97,16 @@ make coverage            # everything above
 
 In GitHub Actions every Playwright run writes a visual **job summary** (`e2e/support/summary-reporter.ts`: totals, a
 pass/fail bar, one row per spec, each failure with its error and the full list of journeys), marks failures as
-annotations and uploads the HTML report (`playwright-report` artifact, with traces of failures).
+annotations and uploads the HTML report (`playwright-report` artifact, with traces of failures on the local stack only:
+on a deployed instance traces are off, because they record typed values and request headers, the administrator's
+password and session among them, and the artifact is public).
 
 The same journeys run against a deployed instance with `E2E_REMOTE_URL` (the UI origin; it must proxy `/api`, as the
 Render static site and the docker nginx do) plus `E2E_ADMIN_USERNAME` / `E2E_ADMIN_PASSWORD`: no local servers, no
 coverage, longer timeouts, and journeys tagged `@local` are skipped (they need the local GitHub double and webhook
 receivers, or deprecate every automated test case). The others create their own projects, test cases and runs on the
 instance. Locally: `make e2e-remote URL=https://… E2E_ADMIN_PASSWORD=…`; in CI: the **E2E on a deployed instance**
-workflow (Actions → Run workflow; the password comes from a repository secret, `RENDER_ADMIN_PASSWORD` by default).
+workflow (Actions → Run workflow; the password is the repository secret `RENDER_ADMIN_PASSWORD`, never an input).
 
 The journeys leave the instance clean and never depend on an earlier run (Ed, 2026-10-09). What they create follows
 conventions (usernames `e2e-…`, project keys `E2E…`) and `e2e/support/cleanup.ts` sweeps it before and after every run,

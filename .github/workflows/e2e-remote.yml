@@ -3,7 +3,8 @@ name: E2E on a deployed instance
 # Runs the Playwright journeys against a deployed Provenly (for example the Render demo) on demand. Journeys tagged
 # @local (they need the local stack or would wipe data) are skipped; the others create their own projects, test
 # cases and runs on the instance, and a sweep before and after the run deactivates their accounts and revokes their
-# credentials (docs/testing-strategy.md). Results: the job summary and the playwright-report artifact.
+# credentials (docs/testing-strategy.md). Results: the job summary and the playwright-report artifact (no traces on a
+# deployed instance: they would carry the administrator's password and session into a public artifact).
 on:
   workflow_dispatch:
     inputs:
@@ -12,12 +13,8 @@ on:
         default: https://provenly-ed.onrender.com
         required: true
       username:
-        description: Administrator username
+        description: Administrator username (its password is the repository secret RENDER_ADMIN_PASSWORD)
         default: admin
-        required: true
-      password_secret:
-        description: Name of the repository secret with that administrator's password
-        default: RENDER_ADMIN_PASSWORD
         required: true
 
 concurrency:
@@ -35,7 +32,8 @@ jobs:
     env:
       E2E_REMOTE_URL: ${{ inputs.url }}
       E2E_ADMIN_USERNAME: ${{ inputs.username }}
-      E2E_ADMIN_PASSWORD: ${{ secrets[inputs.password_secret] }}
+      # One fixed secret: a free input naming the secret would let any dispatcher post another secret to `url`.
+      E2E_ADMIN_PASSWORD: ${{ secrets.RENDER_ADMIN_PASSWORD }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -50,11 +48,9 @@ jobs:
       - name: Check the password secret
         run: |
           if [ -z "$E2E_ADMIN_PASSWORD" ]; then
-            echo "::error::Repository secret '$SECRET' is missing or empty"
+            echo "::error::Repository secret RENDER_ADMIN_PASSWORD is missing or empty"
             exit 1
           fi
-        env:
-          SECRET: ${{ inputs.password_secret }}
       - name: Wake the instance (free tiers sleep)
         run: |
           for _ in $(seq 1 30); do

@@ -35,8 +35,10 @@ async function ingest(request: APIRequestContext, runId: string, xml: string, st
   return ((await res.json()) as { testRun: { id: number } }).testRun.id
 }
 
+// The reports say their tests ran an hour ago: a fixed date would age into "stale" on the dashboard screenshot.
+const reportTimestamp = new Date(Math.floor(Date.now() / 1000) * 1000 - 3_600_000).toISOString()
 const junit = (...cases: string[]) =>
-  `<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="web" timestamp="2026-09-28T10:00:00">${cases.join('')}</testsuite></testsuites>`
+  `<?xml version="1.0" encoding="UTF-8"?><testsuites><testsuite name="web" timestamp="${reportTimestamp}">${cases.join('')}</testsuite></testsuites>`
 const tc = (name: string, id: number | string, body = '', time = '1.284') =>
   `<testcase name="${name}" classname="web" time="${time}"><properties><property name="tc-id" value="${id}"/></properties>${body}</testcase>`
 const fail = (msg: string) => `<failure message="${msg}">Error: ${msg}\n    at checkout.spec.ts:42</failure>`

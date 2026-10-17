@@ -9,7 +9,8 @@ import type {
   User,
 } from '@/api/client'
 
-const at = '2026-09-28T10:00:00Z'
+// A day ago, to the second, as the API serializes instants: a fixed date aged into "stale" (14 days) on 2026-10-12.
+const at = new Date(Math.floor(Date.now() / 1000) * 1000 - 86_400_000).toISOString().replace('.000Z', 'Z')
 
 export function user(overrides: Partial<User> = {}): User {
   return {

@@ -34,7 +34,7 @@ func TestInsights(t *testing.T) {
 				`<testcase name="` + name + `" classname="c"><properties><property name="tc-id" value="` + key + `"/><property name="attempt" value="2"/></properties></testcase>`
 		}
 		// The first run started long ago but its report arrives now (a late upload): it counts by its start.
-		oldReport := strings.Replace(junitFor(tcProp("old", old.Key(), ""), retried("pay", pay.Key())), "2026-09-28T10:00:00", "2025-01-01T10:00:00", 1)
+		oldReport := strings.Replace(junitFor(tcProp("old", old.Key(), ""), retried("pay", pay.Key())), reportTimestamp, "2025-01-01T10:00:00", 1)
 		_, err := s.Ingestion.IngestJUnit(ctx, meta("1", 1), strings.NewReader(oldReport))
 		require.NoError(t, err)
 		ingestCases("2", retried("login", login.Key()), retried("pay", pay.Key()))

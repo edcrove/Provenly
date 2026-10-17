@@ -1557,8 +1557,13 @@ func TestTraceIDs(t *testing.T) {
 // TestArchivedProjects: archive and unarchive (administrators, idempotent, never TC), ?archived=true lists them,
 // and every change to an archived project is a 409 until it is unarchived.
 func TestArchivedProjects(t *testing.T) {
-	e := api(t, fresh(t), 1<<20)
+	s := fresh(t)
+	e := api(t, s, 1<<20)
 	e.POST("/api/v1/projects").WithJSON(map[string]any{"key": "OLD", "name": "Old"}).Expect().Status(http.StatusCreated)
+	// A CI key issued before the archive: afterwards it cannot report either (audit 2026-10-17, D1).
+	issued := e.POST("/api/v1/projects/OLD/api-keys").WithJSON(map[string]any{"name": "CI"}).Expect().Status(http.StatusCreated).JSON().Object()
+	key := as(anon(t, s, 1<<20), issued.Value("token").String().Raw())
+	keyID := strconv.FormatInt(int64(issued.Value("apiKey").Object().Value("id").Number().Raw()), 10)
 	tc := "/api/v1/test-cases/" + strconv.FormatInt(int64(e.POST("/api/v1/test-cases").WithJSON(map[string]any{"title": "kept", "project": "OLD"}).
 		Expect().Status(http.StatusCreated).JSON().Object().Value("id").Number().Raw()), 10)
 	step := tc + "/steps/" + strconv.FormatInt(int64(e.POST(tc+"/steps").WithJSON(map[string]any{"action": "a"}).
@@ -1621,6 +1626,18 @@ func TestArchivedProjects(t *testing.T) {
 	archived(e.PATCH(step).WithJSON(map[string]any{"action": "b"}))
 	archived(e.DELETE(step))
 	archived(ingest(e, "1", 1, strings.ReplaceAll(report(1), "\n", "")).WithQuery("project", "OLD"))
+	archived(ingest(key, "2", 1, strings.ReplaceAll(report(1), "\n", "")))
+	archived(e.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "OLD", "name": "sign-off", "scope": "manual"}))
+	archived(e.POST("/api/v1/test-runs/live").WithJSON(map[string]any{"project": "OLD", "provider": "github", "runId": "3", "runAttempt": 1}))
+	// Access changes (audit 2026-10-17, D2): the guard answers before the user is looked up.
+	archived(e.PUT(p + "/members/nobody").WithJSON(map[string]any{"role": "member"}))
+	archived(e.POST(p + "/api-keys").WithJSON(map[string]any{"name": "late"}))
+	archived(e.POST("/api/v1/invitations").WithJSON(map[string]any{"project": "OLD", "role": "viewer"}))
+	e.GET(p + "/members").Expect().Status(http.StatusOK)
+	e.GET(p+"/api-keys").Expect().Status(http.StatusOK).JSON().Object().HasValue("totalItems", 1)
+	// Reducing access stays allowed (the E2E sweep revokes, then archives; exception for Ed to ratify).
+	e.POST(p+"/api-keys/"+keyID+"/revoke").Expect().Status(http.StatusOK).JSON().Object().HasValue("status", "revoked")
+	e.DELETE(p + "/members/nobody").Expect().Status(http.StatusNotFound)
 
 	e.POST(p + "/unarchive").Expect().Status(http.StatusOK).JSON().Object().Value("archivedAt").IsNull()
 	e.POST(p + "/unarchive").Expect().Status(http.StatusOK).JSON().Object().Value("archivedAt").IsNull()

@@ -113,8 +113,12 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   and every list that spans projects (`VisibleProjects` narrows to `catalog.Service.ActiveProjectIDs`); asked for by
   key it still reads. It is read-only: the guard the modules receive (`app.archiveGuard` around identity's) answers
   `409 conflict` to any request that is not a GET or HEAD (`markReads`, which also marks MCP's in-process calls) and
-  needs a member or more in an archived project, after the access check (an invisible project is still `404`). The UI
-  shows its pages as to a viewer, with a notice. Nothing in it is deleted.
+  needs a member or more in an archived project, after the access check (an invisible project is still `404`). The
+  same guard covers CI reporting with the project's own key (no `?project=`) and the identity routes that add access
+  (a member, a CI key, an invitation with a role in the project); reads that need a maintainer still answer, and so
+  do revoking a key and removing a member (they reduce access). The
+  guard is application-level: a report already past it when the project is archived still lands (a window of one
+  request). The UI shows its pages as to a viewer, with a notice. Nothing in it is deleted.
 - `GET /api/v1/test-cases?automated=true|false` lists only automated or only manual test cases (any other value is a
   400); the list's "Filter by execution" uses it.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,

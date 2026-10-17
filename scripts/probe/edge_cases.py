@@ -782,7 +782,7 @@ def main():
     check("ingest with ciUrl", [st, (body or {}).get("testRun", {}).get("ciUrl")], [201, ok_url])
     st, body = call(base, "POST", "/ingestion/junit?" + q.format(80) + "&ciUrl=https://ci.example.com/other", raw=xml, ctype="application/xml")
     check("replay with another ciUrl warns and keeps the recorded one", [st, "ciUrl" in str((body or {}).get("warnings")), (body or {}).get("testRun", {}).get("ciUrl")], [200, True, ok_url])
-    for i, bad in enumerate(["javascript:alert(1)", "ftp://x/y", "example.com/job", "https://user:pw@x/y", "https://x/a%20b", "https://x/" + "a" * 1995, "https://x/%00", "%FF"]):
+    for i, bad in enumerate(["javascript:alert(1)", "ftp://x/y", "example.com/job", "https://user:pw@x/y", "https://x/a%20b", "https://x/" + "a" * 1995, "https://x/%00", "%FF", "HTTPS://x/job", "https://x/%FF"]):
         check(f"ingest with ciUrl {bad[:25]!r}", call(base, "POST", "/ingestion/junit?" + q.format(81 + i) + "&ciUrl=" + urllib.parse.quote(bad, safe=":/@%"), raw=xml, ctype="application/xml")[0], 400)
     check("ingest with empty ciUrl", call(base, "POST", "/ingestion/junit?" + q.format(90) + "&ciUrl=", raw=xml, ctype="application/xml")[0], 201)
 
@@ -790,6 +790,7 @@ def main():
     old = f"PA{int(time.time()) % 10**8}"
     check("create a project to archive", call(base, "POST", "/projects", {"key": old, "name": "probe archive"})[0], 201)
     otc = call(base, "POST", "/test-cases", {"title": "probe-archived", "project": old})[1]["id"]
+    old_key = call(base, "POST", f"/projects/{old}/api-keys", {"name": "probe"})[1]["token"]
     for bad, exp in [("pa1", 400), ("NOPE9999", 404), ("A", 400), ("%00", 400)]:
         check(f"archive key={bad!r}", call(base, "POST", f"/projects/{bad}/archive")[0], exp)
     check("archive TC", call(base, "POST", "/projects/TC/archive")[0], 409)
@@ -812,6 +813,16 @@ def main():
         check(f"{method} {path} on an archived project", call(base, method, path, body)[0], exp)
     check("ingest into an archived project", call(base, "POST", f"/ingestion/junit?project={old}&provider=github&runId=probe-archived&runAttempt=1",
                                                   raw=b'<testsuite name="s"><testcase name="t"/></testsuite>', ctype="application/xml")[0], 409)
+    # Audit 2026-10-17: its CI key, access changes and run starts are refused too; ?q= is validated like other text.
+    check("CI key of an archived project cannot report", call(base, "POST", "/ingestion/junit?provider=github&runId=probe-archived-key&runAttempt=1",
+                                                              raw=b'<testsuite name="s"><testcase name="t"/></testsuite>', ctype="application/xml",
+                                                              headers={"Authorization": "Bearer " + old_key})[0], 409)
+    for method, path, body in [("PUT", f"/projects/{old}/members/nobody", {"role": "member"}), ("POST", f"/projects/{old}/api-keys", {"name": "x"}),
+                               ("POST", "/invitations", {"project": old, "role": "viewer"}), ("POST", "/test-runs/manual", {"project": old, "name": "x", "scope": "manual"}),
+                               ("POST", "/test-runs/live", {"project": old, "provider": "github", "runId": "probe-archived-live", "runAttempt": 1})]:
+        check(f"{method} {path} on an archived project", call(base, method, path, body)[0], 409)
+    for qs, exp in [("q=" + "a" * 201, 400), ("q=%00", 400), ("q=%ff", 400), ("q=", 400), ("q=%20", 400), (f"q={old}&q=zzz", 200)]:
+        check(f"GET /projects?{qs[:16]}", call(base, "GET", f"/projects?{qs}")[0], exp)
     check("unarchive", call(base, "POST", f"/projects/{old}/unarchive")[0], 200)
     check("unarchive again", call(base, "POST", f"/projects/{old}/unarchive")[0], 200)
     check("writable again", call(base, "PATCH", f"/test-cases/{otc}", {"title": "again"})[0], 200)

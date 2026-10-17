@@ -430,6 +430,13 @@ func TestProjectsLifecycle(t *testing.T) {
 	assert.Equal(t, apperr.KindNotFound, kindOf(t, err))
 
 	// Archiving (Ed, 2026-10-09): out of the active list, into the archived one; twice changes nothing; TC never.
+	// With nothing archived the ids come back as given (nil stays nil: the lists' "every project" fast path).
+	active, err := svc.ActiveProjectIDs(ctx, nil)
+	require.NoError(t, err)
+	assert.Nil(t, active)
+	active, err = svc.ActiveProjectIDs(ctx, []int64{2, 99})
+	require.NoError(t, err)
+	assert.Equal(t, []int64{2, 99}, active)
 	old, err := svc.SetProjectArchived(ctx, "CHK", true)
 	require.NoError(t, err)
 	require.NotNil(t, old.ArchivedAt)
@@ -442,7 +449,7 @@ func TestProjectsLifecycle(t *testing.T) {
 	res, err = svc.ListProjects(ctx, ProjectFilter{Archived: true}, pagination.Default())
 	require.NoError(t, err)
 	assert.Equal(t, "CHK", res.Items[0].Key)
-	active, err := svc.ActiveProjectIDs(ctx, nil)
+	active, err = svc.ActiveProjectIDs(ctx, nil)
 	require.NoError(t, err)
 	assert.NotContains(t, active, old.ID)
 	active, err = svc.ActiveProjectIDs(ctx, []int64{old.ID, 1})

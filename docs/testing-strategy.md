@@ -66,6 +66,14 @@ exception check).
 - New `.tsx` UI surface → gap until an `FE-INT` target references it.
 - New integration behavior / journey → add it to the matching inventory (reviewed like code), then tag the test.
 
+## Dates in tests
+
+Generated reports and fixtures say *when* their tests ran relative to **now** (an hour or a day ago, to the second),
+never on a fixed calendar date: a fixed `2026-09-28` aged past the dashboard's 14-day "stale" threshold on 2026-10-12 and
+turned three gates red at once (E2E, backend and frontend integration). Assertions on a rendered instant derive the
+expected text from the same value (`junitStartedAt`, `junitExecutedText` in `e2e/support/fixtures.ts`). Fixed dates
+stay only where the test needs an instant in the far past or future (a stale execution, an expired token).
+
 ## Exceptions
 
 `coverage/exceptions.yaml` is the only way to remove elements from a required denominator. Fields: `id, gate, layer,

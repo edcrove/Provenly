@@ -203,7 +203,7 @@ func (s *stubManual) Start(_ context.Context, in ManualRunInput) (execution.Test
 func (s *stubManual) Record(_ context.Context, runID int64, in ManualResultInput) (execution.TestResult, error) {
 	s.record = in
 	id := in.TestCaseID
-	return execution.TestResult{ID: 1, TestRunID: runID, TestCaseID: &id, TestName: "CHK-3", Status: in.Status, RecordedBy: "ana"}, s.err
+	return execution.TestResult{ID: 1, TestRunID: runID, TestCaseID: &id, TestName: "CHK-3", Status: in.Status, RecordedBy: "ana", FailedStep: in.FailedStep}, s.err
 }
 
 func (s *stubManual) Finish(_ context.Context, runID int64, status execution.RunStatus) (execution.TestRun, error) {
@@ -232,6 +232,7 @@ func TestManualHandlers(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"testCaseKey":"CHK-3"`)
 	assert.Contains(t, rec.Body.String(), `"recordedBy":"ana"`)
+	assert.Contains(t, rec.Body.String(), `"failedStep":2`)
 	assert.Equal(t, ManualResultInput{TestCaseID: 3, Status: execution.Failed, Note: "n", FailedStep: ptrInt32(2)}, api.record)
 
 	rec = serveManual(api, "/api/v1/test-runs/9/finish", `{"status":"cancelled"}`)

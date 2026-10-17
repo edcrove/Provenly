@@ -4,6 +4,7 @@
 package audit
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -190,6 +191,10 @@ func (s *Service) project(r *http.Request, note *auditnote.Note) string {
 
 // record stores the event of a successful change; a failure is logged, never returned (the change happened).
 func (s *Service) record(r *http.Request, action string, status int, note *auditnote.Note, t target) {
+	if _, ok := t.values["detail"]; ok {
+		// The handler says what the change was about (audit 2026-10-17, D19): "recorded CHK-4 failed (step 3) in run #11".
+		t.values["detail"] = cmp.Or(note.Detail(), detailDefaults[action])
+	}
 	summary, testCase := t.summary(action), t.testCaseKey
 	// A creation names what it made (deployed audit: "created a test case" did not say which).
 	if created := note.Created(); created != "" && summary != "" {

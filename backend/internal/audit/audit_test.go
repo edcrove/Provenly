@@ -304,6 +304,11 @@ func TestEverySummaryNamesItsPathValues(t *testing.T) {
 	for pattern, tmpl := range summaries {
 		_, path, _ := strings.Cut(pattern, " ")
 		for _, name := range placeholders(tmpl) {
+			if name == "detail" {
+				_, ok := detailDefaults[pattern]
+				assert.True(t, ok, pattern+": {detail} needs a default")
+				continue
+			}
 			assert.Contains(t, path, "{"+name+"}", pattern)
 		}
 	}
@@ -404,4 +409,30 @@ func TestEventsForMaintainers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, repo.filter.ProjectKeys)
 	assert.Equal(t, "203.0.113.9", page.Items[0].IP)
+}
+
+// Audit 2026-10-17 (D19): a manual result and an amendment name their test case and are found by its key; without a
+// detail from the handler the summary keeps its generic object.
+func TestRouterNamesManualResultsAndAmendments(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := NewService(repo, fakeAccess{})
+	svc.SetResolver(fakeNames{})
+	m := http.NewServeMux()
+	a := Wrap(m, svc)
+	a.HandleFunc("POST /api/v1/test-runs/{testRunId}/manual-results", func(w http.ResponseWriter, r *http.Request) {
+		auditnote.Project(r.Context(), 2)
+		auditnote.TestCase(r.Context(), "CHK-4")
+		auditnote.Detail(r.Context(), "CHK-4 failed (step 3)")
+		w.WriteHeader(http.StatusCreated)
+	})
+	a.HandleFunc("POST /api/v1/test-runs/{testRunId}/amendments", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusCreated) })
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { m.ServeHTTP(w, r.WithContext(asUser(r.Context()))) })
+	serve(h, http.MethodPost, "/api/v1/test-runs/11/manual-results")
+	serve(h, http.MethodPost, "/api/v1/test-runs/11/amendments")
+	require.Len(t, repo.events, 2)
+	assert.Equal(t, "recorded CHK-4 failed (step 3) in run #11", repo.events[0].Summary)
+	assert.Equal(t, "CHK-4", repo.events[0].TestCaseKey)
+	assert.Equal(t, "CHK", repo.events[0].ProjectKey)
+	assert.Equal(t, "included a test case in run #11", repo.events[1].Summary, "no detail: the generic object")
+	assert.Equal(t, "", repo.events[1].TestCaseKey)
 }

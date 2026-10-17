@@ -122,7 +122,7 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 - A run carries its project's key (`TestRun.projectKey`, read with the run by the execution queries), so a run page or
   the runs list names the project without the projects list (which leaves out archived projects and, past a page,
   the rest); the page's role and archived notice come from `GET /projects/{key}`.
-- `GET /api/v1/test-cases?automated=true|false` lists only automated or only manual test cases (any other value is a
+- `GET /api/v1/test-cases?automated=true|false` (a boolean, like `archived`) lists only automated or only manual test cases (any other value is a
   400); the list's "Filter by execution" uses it.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,
   `totalItems`, `totalPages`. Every list is paged, the project's suites, requirements, issues, dimensions and webhooks

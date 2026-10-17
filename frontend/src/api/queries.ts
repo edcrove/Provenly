@@ -389,8 +389,8 @@ export function useArchiveProject(key: string) {
 /** Narrows the test case list: a tag and `dimension:value` pairs that must all hold. */
 export interface TestCaseFilter {
   status?: 'active' | 'deprecated'
-  /** Automated ('true') or manual ('false') test cases only. */
-  automated?: 'true' | 'false'
+  /** Automated (true) or manual (false) test cases only. */
+  automated?: boolean
   project?: string
   tag?: string
   classification?: string

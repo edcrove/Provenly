@@ -1994,8 +1994,7 @@ paths:
           required: false
           description: Only automated (true) or manual (false) test cases.
           schema:
-            type: string
-            enum: ["true", "false"]
+            type: boolean
         - name: tag
           in: query
           required: false

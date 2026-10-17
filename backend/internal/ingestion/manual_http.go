@@ -2,7 +2,10 @@ package ingestion
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+
+	"github.com/edcrove/provenly/backend/internal/platform/auditnote"
 
 	"github.com/edcrove/provenly/backend/internal/execution"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
@@ -81,6 +84,13 @@ func (h *ManualHandler) record(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	// The audit entry names the test case and the result ("CHK-4 failed (step 3)"), and is found by the key.
+	detail := res.TestName + " " + string(res.Status)
+	if res.FailedStep != nil {
+		detail += fmt.Sprintf(" (step %d)", *res.FailedStep)
+	}
+	auditnote.TestCase(r.Context(), res.TestName)
+	auditnote.Detail(r.Context(), detail)
 	httpx.WriteJSON(w, http.StatusCreated, execution.ResultDTO(res, map[int64]string{*res.TestCaseID: res.TestName}))
 }
 

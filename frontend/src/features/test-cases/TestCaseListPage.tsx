@@ -91,7 +91,7 @@ export function TestCaseListPage() {
   const dimensions = useDimensions(project).data?.items ?? []
   const query = useTestCases(page, {
     status,
-    automated,
+    automated: automated === undefined ? undefined : automated === 'true',
     project: project || undefined,
     tag: tag || undefined,
     classification: (project && classification) || undefined,

@@ -1307,7 +1307,11 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Individual results of a run, optionally filtered by status and/or TC-ID correlation */
+        /**
+         * Individual results of a run, optionally filtered by status and/or TC-ID correlation
+         * @description Failures first: results are ordered by the logical status of their last attempt (failed, then error, then the
+         *     rest), then by their order in the report. Within a run the order is stable across pages.
+         */
         get: operations["listTestRunResults"];
         put?: never;
         post?: never;
@@ -1962,6 +1966,11 @@ export interface components {
             id: number;
             /** Format: int64 */
             projectId: number;
+            /**
+             * @description The run's project, by key: a page shows it (and whether it is archived) without the projects list.
+             * @example CHK
+             */
+            projectKey: string;
             /** @example github:9876543210:1 */
             externalRunId: string;
             provider: string;
@@ -3397,6 +3406,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -3792,6 +3802,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
         };
@@ -4973,7 +4984,7 @@ export interface operations {
                  */
                 project?: components["parameters"]["ProjectFilter"];
                 /** @description Only automated (true) or manual (false) test cases. */
-                automated?: "true" | "false";
+                automated?: boolean;
                 /** @description Only test cases with this tag. */
                 tag?: components["schemas"]["Tag"];
                 /**

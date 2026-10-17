@@ -26,8 +26,12 @@ func meta(runID string, attempt int32) ingestion.RunMeta {
 	return ingestion.RunMeta{Provider: "github", ProviderRunID: runID, RunAttempt: attempt, Pipeline: "ci", Branch: "main", Commit: "abc123"}
 }
 
+// reportTimestamp is when the generated reports say their tests ran: an hour before the suite started, so the
+// executions never age into "stale" (14 days) as a fixed date did on 2026-10-12.
+var reportTimestamp = time.Now().UTC().Add(-time.Hour).Truncate(time.Second).Format("2006-01-02T15:04:05")
+
 func junitFor(cases ...string) string {
-	return `<testsuites><testsuite name="suite" timestamp="2026-09-28T10:00:00">` + strings.Join(cases, "") + `</testsuite></testsuites>`
+	return `<testsuites><testsuite name="suite" timestamp="` + reportTimestamp + `">` + strings.Join(cases, "") + `</testsuite></testsuites>`
 }
 
 func tcProp(name string, id string, inner string) string {

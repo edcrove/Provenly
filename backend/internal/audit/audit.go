@@ -4,6 +4,7 @@
 package audit
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -124,16 +125,24 @@ func (s *Service) Events(ctx context.Context, f Filter, page pagination.Page) (P
 // maintained returns the keys of the projects the caller maintains (P20-5, Ed 2026-10-09): their events are what a
 // maintainer reads. Events without a project (sign-ins, accounts, invitations) stay with administrators.
 func (s *Service) maintained(ctx context.Context, scope authz.Scope) ([]string, error) {
-	var keys []string
+	var ids []int64
 	for id, role := range scope.Roles {
-		if role < authz.RoleMaintainer || s.resolver == nil {
-			continue
+		if role >= authz.RoleMaintainer && s.resolver != nil {
+			ids = append(ids, id)
 		}
-		key, err := s.resolver.ProjectKey(ctx, id)
+	}
+	var keys []string
+	if len(ids) > 0 {
+		// One read for the page, not one per maintained project (audit 2026-10-17, D25).
+		byID, err := s.resolver.ProjectKeys(ctx, ids)
 		if err != nil {
 			return nil, err
 		}
-		keys = append(keys, key)
+		for _, id := range ids {
+			if key, ok := byID[id]; ok {
+				keys = append(keys, key)
+			}
+		}
 	}
 	if len(keys) == 0 {
 		return nil, apperr.Forbidden("only administrators and project maintainers can read the audit log")
@@ -182,6 +191,10 @@ func (s *Service) project(r *http.Request, note *auditnote.Note) string {
 
 // record stores the event of a successful change; a failure is logged, never returned (the change happened).
 func (s *Service) record(r *http.Request, action string, status int, note *auditnote.Note, t target) {
+	if _, ok := t.values["detail"]; ok {
+		// The handler says what the change was about (audit 2026-10-17, D19): "recorded CHK-4 failed (step 3) in run #11".
+		t.values["detail"] = cmp.Or(note.Detail(), detailDefaults[action])
+	}
 	summary, testCase := t.summary(action), t.testCaseKey
 	// A creation names what it made (deployed audit: "created a test case" did not say which).
 	if created := note.Created(); created != "" && summary != "" {

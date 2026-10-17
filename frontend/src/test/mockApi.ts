@@ -277,13 +277,17 @@ function tokenRefusal(request: Request): Response | undefined {
     : problem(403, 'forbidden', 'this personal access token does not cover the project')
 }
 
+/** The method of the request being answered: an archived project refuses changes, never reads (audit 2026-10-17). */
+let currentMethod = 'GET'
 /** Wraps a handler that needs a session, like every other API operation. */
 const guard =
   (fn: Handler): Handler =>
-  (info) =>
-    db.session === null && !db.failing
+  (info) => {
+    currentMethod = info.request.method
+    return db.session === null && !db.failing
       ? problem(401, 'unauthorized', 'sign in to continue')
       : (tokenRefusal(info.request) ?? publicGuard(fn)(info))
+  }
 
 const currentUser = () => db.users.find((u) => u.id === db.session)!
 const session = (u: User) => ({ token: `token-${u.id}`, expiresAt: '2026-10-05T22:00:00Z', user: u })
@@ -313,9 +317,10 @@ function requireRole(projectId: number, min: MemberRole, missing: () => Response
   const role = roleIn(projectId)
   if (!role) return missing()
   if (rank[role] < rank[min]) return problem(403, 'forbidden', `this needs the ${min} role in the project`)
-  // An archived project is read-only for everyone (an administrator unarchives it first).
+  // An archived project is read-only for everyone (an administrator unarchives it first): like the server, a GET
+  // that needs a maintainer (webhooks, API keys, GitHub) still reads.
   const p = db.projects.find((x) => x.id === projectId)
-  if (min !== 'viewer' && p?.archivedAt)
+  if (min !== 'viewer' && p?.archivedAt && currentMethod !== 'GET' && currentMethod !== 'HEAD')
     return problem(
       409,
       'conflict',
@@ -1036,6 +1041,7 @@ export const handlers = [
         const run = testRun({
           id,
           projectId: p.id,
+          projectKey: p.key,
           externalRunId: `manual:${id}:1`,
           provider: 'manual',
           providerRunId: String(id),
@@ -1319,9 +1325,9 @@ export const handlers = [
       jsonGuard(async ({ params, request }) => {
         if (!KEY.test(String(params.projectKey))) return validation('projectKey', PROJECT_KEY_MESSAGE)
         const p = db.projects.find((x) => x.key === params.projectKey)
-        if (!p || !roleIn(p.id)) return notFound(`project ${String(params.projectKey)}`)
-        if (roleIn(p.id) !== 'admin' && roleIn(p.id) !== 'maintainer')
-          return problem(403, 'forbidden', 'this needs the maintainer role in the project')
+        if (!p) return notFound(`project ${String(params.projectKey)}`)
+        const denied = requireRole(p.id, 'maintainer', () => notFound(`project ${String(params.projectKey)}`))
+        if (denied) return denied
         const role = (await readBody(request))?.role
         if (!memberRoleOk(role)) return validation('role', 'must be one of maintainer, member, viewer')
         const u = db.users.find((x) => x.username === params.username)
@@ -1778,6 +1784,10 @@ export const handlers = [
         const grant = typeof body?.project === 'string' && body.project ? body.project : null
         const grantProject = grant ? db.projects.find((p) => p.key === grant) : undefined
         if (grant && !grantProject) return notFound(`project ${grant}`)
+        if (grantProject) {
+          const denied = requireRole(grantProject.id, 'maintainer', () => notFound(`project ${grant}`))
+          if (denied) return denied
+        }
         if (grant && !memberRoleOk(body?.role))
           return validation('role', 'must be one of maintainer, member, viewer')
         const inv = invitation({

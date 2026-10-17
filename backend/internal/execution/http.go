@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/edcrove/provenly/backend/internal/platform/auditnote"
+
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
 	"github.com/edcrove/provenly/backend/internal/platform/authz"
 	"github.com/edcrove/provenly/backend/internal/platform/httpx"
@@ -47,6 +49,7 @@ var suiteKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,29}$`)
 type TestRunDTO struct {
 	ID            int64  `json:"id"`
 	ProjectID     int64  `json:"projectId"`
+	ProjectKey    string `json:"projectKey"`
 	ExternalRunID string `json:"externalRunId"`
 	Provider      string `json:"provider"`
 	ProviderRunID string `json:"providerRunId"`
@@ -102,7 +105,7 @@ type outcomeDTO struct {
 // RunDTO converts a TestRun to its wire form.
 func RunDTO(r TestRun) TestRunDTO {
 	dto := TestRunDTO{
-		ID: r.ID, ProjectID: r.ProjectID, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
+		ID: r.ID, ProjectID: r.ProjectID, ProjectKey: r.ProjectKey, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.Commit, CIURL: r.CIURL, Status: r.Status,
 		Outcome:       outcomeDTO(r.Outcome),
 		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt,
@@ -662,5 +665,8 @@ func (h *Handler) amend(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
+	// The audit entry names the test case included, and is found by its key (audit 2026-10-17, D19).
+	auditnote.TestCase(r.Context(), keys[a.TestCaseID])
+	auditnote.Detail(r.Context(), keys[a.TestCaseID])
 	httpx.WriteJSON(w, http.StatusCreated, toAmendmentDTO(a, keys))
 }

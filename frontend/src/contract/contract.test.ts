@@ -1336,14 +1336,14 @@ const suiteScenarios: Scenario[] = [
   {
     op: 'GET /api/v1/test-cases',
     status: 200,
-    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { automated: 'false' } } }),
+    call: (c) => c.GET('/api/v1/test-cases', { params: { query: { automated: false } } }),
   },
   {
     op: 'GET /api/v1/test-cases',
     status: 400,
     call: (c) =>
       c.GET('/api/v1/test-cases', {
-        params: { query: { automated: 'yes' as 'true' } },
+        params: { query: { automated: 'yes' as unknown as boolean } },
       }),
   },
   // Filters (deployed audit): branch, execution status, mode and the creation window.
@@ -2092,6 +2092,7 @@ const anyPath = {
   requirementId: 1,
   issueId: 1,
   webhookId: 1,
+  username: 'ana',
 }
 
 /** Without a session every operation that declares 401 answers it (sign-in's own 401 is a wrong password). */
@@ -2792,23 +2793,46 @@ const archivedWrites: [string, object][] = [
   ['PUT /api/v1/test-cases/{testCaseId}/steps/order', { stepIds: [2, 1] }],
   ['PATCH /api/v1/test-cases/{testCaseId}/steps/{stepId}', { action: 'x' }],
   ['DELETE /api/v1/test-cases/{testCaseId}/steps/{stepId}', {}],
+  // Access changes too (audit 2026-10-17): a member, a CI key, an invitation with a role in the project.
+  ['PUT /api/v1/projects/{projectKey}/members/{username}', { role: 'member' }],
+  ['POST /api/v1/projects/{projectKey}/api-keys', { name: 'CI' }],
+  ['POST /api/v1/invitations', { project: 'TC', role: 'viewer' }],
 ]
+/** Reads that need a maintainer keep answering on an archived project: it is read-only, not gone. */
+const archivedReads = [
+  'GET /api/v1/projects/{projectKey}/webhooks',
+  'GET /api/v1/projects/{projectKey}/api-keys',
+  'GET /api/v1/projects/{projectKey}/members',
+] as const
 const archivedScenarios = (): Scenario[] =>
-  archivedWrites
-    .filter(([key]) => consumedOperations().includes(key))
-    .map(([key, body]) => {
-      const [method, path] = key.split(' ') as [Method, string]
+  archivedReads
+    .filter((key) => consumedOperations().includes(key))
+    .map((key): Scenario => {
+      const path = key.slice(4) as '/api/v1/projects/{projectKey}/webhooks'
       return {
         op: key,
-        status: 409,
+        status: 200,
         setup: archiveTc,
-        call: (c) =>
-          (c[method] as AnyCall)(path, {
-            params: { path: { ...anyPath, webhookId: 31 } },
-            ...(method === 'DELETE' || Object.keys(body).length === 0 ? {} : { body }),
-          }),
+        call: (c) => c.GET(path, { params: { path: anyPath, query: {} } }),
       }
     })
+    .concat(
+      archivedWrites
+        .filter(([key]) => consumedOperations().includes(key))
+        .map(([key, body]) => {
+          const [method, path] = key.split(' ') as [Method, string]
+          return {
+            op: key,
+            status: 409,
+            setup: archiveTc,
+            call: (c) =>
+              (c[method] as AnyCall)(path, {
+                params: { path: { ...anyPath, webhookId: 31 } },
+                ...(method === 'DELETE' || Object.keys(body).length === 0 ? {} : { body }),
+              }),
+          }
+        }),
+    )
 
 const archiveScenarios: Scenario[] = (['archive', 'unarchive'] as const).flatMap((action) => {
   const key = `POST /api/v1/projects/{projectKey}/${action}` as const

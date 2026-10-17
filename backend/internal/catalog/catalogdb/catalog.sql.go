@@ -998,6 +998,36 @@ func (q *Queries) ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDs
 	return items, nil
 }
 
+const listProjectKeys = `-- name: ListProjectKeys :many
+SELECT id, key FROM projects WHERE id = ANY($1::bigint[])
+`
+
+type ListProjectKeysRow struct {
+	ID  int64
+	Key string
+}
+
+// The keys of the given projects, for display (one read for a page, never one per row).
+func (q *Queries) ListProjectKeys(ctx context.Context, ids []int64) ([]ListProjectKeysRow, error) {
+	rows, err := q.db.Query(ctx, listProjectKeys, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListProjectKeysRow
+	for rows.Next() {
+		var i ListProjectKeysRow
+		if err := rows.Scan(&i.ID, &i.Key); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjects = `-- name: ListProjects :many
 SELECT id, key, name, description, next_number, created_at, updated_at, next_requirement_number, next_issue_number, archived_at FROM projects
 WHERE ($1::bigint[] IS NULL OR id = ANY($1::bigint[]))

@@ -27,6 +27,8 @@ RUN npm run build
 
 FROM nginx:alpine AS runtime
 ENV API_UPSTREAM=http://api:8080
+# Body limit of /api (bytes), the API's PROVENLY_MAX_INGEST_BYTES; compose sets both from the same variable.
+ENV PROVENLY_MAX_INGEST_BYTES=10485760
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /app/dist /usr/share/nginx/html

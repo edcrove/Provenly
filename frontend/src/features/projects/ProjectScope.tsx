@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 
 import { useProject, useProjects } from '@/api/queries'
+import { ErrorAlert } from '@/components/QueryState'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { formatDateTime } from '@/lib/format'
@@ -25,12 +26,15 @@ const CHOOSER_SIZE = 8
 export function ProjectChooser({ what }: { what: string }) {
   const { setProject } = useCurrentProject()
   // The first few projects, and how many there are: an instance may have more than one page of them.
-  const page = useProjects(1, CHOOSER_SIZE).data
+  const query = useProjects(1, CHOOSER_SIZE)
+  const page = query.data
   const projects = page?.items ?? []
   const more = (page?.totalItems ?? 0) - projects.length
   return (
     <div className="grid gap-3" data-testid="project-chooser">
       <p className="text-muted-foreground text-sm">Pick a project to see its {what}.</p>
+      {query.isPending ? <p className="text-muted-foreground text-sm">Loading the projects…</p> : null}
+      {query.isError ? <ErrorAlert error={query.error} title="Could not load the projects" /> : null}
       <div className="flex flex-wrap gap-2">
         {projects.map((p) => (
           <Button key={p.key} size="sm" variant="outline" onClick={() => setProject(p.key)}>

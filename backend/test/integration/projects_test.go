@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -136,16 +137,69 @@ func TestProjects(t *testing.T) {
 			b, _ := io.ReadAll(res.Body)
 			return res.StatusCode, string(b)
 		}
-		code, _ := do("POST", "/api/v1/projects", `{"key":"OLD","name":"Old product"}`)
+		code, body := do("POST", "/api/v1/projects", `{"key":"OLD","name":"Old product"}`)
 		require.Equal(t, 201, code)
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(body), &created))
 		code, _ = do("POST", "/api/v1/test-cases", `{"title":"kept","project":"OLD","automated":true}`)
 		require.Equal(t, 201, code)
+		code, body = do("POST", "/api/v1/projects/OLD/api-keys", `{"name":"ci"}`)
+		require.Equal(t, 201, code)
+		var issued struct {
+			Token  string `json:"token"`
+			APIKey struct {
+				ID int64 `json:"id"`
+			} `json:"apiKey"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(body), &issued))
+		report := func(headers map[string]string, query string) (int, string) {
+			req, _ := http.NewRequest("POST", srv.URL+"/api/v1/ingestion/junit?provider=github&runAttempt=1&"+query,
+				strings.NewReader(`<testsuite name="s"><testcase name="t"/></testsuite>`))
+			req.Header.Set("Content-Type", "application/xml")
+			for k, v := range headers {
+				req.Header.Set(k, v)
+			}
+			res, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			defer res.Body.Close()
+			b, _ := io.ReadAll(res.Body)
+			return res.StatusCode, string(b)
+		}
+		session := map[string]string{"Authorization": "Bearer " + sess.Token}
+		apiKey := map[string]string{"Authorization": "Bearer " + issued.Token}
+		code, _ = report(session, "project=OLD&runId=before")
+		require.Equal(t, 201, code)
+		code, _ = report(apiKey, "runId=key-before")
+		require.Equal(t, 201, code, "the key reports into its project")
 
-		code, body := do("POST", "/api/v1/projects/OLD/archive", "")
+		code, body = do("POST", "/api/v1/projects/OLD/archive", "")
 		require.Equal(t, 200, code)
 		assert.Contains(t, body, `"archivedAt":"`)
 		_, body = do("GET", "/api/v1/projects", "")
-		assert.NotContains(t, body, `"OLD"`, "not in the projects list")
+		var listed struct {
+			Items []struct {
+				Key string `json:"key"`
+			} `json:"items"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(body), &listed))
+		keys := make([]string, 0, len(listed.Items))
+		for _, p := range listed.Items {
+			keys = append(keys, p.Key)
+		}
+		assert.Equal(t, []string{"TC"}, keys, "not in the projects list")
+		_, body = do("GET", "/api/v1/test-runs", "")
+		assert.NotContains(t, body, fmt.Sprintf(`"projectId":%d`, created.ID), "its runs leave the runs list")
+		_, body = do("GET", "/api/v1/test-runs?project=OLD", "")
+		assert.Contains(t, body, fmt.Sprintf(`"projectId":%d`, created.ID), "read by key")
+		assert.Contains(t, body, `"projectKey":"OLD"`, "a run names its project (audit 2026-10-17, D5)")
+		code, body = report(apiKey, "runId=key-after")
+		assert.Equal(t, 409, code, "its CI key cannot report (audit 2026-10-17, D1)")
+		assert.Contains(t, body, "project OLD is archived")
+		code, body = do("POST", fmt.Sprintf("/api/v1/projects/OLD/api-keys/%d/revoke", issued.APIKey.ID), "")
+		assert.Equal(t, 200, code, "revoking (reducing access) stays allowed")
+		assert.Contains(t, body, `"status":"revoked"`)
 		_, body = do("GET", "/api/v1/projects?archived=true", "")
 		assert.Contains(t, body, `"key":"OLD"`)
 		_, body = do("GET", "/api/v1/test-cases", "")
@@ -161,6 +215,11 @@ func TestProjects(t *testing.T) {
 			{"PATCH", "/api/v1/projects/OLD", `{"name":"x"}`},
 			{"POST", "/api/v1/projects/OLD/suites", `{"key":"smoke","name":"Smoke","kind":"static"}`},
 			{"POST", "/api/v1/ingestion/junit?project=OLD&provider=github&runId=1&runAttempt=1", `<testsuite name="s"><testcase name="t"/></testsuite>`},
+			{"POST", "/api/v1/test-runs/manual", `{"project":"OLD","name":"sign-off","scope":"manual"}`},
+			{"POST", "/api/v1/test-runs/live", `{"project":"OLD","provider":"github","runId":"2","runAttempt":1}`},
+			{"PUT", "/api/v1/projects/OLD/members/nobody", `{"role":"member"}`},
+			{"POST", "/api/v1/projects/OLD/api-keys", `{"name":"late"}`},
+			{"POST", "/api/v1/invitations", `{"project":"OLD","role":"viewer"}`},
 		} {
 			req, _ := http.NewRequest(c[0], srv.URL+c[1], strings.NewReader(c[2]))
 			req.Header.Set("Authorization", "Bearer "+sess.Token)
@@ -173,11 +232,33 @@ func TestProjects(t *testing.T) {
 			assert.Contains(t, string(b), "project OLD is archived", c[0]+" "+c[1])
 		}
 
-		// TC never: the database refuses it too.
+		// Archiving and unarchiving race: every call answers 200 and the project ends in one of the two states.
+		var wg sync.WaitGroup
+		codes := make(chan int, 10)
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				action := map[bool]string{true: "unarchive", false: "archive"}[i%2 == 1]
+				c, _ := do("POST", "/api/v1/projects/OLD/"+action, "")
+				codes <- c
+			}(i)
+		}
+		wg.Wait()
+		close(codes)
+		for c := range codes {
+			assert.Equal(t, 200, c)
+		}
+		_, body = do("GET", "/api/v1/projects/OLD", "")
+		assert.Regexp(t, `"archivedAt":(null|"20)`, body)
+
+		// TC never: the database refuses it too; nor can a project be archived before it was created.
 		code, _ = do("POST", "/api/v1/projects/TC/archive", "")
 		assert.Equal(t, 409, code)
 		_, err = db.Pool.Exec(ctx, `UPDATE projects SET archived_at = now() WHERE key = 'TC'`)
 		assert.ErrorContains(t, err, "projects_default_never_archived")
+		_, err = db.Pool.Exec(ctx, `UPDATE projects SET archived_at = created_at - interval '1 day' WHERE key = 'OLD'`)
+		assert.ErrorContains(t, err, "projects_archived_after_creation")
 
 		code, body = do("POST", "/api/v1/projects/OLD/unarchive", "")
 		require.Equal(t, 200, code)
@@ -186,7 +267,7 @@ func TestProjects(t *testing.T) {
 		assert.Equal(t, 201, code, "writable again")
 		ids, err := s.Catalog.ActiveProjectIDs(ctx, nil)
 		require.NoError(t, err)
-		assert.Len(t, ids, 2)
+		assert.Nil(t, ids, "nothing archived: nil keeps the lists' every-project fast path")
 	})
 
 	t.Run("BE-INT-032_numbers_are_per_project_contiguous_and_unique_under_concurrency", func(t *testing.T) {

@@ -202,6 +202,9 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     archived and offer no changes. The default project `TC` cannot be archived (reports without `?project=` go to it).
     The E2E sweep (decision 21) archives E2E projects after revoking their credentials, so a deployed instance shows
     only real projects. BE-INT-078, FE-INT-069, BE-E2E-032, FE-E2E-039.
+    Audit 2026-10-17: reporting with the project's own CI key, adding a member, issuing a CI key and inviting with a
+    role in the project are refused too (the identity routes and the key path had bypassed the guard). Revoking a CI
+    key and removing a member stay allowed: they reduce access (the E2E sweep relies on it; exception for Ed to ratify).
     **Status: Decided by Ed (2026-10-11).**
 
 24. **A run links to its CI job (`ciUrl`).** CI sends the job's URL with the report (`?ciUrl=`) or when it starts a

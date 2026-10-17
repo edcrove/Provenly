@@ -6,7 +6,7 @@ import { useStepMutations, useTestSteps } from '@/api/queries'
 import { InlineConfirm } from '@/components/InlineConfirm'
 import { ErrorAlert, QueryState } from '@/components/QueryState'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { moveId } from '@/lib/steps'
 
 interface StepFields {
@@ -33,16 +33,20 @@ function StepForm({
   }
   return (
     <form onSubmit={submit} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]" aria-label={submitLabel}>
-      <Input
+      <Textarea
         aria-label="Step action"
         placeholder="Action"
+        rows={1}
+        className="field-sizing-content max-h-60 min-h-9 py-1.5"
         value={fields.action}
         required
         onChange={(e) => setFields({ ...fields, action: e.target.value })}
       />
-      <Input
+      <Textarea
         aria-label="Step expected result"
         placeholder="Expected result (optional)"
+        rows={1}
+        className="field-sizing-content max-h-60 min-h-9 py-1.5"
         value={fields.expectedResult}
         onChange={(e) => setFields({ ...fields, expectedResult: e.target.value })}
       />

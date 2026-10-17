@@ -16,6 +16,7 @@ import {
   api,
   type RunListFilter,
   type TestCase,
+  type TestResult,
   type AcceptInvitationRequest,
   type CreateInvitationRequest,
   type CreateProjectRequest,
@@ -377,15 +378,19 @@ export function useArchiveProject(key: string) {
           : await api.POST('/api/v1/projects/{projectKey}/unarchive', { params }),
       )
     },
-    onSuccess: () => qc.invalidateQueries(),
+    // What an archive changes: the project (lists, switcher, role) and the lists that span projects.
+    onSuccess: () =>
+      Promise.all(
+        [keys.projects, keys.testCases, keys.testRuns].map((queryKey) => qc.invalidateQueries({ queryKey })),
+      ),
   })
 }
 
 /** Narrows the test case list: a tag and `dimension:value` pairs that must all hold. */
 export interface TestCaseFilter {
   status?: 'active' | 'deprecated'
-  /** Automated ('true') or manual ('false') test cases only. */
-  automated?: 'true' | 'false'
+  /** Automated (true) or manual (false) test cases only. */
+  automated?: boolean
   project?: string
   tag?: string
   classification?: string
@@ -1034,6 +1039,25 @@ export function useManualRun(id: number) {
       onSettled,
     }),
   }
+}
+
+/** Every result of a run (page after page): what a manual run recorded, to show it on its rows. */
+export function useRunRecords(id: number) {
+  return useQuery({
+    queryKey: [...keys.testRun(id), 'records'],
+    queryFn: async () => {
+      const items: TestResult[] = []
+      for (let page = 1; ; page++) {
+        const p = unwrap(
+          await api.GET('/api/v1/test-runs/{testRunId}/results', {
+            params: { path: { testRunId: id }, query: { page, pageSize: 100 } },
+          }),
+        )
+        items.push(...p.items)
+        if (page >= p.totalPages) return items
+      }
+    },
+  })
 }
 
 export function useTestRunResults(

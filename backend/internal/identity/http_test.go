@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/edcrove/provenly/backend/internal/platform/apperr"
+	"github.com/edcrove/provenly/backend/internal/platform/authz"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,6 +44,7 @@ type harness struct {
 	t   *testing.T
 	mux *http.ServeMux
 	svc *Service
+	h   *Handler
 }
 
 func newHarness(t *testing.T) *harness {
@@ -53,8 +55,25 @@ func newHarness(t *testing.T) *harness {
 	h := NewHandler(s, stubProjects{}, c.now)
 	h.RegisterPublic(mux)
 	h.RegisterProtected(Protect(mux, s))
-	return &harness{t: t, mux: mux, svc: s}
+	return &harness{t: t, mux: mux, svc: s, h: h}
 }
+
+// stubGuard refuses the projects in denied with their error (nil: the notFound it is handed); it is the
+// application's guard, which answers 409 for an archived project (audit 2026-10-17).
+type stubGuard struct{ denied map[int64]error }
+
+func (stubGuard) Scope(context.Context) (authz.Scope, error) { return authz.Scope{All: true}, nil }
+func (g stubGuard) Require(_ context.Context, projectID int64, _ authz.Role, notFound error) error {
+	if err, ok := g.denied[projectID]; ok {
+		if err == nil {
+			return notFound
+		}
+		return err
+	}
+	return nil
+}
+func (stubGuard) RequireAdmin(context.Context) error         { return nil }
+func (stubGuard) Actor(context.Context) (authz.Actor, error) { return authz.Actor{}, nil }
 
 func (h *harness) do(method, path, body string, mutate ...func(*http.Request)) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))

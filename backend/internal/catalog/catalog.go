@@ -403,6 +403,8 @@ type Repository interface {
 	SetProjectArchived(ctx context.Context, key string, archived bool) (Project, error)
 	// ProjectIDs lists the ids of the archived projects, or of the active ones.
 	ProjectIDs(ctx context.Context, archived bool) ([]int64, error)
+	// ProjectKeys maps the given project ids to their keys (unknown ids are left out).
+	ProjectKeys(ctx context.Context, ids []int64) (map[int64]string, error)
 	UpdateProject(ctx context.Context, key string, in UpdateProjectInput) (Project, error)
 
 	ListTestSteps(ctx context.Context, testCaseID int64, limit, offset int32) ([]TestStep, error)

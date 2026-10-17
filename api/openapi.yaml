@@ -3,7 +3,7 @@ info:
   title: Provenly API
   version: 0.1.0
   description: |
-    Public REST contract of the Provenly POC. This file is the authoritative
+    Public REST contract of Provenly. This file is the authoritative
     inventory of public operations: backend Contract coverage and the frontend
     generated client are both derived from it.
 
@@ -445,6 +445,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
         "500":
@@ -820,6 +822,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
         "500":
@@ -1990,8 +1994,7 @@ paths:
           required: false
           description: Only automated (true) or manual (false) test cases.
           schema:
-            type: string
-            enum: ["true", "false"]
+            type: boolean
         - name: tag
           in: query
           required: false
@@ -2751,6 +2754,9 @@ paths:
       tags: [test-runs]
       operationId: listTestRunResults
       summary: Individual results of a run, optionally filtered by status and/or TC-ID correlation
+      description: |
+        Failures first: results are ordered by the logical status of their last attempt (failed, then error, then the
+        rest), then by their order in the report. Within a run the order is stable across pages.
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
@@ -3010,6 +3016,7 @@ paths:
           schema:
             type: string
             maxLength: 2000
+            pattern: "^$|^https?://"
         - name: status
           in: query
           required: false
@@ -4351,6 +4358,7 @@ components:
       required:
         - id
         - projectId
+        - projectKey
         - externalRunId
         - provider
         - providerRunId
@@ -4427,6 +4435,11 @@ components:
         projectId:
           type: integer
           format: int64
+        projectKey:
+          type: string
+          minLength: 1
+          example: CHK
+          description: "The run's project, by key: a page shows it (and whether it is archived) without the projects list."
         externalRunId:
           type: string
           example: github:9876543210:1
@@ -5478,6 +5491,7 @@ components:
         ciUrl:
           type: string
           maxLength: 2000
+          pattern: "^$|^https?://"
           description: The CI job's URL (absolute http(s)), as on the ingestion; empty is the same as absent.
 
     LiveEventsRequest:

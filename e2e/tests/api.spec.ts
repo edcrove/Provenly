@@ -1,5 +1,5 @@
 import { apiURL } from '../playwright.config'
-import { byName, byProperty, expect, junit, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
+import { byName, byProperty, expect, junit, junitStartedAt, test, uniqueProjectKey, uniqueRunId } from '../support/fixtures'
 
 // @local: isolateUniverse deprecates every automated test case, which would wipe a deployed instance's data.
 test.describe('Backend API journeys', { tag: '@local' }, () => {
@@ -68,7 +68,7 @@ test.describe('Backend API journeys', { tag: '@local' }, () => {
     expect(res.status()).toBe(201)
     const body = await res.json()
     expect(body).toMatchObject({ created: true, received: 9, persisted: 8 })
-    expect(body.testRun.startedAt).toBe('2026-09-28T10:00:00Z')
+    expect(body.testRun.startedAt).toBe(junitStartedAt)
     expect(body.parseErrors.map((e: { persisted: boolean; severity: string }) => [e.persisted, e.severity])).toEqual([
       [true, 'error'],
       [false, 'error'],

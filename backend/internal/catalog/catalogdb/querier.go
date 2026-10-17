@@ -58,6 +58,8 @@ type Querier interface {
 	ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListIssuesRow, error)
 	// Which of the given ids are test cases of the project.
 	ListProjectCaseIDs(ctx context.Context, arg ListProjectCaseIDsParams) ([]int64, error)
+	// The keys of the given projects, for display (one read for a page, never one per row).
+	ListProjectKeys(ctx context.Context, ids []int64) ([]ListProjectKeysRow, error)
 	// project_ids NULL means every project (administrators); otherwise only those. search (LIKE-escaped) finds a key or a
 	// name containing it, any case. archived lists the archived projects instead of the active ones.
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error)

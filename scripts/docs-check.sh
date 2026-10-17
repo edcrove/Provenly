@@ -34,5 +34,12 @@ for wf in .github/workflows/*.yml; do
   fi
 done
 
+# Security (audit 2026-10-17): workflows never index secrets with an input, and remote E2E runs keep no traces.
+if grep -rnE 'secrets\[' .github/workflows; then
+  err "a workflow indexes secrets dynamically (an input could name any secret)"
+fi
+grep -q "trace: remoteURL ? 'off' : 'retain-on-failure'" e2e/playwright.config.ts \
+  || err "e2e/playwright.config.ts must keep traces off on a deployed instance (public artifact)"
+
 [ "$fail" = 0 ] && echo "docs-check: OK"
 exit "$fail"

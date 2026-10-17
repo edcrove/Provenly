@@ -128,6 +128,16 @@ func TestToolsList(t *testing.T) {
 	assert.Equal(t, false, schema["additionalProperties"])
 	assert.Equal(t, map[string]any{"type": "integer", "minimum": 1.0, "description": testCaseID.description}, schema["properties"].(map[string]any)["testCaseId"])
 	assert.Equal(t, []any{}, names["list_projects"]["inputSchema"].(map[string]any)["required"])
+	// Audit 2026-10-17 (D28): the tools carry the REST filters; a boolean is a boolean.
+	projects := names["list_projects"]["inputSchema"].(map[string]any)["properties"].(map[string]any)
+	assert.Equal(t, "boolean", projects["archived"].(map[string]any)["type"])
+	runs := names["list_test_runs"]["inputSchema"].(map[string]any)["properties"].(map[string]any)
+	for _, p := range []string{"project", "suite", "branch", "executionStatus", "mode", "from", "to", "page"} {
+		assert.Contains(t, runs, p)
+	}
+	history := schema["properties"].(map[string]any)
+	assert.Contains(t, history, "branch")
+	assert.Contains(t, history, "status")
 }
 
 func call(t *testing.T, h http.Handler, name, args string, headers ...string) map[string]any {
@@ -190,5 +200,23 @@ func TestToolArguments(t *testing.T) {
 		out := decode(t, post(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_test_runs","arguments":`+args+`}}`))
 		require.NotNil(t, out.Error, args)
 		assert.Contains(t, out.Error.Message, "project must be a non-empty string")
+	}
+
+	// Audit 2026-10-17 (D28): the REST filters reach the API; a boolean argument is sent as true/false, anything else
+	// is refused.
+	api := &fakeAPI{}
+	h = server(api)
+	call(t, h, "list_test_runs", `{"project":"CHK","branch":"main","executionStatus":"completed","mode":"batch","from":"2026-10-01T00:00:00Z","to":"2026-10-31T00:00:00Z"}`)
+	assert.Equal(t, "/api/v1/test-runs?branch=main&executionStatus=completed&from=2026-10-01T00%3A00%3A00Z&mode=batch&project=CHK&to=2026-10-31T00%3A00%3A00Z", api.got.URL.String())
+	call(t, h, "get_test_case_history", `{"testCaseId":12,"branch":"main","status":"failed"}`)
+	assert.Equal(t, "/api/v1/test-cases/12/results?branch=main&status=failed", api.got.URL.String())
+	call(t, h, "list_projects", `{"archived":true,"q":"old"}`)
+	assert.Equal(t, "/api/v1/projects?archived=true&q=old", api.got.URL.String())
+	call(t, h, "list_projects", `{"archived":false}`)
+	assert.Equal(t, "/api/v1/projects?archived=false", api.got.URL.String())
+	for _, args := range []string{`{"archived":"yes"}`, `{"archived":1}`} {
+		out := decode(t, post(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_projects","arguments":`+args+`}}`))
+		require.NotNil(t, out.Error, args)
+		assert.Contains(t, out.Error.Message, "archived must be true or false")
 	}
 }

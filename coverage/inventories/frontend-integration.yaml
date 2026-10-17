@@ -225,3 +225,21 @@ targets:
   - id: FE-INT-070
     description: a run links to its CI job (Ed, 2026-10-12) - the run page shows "Open the CI job" (new tab, noopener) when CI sent its link and — otherwise; the runs list links the pipeline name (or "CI job" when nameless) to the job
     surfaces: [src/features/test-runs/CiJobLink.tsx, src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/TestRunListPage.tsx]
+  - id: FE-INT-071
+    description: runs name their project (audit 2026-10-17, D5) - a run carries its projectKey, so the runs list, the breadcrumb and the archived notice of a run whose project is archived (or past the first page of projects) still name it, and the manual panel follows that project's role
+    surfaces: [src/features/test-runs/TestRunDetailPage.tsx, src/features/test-runs/TestRunListPage.tsx, src/features/projects/useProjectRole.ts]
+  - id: FE-INT-072
+    description: manual results stay visible (audit 2026-10-17, D17) - a row of the manual panel shows the recorded note, failed step and recorder after a reload (the run's results, last attempt per test case); the Results table of a manual run reads "Note" and adds "Failed step" and "Recorded by"; the execution history says who recorded a manual result and at which step
+    surfaces: [src/features/manual/ManualExecution.tsx, src/features/test-runs/RunResults.tsx, src/features/test-cases/TestCaseHistory.tsx, src/api/queries.ts]
+  - id: FE-INT-073
+    description: multi-line text (audit 2026-10-17, D18) - the manual note and a step's action and expected result are auto-growing textareas, so a note or a step can span lines (the API takes 10,000 characters)
+    surfaces: [src/features/manual/ManualExecution.tsx, src/features/test-cases/StepsEditor.tsx]
+  - id: FE-INT-074
+    description: dashboard trend (audit 2026-10-17, D20) - a run still running is hatched (data-running) and the caption counts it ("1 still running"); the printed captions keep the chosen stale-days and flaky-window values as print-only text, since printing hides the selects
+    surfaces: [src/features/dashboard/DashboardPage.tsx]
+  - id: FE-INT-075
+    description: project pickers' states (audit 2026-10-17, D21) - the switcher says "Searching…" while it loads and shows an alert when the projects cannot be loaded; the project chooser says it is loading or failed; a server error reading the current project keeps it (its key as the label) while a 404 or 403 widens to every project
+    surfaces: [src/features/projects/ProjectSwitcher.tsx, src/features/projects/ProjectScope.tsx, src/features/projects/ProjectProvider.tsx]
+  - id: FE-INT-076
+    description: archive feedback (audit 2026-10-17, D22) - archiving or unarchiving a project is announced in a status line that takes focus (the row and its button disappear); the projects search box follows the address on back/forward; the CI job link says it opens a new tab
+    surfaces: [src/features/projects/ProjectsPage.tsx, src/features/test-runs/CiJobLink.tsx]

@@ -188,6 +188,10 @@ SELECT id FROM projects WHERE archived_at IS NOT NULL ORDER BY id;
 -- name: ListActiveProjectIDs :many
 SELECT id FROM projects WHERE archived_at IS NULL ORDER BY id;
 
+-- name: ListProjectKeys :many
+-- The keys of the given projects, for display (one read for a page, never one per row).
+SELECT id, key FROM projects WHERE id = ANY(@ids::bigint[]);
+
 -- name: SetProjectArchived :one
 -- Archives (archived = true) or unarchives a project; no row when it does not exist or is already in that state.
 UPDATE projects SET archived_at = CASE WHEN @archived::boolean THEN now() END, updated_at = now()

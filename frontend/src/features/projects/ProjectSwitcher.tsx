@@ -3,6 +3,7 @@ import { useDeferredValue, useEffect, useId, useRef, useState, type KeyboardEven
 import { Link } from 'react-router'
 
 import { useProject, useProjects } from '@/api/queries'
+import { errorMessage } from '@/lib/problem'
 import { cn } from '@/lib/utils'
 
 import { projectLabel, useCurrentProject } from './currentProject'
@@ -25,7 +26,8 @@ export function ProjectSwitcher({ onPicked }: { onPicked?: () => void }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const q = useDeferredValue(query.trim())
-  const found = useProjects(1, SHOWN, q).data
+  const search = useProjects(1, SHOWN, q)
+  const found = search.data
   const projects = found?.items ?? []
   const current = useProject(project || undefined).data
   const [active, setActive] = useState(0)
@@ -33,7 +35,8 @@ export function ProjectSwitcher({ onPicked }: { onPicked?: () => void }) {
   const panel = useRef<HTMLDivElement>(null)
   const listId = useId()
 
-  const label = current ? projectLabel(current) : 'All projects'
+  // A stored project whose read failed (server or network) keeps the scope and its key as the label.
+  const label = current ? projectLabel(current) : project || 'All projects'
   const options: Option[] = [
     ...(q ? [] : [{ key: '', label: 'All projects' }]),
     ...projects.map((p) => ({ key: p.key, label: projectLabel(p) })),
@@ -136,6 +139,17 @@ export function ProjectSwitcher({ onPicked }: { onPicked?: () => void }) {
             ))}
             {options.length === 0 && found ? (
               <li className="text-muted-foreground px-2 py-1.5 text-sm">No project matches.</li>
+            ) : null}
+            {/* The list says when it is still searching or could not load (it used to be silently empty). */}
+            {!found && search.isPending ? (
+              <li className="text-muted-foreground px-2 py-1.5 text-sm" data-testid="switcher-searching">
+                Searching…
+              </li>
+            ) : null}
+            {search.isError ? (
+              <li role="alert" className="text-destructive px-2 py-1.5 text-sm">
+                Could not load the projects: {errorMessage(search.error)}
+              </li>
             ) : null}
           </ul>
           {hidden > 0 ? (

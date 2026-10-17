@@ -12,6 +12,8 @@ import (
 // step positions). Lookups that fail fall back to the ids in the path.
 type Resolver interface {
 	ProjectKey(ctx context.Context, id int64) (string, error)
+	// ProjectKeys resolves several projects in one read (unknown ids are left out).
+	ProjectKeys(ctx context.Context, ids []int64) (map[int64]string, error)
 	TestCaseKey(ctx context.Context, id int64) (string, error)
 	StepPosition(ctx context.Context, testCaseID, stepID int64) (int32, error)
 }
@@ -29,9 +31,9 @@ var summaries = map[string]string{
 	"PUT /api/v1/test-cases/{testCaseId}/steps/order":                                 "reordered the steps of {testCaseId}",
 	"POST /api/v1/test-runs/manual":                                                   "started a manual run",
 	"POST /api/v1/test-runs/live":                                                     "started a live run",
-	"POST /api/v1/test-runs/{testRunId}/amendments":                                   "included a test case in {testRunId}",
+	"POST /api/v1/test-runs/{testRunId}/amendments":                                   "included {detail} in {testRunId}",
 	"POST /api/v1/test-runs/{testRunId}/finish":                                       "finished {testRunId}",
-	"POST /api/v1/test-runs/{testRunId}/manual-results":                               "recorded a manual result in {testRunId}",
+	"POST /api/v1/test-runs/{testRunId}/manual-results":                               "recorded {detail} in {testRunId}",
 	"POST /api/v1/ingestion/junit":                                                    "uploaded a JUnit report",
 	"POST /api/v1/ingestion/finalize":                                                 "finalized a sharded run",
 	"POST /api/v1/projects":                                                           "created a project",
@@ -75,6 +77,12 @@ var summaries = map[string]string{
 }
 
 // target is what a change touched, resolved before the change runs (a deleted step has no position afterwards).
+// detailDefaults is what {detail} reads when the handler recorded none (an older handler, or a failure before it).
+var detailDefaults = map[string]string{
+	"POST /api/v1/test-runs/{testRunId}/amendments":     "a test case",
+	"POST /api/v1/test-runs/{testRunId}/manual-results": "a manual result",
+}
+
 type target struct {
 	values      map[string]string
 	testCaseKey string

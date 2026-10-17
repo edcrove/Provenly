@@ -120,7 +120,11 @@ export function matchOperation(
 }
 
 function coerce(schema: Schema, raw: string): unknown {
-  return schema.type === 'integer' || schema.type === 'number' ? Number(raw) : raw
+  if (schema.type === 'integer' || schema.type === 'number') return Number(raw)
+  // A boolean travels as "true"/"false" in a query string (as kin-openapi reads it); anything else stays a string
+  // and fails the schema.
+  if (schema.type === 'boolean' && (raw === 'true' || raw === 'false')) return raw === 'true'
+  return raw
 }
 
 /** Returns the contract violations of a request (empty when valid). */

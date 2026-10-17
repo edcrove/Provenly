@@ -191,8 +191,34 @@ func TestHandler(t *testing.T) {
 
 type fakeNames struct{ err error }
 
+// countingNames counts the project lookups: a page of the log resolves the maintained projects in one read (D25).
+type countingNames struct {
+	fakeNames
+	single, batch *int
+}
+
+func (n countingNames) ProjectKey(ctx context.Context, id int64) (string, error) {
+	*n.single++
+	return n.fakeNames.ProjectKey(ctx, id)
+}
+
+func (n countingNames) ProjectKeys(ctx context.Context, ids []int64) (map[int64]string, error) {
+	*n.batch++
+	return n.fakeNames.ProjectKeys(ctx, ids)
+}
+
 func (n fakeNames) ProjectKey(_ context.Context, id int64) (string, error) {
 	return map[int64]string{2: "CHK"}[id], n.err
+}
+
+func (n fakeNames) ProjectKeys(_ context.Context, ids []int64) (map[int64]string, error) {
+	out := map[int64]string{}
+	for _, id := range ids {
+		if key := map[int64]string{2: "CHK"}[id]; key != "" {
+			out[id] = key
+		}
+	}
+	return out, n.err
 }
 
 func (n fakeNames) TestCaseKey(_ context.Context, id int64) (string, error) {
@@ -278,6 +304,11 @@ func TestEverySummaryNamesItsPathValues(t *testing.T) {
 	for pattern, tmpl := range summaries {
 		_, path, _ := strings.Cut(pattern, " ")
 		for _, name := range placeholders(tmpl) {
+			if name == "detail" {
+				_, ok := detailDefaults[pattern]
+				assert.True(t, ok, pattern+": {detail} needs a default")
+				continue
+			}
 			assert.Contains(t, path, "{"+name+"}", pattern)
 		}
 	}
@@ -335,6 +366,18 @@ func TestEventsForMaintainers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, Filter{ProjectKey: "CHK", Actor: "ana", ProjectKeys: []string{"CHK"}}, repo.filter)
 
+	// Audit 2026-10-17 (D25): the maintained projects are named in one read, never one per project.
+	single, batch := 0, 0
+	counted := NewService(repo, fakeAccess{scope: &authz.Scope{Roles: map[int64]authz.Role{2: authz.RoleMaintainer, 5: authz.RoleMaintainer, 3: authz.RoleMember}}})
+	counted.SetResolver(countingNames{single: &single, batch: &batch})
+	_, err = counted.Events(ctx, Filter{}, pagination.Default())
+	require.NoError(t, err)
+	assert.Equal(t, []int{0, 1}, []int{single, batch})
+	assert.Equal(t, []string{"CHK"}, repo.filter.ProjectKeys, "an unknown project is simply left out")
+	counted.SetResolver(countingNames{fakeNames: fakeNames{err: errBoom}, single: &single, batch: &batch})
+	_, err = counted.Events(ctx, Filter{}, pagination.Default())
+	assert.ErrorIs(t, err, errBoom)
+
 	forbidden := func(err error, detail string) {
 		t.Helper()
 		e, _ := apperr.As(err)
@@ -366,4 +409,30 @@ func TestEventsForMaintainers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, repo.filter.ProjectKeys)
 	assert.Equal(t, "203.0.113.9", page.Items[0].IP)
+}
+
+// Audit 2026-10-17 (D19): a manual result and an amendment name their test case and are found by its key; without a
+// detail from the handler the summary keeps its generic object.
+func TestRouterNamesManualResultsAndAmendments(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := NewService(repo, fakeAccess{})
+	svc.SetResolver(fakeNames{})
+	m := http.NewServeMux()
+	a := Wrap(m, svc)
+	a.HandleFunc("POST /api/v1/test-runs/{testRunId}/manual-results", func(w http.ResponseWriter, r *http.Request) {
+		auditnote.Project(r.Context(), 2)
+		auditnote.TestCase(r.Context(), "CHK-4")
+		auditnote.Detail(r.Context(), "CHK-4 failed (step 3)")
+		w.WriteHeader(http.StatusCreated)
+	})
+	a.HandleFunc("POST /api/v1/test-runs/{testRunId}/amendments", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusCreated) })
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { m.ServeHTTP(w, r.WithContext(asUser(r.Context()))) })
+	serve(h, http.MethodPost, "/api/v1/test-runs/11/manual-results")
+	serve(h, http.MethodPost, "/api/v1/test-runs/11/amendments")
+	require.Len(t, repo.events, 2)
+	assert.Equal(t, "recorded CHK-4 failed (step 3) in run #11", repo.events[0].Summary)
+	assert.Equal(t, "CHK-4", repo.events[0].TestCaseKey)
+	assert.Equal(t, "CHK", repo.events[0].ProjectKey)
+	assert.Equal(t, "included a test case in run #11", repo.events[1].Summary, "no detail: the generic object")
+	assert.Equal(t, "", repo.events[1].TestCaseKey)
 }

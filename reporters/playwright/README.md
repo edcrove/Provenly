@@ -48,6 +48,14 @@ It ends a run still waiting for shards as `interrupted`, naming the missing ones
 Alternatively merge the shards first (`npx playwright merge-reports` with the `junit` reporter) and send the merged
 report once, without `shard`: Provenly then sees one ordinary run.
 
+A CI **matrix that is not a shard** (one job per browser or OS, each running the whole suite) is a replay of the same
+run id: the first job creates the run, the others are answered `200` with a warning ("not applied") and their results
+are merged by test name. Give each job its own `suite` or `runId` (for example the GitHub run id plus the browser name)
+when you want one run per job. The reporter logs the server's warnings, so a silent replay is visible in the job log.
+
+When the report is accepted the reporter logs one line: the run's number and page, how many results were received and
+persisted, and how many have no valid TC-ID (the run page lists them under *Diagnostics*).
+
 ## Declaring the TC-ID of a test
 
 The test case must exist in Provenly first (create it in the UI or through the API): a TC-ID that does not exist is
@@ -59,11 +67,20 @@ test('pays by card', { tag: '@CHK-12' }, async () => {})
 test('pays by card CHK-12', async () => {})
 ```
 
+In a title only the project's own key counts when the reporter knows the project (`project` option or
+`PROVENLY_PROJECT`): `UTF-8`, `ISO-8601` or `HTTP-2` are words. Without a project any `KEY-n` is taken, so prefer the
+annotation or the tag there.
+
 ## Options
 
 `url`, `apiKey`, `project`, `suite`, `provider`, `runId`, `runAttempt`, `pipeline`, `branch`, `commit`, `ciUrl` (the CI
 job's URL, shown on the run), `shard` override
 the environment; `live: false` only sends the final report; `flushEvery` (default 50) sets the event batch size.
+
+## Compatibility
+
+The reporter sends `ciUrl` when it starts a live run; a Provenly older than v0.3.0 rejects that start (400) and only the
+live view is lost: the final report is still sent and recorded. Use the reporter released with your Provenly.
 
 ## Develop
 

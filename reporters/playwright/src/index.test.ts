@@ -49,6 +49,11 @@ describe('helpers', () => {
     expect(tcIdOf(test({ annotations: [{ type: 'tc-id' }], tags: ['@smoke', '@CHK-9'] }))).toBe('CHK-9')
     expect(tcIdOf(test())).toBe('CHK-12')
     expect(tcIdOf(test({ title: 'no id here', tags: ['@smoke'] }))).toBe('')
+    // With a known project only its keys count in a title (audit 2026-10-17): UTF-8 is a word, not a test case.
+    expect(tcIdOf(test({ title: 'decodes UTF-8 CHK-4 then TC-9' }), 'CHK')).toBe('CHK-4')
+    expect(tcIdOf(test({ title: 'decodes UTF-8 in ISO-8601 dates' }), 'CHK')).toBe('')
+    expect(tcIdOf(test({ title: 'decodes UTF-8 in ISO-8601 dates' }))).toBe('ISO-8601')
+    expect(tcIdOf(test({ title: 'tagged', tags: ['@TC-9'] }), 'CHK')).toBe('TC-9')
   })
 
   it('clips by characters, not UTF-16 units', () => {
@@ -97,7 +102,12 @@ describe('ProvenlyReporter', () => {
   })
 
   it('streams a live run and sends the final report with every attempt', async () => {
-    const f = fakeFetch([json({ id: 42 })])
+    const f = fakeFetch([
+      json({ id: 42 }),
+      new Response('{}'),
+      new Response('{}'),
+      json({ testRun: { id: 42 }, received: 3, persisted: 3, diagnostics: [], warnings: [] }),
+    ])
     const log = vi.fn()
     const r = new ProvenlyReporter({
       fetch: f.fn,
@@ -114,6 +124,7 @@ describe('ProvenlyReporter', () => {
         GITHUB_RUN_ATTEMPT: '2',
         GITHUB_WORKFLOW: 'e2e',
         GITHUB_REF_NAME: 'main',
+        GITHUB_HEAD_REF: '',
         GITHUB_SHA: 'abc',
         GITHUB_REPOSITORY: 'acme/shop',
         GITHUB_SERVER_URL: 'https://github.com/',
@@ -151,7 +162,46 @@ describe('ProvenlyReporter', () => {
     expect(report.body).toContain('<property name="tc-id" value="CHK-3"/><property name="attempt" value="1"/></properties><failure message="expected 1">Error: expected 1</failure>')
     expect(report.body).toContain('<property name="attempt" value="2"/></properties></testcase>')
     expect(report.body).toContain('<testcase name="plain" classname="checkout.spec.ts" time="1.500"><properties><property name="attempt" value="1"/></properties><skipped/>')
-    expect(log).not.toHaveBeenCalled()
+    expect(log.mock.calls.map((c) => c[0])).toEqual(['run #42 recorded (https://provenly.test/test-runs/42): 3 results received, 3 persisted'])
+  })
+
+  it('on a pull_request build the branch is GITHUB_HEAD_REF, not the merge ref', async () => {
+    const f = fakeFetch()
+    const r = new ProvenlyReporter({
+      fetch: f.fn, log: vi.fn(), now: () => now, live: false,
+      env: { PROVENLY_URL: 'https://p.test', GITHUB_ACTIONS: 'true', GITHUB_RUN_ID: '9', GITHUB_REF_NAME: '123/merge', GITHUB_HEAD_REF: 'feat/pay' },
+    })
+    r.onBegin()
+    await r.onEnd({ status: 'passed' })
+    expect(new URL(f.calls[0].url).searchParams.get('branch')).toBe('feat/pay')
+  })
+
+  it('summarizes the accepted report: the run, results without a valid TC-ID and warnings; an older server without a body is just accepted', async () => {
+    const f = fakeFetch([
+      json({ testRun: { id: 7 }, received: 2, persisted: 2, diagnostics: [{ testName: 'x' }], warnings: ['ciUrl https://b differs from the recorded one and was not applied'] }, 200),
+    ])
+    const log = vi.fn()
+    const r = new ProvenlyReporter({ url: 'https://p.test/', fetch: f.fn, log, live: false, runId: '1', env: {} })
+    r.onBegin()
+    await r.onEnd({ status: 'passed' })
+    expect(log.mock.calls.map((c) => c[0])).toEqual([
+      "run #7 recorded (https://p.test/test-runs/7): 2 results received, 2 persisted; 1 without a valid TC-ID (see the run's diagnostics)",
+      'warning: ciUrl https://b differs from the recorded one and was not applied',
+    ])
+
+    const g = fakeFetch([json({ testRun: { id: 8 } })])
+    const sparse = vi.fn()
+    const s = new ProvenlyReporter({ url: 'https://p.test', fetch: g.fn, log: sparse, live: false, runId: '1', env: {} })
+    s.onBegin()
+    await s.onEnd({ status: 'passed' })
+    expect(sparse).toHaveBeenCalledWith('run #8 recorded (https://p.test/test-runs/8): 0 results received, 0 persisted')
+
+    const h = fakeFetch([new Response('ok', { status: 201 })])
+    const plain = vi.fn()
+    const p = new ProvenlyReporter({ url: 'https://p.test', fetch: h.fn, log: plain, live: false, runId: '1', env: {} })
+    p.onBegin()
+    await p.onEnd({ status: 'passed' })
+    expect(plain.mock.calls.map((c) => c[0])).toEqual(['report accepted'])
   })
 
   it('keeps going when the live channel fails and retries the final report', async () => {
@@ -165,6 +215,7 @@ describe('ProvenlyReporter', () => {
       'live run not started (HTTP 503); the final report is still sent',
       'report not sent, attempt 1 of 3 (offline)',
       'report not sent, attempt 2 of 3 (HTTP 502)',
+      'report accepted',
     ])
     expect(f.calls.at(-1)!.url).toBe('https://p.test/api/v1/ingestion/junit?provider=local&runId=9&runAttempt=1&status=interrupted')
     expect(f.calls.at(-1)!.headers.Authorization).toBeUndefined()

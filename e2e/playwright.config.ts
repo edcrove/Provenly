@@ -55,7 +55,9 @@ export default defineConfig({
     timezoneId: 'UTC',
     // Every journey (browser and API request fixture) starts signed in as the administrator.
     storageState: adminState,
-    trace: 'retain-on-failure',
+    // Traces record every action's values (the administrator's password in FE-E2E-011) and request headers; on a
+    // deployed instance the report is a public artifact, so remote runs keep none (security audit, 2026-10-17).
+    trace: remoteURL ? 'off' : 'retain-on-failure',
     // Optional: run on an already installed Chromium instead of Playwright's own build.
     launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined },
   },

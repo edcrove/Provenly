@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
-import { project, testCase, user } from '@/test/fixtures'
+import { project, testCase, testRun, user } from '@/test/fixtures'
 import { db } from '@/test/mockApi'
 import { projectSwitcher, renderRoute } from '@/test/render'
 import { server } from '@/test/server'
@@ -117,5 +117,51 @@ describe('FE-INT-069 archived projects (Ed, 2026-10-11)', () => {
     await u.click(within(row).getByRole('button', { name: 'Archive' }))
     expect(await within(row).findByText('Could not archive the project')).toBeInTheDocument()
     expect(within(row).getByText(/try again later/)).toBeInTheDocument()
+  })
+
+  it('FE-INT-071 a run of an archived project (not in the projects list) still names it: breadcrumb and archived notice', async () => {
+    addOld('2026-10-10T10:00:00Z')
+    db.runs.push(testRun({ id: 70, projectId: 2, projectKey: 'OLD', externalRunId: 'github:70:1' }))
+    // Another project's run (the current one is TC): named, and said to be archived, exactly once.
+    renderRoute('/test-runs/70')
+    expect(await screen.findByRole('heading', { name: 'Test run #70' })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent(/OLD/)
+    expect(await screen.findAllByTestId('archived-notice')).toHaveLength(1)
+  })
+
+  it('FE-INT-071 the runs list of an archived current project names it (it used to read "—", from the active projects list)', async () => {
+    addOld('2026-10-10T10:00:00Z')
+    db.runs.push(testRun({ id: 70, projectId: 2, projectKey: 'OLD', externalRunId: 'github:70:1' }))
+    localStorage.setItem('provenly.project', 'OLD')
+    const { router } = renderRoute('/test-runs')
+    expect(await screen.findByTestId('run-project')).toHaveTextContent('OLD')
+    await router.navigate('/test-runs/70')
+    expect(await screen.findByRole('heading', { name: 'Test run #70' })).toBeInTheDocument()
+    expect(await screen.findAllByTestId('archived-notice')).toHaveLength(1)
+  })
+
+  it('FE-INT-076 archiving and unarchiving are announced where focus lands, and the search box follows the address', async () => {
+    addOld()
+    const { user: u, router } = renderRoute('/projects?q=old')
+    expect(await screen.findByLabelText('Search projects')).toHaveValue('old')
+    await router.navigate('/projects')
+    await waitFor(() => expect(screen.getByLabelText('Search projects')).toHaveValue(''))
+    const row = await screen.findByTestId('project-OLD')
+    await u.click(within(row).getByRole('button', { name: 'Archive…' }))
+    await u.click(
+      within(within(row).getByRole('group', { name: 'Archive OLD' })).getByRole('button', {
+        name: 'Archive',
+      }),
+    )
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('OLD archived: it left the lists and is read-only.')
+    expect(status).toHaveFocus()
+    await u.click(screen.getByRole('checkbox', { name: 'Show archived projects instead' }))
+    await u.click(within(await screen.findByTestId('project-OLD')).getByRole('button', { name: 'Unarchive' }))
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'OLD unarchived: it is listed and writable again.',
+      ),
+    )
   })
 })

@@ -15,7 +15,7 @@ describe('FE-INT-070 a run links to its CI job (Ed, 2026-10-12)', () => {
     ]
     renderRoute('/test-runs/7')
     await screen.findByRole('heading', { name: 'Test run #7' })
-    const link = screen.getByRole('link', { name: 'Open the CI job' })
+    const link = screen.getByRole('link', { name: /^Open the CI job *\(opens in a new tab\)$/ })
     expect(link).toHaveAttribute('href', ciUrl)
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
@@ -23,7 +23,10 @@ describe('FE-INT-070 a run links to its CI job (Ed, 2026-10-12)', () => {
 
     const list = renderRoute('/test-runs')
     const rows = await screen.findAllByTestId('run-row')
-    expect(within(rows[1]).getByRole('link', { name: 'ci' })).toHaveAttribute('href', ciUrl)
+    expect(within(rows[1]).getByRole('link', { name: /^ci *\(opens in a new tab\)$/ })).toHaveAttribute(
+      'href',
+      ciUrl,
+    )
     expect(within(rows[0]).queryByTestId('ci-job-link')).toBeNull()
     list.unmount()
   })
@@ -40,7 +43,10 @@ describe('FE-INT-070 a run links to its CI job (Ed, 2026-10-12)', () => {
 
     const list = renderRoute('/test-runs')
     const rows = await screen.findAllByTestId('run-row')
-    expect(within(rows[0]).getByRole('link', { name: 'CI job' })).toHaveAttribute('href', ciUrl)
+    expect(within(rows[0]).getByRole('link', { name: /^CI job *\(opens in a new tab\)$/ })).toHaveAttribute(
+      'href',
+      ciUrl,
+    )
     list.unmount()
   })
 })

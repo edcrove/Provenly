@@ -12,7 +12,7 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 | `identity` | `users`, `invitations`, `project_members`, `api_keys`, `personal_access_tokens` | `identity.Service`, `identity.Protect` | `catalog` (project keys) |
 | `insights` | none | `insights.Service` (quality indicators) | `catalog`, `execution` |
 | `audit` | `audit_events` (append-only) | `audit.Service`, `audit.Wrap` (router) | `identity` (who called, admin check) |
-| `integrations` | `webhooks`, `webhook_deliveries`, `github_connections` | `integrations.Service` | `catalog` (`ProjectByKey`, `ProjectByID`, `ImportIssues`), `identity` (access); hears completed runs from `ingestion` through `RunNotifier` |
+| `integrations` | `webhooks`, `webhook_deliveries`, `github_connections` | `integrations.Service` | `catalog` (`ProjectByKey`, `ProjectByID`, `ImportIssues`), `identity` (access), `execution` (`TestRun` and `RunDTO`: the webhook payload is the run as `getTestRun` returns it); hears completed runs from `ingestion` through `RunNotifier` |
 | `mcp` | none | `POST /api/v1/mcp` | the REST API in-process, with the caller's credentials |
 
 - A module never reads another module's tables and there are **no cross-module foreign keys**: execution stores
@@ -41,7 +41,7 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
 | Step text: action 1..2000 non-blank characters, expected result ≤ 2000 | service validation (400) backed by `CHECK`s (`test_steps_action_not_blank`, `test_steps_expected_result_length`, migration 00008) |
 | Ingested results and parse errors are the source of truth | written by the transaction that creates their run, and while a manual or live run is running (recorded results, the final report completing a live run); triggers forbid inserts into finished runs, any `UPDATE` and `DELETE` (migrations 00010, 00023, 00026) |
 | `untested` is never persisted | `CHECK` on `test_results.status`; derived in `execution.ComputeSummary` |
-| A run's outcome is derived on read, cheaply | routes on a run authorize it by `GetRunProject` (project only); only `GET /test-runs/{id}` loads the run and computes its outcome; a live poll reads the run and its summary inputs once (BE-INT-066, card #44) |
+| A run's outcome is derived on read, cheaply | routes on a run authorize it by `GetRunProject` (project only); only `GET /test-runs/{id}` loads the run and computes its outcome; a live poll reads the run and its summary inputs once (BE-INT-066, card #44). Known debt (plan 1.0 §4.2): list, history and trend pages still compute the outcome of every run on the page from its result and snapshot rows (`attachOutcomes` → `ListSummaryInputs`); persisted outcomes are the planned fix |
 | `testCaseId` only for valid or deprecated correlations (deprecated results stay in history) | `CHECK ((correlation IN ('valid','deprecated')) = (test_case_id IS NOT NULL))` |
 
 ## Identity and sessions (module `identity`)
@@ -113,14 +113,23 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   and every list that spans projects (`VisibleProjects` narrows to `catalog.Service.ActiveProjectIDs`); asked for by
   key it still reads. It is read-only: the guard the modules receive (`app.archiveGuard` around identity's) answers
   `409 conflict` to any request that is not a GET or HEAD (`markReads`, which also marks MCP's in-process calls) and
-  needs a member or more in an archived project, after the access check (an invisible project is still `404`). The UI
-  shows its pages as to a viewer, with a notice. Nothing in it is deleted.
-- `GET /api/v1/test-cases?automated=true|false` lists only automated or only manual test cases (any other value is a
+  needs a member or more in an archived project, after the access check (an invisible project is still `404`). The
+  same guard covers CI reporting with the project's own key (no `?project=`) and the identity routes that add access
+  (a member, a CI key, an invitation with a role in the project); reads that need a maintainer still answer, and so
+  do revoking a key and removing a member (they reduce access). The
+  guard is application-level: a report already past it when the project is archived still lands (a window of one
+  request). The UI shows its pages as to a viewer, with a notice. Nothing in it is deleted.
+- A run carries its project's key (`TestRun.projectKey`, read with the run by the execution queries), so a run page or
+  the runs list names the project without the projects list (which leaves out archived projects and, past a page,
+  the rest); the page's role and archived notice come from `GET /projects/{key}`.
+- `GET /api/v1/test-cases?automated=true|false` (a boolean, like `archived`) lists only automated or only manual test cases (any other value is a
   400); the list's "Filter by execution" uses it.
 - Pagination: `page` (1-based) and `pageSize` (1..100, default 20); responses carry `items`, `page`, `pageSize`,
   `totalItems`, `totalPages`. Every list is paged, the project's suites, requirements, issues, dimensions and webhooks
   included (DEC-78); counts a screen needs over the whole list come with the page (`coverageCounts`,
-  `verificationCounts`) instead of fetching every page. Pickers search on the server: `GET /api/v1/test-cases?q=`
+  `verificationCounts`) instead of fetching every page. Known debt (plan 1.0 §4.2): suites, requirements, issues and
+  dimensions are read whole and sliced in the HTTP adapter (`pagination.Slice`), with their counts computed in Go;
+  the other lists page in SQL. Pickers search on the server: `GET /api/v1/test-cases?q=`
   matches the title (case-insensitive, `%` and `_` literal) or a key or number (`chk-12`, `12`); blank or over 200
   characters is a 400.
 - `GET /api/v1/test-cases/{id}/results` (history) filters by `branch` (exact) and `status`; the test case page asks for
@@ -187,7 +196,10 @@ class name `provenly-manual`, so a re-test is the next attempt of the same test 
 The execution panel shows each test case's title and steps; the failed step is chosen from its steps (no failed step
 when it has none). A note or failed step typed but not yet recorded is kept in the browser's `sessionStorage`
 (`provenly.manual.<run>.<testCase>`, this tab only) until the result is recorded, so a reload does not lose it; an
-unreadable draft is ignored.
+unreadable draft is ignored. What was recorded stays visible: each row shows the last result's note, failed step and
+recorder (the run's results, read page by page), the run's Results table reads "Note" and adds "Failed step" and
+"Recorded by", and the execution history says the same for manual results (audit 2026-10-17). Notes and step texts are
+auto-growing textareas.
 
 ## Requirements and traceability (prototype feature 12)
 
@@ -216,7 +228,9 @@ splits its failures into known issues (linked to an open issue) and new failures
 checks project access (identity), reads the active automated and manual test cases (`catalog.Service.Selection`),
 when each last executed (execution query `ListLastExecuted`) and how many of the latest runs each was flaky in
 (`ListFlakyCounts`: last attempt passed after a failed or errored one, manual re-tests excluded). The dashboard page
-combines it with the run list (trend), requirement coverage and issue verification, which stay in their modules.
+combines it with the run list (trend), requirement coverage and issue verification, which stay in their modules. In the
+trend a run still running is hatched and counted in the caption (its figures are so far); the stale-days and
+flaky-window values are also plain text for printing, which hides form controls.
 
 ## Live runs (prototype feature 15)
 

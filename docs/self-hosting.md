@@ -31,6 +31,9 @@ Set in `envs/prod.env`:
 | `PROVENLY_WEBHOOKS_ALLOW_PRIVATE` | Leave empty in prod: webhooks and connectors may not reach private addresses | `true` only for an internal-only deployment |
 | `PROVENLY_GITHUB_API_URL` | GitHub Enterprise Server API, if not github.com | `https://github.example.com/api/v3` |
 | `PROVENLY_TRUSTED_PROXIES` | Proxies whose `X-Forwarded-For` names the client in the audit log (addresses or CIDR ranges, comma-separated). Empty by default: the log keeps the peer address, which behind the bundled web container or your TLS proxy is the proxy's. Set it to the proxies' network only; any client can write the header | `172.16.0.0/12` (the compose network) |
+| `PROVENLY_MAX_INGEST_BYTES` | Largest report accepted (bytes, decompressed for gzip). The web proxy's body limit follows it: set it once | Default `10485760` (10 MiB) |
+| `PROVENLY_LOG_LEVEL` | `debug`, `info`, `warn` or `error` | Default `info` |
+| `PROVENLY_AUTO_MIGRATE` | `true` makes the API apply pending migrations when it starts (the compose stack runs the `migrate` service instead; useful for a single-container platform such as Render) | Default `false` |
 | `PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS` | Days finished webhook deliveries are kept (default 90; `0` keeps them). The API purges older ones hourly, in batches, and logs how many. Audit events and run results are never purged | `30` |
 
 The API refuses to start in `prod` without `PROVENLY_JWT_SECRET` and `PROVENLY_SECRETS_KEY`.
@@ -93,7 +96,7 @@ is healthy while its last success is under 26 hours old (`docker compose ps`, or
 
 ## 6. Operate
 
-- **Health**: `GET /healthz` (process), `GET /readyz` (database). Logs are JSON on stdout with `trace_id`.
+- **Health**: `GET /healthz` (process), `GET /readyz` (database). Logs are JSON on stderr with `trace_id`.
 - **Audit**: administrators see every change in **Audit** (who, what, when).
 - **Sign-in throttle**: five failed sign-ins of a username lock it for 15 minutes (429), also under parallel attempts.
   It lives in the API's memory: restarting the API clears it, and it does not span several API replicas. Put rate
@@ -105,9 +108,13 @@ is healthy while its last success is under 26 hours old (`docker compose ps`, or
   in; project API keys belong to the project and keep working) and can reactivate them later. A forgotten password
   gets a single-use reset link from **Users** (24 hours). If the only administrator is locked out, run on the server
   `docker compose --env-file envs/prod.env exec api provenly reset-password <username>`: it prints a reset link token
-  (open `<web address>/reset-password?token=...`) and reactivates the account.
+  (open `<web address>/reset-password#token=...`: the fragment never reaches a server or a log) and reactivates the
+  account.
 - **Agents**: MCP clients connect to `/api/v1/mcp` with a user's session token (Account page).
 - **Security reports**: see `SECURITY.md`.
+- **Known limits**: archiving a project is read-only at the application, not the database: a report already being
+  processed when the archive happens still lands. Revoking its CI keys and removing its members stay possible
+  (they reduce access); anything else waits for an unarchive.
 
 ## 7. Try it on Render (free, temporary)
 

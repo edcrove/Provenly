@@ -81,6 +81,7 @@ function TrendLegend() {
  */
 function Trend({ runs }: { runs: TestRun[] }) {
   const ordered = [...runs].reverse()
+  const stillRunning = ordered.filter((r) => r.executionStatus === 'running').length
   if (ordered.length === 0) return <p className="text-muted-foreground text-sm">No runs yet.</p>
   return (
     <div className="grid gap-2">
@@ -113,6 +114,8 @@ function Trend({ runs }: { runs: TestRun[] }) {
                     : 'no pass rate'
                 const executed = `executed ${executedLabel(r.outcome.executed, r.expectedCount)}`
                 const fill = verdictFill[r.outcome.verdict]
+                // A run still running is hatched: its bar is provisional, whatever colour its verdict so far has.
+                const striped = fill.striped || r.executionStatus === 'running'
                 return (
                   <li key={r.id} className="flex h-full max-w-12 flex-1 items-end">
                     <Link
@@ -121,9 +124,10 @@ function Trend({ runs }: { runs: TestRun[] }) {
                       aria-label={`Run #${r.id}: ${runVerdict(r)}, ${rate}, ${executed}`}
                       data-testid={`trend-${r.id}`}
                       className={`min-h-1 w-full rounded-t ${fill.className}`}
+                      data-running={r.executionStatus === 'running' ? 'true' : undefined}
                       style={{
                         height: `${Math.max(r.outcome.passRate, 2)}%`,
-                        ...(fill.striped ? stripes : {}),
+                        ...(striped ? stripes : {}),
                       }}
                     />
                   </li>
@@ -147,9 +151,10 @@ function Trend({ runs }: { runs: TestRun[] }) {
         </div>
       </div>
       <TrendLegend />
-      <p className="text-muted-foreground text-xs">
-        Pass rate (% of executed) of the latest {ordered.length} runs, oldest first; hover a bar for how much
-        of the run executed.
+      <p className="text-muted-foreground text-xs" data-testid="trend-caption">
+        Pass rate (% of executed) of the latest {ordered.length} runs, oldest first
+        {stillRunning > 0 ? ` (${stillRunning} still running, hatched: its figures are so far)` : ''}; hover a
+        bar for how much of the run executed.
       </p>
     </div>
   )
@@ -340,6 +345,8 @@ function ProjectDashboard({ project }: { project: string }) {
                       </option>
                     ))}
                   </NativeSelect>
+                  {/* Printing hides form controls: the chosen value stays on paper. */}
+                  <span className="hidden print:inline">{staleDays} days</span>
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -377,6 +384,7 @@ function ProjectDashboard({ project }: { project: string }) {
                       </option>
                     ))}
                   </NativeSelect>
+                  <span className="hidden print:inline">{window} runs</span>
                 </CardDescription>
               </CardHeader>
               <CardContent>

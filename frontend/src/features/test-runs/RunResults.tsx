@@ -112,13 +112,15 @@ export function RunResults({
                   <TableHead>Test name</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Duration</TableHead>
-                  <TableHead>Error</TableHead>
+                  <TableHead>{manual ? 'Note' : 'Error'}</TableHead>
+                  {manual ? <TableHead>Failed step</TableHead> : null}
+                  {manual ? <TableHead>Recorded by</TableHead> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-muted-foreground">
+                    <TableCell colSpan={manual ? 7 : 5} className="text-muted-foreground">
                       {status || correlation || shard
                         ? 'No results match the filters.'
                         : manual
@@ -180,10 +182,16 @@ export function RunResults({
                           <span className="line-clamp-2">{r.errorMessage}</span>
                         </span>
                       </TableCell>
+                      {manual ? (
+                        <TableCell data-testid="result-failed-step">{r.failedStep ?? '—'}</TableCell>
+                      ) : null}
+                      {manual ? (
+                        <TableCell data-testid="result-recorded-by">{r.recordedBy || '—'}</TableCell>
+                      ) : null}
                     </TableRow>
                     {expanded.has(r.id) ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="bg-muted/40">
+                        <TableCell colSpan={manual ? 7 : 5} className="bg-muted/40">
                           <pre
                             data-testid="error-details"
                             className="max-h-96 overflow-auto font-mono text-xs whitespace-pre-wrap [overflow-wrap:anywhere]"

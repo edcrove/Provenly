@@ -191,6 +191,33 @@ describe('FE-INT-042 quality dashboard', () => {
     expect(screen.getByText('50%')).toBeInTheDocument()
   })
 
+  it('FE-INT-074 a run still running is hatched and counted in the caption; the printed captions keep the chosen values', async () => {
+    db.runs = [
+      testRun({ id: 31, createdAt: '2026-10-07T12:00:00Z', expectedCount: 10 }),
+      testRun({
+        id: 32,
+        createdAt: '2026-10-08T12:00:00Z',
+        expectedCount: 10,
+        executionStatus: 'running',
+        completedAt: null,
+      }),
+    ]
+    localStorage.setItem('provenly.project', 'TC')
+    renderRoute('/dashboard')
+    const running = await screen.findByTestId('trend-32')
+    expect(running).toHaveAttribute('data-running', 'true')
+    expect(running.style.backgroundImage).toContain('repeating-linear-gradient')
+    expect(running).toHaveAccessibleName(/^Run #32: failed so far \(running\)/)
+    expect(screen.getByTestId('trend-31')).not.toHaveAttribute('data-running')
+    expect(screen.getByTestId('trend-31').style.backgroundImage).toBe('')
+    expect(screen.getByTestId('trend-caption')).toHaveTextContent(
+      'latest 2 runs, oldest first (1 still running, hatched: its figures are so far)',
+    )
+    // Printing hides the selects: the chosen values are also plain text (print-only).
+    expect(await screen.findByText('14 days', { selector: 'span' })).toHaveClass('print:inline')
+    expect(screen.getByText('20 runs', { selector: 'span' })).toHaveClass('print:inline')
+  })
+
   it('FE-INT-042 the latest run card tells loading and a failed read from no runs', async () => {
     localStorage.setItem('provenly.project', 'TC')
     server.use(

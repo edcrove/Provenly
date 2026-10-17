@@ -196,7 +196,10 @@ class name `provenly-manual`, so a re-test is the next attempt of the same test 
 The execution panel shows each test case's title and steps; the failed step is chosen from its steps (no failed step
 when it has none). A note or failed step typed but not yet recorded is kept in the browser's `sessionStorage`
 (`provenly.manual.<run>.<testCase>`, this tab only) until the result is recorded, so a reload does not lose it; an
-unreadable draft is ignored.
+unreadable draft is ignored. What was recorded stays visible: each row shows the last result's note, failed step and
+recorder (the run's results, read page by page), the run's Results table reads "Note" and adds "Failed step" and
+"Recorded by", and the execution history says the same for manual results (audit 2026-10-17). Notes and step texts are
+auto-growing textareas.
 
 ## Requirements and traceability (prototype feature 12)
 
@@ -225,7 +228,9 @@ splits its failures into known issues (linked to an open issue) and new failures
 checks project access (identity), reads the active automated and manual test cases (`catalog.Service.Selection`),
 when each last executed (execution query `ListLastExecuted`) and how many of the latest runs each was flaky in
 (`ListFlakyCounts`: last attempt passed after a failed or errored one, manual re-tests excluded). The dashboard page
-combines it with the run list (trend), requirement coverage and issue verification, which stay in their modules.
+combines it with the run list (trend), requirement coverage and issue verification, which stay in their modules. In the
+trend a run still running is hatched and counted in the caption (its figures are so far); the stale-days and
+flaky-window values are also plain text for printing, which hides form controls.
 
 ## Live runs (prototype feature 15)
 

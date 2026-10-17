@@ -139,4 +139,29 @@ describe('FE-INT-069 archived projects (Ed, 2026-10-11)', () => {
     expect(await screen.findByRole('heading', { name: 'Test run #70' })).toBeInTheDocument()
     expect(await screen.findAllByTestId('archived-notice')).toHaveLength(1)
   })
+
+  it('FE-INT-076 archiving and unarchiving are announced where focus lands, and the search box follows the address', async () => {
+    addOld()
+    const { user: u, router } = renderRoute('/projects?q=old')
+    expect(await screen.findByLabelText('Search projects')).toHaveValue('old')
+    await router.navigate('/projects')
+    await waitFor(() => expect(screen.getByLabelText('Search projects')).toHaveValue(''))
+    const row = await screen.findByTestId('project-OLD')
+    await u.click(within(row).getByRole('button', { name: 'Archive…' }))
+    await u.click(
+      within(within(row).getByRole('group', { name: 'Archive OLD' })).getByRole('button', {
+        name: 'Archive',
+      }),
+    )
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('OLD archived: it left the lists and is read-only.')
+    expect(status).toHaveFocus()
+    await u.click(screen.getByRole('checkbox', { name: 'Show archived projects instead' }))
+    await u.click(within(await screen.findByTestId('project-OLD')).getByRole('button', { name: 'Unarchive' }))
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'OLD unarchived: it is listed and writable again.',
+      ),
+    )
+  })
 })

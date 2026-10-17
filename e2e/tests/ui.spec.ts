@@ -243,7 +243,9 @@ test.describe('Frontend UI journeys', { tag: '@local' }, () => {
     await expect(page.getByRole('alert')).toContainText('must not be empty')
     await expect(add.getByLabel('Step expected result')).toHaveValue('kept')
 
-    // The list pages fit a phone too (the screenshot spec checks this as well, but it does not run in CI).
+    // The list pages fit a phone too (the screenshot spec checks this as well, but it does not run in CI). A run with a
+    // CI link is on the list: its "opens in a new tab" cue, positioned absolutely, once widened the page.
+    await provenly.ingest(uniqueRunId(), 1, junit(byName(`phone ${tc.key}`)), { ciUrl: 'https://ci.example.com/jobs/1' })
     for (const url of ['/test-cases', '/test-runs']) {
       await page.goto(url)
       await expect(page.getByRole('table').first()).toBeVisible()

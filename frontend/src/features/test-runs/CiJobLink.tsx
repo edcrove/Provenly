@@ -7,11 +7,14 @@ export function CiJobLink({ href, label = 'Open the CI job' }: { href: string; l
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 underline"
+      // relative: the sr-only cue is absolutely positioned; inside a table that scrolls in its card it would otherwise
+      // sit relative to the page and widen it at phone width.
+      className="relative inline-flex items-center gap-1 underline"
       data-testid="ci-job-link"
     >
       {label}
       <ExternalLink aria-hidden className="size-3.5" />
+      <span className="sr-only"> (opens in a new tab)</span>
     </a>
   )
 }

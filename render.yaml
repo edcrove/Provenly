@@ -1,19 +1,11 @@
 # Render Blueprint: a temporary, free Provenly to try (docs/self-hosting.md, "Try it on Render").
 # Render → New → Blueprint → this repository (branch prototype/full-product). It creates:
-#   provenly-ed-db   free PostgreSQL 16 (Render deletes free databases 30 days after creation)
 #   provenly-ed-api  the API (Docker, free: sleeps after 15 min idle, ~1 min to wake); migrates on start
 #   provenly-ed      the UI (static site), proxying /api/* to the API so the session cookie stays same-origin
+# The database is not Render's (its free one is deleted 30 days after creation): a free Neon project in AWS us-east-1
+# (Virginia, next to the API). Render asks for PROVENLY_DATABASE_URL, Neon's direct (not pooled) connection string.
 # Render asks for PROVENLY_ADMIN_PASSWORD (at least 10 characters, not the demo password): sign in as admin with it.
 # If Render had to rename the API (the name was taken), point the /api/* rewrite below at its real URL.
-
-databases:
-  - name: provenly-ed-db
-    plan: free
-    region: virginia
-    postgresMajorVersion: "16"
-    databaseName: provenly
-    user: provenly
-    ipAllowList: []
 
 services:
   - type: web
@@ -29,10 +21,9 @@ services:
         value: prod
       - key: PROVENLY_AUTO_MIGRATE
         value: "true"
+      # Neon's direct connection string (postgresql://…neon.tech/…?sslmode=require), set in Render, never committed.
       - key: PROVENLY_DATABASE_URL
-        fromDatabase:
-          name: provenly-ed-db
-          property: connectionString
+        sync: false
       - key: PROVENLY_JWT_SECRET
         generateValue: true
       # 256 random bits in base64: exactly the 32-byte AES key the API expects.

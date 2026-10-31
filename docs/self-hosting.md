@@ -120,19 +120,24 @@ is healthy while its last success is under 26 hours old (`docker compose ps`, or
 
 `render.yaml` is a Render Blueprint for a throwaway instance to try Provenly, not for real data:
 
-1. Sign in to [Render](https://render.com) with GitHub, then **New → Blueprint**, pick this repository and the branch
-   to try (`prototype/full-product` until the prototype is merged).
-2. Render asks for `PROVENLY_ADMIN_PASSWORD` (at least 10 characters; the demo password is refused): sign in as
-   `admin` with it.
+1. Create the database in [Neon](https://neon.com) (free plan, no card): a project with PostgreSQL 16 in **AWS US East
+   (N. Virginia)**, next to the API. Copy its **direct** connection string (not the pooled one; it ends in
+   `?sslmode=require`). Render's free database is not used: Render deletes it 30 days after creation.
+2. Sign in to [Render](https://render.com) with GitHub, then **New → Blueprint**, pick this repository and the branch
+   to try (`prototype/full-product` until the prototype is merged). Render asks for `PROVENLY_DATABASE_URL` (Neon's
+   connection string) and `PROVENLY_ADMIN_PASSWORD` (at least 10 characters; the demo password is refused): sign in as
+   `admin` with it. On a Blueprint created before the move to Neon, set `PROVENLY_DATABASE_URL` on the API's
+   **Environment** page and redeploy; the old Render database can be deleted.
 3. The UI is `https://provenly-ed.onrender.com`. If Render renamed a service because the name was taken, use its real
    URL and point the `/api/*` rewrite of `provenly-ed` at the API's.
 
 What to expect on the free plan: the API sleeps after 15 minutes without requests and takes up to a minute to wake (the
 first page load waits); every sign-in takes about 2 seconds (password hashing on a shared CPU), which is not an outage.
-The database starts empty (`scripts/seed/demo-data.sh https://<your UI>` loads the demo data) and **Render deletes free
-databases 30 days after creation** (the database page shows the date): it is not for real data. To keep what you put in
-it, add your IP to the database's access control in Render (the Blueprint allows none) and run `pg_dump "<External
-Database URL>" > provenly.sql` before that date. The API runs with `PROVENLY_ENV=prod` (Render generates the JWT secret
+The database starts empty (`scripts/seed/demo-data.sh https://<your UI>` loads the demo data). Neon's free plan keeps
+it with no expiry (1 GB, 100 compute-hours a month) and suspends it after 5 minutes without queries; the API's webhook
+worker queries every 2 seconds while the API is awake, so Neon sleeps when Render puts the API to sleep and the hours
+are spent only while someone uses the demo. It is still a demo, not for real data: take a copy with
+`pg_dump "<connection string>" > provenly.sql` when what is in it matters. The API runs with `PROVENLY_ENV=prod` (Render generates the JWT secret
 and the secrets key) and applies migrations on start (`PROVENLY_AUTO_MIGRATE`). The UI is a static site that proxies
 `/api/*` to the API, so the session cookie stays same-origin. The Blueprint trusts Render's internal proxies
 (`PROVENLY_TRUSTED_PROXIES`), so the audit log records the client's address. Backups (section 4) do not apply.

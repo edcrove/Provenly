@@ -1,6 +1,6 @@
 module github.com/edcrove/provenly/backend
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/exaring/otelpgx v0.12.0

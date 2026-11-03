@@ -149,8 +149,8 @@ hand-written MSW mock is the testing cost that grows with contributors (mock-par
 
 ## 6. Decisions for Ed before 1.0
 
-1. **DEC-88** (Proposed in Notion): D8–D13 are Accepted and implemented; remove "paused" from
-   `docs/prototype/README.md` line 16 and `.claude/agents/product-owner.md` line 37. Recommendation: accept.
+1. ~~**DEC-88**~~ — decided (2026-11-03): D8–D13 are Accepted and implemented; "paused" removed from
+   `docs/prototype/README.md` and `.claude/agents/product-owner.md`.
 2. **Landing the prototype on `main`**: validate the 22 *Validation* cards in batches, then one merge PR (the branch
    forks from `main`'s head, the merge is clean), then tag `v0.1.0`. Recommendation: yes, before any new feature.
 3. **Ratify the beyond-MVP features as the 1.0 baseline** with their `Pn-m` decisions: taxonomy, suites, manual runs,

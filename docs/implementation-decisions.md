@@ -215,3 +215,22 @@ Project rename (OpenTestHub → Provenly): DEC-39.
     links the pipeline name to the job. The developer's first click from a red run (deployed persona audit, 2026-10-08).
     BE-INT-079, FE-INT-070, FE-E2E-040, BE-E2E-021/022, probe.
     **Status: Decided by Ed (2026-10-12).**
+
+25. **Catalog audit (2026-11-03): behavior changes approved for the backlog.** Claude audited the feature catalog
+    (Google Doc "Provenly: catálogo de funcionalidades, comportamientos y supuestos": 41 features, 196 behaviors and 62
+    assumptions checked against `prototype/full-product` c3cdcad) and Ed approved every verdict and change (DEC-96).
+    None of these is implemented yet; each becomes a card and records its own decision when built:
+    - **Run lifecycle (CHG-003, DA-1, DA-5):** abandoned runs time out, `finalize` closes any running CI run, and
+      archiving a project cancels its manual runs and interrupts its CI runs, listed in the confirmation.
+    - **Archived projects (CHG-004, DA-2):** revoking a CI key and removing a member stay allowed; decision 23's
+      exception is ratified.
+    - **Run page (CHG-011, DA-3):** results first; in a running manual run the execution panel first; metadata last.
+    - **Live start replay (CHG-017, DA-16):** another `ciUrl` or branch answers 200 with warnings, like a report.
+    - **Users list (CHG-009, DA-18):** deactivated accounts hidden by default, plus search.
+    - Also approved: suite rename and query edit in the UI (CHG-005), webhook delete and secret rotation (CHG-006),
+      dashboard by branch or pipeline with chips that open the filtered list (CHG-007), persisted run outcome
+      (CHG-008), manual execution as one card per case on small screens (CHG-010), a manual run started from the
+      list filters (CHG-012), previous/next attempt links (CHG-013), a known-issue badge on result rows (CHG-014), a
+      cross-project view (CHG-015). DA-9 waits for the Jira connector.
+    **Status: Decided by Ed (2026-11-03).** Order and priorities: DEC-96 and the catalog's backlog. DEC-88 accepted
+    the same day (D8–D13 stay Accepted).

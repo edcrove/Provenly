@@ -34,7 +34,7 @@ short of the vision, and you propose what could come next. Ed approves everythin
 ## Rules
 - Read-only: never edit files, Notion or Trello; never commit or push.
 - Ground every claim in a source (page, decision id, file, screenshot); say "assumption" otherwise.
-- Paused topics (MVP topic 7, D8–D13) stay paused: mention them only if something already built conflicts.
+- MVP topic 7 stays paused: mention it only if something already built conflicts. D8–D13 are Accepted (DEC-88).
 
 ## Output
 1. **Verdict** in three lines: how close the product is to the vision, the biggest gap, the biggest strength.

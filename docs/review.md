@@ -127,6 +127,10 @@ Layers: **U** = unit, **I** = integration (backend: testcontainers; frontend: Te
 | | Diagnostics missing/malformed/unknown/deprecated in the response | U `TestIngestCorrelatesEveryResult`; E BE-E2E-004 |
 | | One invalid case does not block the batch | I BE-INT-018; E BE-E2E-004 |
 | | Idempotent (+ warnings, decision 6) and final status (decision 7) | I BE-INT-008/019; E BE-E2E-005 |
+| Run lifecycle (CHG-003) | Finalize ends a running live or sharded run; batch unchanged, manual 409 | U `TestFinalizeRun`, `TestFinalizeLiveAndManualRuns`; I BE-INT-080, BE-INT-063; C `TestShardedRuns`; E BE-E2E-034; probe |
+| | Live and sharded runs without activity time out after `PROVENLY_ABANDONED_RUN_HOURS` (6); manual never | U `TestCloseAbandonedRuns`, `TestCloseAbandonedRunsIsBounded`; I BE-INT-081 |
+| | Archiving cancels manual runs and interrupts CI runs; the confirmation names them | U `TestCloseProjectRuns`, `TestArchiveClosesProjectRuns`; I BE-INT-082; F FE-INT-078; E FE-E2E-041 |
+| | The run says why it ended (`closedReason`), set once, only on an ended run | I BE-INT-081; F FE-INT-077; U `closedReasonText` |
 
 ### Reporting
 

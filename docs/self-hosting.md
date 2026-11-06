@@ -35,6 +35,7 @@ Set in `envs/prod.env`:
 | `PROVENLY_LOG_LEVEL` | `debug`, `info`, `warn` or `error` | Default `info` |
 | `PROVENLY_AUTO_MIGRATE` | `true` makes the API apply pending migrations when it starts (the compose stack runs the `migrate` service instead; useful for a single-container platform such as Render) | Default `false` |
 | `PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS` | Days finished webhook deliveries are kept (default 90; `0` keeps them). The API purges older ones hourly, in batches, and logs how many. Audit events and run results are never purged | `30` |
+| `PROVENLY_ABANDONED_RUN_HOURS` | Hours a live or sharded run may go without an event or shard before Provenly ends it as interrupted (its report never came: the CI job died or was not finalized). The API checks every minute | Default `6`; `0` never ends them |
 
 The API refuses to start in `prod` without `PROVENLY_JWT_SECRET` and `PROVENLY_SECRETS_KEY`.
 

@@ -662,6 +662,20 @@ def main():
     st, lv = call(base, "GET", f"/test-runs/{lid}/live")
     check("reconciled after the report", lv.get("reconciliation") if isinstance(lv, dict) else st, "mismatch")
     check("events after the report", call(base, "POST", evs, {"events": [{**ev, "eventId": "late"}]})[0], 409)
+    # Run lifecycle (CHG-003): CI finalizes a live run whose report will not arrive; a batch run is already ended; a
+    # manual run is a person's to finish.
+    fin = f"/ingestion/finalize?project={key}&provider=github&runId={live_id}x&runAttempt=1"
+    check("start a live run to finalize", call(base, "POST", "/test-runs/live", {**start, "runId": live_id + "x"})[0], 201)
+    st, body = call(base, "POST", fin)
+    check("finalize a live run", [st, (body or {}).get("testRun", {}).get("executionStatus"), (body or {}).get("testRun", {}).get("closedReason")],
+          [201, "interrupted", "finalized"])
+    check("finalize the live run again", call(base, "POST", fin)[0], 200)
+    st, body = call(base, "POST", "/ingestion/finalize?" + q.format(1))
+    check("finalize a batch run", [st, (body or {}).get("created"), (body or {}).get("testRun", {}).get("closedReason")], [200, False, None])
+    st, man = call(base, "POST", "/test-runs/manual", {"project": key, "name": "probe finalize"})
+    man = man if isinstance(man, dict) else {}
+    check("finalize a manual run", call(base, "POST", f"/ingestion/finalize?project={key}&provider={man.get('provider')}&runId={man.get('providerRunId')}&runAttempt=1")[0], 409)
+    check("cancel that manual run", call(base, "POST", f"/test-runs/{man.get('id', 0)}/finish", {"status": "cancelled"})[0], 200)
 
     # Integrations (prototype feature 18): webhook and GitHub inputs are validated (never a 500), the secret is
     # shown once and never listed, ids are scoped to the project, and the GitHub token never comes back.

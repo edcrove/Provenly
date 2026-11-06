@@ -39,6 +39,9 @@ type Config struct {
 	TrustedProxies []netip.Prefix
 	// WebhookDeliveryRetentionDays is how many days finished webhook deliveries are kept (default 90; 0 keeps them).
 	WebhookDeliveryRetentionDays int
+	// AbandonedRunHours is how long a live or sharded run may go without an event or shard before Provenly ends it
+	// as interrupted (default 6; 0 never ends them).
+	AbandonedRunHours int
 	// OTLPExport is true when an OpenTelemetry OTLP endpoint is configured (OTEL_EXPORTER_OTLP_ENDPOINT or
 	// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT): spans are then exported.
 	OTLPExport bool
@@ -57,6 +60,13 @@ const secretsKeyBytes = 32
 const (
 	defaultDeliveryRetentionDays = 90
 	maxDeliveryRetentionDays     = 36500
+)
+
+// Live and sharded runs without activity end after 6 hours by default (a GitHub Actions job's limit, Ed 2026-11-06);
+// the maximum is a year.
+const (
+	defaultAbandonedRunHours = 6
+	maxAbandonedRunHours     = 8760
 )
 
 // minSecretBytes is the shortest accepted PROVENLY_JWT_SECRET (HS256 key size).
@@ -134,6 +144,15 @@ func Load(getenv func(string) string) (Config, error) {
 				maxDeliveryRetentionDays, raw)
 		}
 		cfg.WebhookDeliveryRetentionDays = days
+	}
+	cfg.AbandonedRunHours = defaultAbandonedRunHours
+	if raw := getenv("PROVENLY_ABANDONED_RUN_HOURS"); raw != "" {
+		hours, err := strconv.Atoi(raw)
+		if err != nil || hours < 0 || hours > maxAbandonedRunHours {
+			return Config{}, fmt.Errorf("PROVENLY_ABANDONED_RUN_HOURS must be a whole number of hours from 0 (never) to %d, got %q",
+				maxAbandonedRunHours, raw)
+		}
+		cfg.AbandonedRunHours = hours
 	}
 	cfg.GitHubAPIURL = strings.TrimRight(valueOr(getenv("PROVENLY_GITHUB_API_URL"), "https://api.github.com"), "/")
 	cfg.AdminUsername, cfg.AdminPassword = getenv("PROVENLY_ADMIN_USERNAME"), getenv("PROVENLY_ADMIN_PASSWORD")

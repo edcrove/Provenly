@@ -89,6 +89,35 @@ export function isInterruptedRun(status: ExecutionStatus): boolean {
   return status === 'interrupted' || status === 'cancelled'
 }
 
+export type ClosedReason = NonNullable<components['schemas']['TestRun']['closedReason']>
+
+/**
+ * Why a run that did not end on its own ended (CHG-003): CI finalized it, it timed out without events or shards, or
+ * its project was archived. The title replaces "the CI execution was interrupted"; untested cases may not have run.
+ */
+export function closedReasonText(reason: ClosedReason, manual: boolean): { title: string; detail: string } {
+  switch (reason) {
+    case 'finalized':
+      return {
+        title: 'CI ended this run before its report arrived',
+        detail: 'CI finalized it: its final report or some of its shards never arrived.',
+      }
+    case 'timeout':
+      return {
+        title: 'Provenly ended this run: nothing arrived for hours',
+        detail:
+          'No event or shard arrived for the abandoned-run timeout (6 hours unless the server sets another).',
+      }
+    case 'archived':
+      return {
+        title: 'This run ended when its project was archived',
+        detail: manual
+          ? 'It was still being executed by hand: it was cancelled.'
+          : 'It was still running in CI: it was interrupted.',
+      }
+  }
+}
+
 const verdictVariants: Record<Verdict, BadgeVariant> = {
   passed: 'success',
   failed: 'destructive',

@@ -94,7 +94,7 @@ func toRun(r runRow) execution.TestRun {
 	return execution.TestRun{
 		ID: r.ID, ProjectID: r.ProjectID, ProjectKey: r.ProjectKey, ExternalRunID: r.ExternalRunID, Provider: r.Provider, ProviderRunID: r.ProviderRunID,
 		RunAttempt: r.RunAttempt, Pipeline: r.Pipeline, Branch: r.Branch, Commit: r.CommitSha, CIURL: r.CiUrl,
-		Status: execution.RunStatus(r.Status), ExpectedCount: r.ExpectedCount + r.AmendmentCount, ResultCount: r.ResultCount,
+		Status: execution.RunStatus(r.Status), ClosedReason: execution.CloseReason(r.ClosedReason.String), ExpectedCount: r.ExpectedCount + r.AmendmentCount, ResultCount: r.ResultCount,
 		AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt.Time, StartedAt: timePtr(r.StartedAt), CompletedAt: timePtr(r.CompletedAt),
 		ReportSHA256: r.ReportSha256, SuiteKey: r.SuiteKey.String, SuiteName: r.SuiteName.String,
 		Mode: execution.RunMode(r.Mode), StartedBy: r.StartedBy.String, ShardTotal: r.ShardTotal.Int32, ShardsReceived: r.ShardsReceived,
@@ -538,6 +538,30 @@ func (s *Store) ListRunShards(ctx context.Context, runID int64) ([]execution.Run
 // FinishShardedRun implements execution.Repository.
 func (s *Store) FinishShardedRun(ctx context.Context, runID int64, status execution.RunStatus) error {
 	return s.q.FinishShardedRun(ctx, executiondb.FinishShardedRunParams{ID: runID, Status: string(status)})
+}
+
+// CloseRunningRun implements execution.Repository.
+func (s *Store) CloseRunningRun(ctx context.Context, runID int64, status execution.RunStatus, reason execution.CloseReason) error {
+	return s.q.CloseRunningRun(ctx, executiondb.CloseRunningRunParams{ID: runID, Status: string(status),
+		ClosedReason: pgtype.Text{String: string(reason), Valid: true}})
+}
+
+// ListAbandonedRuns implements execution.Repository.
+func (s *Store) ListAbandonedRuns(ctx context.Context, cutoff time.Time, limit int32) ([]int64, error) {
+	return s.q.ListAbandonedRuns(ctx, executiondb.ListAbandonedRunsParams{Cutoff: pgtype.Timestamptz{Time: cutoff, Valid: true}, MaxRuns: limit})
+}
+
+// ListRunningRunsOfProject implements execution.Repository.
+func (s *Store) ListRunningRunsOfProject(ctx context.Context, projectID int64) ([]execution.RunningRun, error) {
+	rows, err := s.q.ListRunningRunsOfProject(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]execution.RunningRun, len(rows))
+	for i, r := range rows {
+		out[i] = execution.RunningRun{ID: r.ID, Mode: execution.RunMode(r.Mode)}
+	}
+	return out, nil
 }
 
 // GetRunProject implements execution.Repository.

@@ -160,9 +160,10 @@ func worstStatus(shards []RunShard) RunStatus {
 	return out
 }
 
-// FinalizeShardedRun ends a running sharded run whose shards will not all arrive: it becomes interrupted, and its
-// missing shards stay missing. A run that already ended is returned as it is (false).
-func (s *Service) FinalizeShardedRun(ctx context.Context, projectID int64, provider, providerRunID string, attempt int32) (TestRun, bool, error) {
+// FinalizeRun ends a running CI run (live or sharded) whose report or missing shards will not arrive: it becomes
+// interrupted, closed as finalized, and its missing shards stay missing. A run that already ended is returned as it
+// is (false); a manual run is a 409, a person completes or cancels it.
+func (s *Service) FinalizeRun(ctx context.Context, projectID int64, provider, providerRunID string, attempt int32) (TestRun, bool, error) {
 	externalID := ExternalRunID(provider, providerRunID, attempt)
 	var (
 		out      TestRun
@@ -180,12 +181,12 @@ func (s *Service) FinalizeShardedRun(ctx context.Context, projectID int64, provi
 		if err != nil {
 			return err
 		}
-		if mode != ModeSharded {
-			return apperr.Conflict("run %s is not sharded: it ends with its report", externalID)
+		if mode == ModeManual {
+			return apperr.Conflict("run %s is a manual run: complete or cancel it from its page", externalID)
 		}
 		if current == RunRunning {
 			finished = true
-			if err := r.FinishShardedRun(ctx, id, RunInterrupted); err != nil {
+			if err := r.CloseRunningRun(ctx, id, RunInterrupted, ClosedFinalized); err != nil {
 				return err
 			}
 		}
@@ -195,6 +196,64 @@ func (s *Service) FinalizeShardedRun(ctx context.Context, projectID int64, provi
 		return attachOutcomes(ctx, r, []TestRun{out}, func(_ int, o RunOutcome) { out.Outcome = o })
 	})
 	return out, finished, err
+}
+
+// MaxAbandonedPerSweep bounds the runs one sweep closes (and locks); the next sweep takes the rest.
+const MaxAbandonedPerSweep = 100
+
+// CloseAbandonedRuns ends the live and sharded runs that received no event or shard for idle: they become
+// interrupted, closed by timeout (P15-6, CHG-003). It returns the runs it closed, with their outcomes, so their
+// webhooks fire. Manual runs never time out.
+func (s *Service) CloseAbandonedRuns(ctx context.Context, idle time.Duration) ([]TestRun, error) {
+	return s.closeRuns(ctx, func(r Repository) ([]RunningRun, error) {
+		ids, err := r.ListAbandonedRuns(ctx, s.now().Add(-idle), MaxAbandonedPerSweep)
+		out := make([]RunningRun, len(ids))
+		for i, id := range ids {
+			out[i] = RunningRun{ID: id}
+		}
+		return out, err
+	}, func(RunMode) (RunStatus, CloseReason) { return RunInterrupted, ClosedTimeout })
+}
+
+// CloseProjectRuns ends the running runs of a project being archived: manual runs are cancelled, CI runs (live,
+// sharded) interrupted, all closed as archived (DA-1, CHG-003). It returns the runs it closed, with their outcomes.
+func (s *Service) CloseProjectRuns(ctx context.Context, projectID int64) ([]TestRun, error) {
+	return s.closeRuns(ctx, func(r Repository) ([]RunningRun, error) {
+		return r.ListRunningRunsOfProject(ctx, projectID)
+	}, func(mode RunMode) (RunStatus, CloseReason) {
+		if mode == ModeManual {
+			return RunCancelled, ClosedArchived
+		}
+		return RunInterrupted, ClosedArchived
+	})
+}
+
+// closeRuns closes, in one transaction, the running runs list locks, with the status and reason closeAs gives each.
+func (s *Service) closeRuns(ctx context.Context, list func(Repository) ([]RunningRun, error),
+	closeAs func(RunMode) (RunStatus, CloseReason)) ([]TestRun, error) {
+	var out []TestRun
+	err := s.repo.InTx(ctx, func(r Repository) error {
+		runs, err := list(r)
+		if err != nil {
+			return err
+		}
+		for _, run := range runs {
+			status, reason := closeAs(run.Mode)
+			if err := r.CloseRunningRun(ctx, run.ID, status, reason); err != nil {
+				return err
+			}
+			closed, err := r.GetTestRun(ctx, run.ID)
+			if err != nil {
+				return err
+			}
+			out = append(out, closed)
+		}
+		return attachOutcomes(ctx, r, out, func(i int, o RunOutcome) { out[i].Outcome = o })
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // attachOutcomes computes the outcome of each run (one batch read) and hands

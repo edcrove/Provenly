@@ -2,7 +2,13 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 
 import type { Project } from '@/api/client'
-import { useArchiveProject, useCreateProject, useProjects, useUpdateProject } from '@/api/queries'
+import {
+  useArchiveProject,
+  useCreateProject,
+  useProjects,
+  useTestRuns,
+  useUpdateProject,
+} from '@/api/queries'
 import { InlineConfirm } from '@/components/InlineConfirm'
 import { PageTitle } from '@/components/PageTitle'
 import { Pagination } from '@/components/Pagination'
@@ -112,7 +118,12 @@ function ArchiveControl({ project, onDone }: { project: Project; onDone: (messag
     <>
       <InlineConfirm
         label={`Archive ${project.key}`}
-        question={`Archive ${project.key}? It leaves every list and becomes read-only; nothing is deleted.`}
+        question={
+          <>
+            Archive {project.key}? It leaves every list and becomes read-only; nothing is deleted.{' '}
+            <RunningRunsNote projectKey={project.key} />
+          </>
+        }
         confirmLabel="Archive"
         pending={archive.isPending}
         onConfirm={(close) => archive.mutate(true, { onSettled: close, onSuccess: done(true) })}
@@ -124,6 +135,38 @@ function ArchiveControl({ project, onDone }: { project: Project; onDone: (messag
       />
       {error}
     </>
+  )
+}
+
+/** How many running runs the archive confirmation names before "and N more". */
+const SHOWN_RUNNING_RUNS = 5
+
+/**
+ * The runs archiving ends (DA-1, CHG-003): manual runs are cancelled, CI runs interrupted. Read when the confirmation
+ * opens, so a list of projects asks nothing until an archive is confirmed.
+ */
+function RunningRunsNote({ projectKey }: { projectKey: string }) {
+  const runs = useTestRuns(1, projectKey, undefined, { executionStatus: 'running' })
+  if (runs.isPending) return <span data-testid="archive-running-runs">Checking its running runs…</span>
+  if (runs.isError) return <span data-testid="archive-running-runs">Its running runs, if any, end too.</span>
+  const items = runs.data.items
+  if (items.length === 0) return null
+  const more = runs.data.totalItems - Math.min(items.length, SHOWN_RUNNING_RUNS)
+  return (
+    <span data-testid="archive-running-runs">
+      It also ends{' '}
+      {runs.data.totalItems === 1 ? 'its running run' : `its ${runs.data.totalItems} running runs`}:{' '}
+      {items.slice(0, SHOWN_RUNNING_RUNS).map((r, i) => (
+        <span key={r.id}>
+          {i > 0 ? ', ' : null}
+          <Link to={`/test-runs/${r.id}`} className="underline">
+            #{r.id}
+          </Link>{' '}
+          ({r.mode === 'manual' ? 'manual: cancelled' : 'CI: interrupted'})
+        </span>
+      ))}
+      {more > 0 ? ` and ${more} more` : null}.
+    </span>
   )
 }
 

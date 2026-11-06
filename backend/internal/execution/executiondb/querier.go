@@ -11,6 +11,9 @@ import (
 )
 
 type Querier interface {
+	// Provenly ends a running run that would otherwise stay running (CI finalized it, it timed out, or its project was
+	// archived): its execution status, completion time and why.
+	CloseRunningRun(ctx context.Context, arg CloseRunningRunParams) error
 	// The final report completes a running live run: its execution status, completion time and report digest.
 	CompleteLiveRun(ctx context.Context, arg CompleteLiveRunParams) error
 	CountAmendments(ctx context.Context, testRunID int64) (int64, error)
@@ -40,6 +43,9 @@ type Querier interface {
 	InsertTestRun(ctx context.Context, arg InsertTestRunParams) (int64, error)
 	// Whether a test case is in a run's universe: its snapshot or its amendments.
 	IsInUniverse(ctx context.Context, arg IsInUniverseParams) (pgtype.Bool, error)
+	// Live and sharded runs with no event, shard or start since the cutoff, locked until the sweep closes them; a run
+	// another sweep holds is left to it. Manual runs never time out.
+	ListAbandonedRuns(ctx context.Context, arg ListAbandonedRunsParams) ([]int64, error)
 	ListAmendments(ctx context.Context, arg ListAmendmentsParams) ([]TestRunAmendment, error)
 	ListDiagnosticResults(ctx context.Context, testRunID int64) ([]ListDiagnosticResultsRow, error)
 	// In a project's latest runs, how many runs each test case was flaky in: every result of one of its tests' last
@@ -71,6 +77,8 @@ type Querier interface {
 	// the rest; attempts of one test keep their ingestion order next to each other.
 	ListRunResults(ctx context.Context, arg ListRunResultsParams) ([]ListRunResultsRow, error)
 	ListRunShards(ctx context.Context, testRunID int64) ([]ListRunShardsRow, error)
+	// The running runs of a project, locked until archiving closes them.
+	ListRunningRunsOfProject(ctx context.Context, projectID int64) ([]ListRunningRunsOfProjectRow, error)
 	// Snapshot TC-IDs (kind 'expected'), amendments ('amended') and valid results ('result', with their status, the
 	// test they belong to and their attempt) of the given runs, in one read.
 	ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]ListSummaryInputsRow, error)

@@ -45,7 +45,7 @@ type Catalog interface {
 // Recorder is what ingestion needs from the execution module.
 type Recorder interface {
 	RecordRun(ctx context.Context, run execution.NewRun, expected []int64, results []execution.NewResult, parseErrors []execution.ParseError) (execution.TestRun, bool, error)
-	FinalizeShardedRun(ctx context.Context, projectID int64, provider, providerRunID string, attempt int32) (execution.TestRun, bool, error)
+	FinalizeRun(ctx context.Context, projectID int64, provider, providerRunID string, attempt int32) (execution.TestRun, bool, error)
 	Diagnostics(ctx context.Context, runID int64) ([]execution.Diagnostic, error)
 	ParseErrors(ctx context.Context, runID int64) ([]execution.ParseError, error)
 }
@@ -357,9 +357,9 @@ func (s *Service) ingestJUnit(ctx context.Context, meta RunMeta, body io.Reader)
 	return out, nil
 }
 
-// FinalizeShards ends a sharded run whose shards will not all arrive (a CI job failed before reporting): it becomes
-// interrupted with its missing shards named. Finalizing a run that already ended changes nothing.
-func (s *Service) FinalizeShards(ctx context.Context, meta RunMeta) (Outcome, error) {
+// FinalizeRun ends a live or sharded run whose report or shards will not all arrive (a CI job failed before
+// reporting): it becomes interrupted, its missing shards named. Finalizing a run that already ended changes nothing.
+func (s *Service) FinalizeRun(ctx context.Context, meta RunMeta) (Outcome, error) {
 	if err := ValidateMeta(meta); err != nil {
 		return Outcome{}, err
 	}
@@ -367,7 +367,7 @@ func (s *Service) FinalizeShards(ctx context.Context, meta RunMeta) (Outcome, er
 	if err != nil {
 		return Outcome{}, err
 	}
-	run, finished, err := s.recorder.FinalizeShardedRun(ctx, project.ID, meta.Provider, meta.ProviderRunID, meta.RunAttempt)
+	run, finished, err := s.recorder.FinalizeRun(ctx, project.ID, meta.Provider, meta.ProviderRunID, meta.RunAttempt)
 	if err != nil {
 		return Outcome{}, err
 	}

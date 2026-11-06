@@ -27,6 +27,20 @@ const (
 	RunRunning RunStatus = "running"
 )
 
+// CloseReason says why Provenly ended a run that would otherwise stay running (CHG-003); empty when its report, its
+// shards or a person ended it.
+type CloseReason string
+
+// Close reasons.
+const (
+	// ClosedFinalized: CI finalized a live or sharded run whose report or shards will not arrive.
+	ClosedFinalized CloseReason = "finalized"
+	// ClosedTimeout: a live or sharded run received no event or shard for the abandoned-run timeout.
+	ClosedTimeout CloseReason = "timeout"
+	// ClosedArchived: its project was archived while it was running.
+	ClosedArchived CloseReason = "archived"
+)
+
 // RunMode tells how a run's results arrive.
 type RunMode string
 
@@ -107,9 +121,11 @@ type TestRun struct {
 	Branch        string
 	Commit        string
 	// CIURL links the run to its CI job (empty when CI did not send one).
-	CIURL   string
-	Status  RunStatus
-	Outcome RunOutcome
+	CIURL  string
+	Status RunStatus
+	// ClosedReason says why Provenly ended the run (empty: its report, shards or a person did).
+	ClosedReason CloseReason
+	Outcome      RunOutcome
 	// ExpectedCount is the size of the universe: the snapshot plus its amendments.
 	ExpectedCount int32
 	ResultCount   int32
@@ -132,6 +148,12 @@ type TestRun struct {
 	ShardsReceived []int32
 	// Shards are the received shards in detail (only when the run was just recorded).
 	Shards []RunShard
+}
+
+// RunningRun is a run still running: what closing it needs.
+type RunningRun struct {
+	ID   int64
+	Mode RunMode
 }
 
 // RunShard is one received report of a sharded run.
@@ -390,6 +412,12 @@ type Repository interface {
 	ListRunShards(ctx context.Context, runID int64) ([]RunShard, error)
 	// FinishShardedRun ends a running sharded run with its execution status.
 	FinishShardedRun(ctx context.Context, runID int64, status RunStatus) error
+	// CloseRunningRun ends a running run Provenly closes, with its status and why.
+	CloseRunningRun(ctx context.Context, runID int64, status RunStatus, reason CloseReason) error
+	// ListAbandonedRuns locks up to limit live and sharded runs without activity since cutoff and returns their ids.
+	ListAbandonedRuns(ctx context.Context, cutoff time.Time, limit int32) ([]int64, error)
+	// ListRunningRunsOfProject locks the running runs of a project and returns their ids and modes.
+	ListRunningRunsOfProject(ctx context.Context, projectID int64) ([]RunningRun, error)
 	GetTestRunIDByExternalID(ctx context.Context, projectID int64, externalRunID string) (int64, error)
 	InsertExpectedCases(ctx context.Context, runID int64, testCaseIDs []int64) error
 	InsertTestResults(ctx context.Context, runID int64, results []NewResult) error

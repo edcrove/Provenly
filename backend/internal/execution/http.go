@@ -58,11 +58,13 @@ type TestRunDTO struct {
 	Branch        string `json:"branch"`
 	Commit        string `json:"commit"`
 	// CIURL links to the CI job ("" when CI did not send one).
-	CIURL         string     `json:"ciUrl"`
-	Status        RunStatus  `json:"executionStatus"`
-	Outcome       outcomeDTO `json:"outcome"`
-	ExpectedCount int32      `json:"expectedCount"`
-	ResultCount   int32      `json:"resultCount"`
+	CIURL  string    `json:"ciUrl"`
+	Status RunStatus `json:"executionStatus"`
+	// ClosedReason says why Provenly ended the run (null: its report, shards or a person did).
+	ClosedReason  *CloseReason `json:"closedReason"`
+	Outcome       outcomeDTO   `json:"outcome"`
+	ExpectedCount int32        `json:"expectedCount"`
+	ResultCount   int32        `json:"resultCount"`
 	// AmendmentCount > 0 means the run's universe was edited after its creation (DEC-42).
 	AmendmentCount int32      `json:"amendmentCount"`
 	CreatedAt      time.Time  `json:"createdAt"`
@@ -110,6 +112,9 @@ func RunDTO(r TestRun) TestRunDTO {
 		Outcome:       outcomeDTO(r.Outcome),
 		ExpectedCount: r.ExpectedCount, ResultCount: r.ResultCount, AmendmentCount: r.AmendmentCount, CreatedAt: r.CreatedAt,
 		StartedAt: r.StartedAt, CompletedAt: r.CompletedAt,
+	}
+	if r.ClosedReason != "" {
+		dto.ClosedReason = &r.ClosedReason
 	}
 	if r.SuiteKey != "" {
 		dto.Suite = &SuiteRefDTO{Key: r.SuiteKey, Name: r.SuiteName}

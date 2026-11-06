@@ -84,7 +84,7 @@ func TestValidateShard(t *testing.T) {
 	}
 }
 
-func TestFinalizeShards(t *testing.T) {
+func TestFinalizeRun(t *testing.T) {
 	ctx := context.Background()
 	interrupted := execution.TestRun{ID: 1, Status: execution.RunInterrupted, Mode: execution.ModeSharded, ShardTotal: 3,
 		ShardsReceived: []int32{1}, ResultCount: 5}
@@ -93,7 +93,7 @@ func TestFinalizeShards(t *testing.T) {
 	svc := NewService(&fakeCatalog{}, rec, fakeAccess{})
 	svc.SetNotifier(n)
 
-	out, err := svc.FinalizeShards(ctx, meta)
+	out, err := svc.FinalizeRun(ctx, meta)
 	require.NoError(t, err)
 	assert.True(t, out.Created)
 	assert.Equal(t, 5, out.Persisted)
@@ -104,18 +104,18 @@ func TestFinalizeShards(t *testing.T) {
 	// An ended run is returned unchanged; a completed one has nothing missing.
 	rec.finished = false
 	rec.finalRun.Status, rec.finalRun.ShardsReceived = execution.RunCompleted, []int32{1, 2, 3}
-	out, err = svc.FinalizeShards(ctx, meta)
+	out, err = svc.FinalizeRun(ctx, meta)
 	require.NoError(t, err)
 	assert.False(t, out.Created)
 	assert.Empty(t, out.Warnings)
 	assert.Len(t, n.runs, 1)
 
-	_, err = svc.FinalizeShards(ctx, RunMeta{})
+	_, err = svc.FinalizeRun(ctx, RunMeta{})
 	assert.Error(t, err)
-	_, err = NewService(&fakeCatalog{projectErr: errBoom}, rec, fakeAccess{}).FinalizeShards(ctx, meta)
+	_, err = NewService(&fakeCatalog{projectErr: errBoom}, rec, fakeAccess{}).FinalizeRun(ctx, meta)
 	assert.ErrorIs(t, err, errBoom)
 	rec.finalErr = errBoom
-	_, err = svc.FinalizeShards(ctx, meta)
+	_, err = svc.FinalizeRun(ctx, meta)
 	assert.ErrorIs(t, err, errBoom)
 }
 

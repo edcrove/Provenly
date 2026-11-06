@@ -165,6 +165,16 @@ One Go process, eight modules with their own internal interfaces. No queues, RPC
   A shard answers for its own report (results count, diagnostics, parse errors, replay digest and status). A different
   N, a shard for an unsharded run (or the opposite) and a shard after the end are 409. `POST /api/v1/ingestion/finalize`
   ends a waiting run as interrupted with its missing shards named; `GET …/results?shard=` filters by shard.
+- Run lifecycle (CHG-003, Ed 2026-11-06): a run never stays running for ever. `POST /api/v1/ingestion/finalize` ends a
+  running live or sharded run (interrupted; a batch run is returned unchanged, a manual run is 409). The `serve`
+  worker (`app.Runs`, every minute) ends live and sharded runs with no event, shard or start for
+  `PROVENLY_ABANDONED_RUN_HOURS` (default 6, `0` never) as interrupted, at most 100 per pass, locked with
+  `FOR UPDATE SKIP LOCKED` so two servers never close a run twice; manual runs never time out. Archiving a project
+  (`catalog.SetProjectArchived`, through the `RunCloser` port the app wires to execution) ends its running runs: manual
+  runs cancelled, CI runs interrupted, after the archive so no new run starts in between; archiving again closes any
+  left. `test_runs.closed_reason` (`finalized`, `timeout`, `archived`; null when the report, the shards or a person
+  ended the run) is set once, only on an ended run (CHECKs and the identity trigger), and every run Provenly closes
+  fires `run.completed`.
 
 ## Taxonomy (prototype feature 9)
 

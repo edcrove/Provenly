@@ -40,6 +40,7 @@ sql:
       - migrations/00027_live_event_attempts.sql
       - migrations/00032_sharded_runs.sql
       - migrations/00039_run_ci_url.sql
+      - migrations/00040_run_closed_reason.sql
     queries: queries/execution.sql
     gen:
       go:

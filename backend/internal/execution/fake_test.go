@@ -539,6 +539,56 @@ func (f *fakeRepo) FinishShardedRun(_ context.Context, runID int64, status RunSt
 	return nil
 }
 
+func (f *fakeRepo) CloseRunningRun(_ context.Context, runID int64, status RunStatus, reason CloseReason) error {
+	if err := f.fail("CloseRunningRun"); err != nil {
+		return err
+	}
+	r := f.runs[runID]
+	if r.Status == RunRunning {
+		now := time.Now()
+		r.Status, r.ClosedReason, r.CompletedAt = status, reason, &now
+		f.runs[runID] = r
+	}
+	return nil
+}
+
+// ListAbandonedRuns finds live and sharded runs created before cutoff with no event received since (the fake keeps
+// no shard reception time).
+func (f *fakeRepo) ListAbandonedRuns(_ context.Context, cutoff time.Time, limit int32) ([]int64, error) {
+	if err := f.fail("ListAbandonedRuns"); err != nil {
+		return nil, err
+	}
+	var out []int64
+	for id, r := range f.runs {
+		if r.Status != RunRunning || (r.Mode != ModeLive && r.Mode != ModeSharded) || !r.CreatedAt.Before(cutoff) {
+			continue
+		}
+		if slices.ContainsFunc(f.events[id], func(e Event) bool { return !e.ReceivedAt.Before(cutoff) }) {
+			continue
+		}
+		out = append(out, id)
+	}
+	slices.Sort(out)
+	if len(out) > int(limit) {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) ListRunningRunsOfProject(_ context.Context, projectID int64) ([]RunningRun, error) {
+	if err := f.fail("ListRunningRunsOfProject"); err != nil {
+		return nil, err
+	}
+	var out []RunningRun
+	for id, r := range f.runs {
+		if r.ProjectID == projectID && r.Status == RunRunning {
+			out = append(out, RunningRun{ID: id, Mode: r.Mode})
+		}
+	}
+	slices.SortFunc(out, func(a, b RunningRun) int { return int(a.ID - b.ID) })
+	return out, nil
+}
+
 func (f *fakeRepo) GetRunProject(_ context.Context, id int64) (int64, error) {
 	if err := f.fail("GetRunProject"); err != nil {
 		return 0, err

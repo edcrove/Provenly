@@ -11,6 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const closeRunningRun = `-- name: CloseRunningRun :exec
+UPDATE test_runs SET status = $1, completed_at = now(), closed_reason = $2
+WHERE id = $3 AND status = 'running'
+`
+
+type CloseRunningRunParams struct {
+	Status       string
+	ClosedReason pgtype.Text
+	ID           int64
+}
+
+// Provenly ends a running run that would otherwise stay running (CI finalized it, it timed out, or its project was
+// archived): its execution status, completion time and why.
+func (q *Queries) CloseRunningRun(ctx context.Context, arg CloseRunningRunParams) error {
+	_, err := q.db.Exec(ctx, closeRunningRun, arg.Status, arg.ClosedReason, arg.ID)
+	return err
+}
+
 const completeLiveRun = `-- name: CompleteLiveRun :exec
 UPDATE test_runs SET status = $1, completed_at = now(), report_sha256 = $2
 WHERE id = $3 AND mode = 'live' AND status = 'running'
@@ -186,7 +204,7 @@ func (q *Queries) GetRunProject(ctx context.Context, id int64) (int64, error) {
 }
 
 const getTestRun = `-- name: GetTestRun :one
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total, r.ci_url, (SELECT p.key FROM projects p WHERE p.id = r.project_id)::text AS project_key,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total, r.ci_url, r.closed_reason, (SELECT p.key FROM projects p WHERE p.id = r.project_id)::text AS project_key,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count,
@@ -227,6 +245,7 @@ func (q *Queries) GetTestRun(ctx context.Context, id int64) (GetTestRunRow, erro
 		&i.TestRun.StartedBy,
 		&i.TestRun.ShardTotal,
 		&i.TestRun.CiUrl,
+		&i.TestRun.ClosedReason,
 		&i.ProjectKey,
 		&i.ExpectedCount,
 		&i.ResultCount,
@@ -528,6 +547,43 @@ func (q *Queries) IsInUniverse(ctx context.Context, arg IsInUniverseParams) (pgt
 	var column_1 pgtype.Bool
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const listAbandonedRuns = `-- name: ListAbandonedRuns :many
+SELECT r.id FROM test_runs r
+WHERE r.status = 'running' AND r.mode IN ('live', 'sharded')
+  AND r.created_at < $1
+  AND NOT EXISTS (SELECT 1 FROM test_run_events e WHERE e.test_run_id = r.id AND e.received_at >= $1)
+  AND NOT EXISTS (SELECT 1 FROM test_run_shards s WHERE s.test_run_id = r.id AND s.received_at >= $1)
+ORDER BY r.id LIMIT $2
+FOR UPDATE OF r SKIP LOCKED
+`
+
+type ListAbandonedRunsParams struct {
+	Cutoff  pgtype.Timestamptz
+	MaxRuns int32
+}
+
+// Live and sharded runs with no event, shard or start since the cutoff, locked until the sweep closes them; a run
+// another sweep holds is left to it. Manual runs never time out.
+func (q *Queries) ListAbandonedRuns(ctx context.Context, arg ListAbandonedRunsParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listAbandonedRuns, arg.Cutoff, arg.MaxRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAmendments = `-- name: ListAmendments :many
@@ -1149,6 +1205,36 @@ func (q *Queries) ListRunShards(ctx context.Context, testRunID int64) ([]ListRun
 	return items, nil
 }
 
+const listRunningRunsOfProject = `-- name: ListRunningRunsOfProject :many
+SELECT id, mode FROM test_runs WHERE project_id = $1 AND status = 'running' ORDER BY id FOR UPDATE
+`
+
+type ListRunningRunsOfProjectRow struct {
+	ID   int64
+	Mode string
+}
+
+// The running runs of a project, locked until archiving closes them.
+func (q *Queries) ListRunningRunsOfProject(ctx context.Context, projectID int64) ([]ListRunningRunsOfProjectRow, error) {
+	rows, err := q.db.Query(ctx, listRunningRunsOfProject, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRunningRunsOfProjectRow
+	for rows.Next() {
+		var i ListRunningRunsOfProjectRow
+		if err := rows.Scan(&i.ID, &i.Mode); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSummaryInputs = `-- name: ListSummaryInputs :many
 SELECT test_run_id, test_case_id, 'expected' AS kind, NULL::text AS status, ''::text AS execution, 0 AS attempt
 FROM test_run_expected_cases
@@ -1202,7 +1288,7 @@ func (q *Queries) ListSummaryInputs(ctx context.Context, testRunIds []int64) ([]
 }
 
 const listTestRuns = `-- name: ListTestRuns :many
-SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total, r.ci_url, (SELECT p.key FROM projects p WHERE p.id = r.project_id)::text AS project_key,
+SELECT r.id, r.external_run_id, r.provider, r.provider_run_id, r.run_attempt, r.pipeline, r.branch, r.commit_sha, r.status, r.created_at, r.started_at, r.completed_at, r.report_sha256, r.project_id, r.suite_key, r.suite_name, r.mode, r.started_by, r.shard_total, r.ci_url, r.closed_reason, (SELECT p.key FROM projects p WHERE p.id = r.project_id)::text AS project_key,
     (SELECT count(*) FROM test_run_expected_cases e WHERE e.test_run_id = r.id)::int AS expected_count,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = r.id)::int AS result_count,
     (SELECT count(*) FROM test_run_amendments a WHERE a.test_run_id = r.id)::int AS amendment_count,
@@ -1285,6 +1371,7 @@ func (q *Queries) ListTestRuns(ctx context.Context, arg ListTestRunsParams) ([]L
 			&i.TestRun.StartedBy,
 			&i.TestRun.ShardTotal,
 			&i.TestRun.CiUrl,
+			&i.TestRun.ClosedReason,
 			&i.ProjectKey,
 			&i.ExpectedCount,
 			&i.ResultCount,

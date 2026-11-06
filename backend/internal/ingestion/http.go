@@ -23,7 +23,7 @@ import (
 // API is the set of ingestion use cases exposed over REST.
 type API interface {
 	IngestJUnit(ctx context.Context, meta RunMeta, body io.Reader) (Outcome, error)
-	FinalizeShards(ctx context.Context, meta RunMeta) (Outcome, error)
+	FinalizeRun(ctx context.Context, meta RunMeta) (Outcome, error)
 }
 
 type diagnosticDTO struct {
@@ -106,7 +106,8 @@ func runMeta(q url.Values, charset string) (RunMeta, error) {
 	return meta, nil
 }
 
-// finalize ends a sharded run whose missing shards will not arrive (POST, no body, the run's identity in the query).
+// finalize ends a live or sharded run whose report or missing shards will not arrive (POST, no body, the run's
+// identity in the query).
 func (h *Handler) finalize(w http.ResponseWriter, r *http.Request) {
 	meta, err := runMeta(r.URL.Query(), "")
 	if err == nil && meta.ShardTotal != 0 {
@@ -116,7 +117,7 @@ func (h *Handler) finalize(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, err)
 		return
 	}
-	out, err := h.api.FinalizeShards(r.Context(), meta)
+	out, err := h.api.FinalizeRun(r.Context(), meta)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

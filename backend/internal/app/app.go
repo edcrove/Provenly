@@ -41,6 +41,8 @@ type Services struct {
 	Insights  *insights.Service
 	// Integrations are the webhooks and connectors; its Run sends the queued webhook deliveries.
 	Integrations *integrations.Service
+	// Runs ends the runs Provenly closes on its own; its Run closes the abandoned ones.
+	Runs Runs
 	// Audit records every authenticated change made through the API.
 	Audit    *audit.Service
 	Identity *identity.Service
@@ -98,12 +100,15 @@ func NewServicesConfig(pool *pgxpool.Pool, now func() time.Time, cfg Config) Ser
 	// Completed runs (reports, live runs, manual runs) are exported to the project's webhooks.
 	ing.SetNotifier(integ)
 	manual.SetNotifier(integ)
+	// Archiving a project ends its running runs; abandoned live and sharded runs end on their own (CHG-003).
+	runs := Runs{runs: exe, notify: integ}
+	cat.SetRunCloser(runs)
 	return Services{
 		Catalog: cat, Execution: exe, Ingestion: ing, Live: ingestion.NewLive(ing, exe, now), Manual: manual,
 		Insights:     insights.NewService(cat, exe, guard, now),
-		Integrations: integ,
-		Audit:        auditLog(auditpg.NewStore(pool), ids, cat),
-		Identity:     ids, Guard: guard, Now: now, Ready: pool.Ping, TrustedProxies: cfg.TrustedProxies,
+		Integrations: integ, Runs: runs,
+		Audit:    auditLog(auditpg.NewStore(pool), ids, cat),
+		Identity: ids, Guard: guard, Now: now, Ready: pool.Ping, TrustedProxies: cfg.TrustedProxies,
 	}
 }
 

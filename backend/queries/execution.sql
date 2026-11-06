@@ -296,6 +296,27 @@ SELECT s.shard, s.report_sha256, s.status,
     (SELECT count(*) FROM test_results t WHERE t.test_run_id = s.test_run_id AND t.shard = s.shard)::int AS result_count
 FROM test_run_shards s WHERE s.test_run_id = @test_run_id ORDER BY s.shard;
 
+-- name: CloseRunningRun :exec
+-- Provenly ends a running run that would otherwise stay running (CI finalized it, it timed out, or its project was
+-- archived): its execution status, completion time and why.
+UPDATE test_runs SET status = @status, completed_at = now(), closed_reason = @closed_reason
+WHERE id = @id AND status = 'running';
+
+-- name: ListAbandonedRuns :many
+-- Live and sharded runs with no event, shard or start since the cutoff, locked until the sweep closes them; a run
+-- another sweep holds is left to it. Manual runs never time out.
+SELECT r.id FROM test_runs r
+WHERE r.status = 'running' AND r.mode IN ('live', 'sharded')
+  AND r.created_at < @cutoff
+  AND NOT EXISTS (SELECT 1 FROM test_run_events e WHERE e.test_run_id = r.id AND e.received_at >= @cutoff)
+  AND NOT EXISTS (SELECT 1 FROM test_run_shards s WHERE s.test_run_id = r.id AND s.received_at >= @cutoff)
+ORDER BY r.id LIMIT @max_runs
+FOR UPDATE OF r SKIP LOCKED;
+
+-- name: ListRunningRunsOfProject :many
+-- The running runs of a project, locked until archiving closes them.
+SELECT id, mode FROM test_runs WHERE project_id = @project_id AND status = 'running' ORDER BY id FOR UPDATE;
+
 -- name: FinishShardedRun :exec
 -- Every shard arrived (or CI finalized the run): its execution status and completion time.
 UPDATE test_runs SET status = @status, completed_at = now() WHERE id = @id AND mode = 'sharded' AND status = 'running';

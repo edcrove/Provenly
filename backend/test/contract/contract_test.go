@@ -1421,13 +1421,21 @@ func TestShardedRuns(t *testing.T) {
 		return admin.POST("/api/v1/ingestion/finalize").WithQuery("provider", "github").WithQuery("runId", runID).WithQuery("runAttempt", 1)
 	}
 	done := finalize("s2").Expect().Status(http.StatusCreated).JSON().Object()
-	done.Value("testRun").Object().HasValue("executionStatus", "interrupted").Value("shards").Object().Value("missing").Array().IsEqual([]int{1, 3})
+	done.Value("testRun").Object().HasValue("executionStatus", "interrupted").HasValue("closedReason", "finalized").
+		Value("shards").Object().Value("missing").Array().IsEqual([]int{1, 3})
 	done.Value("warnings").Array().IsEqual([]string{"shards 1, 3 of 3 never arrived: the run ended as interrupted"})
 	finalize("s2").Expect().Status(http.StatusOK).JSON().Object().HasValue("created", false)
 	ingest(admin, "s2", 1, report).WithQuery("shard", "1/3").Expect().Status(http.StatusConflict)
 	finalize("nope").Expect().Status(http.StatusNotFound)
-	ingest(admin, "plain", 1, report).Expect().Status(http.StatusCreated)
-	finalize("plain").Expect().Status(http.StatusConflict)
+	// A batch run is already ended; a live run is finalized too; a manual run is a person's to finish (CHG-003).
+	ingest(admin, "plain", 1, report).Expect().Status(http.StatusCreated).JSON().Object().Value("testRun").Object().HasValue("closedReason", nil)
+	finalize("plain").Expect().Status(http.StatusOK).JSON().Object().HasValue("created", false)
+	admin.POST("/api/v1/test-runs/live").WithJSON(map[string]any{"provider": "github", "runId": "lv", "runAttempt": 1}).Expect().Status(http.StatusCreated)
+	finalize("lv").Expect().Status(http.StatusCreated).JSON().Object().Value("testRun").Object().
+		HasValue("mode", "live").HasValue("executionStatus", "interrupted").HasValue("closedReason", "finalized")
+	manual := admin.POST("/api/v1/test-runs/manual").WithJSON(map[string]any{"project": "TC", "name": "sign-off"}).Expect().Status(http.StatusCreated).JSON().Object()
+	admin.POST("/api/v1/ingestion/finalize").WithQuery("provider", manual.Value("provider").String().Raw()).
+		WithQuery("runId", manual.Value("providerRunId").String().Raw()).WithQuery("runAttempt", 1).Expect().Status(http.StatusConflict)
 	finalize("s2").WithQuery("shard", "1/2").Expect().Status(http.StatusBadRequest)
 	admin.POST("/api/v1/ingestion/finalize").Expect().Status(http.StatusBadRequest)
 	anon(t, s, 1<<20).POST("/api/v1/ingestion/finalize").Expect().Status(http.StatusUnauthorized)

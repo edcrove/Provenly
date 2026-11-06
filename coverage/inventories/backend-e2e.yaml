@@ -67,3 +67,5 @@ targets:
     description: clean environment (Ed, 2026-10-09) - the sweep the suite runs before and after every run deactivates the journeys' accounts (they cannot sign in), revokes their pending invitations, the administrator's tokens over E2E projects only and the API keys of E2E projects, pauses those projects' webhooks, removes their GitHub connection and archives them (out of the list, read by key, a change is 409; TC stays active), leaves the administrator and an ordinary token untouched, and a second sweep finds nothing
   - id: BE-E2E-033
     description: maintainer audit view through the public API (P20-5, Ed 2026-10-09) - a maintainer invited into one project signs in and reads the audit log - only that project's events, without ip and userAgent - and asking for another project is a 403
+  - id: BE-E2E-034
+    description: run lifecycle through the public API (CHG-003) - CI finalizes a live run whose report will not arrive (201, interrupted, closedReason finalized; again 200) and finalizing a manual run is a 409

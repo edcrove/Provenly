@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PageTitle } from '@/components/PageTitle'
 import { formatDateTime, formatPercent } from '@/lib/format'
 import { can } from '@/lib/roles'
-import { isInterruptedRun, positiveInt } from '@/lib/status'
+import { closedReasonText, isInterruptedRun, positiveInt } from '@/lib/status'
 import { RunKnownIssues } from '@/features/issues/RunKnownIssues'
 import { LivePanel } from '@/features/live/LivePanel'
 import { ManualExecution } from '@/features/manual/ManualExecution'
@@ -138,12 +138,25 @@ export function TestRunDetailPage() {
             {r.shards ? <ShardsProgress shards={r.shards} running={running} /> : null}
             {isInterruptedRun(r.executionStatus) ? (
               <Alert variant="destructive" data-testid="interrupted-run">
-                <AlertTitle>
-                  The CI execution {r.executionStatus === 'interrupted' ? 'was interrupted' : 'was cancelled'}
-                </AlertTitle>
-                <AlertDescription>
-                  The report may be incomplete: untested test cases may simply not have run.
-                </AlertDescription>
+                {r.closedReason ? (
+                  <>
+                    <AlertTitle>{closedReasonText(r.closedReason, r.mode === 'manual').title}</AlertTitle>
+                    <AlertDescription>
+                      {closedReasonText(r.closedReason, r.mode === 'manual').detail} Untested test cases may
+                      simply not have run.
+                    </AlertDescription>
+                  </>
+                ) : (
+                  <>
+                    <AlertTitle>
+                      The CI execution{' '}
+                      {r.executionStatus === 'interrupted' ? 'was interrupted' : 'was cancelled'}
+                    </AlertTitle>
+                    <AlertDescription>
+                      The report may be incomplete: untested test cases may simply not have run.
+                    </AlertDescription>
+                  </>
+                )}
               </Alert>
             ) : null}
             {failing ? results : null}

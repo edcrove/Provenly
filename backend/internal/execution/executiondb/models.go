@@ -73,6 +73,7 @@ type TestRun struct {
 	StartedBy     pgtype.Text
 	ShardTotal    pgtype.Int4
 	CiUrl         string
+	ClosedReason  pgtype.Text
 }
 
 type TestRunAmendment struct {

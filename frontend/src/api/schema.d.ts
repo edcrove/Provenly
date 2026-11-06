@@ -1427,11 +1427,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * End a sharded run whose missing shards will not arrive
-         * @description For a CI job that runs after every shard (e.g. `if: always()`): a sharded run still waiting for shards ends as
-         *     `interrupted`, its missing shards named in `warnings`, and `run.completed` webhooks fire. A run that already
-         *     ended is returned unchanged (200); a run that is not sharded is 409. No request body; the run is identified
-         *     like in the ingestion.
+         * End a live or sharded run whose report or missing shards will not arrive
+         * @description For a CI job that runs last (e.g. `if: always()`): a live run still waiting for its final report, or a sharded
+         *     run still waiting for shards, ends as `interrupted` with `closedReason: finalized`, its missing shards named in
+         *     `warnings`, and `run.completed` webhooks fire. A run that already ended is returned unchanged (200); a manual
+         *     run is 409 (a person completes or cancels it). No request body; the run is identified like in the ingestion.
+         *     Runs CI never finalizes end on their own after `PROVENLY_ABANDONED_RUN_HOURS` without activity.
          */
         post: operations["finalizeShardedRun"];
         delete?: never;
@@ -1983,6 +1984,15 @@ export interface components {
             /** @description The CI job's URL sent with the report or the live start; "" when CI sent none. */
             ciUrl: string;
             executionStatus: components["schemas"]["RunExecutionStatus"];
+            /**
+             * @description Why Provenly ended the run, null when its report, its shards or a person did: `finalized` (CI called
+             *     `POST /api/v1/ingestion/finalize` for a live or sharded run whose report or shards will not arrive),
+             *     `timeout` (a live or sharded run received no event or shard for `PROVENLY_ABANDONED_RUN_HOURS`, 6 by
+             *     default) or `archived` (its project was archived while it was running: manual runs are cancelled, CI runs
+             *     interrupted).
+             * @enum {string|null}
+             */
+            closedReason: "finalized" | "timeout" | "archived" | null;
             outcome: components["schemas"]["RunOutcome"];
             /**
              * Format: int32

@@ -80,3 +80,5 @@ E2E database, 1440×900 viewport (31–34: 375×812, phone), full page. Regenera
 | 73 | On a phone the header is one row (logo, project, Menu) and the pages sit behind Menu | `73-phone-menu.png` |
 | 74 | Archived projects (administrators): listed on request with when they were archived, and Unarchive | `74-projects-archived.png` |
 | 75 | An archived project's settings: the notice that it is read-only and out of the lists, and no editing actions | `75-archived-project-notice.png` |
+| 76 | Archiving a project that still has running runs: the confirmation names them (newest first) and says how each ends (CHG-003) | `76-archive-running-runs.png` |
+| 77 | A manual run ended by its project's archiving: the run says why it ended and that it was cancelled (CHG-003) | `77-test-run-closed-by-archive.png` |

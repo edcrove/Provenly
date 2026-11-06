@@ -35,7 +35,7 @@ func (s *stubAPI) IngestJUnit(_ context.Context, m RunMeta, body io.Reader) (Out
 	return s.out, s.err
 }
 
-func (s *stubAPI) FinalizeShards(_ context.Context, m RunMeta) (Outcome, error) {
+func (s *stubAPI) FinalizeRun(_ context.Context, m RunMeta) (Outcome, error) {
 	s.gotMeta = m
 	return s.out, s.err
 }

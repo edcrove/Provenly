@@ -618,3 +618,46 @@ func TestOptimisticLocking(t *testing.T) {
 	_, err = svc.Update(ctx, tc.ID, UpdateInput{Title: ptr("c")}, etag.Match{})
 	assert.ErrorIs(t, err, errBoom)
 }
+
+type fakeRunCloser struct {
+	closed []int64
+	err    error
+}
+
+func (f *fakeRunCloser) CloseProjectRuns(_ context.Context, projectID int64) error {
+	f.closed = append(f.closed, projectID)
+	return f.err
+}
+
+// Archiving a project ends its running runs (DA-1, CHG-003); archiving again closes any left; unarchiving closes
+// nothing; a failed close fails the archive, which can be repeated.
+func TestArchiveClosesProjectRuns(t *testing.T) {
+	svc, _, ctx := setup(t)
+	chk, err := svc.CreateProject(ctx, CreateProjectInput{Key: "CHK", Name: "Checkout"})
+	require.NoError(t, err)
+
+	// Without a closer (unit wiring) archiving still works.
+	_, err = svc.SetProjectArchived(ctx, "CHK", true)
+	require.NoError(t, err)
+	_, err = svc.SetProjectArchived(ctx, "CHK", false)
+	require.NoError(t, err)
+
+	runs := &fakeRunCloser{}
+	svc.SetRunCloser(runs)
+	_, err = svc.SetProjectArchived(ctx, "CHK", true)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{chk.ID}, runs.closed)
+	_, err = svc.SetProjectArchived(ctx, "CHK", true)
+	require.NoError(t, err)
+	assert.Equal(t, []int64{chk.ID, chk.ID}, runs.closed, "archiving again closes any run left")
+	_, err = svc.SetProjectArchived(ctx, "CHK", false)
+	require.NoError(t, err)
+	assert.Len(t, runs.closed, 2, "unarchiving closes nothing")
+
+	runs.err = errBoom
+	_, err = svc.SetProjectArchived(ctx, "CHK", true)
+	assert.ErrorIs(t, err, errBoom)
+	p, err := svc.ProjectByKey(ctx, "CHK")
+	require.NoError(t, err)
+	assert.NotNil(t, p.ArchivedAt, "the project is archived; archiving again retries the close")
+}

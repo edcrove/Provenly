@@ -32,7 +32,18 @@ type Service struct {
 	repo Repository
 	// results reads latest results for requirement coverage (nil: nothing has run).
 	results ResultReader
+	// runs closes the running runs of a project being archived (nil: none to close).
+	runs RunCloser
 }
+
+// RunCloser closes the running runs of a project (the execution module, injected to keep the catalog independent
+// of it): archiving a project ends its runs (DA-1, CHG-003).
+type RunCloser interface {
+	CloseProjectRuns(ctx context.Context, projectID int64) error
+}
+
+// SetRunCloser gives the service what closes a project's running runs when it is archived.
+func (s *Service) SetRunCloser(c RunCloser) { s.runs = c }
 
 // NewService builds a Service.
 func NewService(repo Repository) *Service { return &Service{repo: repo} }
@@ -295,7 +306,8 @@ func (s *Service) ListProjects(ctx context.Context, f ProjectFilter, page pagina
 }
 
 // SetProjectArchived archives a project (it leaves the lists and becomes read-only) or brings it back. The default
-// project, where reports without ?project= go, is never archived. Archiving twice changes nothing.
+// project, where reports without ?project= go, is never archived. Archiving ends the project's running runs;
+// archiving twice changes nothing else.
 func (s *Service) SetProjectArchived(ctx context.Context, key string, archived bool) (Project, error) {
 	p, err := s.ProjectByKey(ctx, key)
 	if err != nil {
@@ -304,15 +316,24 @@ func (s *Service) SetProjectArchived(ctx context.Context, key string, archived b
 	if archived && p.Key == DefaultProjectKey {
 		return Project{}, apperr.Conflict("the default project %s cannot be archived: reports without ?project= go to it", DefaultProjectKey)
 	}
-	if (p.ArchivedAt != nil) == archived {
-		return p, nil
+	if (p.ArchivedAt != nil) != archived {
+		p, err = s.repo.SetProjectArchived(ctx, key, archived)
+		if errors.Is(err, ErrNotFound) {
+			// Archived or unarchived concurrently: answer the state it is in now.
+			p, err = s.ProjectByKey(ctx, key)
+		}
+		if err != nil {
+			return Project{}, err
+		}
 	}
-	p, err = s.repo.SetProjectArchived(ctx, key, archived)
-	if errors.Is(err, ErrNotFound) {
-		// Archived or unarchived concurrently: answer the state it is in now.
-		return s.ProjectByKey(ctx, key)
+	// Its running runs end once no new one can start; archiving again closes any left (a report already past the
+	// guard, or a failed close).
+	if p.ArchivedAt != nil && s.runs != nil {
+		if err := s.runs.CloseProjectRuns(ctx, p.ID); err != nil {
+			return Project{}, err
+		}
 	}
-	return p, err
+	return p, nil
 }
 
 // ActiveProjectIDs narrows a list that spans projects (ids nil: every project) to the active ones: archived projects

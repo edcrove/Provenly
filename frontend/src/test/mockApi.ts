@@ -1934,6 +1934,14 @@ export const handlers = [
           p.archivedAt = action === 'archive' ? now() : null
           p.updatedAt = now()
         }
+        // Archiving ends the project's running runs (CHG-003): manual runs cancelled, CI runs interrupted.
+        if (p.archivedAt)
+          for (const r of db.runs)
+            if (r.projectId === p.id && r.executionStatus === 'running') {
+              r.executionStatus = r.mode === 'manual' ? 'cancelled' : 'interrupted'
+              r.closedReason = 'archived'
+              r.completedAt = now()
+            }
         return respond({ ...p, myRole: 'admin' })
       }),
     ),

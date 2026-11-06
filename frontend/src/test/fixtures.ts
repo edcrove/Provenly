@@ -113,6 +113,7 @@ export function testRun(overrides: Partial<TestRun> = {}): TestRun {
     commit: '0123456789abcdef',
     ciUrl: '',
     executionStatus: 'completed',
+    closedReason: null,
     outcome: {
       verdict: 'failed',
       executed: 1,

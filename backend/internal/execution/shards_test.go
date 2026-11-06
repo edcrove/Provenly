@@ -83,19 +83,20 @@ func TestWorstStatus(t *testing.T) {
 	assert.Equal(t, RunCancelled, worstStatus(sh(RunInterrupted, RunCancelled, RunCompleted)))
 }
 
-func TestFinalizeShardedRun(t *testing.T) {
+func TestFinalizeRun(t *testing.T) {
 	svc, repo, ctx := setup()
 	created, _, err := svc.RecordRun(ctx, shard(2, 3, "a"), nil, nil, nil)
 	require.NoError(t, err)
 
-	got, finished, err := svc.FinalizeShardedRun(ctx, 0, "github", "42", 1)
+	got, finished, err := svc.FinalizeRun(ctx, 0, "github", "42", 1)
 	require.NoError(t, err)
 	assert.True(t, finished)
 	assert.Equal(t, created.ID, got.ID)
 	assert.Equal(t, RunInterrupted, got.Status)
+	assert.Equal(t, ClosedFinalized, got.ClosedReason)
 	assert.Equal(t, []int32{1, 3}, got.MissingShards())
 
-	got, finished, err = svc.FinalizeShardedRun(ctx, 0, "github", "42", 1)
+	got, finished, err = svc.FinalizeRun(ctx, 0, "github", "42", 1)
 	require.NoError(t, err)
 	assert.False(t, finished)
 	assert.Equal(t, RunInterrupted, got.Status)
@@ -103,13 +104,17 @@ func TestFinalizeShardedRun(t *testing.T) {
 	_, _, err = svc.RecordRun(ctx, shard(1, 3, "b"), nil, nil, nil)
 	conflict(t, err, "arrived after it ended")
 
+	// A batch run ended with its report: finalizing it changes nothing.
 	_, _, err = svc.RecordRun(ctx, run(2), nil, nil, nil)
 	require.NoError(t, err)
-	_, _, err = svc.FinalizeShardedRun(ctx, 0, "github", "42", 2)
-	conflict(t, err, "is not sharded")
+	got, finished, err = svc.FinalizeRun(ctx, 0, "github", "42", 2)
+	require.NoError(t, err)
+	assert.False(t, finished)
+	assert.Equal(t, RunCompleted, got.Status)
+	assert.Empty(t, got.ClosedReason)
 
 	repo.errs["GetTestRunIDByExternalID"] = ErrNotFound
-	_, _, err = svc.FinalizeShardedRun(ctx, 0, "github", "42", 9)
+	_, _, err = svc.FinalizeRun(ctx, 0, "github", "42", 9)
 	e, ok := apperr.As(err)
 	require.True(t, ok)
 	assert.Equal(t, apperr.KindNotFound, e.Kind)
@@ -134,12 +139,12 @@ func TestShardedRunErrors(t *testing.T) {
 		assert.ErrorIs(t, err, errBoom, m)
 	}
 
-	for _, m := range []string{"InTx", "GetTestRunIDByExternalID", "LockTestRun", "FinishShardedRun", "GetTestRun"} {
+	for _, m := range []string{"InTx", "GetTestRunIDByExternalID", "LockTestRun", "CloseRunningRun", "GetTestRun"} {
 		svc, repo, ctx := setup()
 		_, _, err := svc.RecordRun(ctx, shard(1, 2, "a"), nil, nil, nil)
 		require.NoError(t, err)
 		repo.errs[m] = errBoom
-		_, _, err = svc.FinalizeShardedRun(ctx, 0, "github", "42", 1)
+		_, _, err = svc.FinalizeRun(ctx, 0, "github", "42", 1)
 		assert.ErrorIs(t, err, errBoom, m)
 	}
 }

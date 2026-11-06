@@ -243,3 +243,9 @@ targets:
   - id: FE-INT-076
     description: archive feedback (audit 2026-10-17, D22) - archiving or unarchiving a project is announced in a status line that takes focus (the row and its button disappear); the projects search box follows the address on back/forward; the CI job link says it opens a new tab
     surfaces: [src/features/projects/ProjectsPage.tsx, src/features/test-runs/CiJobLink.tsx]
+  - id: FE-INT-077
+    description: a run Provenly ended says why (CHG-003) - the run page names a finalized, timed-out or archived run (manual runs cancelled, CI runs interrupted) instead of "the CI execution was interrupted", which a run CI reported as interrupted keeps
+    surfaces: [src/features/test-runs/TestRunDetailPage.tsx, src/lib/status.ts]
+  - id: FE-INT-078
+    description: archiving a project ends its running runs (DA-1, CHG-003) - the archive confirmation names its running runs newest first (manual cancelled, CI interrupted, one, none, five and "N more", a warning when they cannot be read) and archiving closes them
+    surfaces: [src/features/projects/ProjectsPage.tsx]

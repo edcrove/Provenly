@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  closedReasonText,
   correlationExplanation,
   correlations,
   correlationVariant,
@@ -53,6 +54,15 @@ describe('status helpers', () => {
     expect(isInterruptedRun('completed')).toBe(false)
     expect(isInterruptedRun('running')).toBe(false)
     expect(executionVariant('running')).toBe('outline')
+  })
+
+  it('says why Provenly ended a run (CHG-003)', () => {
+    expect(closedReasonText('finalized', false).title).toBe('CI ended this run before its report arrived')
+    expect(closedReasonText('timeout', false).detail).toContain('6 hours')
+    expect(closedReasonText('archived', true).detail).toBe(
+      'It was still being executed by hand: it was cancelled.',
+    )
+    expect(closedReasonText('archived', false).detail).toBe('It was still running in CI: it was interrupted.')
   })
 
   it('maps verdicts to badges and labels', () => {

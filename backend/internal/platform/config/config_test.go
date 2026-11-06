@@ -20,7 +20,7 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Equal(t, Config{
 		Env: "development", HTTPAddr: ":8080", DatabaseURL: "postgres://db",
 		LogLevel: slog.LevelInfo, MaxIngestBytes: 10 << 20, WebhooksAllowPrivate: true, GitHubAPIURL: "https://api.github.com",
-		WebhookDeliveryRetentionDays: 90,
+		WebhookDeliveryRetentionDays: 90, AbandonedRunHours: 6,
 	}, cfg)
 }
 
@@ -40,6 +40,7 @@ func TestLoadOverrides(t *testing.T) {
 		"PROVENLY_GITHUB_API_URL":                  "https://github.example.com/api/v3/",
 		"PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS": "0",
 		"PROVENLY_TRUSTED_PROXIES":                 "10.0.0.0/8, 192.168.1.1",
+		"PROVENLY_ABANDONED_RUN_HOURS":             "0",
 	}))
 	require.NoError(t, err)
 	assert.Equal(t, Config{
@@ -47,8 +48,8 @@ func TestLoadOverrides(t *testing.T) {
 		LogLevel: slog.LevelDebug, MaxIngestBytes: 1024, AutoMigrate: true,
 		JWTSecret: []byte(strings.Repeat("k", 32)), AdminUsername: "admin", AdminPassword: "correct horse",
 		SecretsKey: []byte(strings.Repeat("k", 32)), GitHubAPIURL: "https://github.example.com/api/v3",
-		WebhookDeliveryRetentionDays: 0,
-		TrustedProxies:               []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8"), netip.MustParsePrefix("192.168.1.1/32")},
+		WebhookDeliveryRetentionDays: 0, AbandonedRunHours: 0,
+		TrustedProxies: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8"), netip.MustParsePrefix("192.168.1.1/32")},
 	}, cfg)
 }
 
@@ -99,6 +100,9 @@ func TestLoadErrors(t *testing.T) {
 		`PROVENLY_TRUSTED_PROXIES: "proxy.local" is not an IP address or CIDR range`:     {"PROVENLY_DATABASE_URL": "x", "PROVENLY_TRUSTED_PROXIES": "proxy.local"},
 		`got "90d"`:   {"PROVENLY_DATABASE_URL": "x", "PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS": "90d"},
 		`got "36501"`: {"PROVENLY_DATABASE_URL": "x", "PROVENLY_WEBHOOK_DELIVERY_RETENTION_DAYS": "36501"},
+		`PROVENLY_ABANDONED_RUN_HOURS must be a whole number of hours from 0 (never) to 8760, got "-1"`: {"PROVENLY_DATABASE_URL": "x", "PROVENLY_ABANDONED_RUN_HOURS": "-1"},
+		`got "6h"`:   {"PROVENLY_DATABASE_URL": "x", "PROVENLY_ABANDONED_RUN_HOURS": "6h"},
+		`got "8761"`: {"PROVENLY_DATABASE_URL": "x", "PROVENLY_ABANDONED_RUN_HOURS": "8761"},
 		"public demo password": {"PROVENLY_DATABASE_URL": "x", "PROVENLY_ENV": "prod", "PROVENLY_JWT_SECRET": strings.Repeat("k", 32),
 			"PROVENLY_SECRETS_KEY": "a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=", "PROVENLY_ADMIN_USERNAME": "admin", "PROVENLY_ADMIN_PASSWORD": "provenly-demo"},
 	}

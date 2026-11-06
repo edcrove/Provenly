@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -116,22 +117,25 @@ func run(ctx context.Context, args []string, d Deps) error {
 			return err
 		}
 	}
-	// The webhook deliveries are sent while the API serves; the worker stops with it.
+	// The webhook deliveries are sent, and abandoned runs closed, while the API serves; the workers stop with it.
 	workerCtx, stop := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() {
-		services.Integrations.Run(workerCtx, deliveryInterval)
-		close(done)
-	}()
+	var workers sync.WaitGroup
+	workers.Go(func() { services.Integrations.Run(workerCtx, deliveryInterval) })
+	workers.Go(func() {
+		services.Runs.Run(workerCtx, abandonedRunInterval, time.Duration(cfg.AbandonedRunHours)*time.Hour)
+	})
 	defer func() {
 		stop()
-		<-done
+		workers.Wait()
 	}()
 	return d.Serve(ctx, l, app.NewHandler(services, cfg.MaxIngestBytes))
 }
 
 // deliveryInterval is how often due webhook deliveries are sent.
 const deliveryInterval = 2 * time.Second
+
+// abandonedRunInterval is how often live and sharded runs without activity are looked for.
+const abandonedRunInterval = time.Minute
 
 // breakGlass makes the reset link through the identity service on the given database.
 func breakGlass(ctx context.Context, pool *pgxpool.Pool, username string) (identity.PasswordReset, string, error) {

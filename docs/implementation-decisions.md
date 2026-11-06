@@ -234,3 +234,14 @@ Project rename (OpenTestHub → Provenly): DEC-39.
       cross-project view (CHG-015). DA-9 waits for the Jira connector.
     **Status: Decided by Ed (2026-11-03).** Order and priorities: DEC-96 and the catalog's backlog. DEC-88 accepted
     the same day (D8–D13 stay Accepted).
+
+26. **Run lifecycle: no run stays running for ever (CHG-003).** CI finalizes any running live or sharded run
+    (`POST /api/v1/ingestion/finalize`; a batch run is returned unchanged, a manual run is a 409: a person completes or
+    cancels it). Live and sharded runs with no event, shard or start for `PROVENLY_ABANDONED_RUN_HOURS` end as
+    interrupted (default 6, a GitHub Actions job's limit; `0` never; checked every minute, at most 100 per pass); manual
+    runs never time out. Archiving a project ends its running runs, named in the confirmation: manual runs cancelled,
+    CI runs interrupted. The run records why in `closedReason` (`finalized`, `timeout`, `archived`; null when its
+    report, shards or a person ended it) and its page says so; each closed run fires `run.completed`. Replaces P15-6
+    ("no automatic timeout") and the open question on running runs of archived projects (DA-1, DA-5).
+    BE-INT-080..082, FE-INT-077/078, BE-E2E-034, FE-E2E-041, probe.
+    **Status: Decided by Ed (2026-11-06): 6 hours; manual runs never time out.**

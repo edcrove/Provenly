@@ -12,8 +12,14 @@ import (
 // Runs ends the runs Provenly closes on its own and tells the project's webhooks (CHG-003): the running runs of a
 // project being archived, and the live and sharded runs abandoned by CI.
 type Runs struct {
-	runs   *execution.Service
+	runs   runCloser
 	notify ingestion.RunNotifier
+}
+
+// runCloser is the part of execution.Service that Runs drives.
+type runCloser interface {
+	CloseProjectRuns(ctx context.Context, projectID int64) ([]execution.TestRun, error)
+	CloseAbandonedRuns(ctx context.Context, idle time.Duration) ([]execution.TestRun, error)
 }
 
 // CloseProjectRuns ends the running runs of a project being archived (catalog.RunCloser).
